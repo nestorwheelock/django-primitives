@@ -28,6 +28,7 @@ classifiers = [
 keywords = ["django", "catalog", "orders", "basket", "workflow", "work-items"]
 dependencies = [
     "Django>=4.2",
+    "django-singleton",
 ]
 
 [project.urls]

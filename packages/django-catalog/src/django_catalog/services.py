@@ -8,7 +8,16 @@
 from django.db import transaction
 from django.utils import timezone
 
-from django_catalog.models import Basket, BasketItem, CatalogItem, WorkItem
+from django_catalog.models import Basket, BasketItem, CatalogItem, CatalogSettings, WorkItem
+
+
+def get_catalog_settings() -> CatalogSettings:
+    """Get the catalog settings singleton.
+
+    Returns:
+        CatalogSettings: The singleton instance
+    """
+    return CatalogSettings.get_instance()
 
 
 def determine_target_board(catalog_item: CatalogItem, stock_action_override: str = '') -> str:
@@ -167,7 +176,8 @@ def add_item_to_basket(
     if not basket.is_editable:
         raise ValueError("Cannot add items to a committed or cancelled basket")
 
-    if not catalog_item.active:
+    settings = get_catalog_settings()
+    if not catalog_item.active and not settings.allow_inactive_items:
         raise ValueError("Cannot add inactive catalog items to basket")
 
     return BasketItem.objects.create(

@@ -185,9 +185,9 @@ work_items = commit_basket(basket, user)
 - Tasks spawn only on Basket commit (idempotent)
 - Routing is deterministic and stored at spawn time
 
-**Depends on:** Configurable encounter model (no hard dependencies)
+**Depends on:** Configurable encounter model, django-singleton (optional for CatalogSettings)
 
-**Status:** ✅ Complete (packages/django-catalog, 67 tests)
+**Status:** ✅ Complete (packages/django-catalog, 83 tests)
 
 ---
 
@@ -336,6 +336,8 @@ settings.save()
 **Depends on:** None (standalone abstract model)
 
 **Status:** ✅ Complete (packages/django-singleton, 15 tests)
+
+**Consumers:** django-catalog (CatalogSettings singleton for allow_inactive_items behavior)
 
 ---
 

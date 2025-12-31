@@ -6,6 +6,7 @@ Provides order catalog functionality:
 - BasketItem: Items in basket with snapshot on commit
 - WorkItem: Spawned executable tasks with board routing
 - DispenseLog: Clinical record of pharmacy dispensing
+- CatalogSettings: Singleton configuration for catalog behavior
 """
 
 from django.conf import settings
@@ -14,6 +15,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from django_catalog.conf import ENCOUNTER_MODEL, INVENTORY_ITEM_MODEL, PRESCRIPTION_MODEL
+from django_singleton.models import SingletonModel
 
 
 # =============================================================================
@@ -555,3 +557,36 @@ if PRESCRIPTION_MODEL:
             help_text=_('Optional link to Prescription record'),
         )
     )
+
+
+# =============================================================================
+# CatalogSettings - Singleton Configuration
+# =============================================================================
+
+class CatalogSettings(SingletonModel):
+    """Singleton configuration for catalog behavior.
+
+    Access via get_catalog_settings() service function.
+    """
+
+    default_currency = models.CharField(
+        _('default currency'),
+        max_length=3,
+        default='USD',
+        help_text=_('ISO 4217 currency code for pricing'),
+    )
+    allow_inactive_items = models.BooleanField(
+        _('allow inactive items'),
+        default=False,
+        help_text=_('If True, inactive catalog items can be added to baskets'),
+    )
+    metadata = models.JSONField(
+        _('metadata'),
+        default=dict,
+        blank=True,
+        help_text=_('Optional JSON metadata for custom configuration'),
+    )
+
+    class Meta:
+        verbose_name = _('catalog settings')
+        verbose_name_plural = _('catalog settings')

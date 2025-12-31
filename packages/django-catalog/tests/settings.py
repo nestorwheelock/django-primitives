@@ -8,6 +8,7 @@ INSTALLED_APPS = [
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'tests.testapp',
+    'django_singleton',
     'django_catalog',
 ]
 
