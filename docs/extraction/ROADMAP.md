@@ -203,33 +203,43 @@ work_items = commit_basket(basket, user)
 
 ### 2.3 django-encounters
 
-**Purpose:** Clinical encounter pipeline with state machine
-
-**Extracts from:**
-- planning/emr/ENCOUNTER_BOARD_SPEC_V1.md
-- planning/emr/TRANSITION_RULES_TABLE.md
-- planning/encounters/ENCOUNTER_PIPELINE.md
+**Purpose:** Domain-agnostic encounter state machine with pluggable validators
 
 **Provides:**
 ```python
-from django_encounters.models import Encounter, EncounterType
-from django_encounters.services import transition_encounter
+from django_encounters.models import EncounterDefinition, Encounter, EncounterTransition
+from django_encounters.services import create_encounter, transition, get_allowed_transitions
 
-class Encounter(BaseModel):
-    state = models.CharField(choices=PIPELINE_STATES)
-    # States: scheduled -> checked_in -> roomed -> in_exam -> ...
+# Define a reusable state machine
+definition = EncounterDefinition.objects.create(
+    key="repair_job",
+    states=["pending", "active", "review", "completed"],
+    transitions={"pending": ["active"], "active": ["review"], "review": ["completed"]},
+    initial_state="pending",
+    terminal_states=["completed"],
+    validator_paths=["myapp.validators.ChecklistValidator"],
+)
 
-transition_encounter(encounter, to_state='roomed', validate=True)
+# Create encounter attached to ANY subject via GenericFK
+encounter = create_encounter("repair_job", subject=my_asset, created_by=user)
+
+# Transition with validation
+result = transition(encounter, "active", by_user=user)
 ```
 
-**Key rules:**
-- Encounter board ends when patient leaves
-- Cancel/No-Show are scheduling actions, not pipeline columns
-- Encounter state never mirrors task boards automatically
+**Key features:**
+- Definition-driven state machines (no hardcoded states)
+- GenericFK subject attachment (any model: patient, asset, case, project)
+- Graph validation (reachability, no orphan states, terminal state enforcement)
+- Pluggable validators for hard blocks and soft warnings
+- Transition audit log with metadata
 
-**Depends on:** django-basemodels, django-party
+**Depends on:** None (standalone, uses Django's ContentType)
 
-**Status:** Not started
+**Note:** Domain-specific encounter workflows (vet clinic pipeline, legal case flow, etc.)
+should be built as vertical packages that use django-encounters as a foundation.
+
+**Status:** ✅ Complete (packages/django-encounters, 80 tests)
 
 ---
 
@@ -337,7 +347,7 @@ Phase 1: Foundation
 Phase 2: Domain
   └── django-catalog (standalone, configurable encounter) ✅
   └── django-workitems (merged into django-catalog) ✅
-  └── django-encounters (needs basemodels, party)
+  └── django-encounters (standalone, GenericFK) ✅
   └── django-worklog (needs basemodels)
 
 Phase 3: Infrastructure

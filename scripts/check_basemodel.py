@@ -33,6 +33,8 @@ EXEMPT_MODELS = {
     "AuditLog",
     # django-catalog base (standalone package)
     "CatalogBaseModel",
+    # django-encounters base (standalone package)
+    "EncountersBaseModel",
 }
 
 
