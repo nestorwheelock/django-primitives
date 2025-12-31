@@ -35,6 +35,8 @@ EXEMPT_MODELS = {
     "CatalogBaseModel",
     # django-encounters base (standalone package)
     "EncountersBaseModel",
+    # django-worklog base (standalone package)
+    "WorklogBaseModel",
 }
 
 

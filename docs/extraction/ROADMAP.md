@@ -245,30 +245,41 @@ should be built as vertical packages that use django-encounters as a foundation.
 
 ### 2.4 django-worklog
 
-**Purpose:** WorkSession timing for labor tracking
-
-**Extracts from:**
-- planning/worklog/*.md
-- planning/hr/TIME_ENTRY_MODEL.md
+**Purpose:** Server-side work session timing for operational work tracking
 
 **Provides:**
 ```python
 from django_worklog.models import WorkSession
-from django_worklog.services import start_session, stop_session
+from django_worklog.services import start_session, stop_session, get_active_session
 
-session = start_session(user=user, context_type='vitals', context_id=encounter.id)
+# Start a session (context via GenericFK - any model)
+session = start_session(user=user, context=task)
+
 # ... work happens ...
-stop_session(session)  # Only on successful save
+
+# Stop the active session
+stopped = stop_session(user)
+print(stopped.duration_seconds)  # Computed on stop
+
+# Switch policy: starting new session auto-stops existing
+start_session(user, task_a)
+start_session(user, task_b)  # Stops task_a, starts task_b
 ```
 
 **Key rules:**
-- Server-side timestamps for start/stop
-- Idempotent start (returns existing running session)
-- HR owns all time tracking
+- Server-side timestamps only (no client timestamps)
+- One active session per user (Switch policy)
+- GenericFK for context attachment to any model
+- duration_seconds computed on stop, immutable after
 
-**Depends on:** django-basemodels
+**Key features:**
+- `start_session(user, context)` - Switch policy (stops old, starts new)
+- `stop_session(user)` - Raises NoActiveSession if none active
+- `get_active_session(user)` - Returns session or None
 
-**Status:** Not started
+**Depends on:** None (standalone)
+
+**Status:** ✅ Complete (packages/django-worklog, 31 tests)
 
 ---
 
@@ -348,7 +359,7 @@ Phase 2: Domain
   └── django-catalog (standalone, configurable encounter) ✅
   └── django-workitems (merged into django-catalog) ✅
   └── django-encounters (standalone, GenericFK) ✅
-  └── django-worklog (needs basemodels)
+  └── django-worklog (standalone) ✅
 
 Phase 3: Infrastructure
   └── django-modules (needs basemodels)
