@@ -1,0 +1,77 @@
+{% extends "base_staff.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "People" %}{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">{% trans "People" %}</h1>
+            <p class="text-gray-600 mt-1">{% trans "All individuals in the system" %}</p>
+        </div>
+        <div class="flex gap-4">
+            <a href="/staff-{{ staff_token }}/core/parties/" class="text-primary-600 hover:underline">{% trans "Back to Parties" %}</a>
+            <a href="/staff-{{ staff_token }}/core/parties/people/add/" class="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700">{% trans "+ Add Person" %}</a>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Name" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Contact" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Accounts" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Relationships" %}</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Actions" %}</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for person in people %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-medium">
+                                {{ person.first_name|slice:":1"|upper }}
+                            </div>
+                            <div class="ml-4">
+                                <div class="text-sm font-medium text-gray-900">{{ person.get_full_name }}</div>
+                                <div class="text-sm text-gray-500">{{ person.preferred_name|default:"-" }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div>{{ person.email|default:"-" }}</div>
+                        <div>{{ person.phone|default:"-" }}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% for account in person.accounts.all %}
+                        <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 mr-1">{{ account.auth_method }}</span>
+                        {% empty %}
+                        <span class="text-sm text-gray-400">{% trans "No accounts" %}</span>
+                        {% endfor %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ person.relationships_from.count }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <a href="/staff-{{ staff_token }}/core/parties/people/{{ person.pk }}/" class="text-primary-600 hover:text-primary-900">{% trans "View" %}</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="px-6 py-8 text-center text-gray-500">{% trans "No people found" %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if is_paginated %}
+    <div class="mt-4 flex justify-center">
+        {% include "components/pagination.html" %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

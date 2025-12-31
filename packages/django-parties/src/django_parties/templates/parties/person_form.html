@@ -1,0 +1,720 @@
+{% extends "base_staff.html" %}
+{% load i18n widget_tweaks %}
+
+{% block title %}{% if person %}{% trans "Edit Person" %}{% else %}{% trans "Add Person" %}{% endif %}{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex items-center justify-between mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">
+            {% if person %}{% trans "Edit Person" %}{% else %}{% trans "Add Person" %}{% endif %}
+        </h1>
+        <a href="/staff-{{ staff_token }}/core/parties/people/" class="text-primary-600 hover:text-primary-700 font-medium">
+            &larr; {% trans "Back to People" %}
+        </a>
+    </div>
+
+    <form method="post" class="bg-white rounded-xl shadow p-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            {% for error in form.non_field_errors %}
+            <p class="text-red-600 text-sm">{{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="space-y-6">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "First Name" %} *</label>
+                    {% render_field form.first_name class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                    {% if form.first_name.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.first_name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Last Name" %}</label>
+                    {% render_field form.last_name class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                    {% if form.last_name.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.last_name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Middle Name" %}</label>
+                    {% render_field form.middle_name class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Preferred Name" %}</label>
+                    {% render_field form.preferred_name class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="e.g., nickname" %}
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Date of Birth" %}</label>
+                {% render_field form.date_of_birth class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Contact Information" %}</h3>
+                <p class="text-sm text-gray-500 mb-4">{% trans "This info is used to contact them. An account is linked when they register for login." %}</p>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Email Address" %}</label>
+                        {% render_field form.email class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Phone Number" %}</label>
+                        {% render_field form.phone class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                    </div>
+                </div>
+
+                <div class="mt-4 flex flex-wrap gap-6">
+                    <div class="flex items-center">
+                        {% render_field form.phone_is_mobile class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" %}
+                        <label for="{{ form.phone_is_mobile.id_for_label }}" class="ml-2 text-sm text-gray-700">{% trans "Mobile/Cell Phone" %}</label>
+                    </div>
+                    <div class="flex items-center">
+                        {% render_field form.phone_has_whatsapp class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" %}
+                        <label for="{{ form.phone_has_whatsapp.id_for_label }}" class="ml-2 text-sm text-gray-700">{% trans "Has WhatsApp" %}</label>
+                    </div>
+                    <div class="flex items-center">
+                        {% render_field form.phone_can_receive_sms class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" %}
+                        <label for="{{ form.phone_can_receive_sms.id_for_label }}" class="ml-2 text-sm text-gray-700">{% trans "Can Receive SMS" %}</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-lg" x-data="{ expanded: false }">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">{% trans "Address" %}</h3>
+                    <button type="button" @click="expanded = !expanded" class="text-primary-600 hover:text-primary-800 text-sm font-medium">
+                        <span x-show="!expanded">{% trans "+ Add Address" %}</span>
+                        <span x-show="expanded" x-cloak>{% trans "- Hide" %}</span>
+                    </button>
+                </div>
+
+                <div x-show="expanded" x-cloak class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Street Address" %}</label>
+                        {% render_field form.address_line1 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Apt, Suite, Unit" %}</label>
+                        {% render_field form.address_line2 class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "City" %}</label>
+                            {% render_field form.city class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "State/Province" %}</label>
+                            {% render_field form.state class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Postal Code" %}</label>
+                            {% render_field form.postal_code class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Country" %}</label>
+                            {% render_field form.country class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-6 pt-2">
+                        <span class="text-sm font-medium text-gray-700">{% trans "Address Type:" %}</span>
+                        <div class="flex items-center">
+                            {% render_field form.address_is_home class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" %}
+                            <label for="{{ form.address_is_home.id_for_label }}" class="ml-2 text-sm text-gray-700">{% trans "Home/Living" %}</label>
+                        </div>
+                        <div class="flex items-center">
+                            {% render_field form.address_is_billing class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" %}
+                            <label for="{{ form.address_is_billing.id_for_label }}" class="ml-2 text-sm text-gray-700">{% trans "Billing" %}</label>
+                        </div>
+                        <div class="flex items-center">
+                            {% render_field form.address_is_shipping class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" %}
+                            <label for="{{ form.address_is_shipping.id_for_label }}" class="ml-2 text-sm text-gray-700">{% trans "Shipping" %}</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div x-show="!expanded" class="text-sm text-gray-500">
+                    {% if person.address_line1 %}
+                    {{ person.address_line1 }}, {{ person.city }}
+                    {% else %}
+                    {% trans "No address added yet" %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Demographics Section (Expandable) -->
+            <div class="bg-gray-50 p-4 rounded-lg" x-data="{ expanded: false }">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">{% trans "Demographics" %}</h3>
+                    <button type="button" @click="expanded = !expanded" class="text-primary-600 hover:text-primary-800 text-sm font-medium">
+                        <span x-show="!expanded">{% trans "+ Add Demographics" %}</span>
+                        <span x-show="expanded" x-cloak>{% trans "- Hide" %}</span>
+                    </button>
+                </div>
+
+                <div x-show="expanded" x-cloak class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Gender" %}</label>
+                            <select name="gender" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="male">{% trans "Male" %}</option>
+                                <option value="female">{% trans "Female" %}</option>
+                                <option value="non_binary">{% trans "Non-binary" %}</option>
+                                <option value="prefer_not_say">{% trans "Prefer not to say" %}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Marital Status" %}</label>
+                            <select name="marital_status" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="single">{% trans "Single" %}</option>
+                                <option value="married">{% trans "Married" %}</option>
+                                <option value="divorced">{% trans "Divorced" %}</option>
+                                <option value="widowed">{% trans "Widowed" %}</option>
+                                <option value="domestic_partner">{% trans "Domestic Partnership" %}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Nationality" %}</label>
+                            <input type="text" name="nationality" placeholder="{% trans 'e.g., Mexican' %}" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Preferred Language" %}</label>
+                            <select name="preferred_language" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="es">{% trans "Spanish" %}</option>
+                                <option value="en">{% trans "English" %}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Occupation" %}</label>
+                            <input type="text" name="occupation" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Household Size" %}</label>
+                            <input type="number" name="household_size" min="1" max="20" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                    </div>
+                </div>
+
+                <div x-show="!expanded" class="text-sm text-gray-500">
+                    {% trans "Optional: Add gender, nationality, occupation, etc." %}
+                </div>
+            </div>
+
+            <!-- Additional Phones Section (Expandable) -->
+            <div class="bg-gray-50 p-4 rounded-lg" x-data="{ phones: [] }">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">{% trans "Additional Phone Numbers" %}</h3>
+                    <button type="button" @click="phones.push({number: '', type: 'mobile'})" class="text-primary-600 hover:text-primary-800 text-sm font-medium">
+                        {% trans "+ Add Phone" %}
+                    </button>
+                </div>
+
+                <template x-for="(phone, index) in phones" :key="index">
+                    <div class="flex gap-2 mb-2">
+                        <select :name="'phone_type_' + index" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <option value="mobile">{% trans "Mobile" %}</option>
+                            <option value="home">{% trans "Home" %}</option>
+                            <option value="work">{% trans "Work" %}</option>
+                        </select>
+                        <input type="tel" :name="'phone_number_' + index" x-model="phone.number" placeholder="{% trans 'Phone number' %}" class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        <button type="button" @click="phones.splice(index, 1)" class="text-red-500 hover:text-red-700 px-2">
+                            &times;
+                        </button>
+                    </div>
+                </template>
+
+                <div x-show="phones.length === 0" class="text-sm text-gray-500">
+                    {% trans "Primary phone is above. Add additional numbers here." %}
+                </div>
+            </div>
+
+            <!-- Additional Emails Section (Expandable) -->
+            <div class="bg-gray-50 p-4 rounded-lg" x-data="{ emails: [] }">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">{% trans "Additional Email Addresses" %}</h3>
+                    <button type="button" @click="emails.push({email: '', type: 'personal'})" class="text-primary-600 hover:text-primary-800 text-sm font-medium">
+                        {% trans "+ Add Email" %}
+                    </button>
+                </div>
+
+                <template x-for="(email, index) in emails" :key="index">
+                    <div class="flex gap-2 mb-2">
+                        <select :name="'email_type_' + index" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <option value="personal">{% trans "Personal" %}</option>
+                            <option value="work">{% trans "Work" %}</option>
+                            <option value="billing">{% trans "Billing" %}</option>
+                        </select>
+                        <input type="email" :name="'email_address_' + index" x-model="email.email" placeholder="{% trans 'Email address' %}" class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        <button type="button" @click="emails.splice(index, 1)" class="text-red-500 hover:text-red-700 px-2">
+                            &times;
+                        </button>
+                    </div>
+                </template>
+
+                <div x-show="emails.length === 0" class="text-sm text-gray-500">
+                    {% trans "Primary email is above. Add additional addresses here." %}
+                </div>
+            </div>
+
+            <!-- Websites Section (Expandable) -->
+            <div class="bg-gray-50 p-4 rounded-lg" x-data="{ urls: [] }">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">{% trans "Websites" %}</h3>
+                    <button type="button" @click="urls.push({url: '', type: 'website'})" class="text-primary-600 hover:text-primary-800 text-sm font-medium">
+                        {% trans "+ Add Website" %}
+                    </button>
+                </div>
+
+                <template x-for="(item, index) in urls" :key="index">
+                    <div class="flex gap-2 mb-2">
+                        <select :name="'url_type_' + index" x-model="item.type" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <option value="website">{% trans "Website" %}</option>
+                            <option value="portfolio">{% trans "Portfolio" %}</option>
+                            <option value="blog">{% trans "Blog" %}</option>
+                            <option value="google_maps">{% trans "Google Maps" %}</option>
+                            <option value="yelp">{% trans "Yelp" %}</option>
+                            <option value="other">{% trans "Other" %}</option>
+                        </select>
+                        <input type="url" :name="'url_' + index" x-model="item.url" placeholder="https://..." class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        <button type="button" @click="urls.splice(index, 1)" class="text-red-500 hover:text-red-700 px-2">
+                            &times;
+                        </button>
+                    </div>
+                </template>
+
+                <div x-show="urls.length === 0" class="text-sm text-gray-500">
+                    {% trans "Add personal or business websites." %}
+                </div>
+            </div>
+
+            <!-- Social Media Section (Expandable) -->
+            <div class="bg-gray-50 p-4 rounded-lg" x-data="{ socials: [] }">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">{% trans "Social Media" %}</h3>
+                    <button type="button" @click="socials.push({url: '', type: 'facebook', username: ''})" class="text-primary-600 hover:text-primary-800 text-sm font-medium">
+                        {% trans "+ Add Social" %}
+                    </button>
+                </div>
+
+                <template x-for="(item, index) in socials" :key="index">
+                    <div class="flex gap-2 mb-2 items-center">
+                        <select :name="'social_type_' + index" x-model="item.type" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <option value="facebook">Facebook</option>
+                            <option value="instagram">Instagram</option>
+                            <option value="twitter">Twitter/X</option>
+                            <option value="linkedin">LinkedIn</option>
+                            <option value="youtube">YouTube</option>
+                            <option value="tiktok">TikTok</option>
+                            <option value="whatsapp">WhatsApp Business</option>
+                            <option value="github">GitHub</option>
+                        </select>
+                        <div class="flex-1 flex gap-2">
+                            <input type="text" :name="'social_username_' + index" x-model="item.username" placeholder="@{% trans 'username' %}" class="w-32 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
+                            <input type="url" :name="'social_url_' + index" x-model="item.url" placeholder="{% trans 'Profile URL (optional)' %}" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm">
+                        </div>
+                        <button type="button" @click="socials.splice(index, 1)" class="text-red-500 hover:text-red-700 px-2">
+                            &times;
+                        </button>
+                    </div>
+                </template>
+
+                <div x-show="socials.length === 0" class="text-sm text-gray-500">
+                    {% trans "Add social media profiles (Facebook, Instagram, etc.)." %}
+                </div>
+            </div>
+
+            <!-- Preferences & Lifestyle Section (Expandable) -->
+            <div class="bg-gray-50 p-4 rounded-lg" x-data="{ expanded: false }">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">{% trans "Preferences & Lifestyle" %}</h3>
+                    <button type="button" @click="expanded = !expanded" class="text-primary-600 hover:text-primary-800 text-sm font-medium">
+                        <span x-show="!expanded">{% trans "+ Add Preferences" %}</span>
+                        <span x-show="expanded" x-cloak>{% trans "- Hide" %}</span>
+                    </button>
+                </div>
+
+                <div x-show="expanded" x-cloak class="space-y-4">
+                    <!-- Identity -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Pronouns" %}</label>
+                            <select name="pronouns" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="he_him">{% trans "He/Him" %}</option>
+                                <option value="she_her">{% trans "She/Her" %}</option>
+                                <option value="they_them">{% trans "They/Them" %}</option>
+                                <option value="other">{% trans "Other" %}</option>
+                                <option value="prefer_not_say">{% trans "Prefer not to say" %}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Sexual Orientation" %}</label>
+                            <select name="sexual_orientation" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="straight">{% trans "Straight" %}</option>
+                                <option value="gay">{% trans "Gay" %}</option>
+                                <option value="lesbian">{% trans "Lesbian" %}</option>
+                                <option value="bisexual">{% trans "Bisexual" %}</option>
+                                <option value="queer">{% trans "Queer" %}</option>
+                                <option value="other">{% trans "Other" %}</option>
+                                <option value="prefer_not_say">{% trans "Prefer not to say" %}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Life Stage & Living -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Life Stage" %}</label>
+                            <select name="life_stage" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="student">{% trans "Student" %}</option>
+                                <option value="young_professional">{% trans "Young Professional" %}</option>
+                                <option value="established_professional">{% trans "Established Professional" %}</option>
+                                <option value="parent">{% trans "Parent" %}</option>
+                                <option value="empty_nester">{% trans "Empty Nester" %}</option>
+                                <option value="retired">{% trans "Retired" %}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Living Situation" %}</label>
+                            <select name="living_situation" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="apartment">{% trans "Apartment" %}</option>
+                                <option value="house">{% trans "House" %}</option>
+                                <option value="condo">{% trans "Condo/Townhouse" %}</option>
+                                <option value="farm">{% trans "Farm/Ranch" %}</option>
+                                <option value="travels">{% trans "Travels Frequently" %}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Pet Parent Style -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Pet Parent Style" %}</label>
+                            <select name="pet_parent_style" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="first_time">{% trans "First-Time Pet Owner" %}</option>
+                                <option value="experienced">{% trans "Experienced Owner" %}</option>
+                                <option value="rescue_advocate">{% trans "Rescue Advocate" %}</option>
+                                <option value="breeder">{% trans "Breeder/Show" %}</option>
+                                <option value="working_animals">{% trans "Working Animals" %}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Care Preference" %}</label>
+                            <select name="care_preference" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="conventional">{% trans "Conventional Medicine" %}</option>
+                                <option value="holistic">{% trans "Holistic/Natural" %}</option>
+                                <option value="integrative">{% trans "Integrative (Both)" %}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Budget & Communication -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Budget Sensitivity" %}</label>
+                            <select name="budget_sensitivity" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="premium">{% trans "Premium - Best care, cost not a concern" %}</option>
+                                <option value="balanced">{% trans "Balanced - Good value matters" %}</option>
+                                <option value="budget">{% trans "Budget - Cost-conscious" %}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Communication Style" %}</label>
+                            <select name="communication_style" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="detailed">{% trans "Detailed - Wants all the info" %}</option>
+                                <option value="summary">{% trans "Summary - Just the essentials" %}</option>
+                                <option value="visual">{% trans "Visual - Show me, don't tell me" %}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Interests (Multi-select style with checkboxes) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Interests & Hobbies" %}</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" name="interests" value="outdoors" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Outdoors/Hiking" %}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="interests" value="travel" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Travel" %}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="interests" value="fitness" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Fitness" %}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="interests" value="photography" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Photography" %}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="interests" value="gardening" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Gardening" %}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="interests" value="cooking" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Cooking" %}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="interests" value="tech" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Technology" %}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="interests" value="arts" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Arts/Crafts" %}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="interests" value="music" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Music" %}</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Values -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Values" %}</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" name="values" value="eco_friendly" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Eco-Friendly/Sustainable" %}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="values" value="local_business" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Supports Local Business" %}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="values" value="animal_welfare" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Animal Welfare Advocate" %}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="values" value="community" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">{% trans "Community Involvement" %}</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Political Beliefs -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Political Beliefs" %}</label>
+                        <select name="political_beliefs" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                            <option value="">{% trans "-- Select --" %}</option>
+                            <option value="progressive">{% trans "Progressive/Liberal" %}</option>
+                            <option value="moderate">{% trans "Moderate/Centrist" %}</option>
+                            <option value="conservative">{% trans "Conservative" %}</option>
+                            <option value="libertarian">{% trans "Libertarian" %}</option>
+                            <option value="apolitical">{% trans "Apolitical/Not interested" %}</option>
+                            <option value="prefer_not_say">{% trans "Prefer not to say" %}</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div x-show="!expanded" class="text-sm text-gray-500">
+                    {% trans "Optional: Add lifestyle, interests, and communication preferences." %}
+                </div>
+            </div>
+
+            <!-- Work History & Skills Section (Expandable) -->
+            <div class="bg-gray-50 p-4 rounded-lg" x-data="{ expanded: false, jobs: [], skills: [] }">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">{% trans "Work History & Skills" %}</h3>
+                    <button type="button" @click="expanded = !expanded" class="text-primary-600 hover:text-primary-800 text-sm font-medium">
+                        <span x-show="!expanded">{% trans "+ Add Work Info" %}</span>
+                        <span x-show="expanded" x-cloak>{% trans "- Hide" %}</span>
+                    </button>
+                </div>
+
+                <div x-show="expanded" x-cloak class="space-y-4">
+                    <!-- Current Employment -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Current Employer" %}</label>
+                            <input type="text" name="current_employer" placeholder="{% trans 'Company name' %}" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Job Title" %}</label>
+                            <input type="text" name="current_job_title" placeholder="{% trans 'Current position' %}" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Industry" %}</label>
+                            <select name="industry" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="healthcare">{% trans "Healthcare/Medical" %}</option>
+                                <option value="technology">{% trans "Technology/IT" %}</option>
+                                <option value="education">{% trans "Education" %}</option>
+                                <option value="finance">{% trans "Finance/Banking" %}</option>
+                                <option value="retail">{% trans "Retail/Sales" %}</option>
+                                <option value="hospitality">{% trans "Hospitality/Tourism" %}</option>
+                                <option value="construction">{% trans "Construction/Real Estate" %}</option>
+                                <option value="manufacturing">{% trans "Manufacturing" %}</option>
+                                <option value="government">{% trans "Government/Public Sector" %}</option>
+                                <option value="agriculture">{% trans "Agriculture" %}</option>
+                                <option value="arts">{% trans "Arts/Entertainment" %}</option>
+                                <option value="legal">{% trans "Legal" %}</option>
+                                <option value="nonprofit">{% trans "Non-Profit" %}</option>
+                                <option value="selfemployed">{% trans "Self-Employed" %}</option>
+                                <option value="unemployed">{% trans "Currently Not Working" %}</option>
+                                <option value="other">{% trans "Other" %}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Employment Type" %}</label>
+                            <select name="employment_type" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{% trans "-- Select --" %}</option>
+                                <option value="full_time">{% trans "Full-Time" %}</option>
+                                <option value="part_time">{% trans "Part-Time" %}</option>
+                                <option value="contract">{% trans "Contract/Freelance" %}</option>
+                                <option value="self_employed">{% trans "Self-Employed" %}</option>
+                                <option value="retired">{% trans "Retired" %}</option>
+                                <option value="student">{% trans "Student" %}</option>
+                                <option value="homemaker">{% trans "Homemaker" %}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Work History (Dynamic) -->
+                    <div class="border-t pt-4 mt-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="block text-sm font-medium text-gray-700">{% trans "Previous Jobs" %}</label>
+                            <button type="button" @click="jobs.push({employer: '', title: '', years: ''})" class="text-primary-600 hover:text-primary-800 text-xs font-medium">
+                                {% trans "+ Add Previous Job" %}
+                            </button>
+                        </div>
+
+                        <template x-for="(job, index) in jobs" :key="index">
+                            <div class="flex gap-2 mb-2 items-center">
+                                <input type="text" :name="'prev_employer_' + index" x-model="job.employer" placeholder="{% trans 'Employer' %}" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <input type="text" :name="'prev_title_' + index" x-model="job.title" placeholder="{% trans 'Title' %}" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <input type="text" :name="'prev_years_' + index" x-model="job.years" placeholder="{% trans 'Years' %}" class="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <button type="button" @click="jobs.splice(index, 1)" class="text-red-500 hover:text-red-700 px-2">
+                                    &times;
+                                </button>
+                            </div>
+                        </template>
+
+                        <div x-show="jobs.length === 0" class="text-sm text-gray-400 italic">
+                            {% trans "No previous jobs added" %}
+                        </div>
+                    </div>
+
+                    <!-- Skills (Dynamic) -->
+                    <div class="border-t pt-4 mt-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="block text-sm font-medium text-gray-700">{% trans "Skills & Expertise" %}</label>
+                            <button type="button" @click="skills.push({name: '', level: 'intermediate'})" class="text-primary-600 hover:text-primary-800 text-xs font-medium">
+                                {% trans "+ Add Skill" %}
+                            </button>
+                        </div>
+
+                        <template x-for="(skill, index) in skills" :key="index">
+                            <div class="flex gap-2 mb-2 items-center">
+                                <input type="text" :name="'skill_name_' + index" x-model="skill.name" placeholder="{% trans 'Skill (e.g., Dog Training, Marketing)' %}" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <select :name="'skill_level_' + index" x-model="skill.level" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                                    <option value="beginner">{% trans "Beginner" %}</option>
+                                    <option value="intermediate">{% trans "Intermediate" %}</option>
+                                    <option value="advanced">{% trans "Advanced" %}</option>
+                                    <option value="expert">{% trans "Expert" %}</option>
+                                </select>
+                                <button type="button" @click="skills.splice(index, 1)" class="text-red-500 hover:text-red-700 px-2">
+                                    &times;
+                                </button>
+                            </div>
+                        </template>
+
+                        <div x-show="skills.length === 0" class="text-sm text-gray-400 italic">
+                            {% trans "No skills added" %}
+                        </div>
+                    </div>
+
+                    <!-- Education -->
+                    <div class="border-t pt-4 mt-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Education Level" %}</label>
+                                <select name="education_level" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                    <option value="">{% trans "-- Select --" %}</option>
+                                    <option value="high_school">{% trans "High School" %}</option>
+                                    <option value="some_college">{% trans "Some College" %}</option>
+                                    <option value="associates">{% trans "Associate's Degree" %}</option>
+                                    <option value="bachelors">{% trans "Bachelor's Degree" %}</option>
+                                    <option value="masters">{% trans "Master's Degree" %}</option>
+                                    <option value="doctorate">{% trans "Doctorate/PhD" %}</option>
+                                    <option value="professional">{% trans "Professional Degree (MD, JD, etc.)" %}</option>
+                                    <option value="trade">{% trans "Trade/Vocational" %}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Field of Study" %}</label>
+                                <input type="text" name="field_of_study" placeholder="{% trans 'e.g., Business, Engineering' %}" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Professional Certifications -->
+                    <div class="border-t pt-4 mt-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Professional Certifications/Licenses" %}</label>
+                        <textarea name="certifications" rows="2" placeholder="{% trans 'e.g., Certified Dog Trainer, Real Estate License' %}" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"></textarea>
+                    </div>
+                </div>
+
+                <div x-show="!expanded" class="text-sm text-gray-500">
+                    {% trans "Optional: Add work history, skills, and professional info." %}
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Notes" %}</label>
+                {% render_field form.notes class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" rows="3" %}
+            </div>
+
+            <div class="flex items-center">
+                {% render_field form.is_active class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" %}
+                <label for="{{ form.is_active.id_for_label }}" class="ml-2 text-sm text-gray-700">{% trans "Active" %}</label>
+            </div>
+        </div>
+
+        <div class="mt-6 flex gap-4">
+            <button type="submit" class="flex-1 bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700">
+                {% if person %}{% trans "Save Changes" %}{% else %}{% trans "Create Person" %}{% endif %}
+            </button>
+            <a href="/staff-{{ staff_token }}/core/parties/people/" class="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-center">
+                {% trans "Cancel" %}
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base_staff.html" %}
+{% load i18n widget_tweaks %}
+
+{% block title %}{% if organization %}{% trans "Edit Organization" %}{% else %}{% trans "Add Organization" %}{% endif %}{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex items-center justify-between mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">
+            {% if organization %}{% trans "Edit Organization" %}{% else %}{% trans "Add Organization" %}{% endif %}
+        </h1>
+        <a href="/staff-{{ staff_token }}/core/parties/organizations/" class="text-primary-600 hover:text-primary-700 font-medium">
+            &larr; {% trans "Back to Organizations" %}
+        </a>
+    </div>
+
+    <form method="post" class="bg-white rounded-xl shadow p-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            {% for error in form.non_field_errors %}
+            <p class="text-red-600 text-sm">{{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Name" %} *</label>
+                {% render_field form.name class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                {% if form.name.errors %}
+                <p class="text-red-600 text-sm mt-1">{{ form.name.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Organization Type" %} *</label>
+                    {% render_field form.org_type class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Website" %}</label>
+                    {% render_field form.website class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="https://..." %}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Tax ID (RFC)" %}</label>
+                    {% render_field form.tax_id class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Legal Name" %}</label>
+                    {% render_field form.legal_name class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="e.g., ABC SA de CV" %}
+                </div>
+            </div>
+
+            <div class="flex items-center">
+                {% render_field form.is_active class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" %}
+                <label for="{{ form.is_active.id_for_label }}" class="ml-2 text-sm text-gray-700">{% trans "Active" %}</label>
+            </div>
+        </div>
+
+        <div class="mt-6 flex gap-4">
+            <button type="submit" class="flex-1 bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700">
+                {% if organization %}{% trans "Save Changes" %}{% else %}{% trans "Create Organization" %}{% endif %}
+            </button>
+            <a href="/staff-{{ staff_token }}/core/parties/organizations/" class="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-center">
+                {% trans "Cancel" %}
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

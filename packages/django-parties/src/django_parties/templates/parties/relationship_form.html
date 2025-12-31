@@ -1,0 +1,99 @@
+{% extends "base_staff.html" %}
+{% load i18n widget_tweaks %}
+
+{% block title %}{% if relationship %}{% trans "Edit Relationship" %}{% else %}{% trans "Add Relationship" %}{% endif %}{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex items-center justify-between mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">
+            {% if relationship %}{% trans "Edit Relationship" %}{% else %}{% trans "Add Relationship" %}{% endif %}
+        </h1>
+        <a href="/staff-{{ staff_token }}/core/parties/relationships/" class="text-primary-600 hover:text-primary-700 font-medium">
+            &larr; {% trans "Back to Relationships" %}
+        </a>
+    </div>
+
+    <form method="post" class="bg-white rounded-xl shadow p-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            {% for error in form.non_field_errors %}
+            <p class="text-red-600 text-sm">{{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="space-y-6">
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "From Party" %}</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Person" %}</label>
+                        {% render_field form.from_person class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Organization" %}</label>
+                        {% render_field form.from_organization class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Relationship Type" %} *</label>
+                {% render_field form.relationship_type class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "To Party" %}</h3>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Person" %}</label>
+                        {% render_field form.to_person class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Organization" %}</label>
+                        {% render_field form.to_organization class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Group" %}</label>
+                        {% render_field form.to_group class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Contract Start" %}</label>
+                    {% render_field form.contract_start class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Contract End" %}</label>
+                    {% render_field form.contract_end class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                </div>
+            </div>
+
+            <div class="flex items-center gap-6">
+                <div class="flex items-center">
+                    {% render_field form.contract_signed class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" %}
+                    <label for="{{ form.contract_signed.id_for_label }}" class="ml-2 text-sm text-gray-700">{% trans "Contract Signed" %}</label>
+                </div>
+                <div class="flex items-center">
+                    {% render_field form.is_active class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" %}
+                    <label for="{{ form.is_active.id_for_label }}" class="ml-2 text-sm text-gray-700">{% trans "Active" %}</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6 flex gap-4">
+            <button type="submit" class="flex-1 bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700">
+                {% if relationship %}{% trans "Save Changes" %}{% else %}{% trans "Create Relationship" %}{% endif %}
+            </button>
+            <a href="/staff-{{ staff_token }}/core/parties/relationships/" class="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-center">
+                {% trans "Cancel" %}
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

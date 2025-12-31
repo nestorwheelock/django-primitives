@@ -1,0 +1,64 @@
+{% extends "base_staff.html" %}
+{% load i18n widget_tweaks %}
+
+{% block title %}{% if group %}{% trans "Edit Group" %}{% else %}{% trans "Add Group" %}{% endif %}{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex items-center justify-between mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">
+            {% if group %}{% trans "Edit Group" %}{% else %}{% trans "Add Group" %}{% endif %}
+        </h1>
+        <a href="/staff-{{ staff_token }}/core/parties/groups/" class="text-primary-600 hover:text-primary-700 font-medium">
+            &larr; {% trans "Back to Groups" %}
+        </a>
+    </div>
+
+    <form method="post" class="bg-white rounded-xl shadow p-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            {% for error in form.non_field_errors %}
+            <p class="text-red-600 text-sm">{{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Group Name" %} *</label>
+                {% render_field form.name class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="e.g., The Garcia Family" %}
+                {% if form.name.errors %}
+                <p class="text-red-600 text-sm mt-1">{{ form.name.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Group Type" %} *</label>
+                {% render_field form.group_type class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Primary Contact" %}</label>
+                {% render_field form.primary_contact class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" %}
+                <p class="text-sm text-gray-500 mt-1">{% trans "The main contact person for this group" %}</p>
+            </div>
+
+            <div class="flex items-center">
+                {% render_field form.is_active class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" %}
+                <label for="{{ form.is_active.id_for_label }}" class="ml-2 text-sm text-gray-700">{% trans "Active" %}</label>
+            </div>
+        </div>
+
+        <div class="mt-6 flex gap-4">
+            <button type="submit" class="flex-1 bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700">
+                {% if group %}{% trans "Save Changes" %}{% else %}{% trans "Create Group" %}{% endif %}
+            </button>
+            <a href="/staff-{{ staff_token }}/core/parties/groups/" class="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-center">
+                {% trans "Cancel" %}
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

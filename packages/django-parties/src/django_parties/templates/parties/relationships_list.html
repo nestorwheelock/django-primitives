@@ -1,0 +1,76 @@
+{% extends "base_staff.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Relationships" %}{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">{% trans "Relationships" %}</h1>
+            <p class="text-gray-600 mt-1">{% trans "Connections between parties" %}</p>
+        </div>
+        <div class="flex gap-4">
+            <a href="/staff-{{ staff_token }}/core/parties/" class="text-primary-600 hover:underline">{% trans "← Back to Parties" %}</a>
+            <a href="/staff-{{ staff_token }}/core/parties/relationships/add/" class="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700">{% trans "+ Add Relationship" %}</a>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "From" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Type" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "To" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Status" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Created" %}</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for rel in relationships %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900">
+                            {% if rel.from_person %}
+                            {{ rel.from_person.get_full_name }}
+                            {% elif rel.from_organization %}
+                            {{ rel.from_organization.name }}
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">{{ rel.get_relationship_type_display }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900">
+                            {% if rel.to_person %}
+                            {{ rel.to_person.get_full_name }}
+                            {% elif rel.to_organization %}
+                            {{ rel.to_organization.name }}
+                            {% elif rel.to_group %}
+                            {{ rel.to_group.name }}
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if rel.is_active %}
+                        <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">{% trans "Active" %}</span>
+                        {% else %}
+                        <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">{% trans "Inactive" %}</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ rel.created_at|date:"M d, Y" }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="px-6 py-8 text-center text-gray-500">{% trans "No relationships found" %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

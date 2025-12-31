@@ -1,0 +1,202 @@
+{% extends "base_staff.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Parties Dashboard" %}{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">{% trans "Parties Dashboard" %}</h1>
+            <p class="text-gray-600 mt-1">{% trans "People, Organizations, Groups, and Relationships" %}</p>
+        </div>
+    </div>
+
+    <!-- Quick Links with Counts -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <a href="/staff-{{ staff_token }}/core/parties/people/" class="bg-white rounded-xl shadow p-4 hover:shadow-lg transition">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">👤</span>
+                    <span class="font-medium text-gray-700">{% trans "People" %}</span>
+                </div>
+                <span class="text-2xl font-bold text-gray-900">{{ people_count }}</span>
+            </div>
+        </a>
+        <a href="/staff-{{ staff_token }}/core/parties/organizations/" class="bg-white rounded-xl shadow p-4 hover:shadow-lg transition">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">🏢</span>
+                    <span class="font-medium text-gray-700">{% trans "Organizations" %}</span>
+                </div>
+                <span class="text-2xl font-bold text-gray-900">{{ organizations_count }}</span>
+            </div>
+        </a>
+        <a href="/staff-{{ staff_token }}/core/parties/groups/" class="bg-white rounded-xl shadow p-4 hover:shadow-lg transition">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">👨‍👩‍👧</span>
+                    <span class="font-medium text-gray-700">{% trans "Groups" %}</span>
+                </div>
+                <span class="text-2xl font-bold text-gray-900">{{ groups_count }}</span>
+            </div>
+        </a>
+        <a href="/staff-{{ staff_token }}/core/parties/relationships/" class="bg-white rounded-xl shadow p-4 hover:shadow-lg transition">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">🔗</span>
+                    <span class="font-medium text-gray-700">{% trans "Relationships" %}</span>
+                </div>
+                <span class="text-2xl font-bold text-gray-900">{{ relationships_count }}</span>
+            </div>
+        </a>
+        <a href="/staff-{{ staff_token }}/core/parties/people/add/" class="bg-gray-800 text-white rounded-xl shadow p-4 hover:bg-gray-900 transition flex items-center gap-3">
+            <span class="text-2xl">+</span>
+            <span class="font-medium">{% trans "Add Person" %}</span>
+        </a>
+        <a href="/staff-{{ staff_token }}/core/parties/organizations/add/" class="bg-primary-600 text-white rounded-xl shadow p-4 hover:bg-primary-700 transition flex items-center gap-3">
+            <span class="text-2xl">+</span>
+            <span class="font-medium">{% trans "Add Organization" %}</span>
+        </a>
+        <a href="/staff-{{ staff_token }}/core/parties/groups/add/" class="bg-green-600 text-white rounded-xl shadow p-4 hover:bg-green-700 transition flex items-center gap-3">
+            <span class="text-2xl">+</span>
+            <span class="font-medium">{% trans "Add Group" %}</span>
+        </a>
+        <a href="/staff-{{ staff_token }}/core/parties/relationships/add/" class="bg-blue-600 text-white rounded-xl shadow p-4 hover:bg-blue-700 transition flex items-center gap-3">
+            <span class="text-2xl">+</span>
+            <span class="font-medium">{% trans "Add Relationship" %}</span>
+        </a>
+    </div>
+
+    <!-- Party Pattern Explanation -->
+    <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-8">
+        <h2 class="text-lg font-semibold text-blue-800 mb-3">{% trans "About the Party Pattern" %}</h2>
+        <div class="text-blue-700 space-y-2">
+            <p>{% trans "A Party is any entity that can own things and do business:" %}</p>
+            <ul class="list-disc list-inside ml-4 space-y-1">
+                <li><strong>{% trans "Person" %}</strong> - {% trans "Individual human (customer, employee, vet)" %}</li>
+                <li><strong>{% trans "Organization" %}</strong> - {% trans "Business entity (clinic, supplier, school)" %}</li>
+                <li><strong>{% trans "Group" %}</strong> - {% trans "Informal grouping (household, family sharing a pet)" %}</li>
+            </ul>
+            <p class="mt-3">{% trans "Relationships connect parties: employees work for organizations, families share pets, organizations contract with other organizations." %}</p>
+        </div>
+    </div>
+
+    <!-- DEV: All Parties Module Pages -->
+    <div class="mt-8 bg-yellow-50 border-2 border-yellow-300 border-dashed rounded-xl p-6">
+        <div class="flex items-center gap-2 mb-4">
+            <span class="text-xl">🛠️</span>
+            <h2 class="font-bold text-yellow-800">DEV: All Parties Module Pages</h2>
+            <span class="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded">TEMPORARY</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Dashboard -->
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>📊</span> Dashboard
+                </h3>
+                <ul class="text-sm space-y-1">
+                    <li><a href="/staff-{{ staff_token }}/core/parties/" class="text-blue-600 hover:underline">Dashboard</a></li>
+                </ul>
+            </div>
+
+            <!-- People -->
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>👤</span> People
+                </h3>
+                <ul class="text-sm space-y-1">
+                    <li><a href="/staff-{{ staff_token }}/core/parties/people/" class="text-blue-600 hover:underline">People List</a></li>
+                    <li><a href="/staff-{{ staff_token }}/core/parties/people/add/" class="text-green-600 hover:underline">+ Add Person</a></li>
+                    <li class="text-gray-400 text-xs">people/&lt;pk&gt;/ - Detail (needs ID)</li>
+                    <li class="text-gray-400 text-xs">people/&lt;pk&gt;/edit/ - Edit (needs ID)</li>
+                    <li class="text-gray-400 text-xs">people/&lt;pk&gt;/delete/ - Delete (needs ID)</li>
+                </ul>
+            </div>
+
+            <!-- Organizations -->
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>🏢</span> Organizations
+                </h3>
+                <ul class="text-sm space-y-1">
+                    <li><a href="/staff-{{ staff_token }}/core/parties/organizations/" class="text-blue-600 hover:underline">Organization List</a></li>
+                    <li><a href="/staff-{{ staff_token }}/core/parties/organizations/add/" class="text-green-600 hover:underline">+ Add Organization</a></li>
+                    <li class="text-gray-400 text-xs">organizations/&lt;pk&gt;/ - Detail (needs ID)</li>
+                    <li class="text-gray-400 text-xs">organizations/&lt;pk&gt;/edit/ - Edit (needs ID)</li>
+                    <li class="text-gray-400 text-xs">organizations/&lt;pk&gt;/delete/ - Delete (needs ID)</li>
+                </ul>
+            </div>
+
+            <!-- Groups -->
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>👨‍👩‍👧</span> Groups
+                </h3>
+                <ul class="text-sm space-y-1">
+                    <li><a href="/staff-{{ staff_token }}/core/parties/groups/" class="text-blue-600 hover:underline">Group List</a></li>
+                    <li><a href="/staff-{{ staff_token }}/core/parties/groups/add/" class="text-green-600 hover:underline">+ Add Group</a></li>
+                    <li class="text-gray-400 text-xs">groups/&lt;pk&gt;/ - Detail (needs ID)</li>
+                    <li class="text-gray-400 text-xs">groups/&lt;pk&gt;/edit/ - Edit (needs ID)</li>
+                    <li class="text-gray-400 text-xs">groups/&lt;pk&gt;/delete/ - Delete (needs ID)</li>
+                </ul>
+            </div>
+
+            <!-- Relationships -->
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>🔗</span> Relationships
+                </h3>
+                <ul class="text-sm space-y-1">
+                    <li><a href="/staff-{{ staff_token }}/core/parties/relationships/" class="text-blue-600 hover:underline">Relationship List</a></li>
+                    <li><a href="/staff-{{ staff_token }}/core/parties/relationships/add/" class="text-green-600 hover:underline">+ Add Relationship</a></li>
+                    <li class="text-gray-400 text-xs">relationships/&lt;pk&gt;/edit/ - Edit (needs ID)</li>
+                    <li class="text-gray-400 text-xs">relationships/&lt;pk&gt;/delete/ - Delete (needs ID)</li>
+                </ul>
+            </div>
+
+            <!-- Contact Info (Future) -->
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>📞</span> Contact Info
+                </h3>
+                <ul class="text-sm space-y-1">
+                    <li class="text-gray-400 text-xs">Addresses - via Party detail</li>
+                    <li class="text-gray-400 text-xs">Phone Numbers - via Party detail</li>
+                    <li class="text-gray-400 text-xs">Email Addresses - via Party detail</li>
+                    <li class="text-gray-500 text-xs italic mt-1">Managed via Person/Org forms</li>
+                </ul>
+            </div>
+
+            <!-- Demographics (Future) -->
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>📋</span> Demographics
+                </h3>
+                <ul class="text-sm space-y-1">
+                    <li class="text-gray-400 text-xs">ID Documents - via Person detail</li>
+                    <li class="text-gray-400 text-xs">Photo Upload - future feature</li>
+                    <li class="text-gray-500 text-xs italic mt-1">Managed via Person forms</li>
+                </ul>
+            </div>
+
+            <!-- Related Modules -->
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>🔄</span> Related Modules
+                </h3>
+                <ul class="text-sm space-y-1">
+                    <li><a href="/staff-{{ staff_token }}/operations/hr/" class="text-blue-600 hover:underline">HR Module</a></li>
+                    <li><a href="/staff-{{ staff_token }}/customers/crm/" class="text-blue-600 hover:underline">CRM Module</a></li>
+                    <li class="text-gray-500 text-xs italic mt-1">Employee/Customer profiles</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="mt-4 text-xs text-yellow-700">
+            <strong>Note:</strong> This section is temporary for development. Links marked in gray require an object ID or are planned for future implementation.
+        </div>
+    </div>
+</div>
+{% endblock %}

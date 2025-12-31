@@ -36,11 +36,11 @@ class Pet(BaseModel):
 
 **Why first:** Every other package depends on BaseModel.
 
-**Status:** Not started
+**Status:** ✅ Complete (packages/django-basemodels, 30 tests)
 
 ---
 
-### 1.2 django-party
+### 1.2 django-parties
 
 **Purpose:** Party pattern (Person, Organization, Group, Relationships)
 
@@ -51,19 +51,19 @@ class Pet(BaseModel):
 
 **Provides:**
 ```python
-from django_party.models import Person, Organization, Group, PartyRelationship
+from django_parties.models import Person, Organization, Group, PartyRelationship
 
 # Relationships handle ownership, employment, guardianship, billing
 rel = PartyRelationship.objects.create(
-    from_party=organization,
-    to_party=person,
-    relationship_type='employs'
+    from_person=person,
+    to_organization=organization,
+    relationship_type='employee'
 )
 ```
 
 **Depends on:** django-basemodels
 
-**Status:** Not started
+**Status:** ✅ Complete (packages/django-parties, 44 tests)
 
 ---
 
