@@ -187,7 +187,7 @@ work_items = commit_basket(basket, user)
 
 **Depends on:** Configurable encounter model (no hard dependencies)
 
-**Status:** ✅ Complete (packages/django-catalog, 4 tests)
+**Status:** ✅ Complete (packages/django-catalog, 67 tests)
 
 ---
 
