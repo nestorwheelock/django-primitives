@@ -1,0 +1,33 @@
+# Import boundary enforcement for django-primitives monorepo
+# Run: django-layers check --config layers.yaml --root .
+
+layers:
+  # Tier 1: Foundation (no dependencies on other primitives)
+  - name: tier1
+    packages:
+      - django-basemodels
+      - django-parties
+      - django-rbac
+      - django-audit-log
+
+  # Tier 2: Domain patterns (may depend on Tier 1)
+  - name: tier2
+    packages:
+      - django-catalog
+      - django-encounters
+      - django-worklog
+
+  # Tier 3: Infrastructure (may depend on Tier 1 and 2)
+  - name: tier3
+    packages:
+      - django-modules
+      - django-singleton
+      - django-layers
+
+rules:
+  default: same_or_lower  # Can import same layer or lower
+
+ignore:
+  paths:
+    - "**/tests/**"
+    - "**/migrations/**"
