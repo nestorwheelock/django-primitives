@@ -1,0 +1,343 @@
+# Package Extraction Roadmap
+
+**Status:** Planning
+**Last Updated:** 2025-12-31
+
+---
+
+## Overview
+
+This roadmap defines the order for extracting reusable Django packages from VetFriendly patterns. Tiers are ordered by dependency: Tier 1 must be stable before Tier 2 begins.
+
+---
+
+## Tier 1: Foundation (Extract First)
+
+These packages have no dependencies on other primitives and form the foundation.
+
+### 1.1 django-basemodels
+
+**Purpose:** BaseModel with UUID PKs, timestamps, soft delete
+
+**Extracts from:**
+- SYSTEM_CHARTER.md: "All domain models inherit from BaseModel"
+- SYSTEM_CHARTER.md: "Soft Delete & Reversibility"
+
+**Provides:**
+```python
+from django_basemodels.models import BaseModel
+
+class Pet(BaseModel):
+    name = models.CharField(max_length=100)
+    # Inherits: id (UUID), created_at, updated_at, deleted_at
+    # Inherits: delete(), restore(), hard_delete()
+    # Default manager excludes soft-deleted
+```
+
+**Why first:** Every other package depends on BaseModel.
+
+**Status:** Not started
+
+---
+
+### 1.2 django-party
+
+**Purpose:** Party pattern (Person, Organization, Group, Relationships)
+
+**Extracts from:**
+- SYSTEM_CHARTER.md: "Party Pattern is foundational"
+- SYSTEM_CHARTER.md: "User vs Person"
+- S-100: Unified People Architecture
+
+**Provides:**
+```python
+from django_party.models import Person, Organization, Group, PartyRelationship
+
+# Relationships handle ownership, employment, guardianship, billing
+rel = PartyRelationship.objects.create(
+    from_party=organization,
+    to_party=person,
+    relationship_type='employs'
+)
+```
+
+**Depends on:** django-basemodels
+
+**Status:** Not started
+
+---
+
+### 1.3 django-rbac
+
+**Purpose:** Role-based access control with hierarchy enforcement
+
+**Extracts from:**
+- SYSTEM_CHARTER.md: "RBAC Hierarchy"
+- S-079: Audit Logging Staff Actions
+
+**Provides:**
+```python
+from django_rbac.models import Role, Permission
+from django_rbac.decorators import requires_hierarchy_level
+
+class Role(BaseModel):
+    name = models.CharField(max_length=100)
+    hierarchy_level = models.IntegerField()  # 10-100
+
+@requires_hierarchy_level(60)  # Manager or higher
+def approve_leave_request(request, user_id):
+    ...
+```
+
+**Key rule:** Users can only manage users with LOWER hierarchy levels.
+
+**Depends on:** django-basemodels
+
+**Status:** Not started
+
+---
+
+### 1.4 django-audit
+
+**Purpose:** Append-only audit trail for all model changes
+
+**Extracts from:**
+- SYSTEM_CHARTER.md: "Medical records are append-only"
+- S-079: Audit Logging Staff Actions
+- WORKITEM_SPAWN_AUDIT.md patterns
+
+**Provides:**
+```python
+from django_audit.models import AuditEntry
+from django_audit.decorators import audited
+
+@audited
+class Pet(BaseModel):
+    name = models.CharField(max_length=100)
+    # All changes automatically logged to AuditEntry
+```
+
+**Depends on:** django-basemodels
+
+**Status:** Not started
+
+---
+
+## Tier 2: Domain Patterns (After Tier 1 Stable)
+
+These packages implement domain-specific patterns and depend on Tier 1.
+
+### 2.1 django-catalog
+
+**Purpose:** Definition layer for orderable/billable items
+
+**Extracts from:**
+- planning/catalog/*.md
+- SYSTEM_EXECUTION_RULES.md: "Catalog owns definitions"
+
+**Provides:**
+```python
+from django_catalog.models import CatalogItem, CatalogCategory
+
+class CatalogItem(BaseModel):
+    kind = models.CharField(choices=KIND_CHOICES)
+    display_name = models.CharField(max_length=200)
+    is_billable = models.BooleanField(default=True)
+    # Definition only - no execution, no inventory, no accounting
+```
+
+**Key rule:** Catalog items become actionable only when added to a Basket and committed.
+
+**Depends on:** django-basemodels
+
+**Status:** Not started
+
+---
+
+### 2.2 django-workitems
+
+**Purpose:** Task spawning and execution tracking
+
+**Extracts from:**
+- planning/workitems/WORKITEM_SPAWNER_RULES.md
+- planning/emr/WORKITEM_SYSTEM_CURRENT_STATE.md
+
+**Provides:**
+```python
+from django_workitems.models import Basket, BasketItem, WorkItem
+from django_workitems.services import commit_basket
+
+# Basket collects items, commit spawns WorkItems
+basket = Basket.objects.create(encounter=encounter)
+BasketItem.objects.create(basket=basket, catalog_item=vaccine)
+work_items = commit_basket(basket)  # Idempotent spawn
+```
+
+**Key rules:**
+- Tasks spawn only on Basket commit
+- Spawning is idempotent (get_or_create pattern)
+- Routing is deterministic and stored at spawn time
+
+**Depends on:** django-basemodels, django-catalog
+
+**Status:** Not started
+
+---
+
+### 2.3 django-encounters
+
+**Purpose:** Clinical encounter pipeline with state machine
+
+**Extracts from:**
+- planning/emr/ENCOUNTER_BOARD_SPEC_V1.md
+- planning/emr/TRANSITION_RULES_TABLE.md
+- planning/encounters/ENCOUNTER_PIPELINE.md
+
+**Provides:**
+```python
+from django_encounters.models import Encounter, EncounterType
+from django_encounters.services import transition_encounter
+
+class Encounter(BaseModel):
+    state = models.CharField(choices=PIPELINE_STATES)
+    # States: scheduled -> checked_in -> roomed -> in_exam -> ...
+
+transition_encounter(encounter, to_state='roomed', validate=True)
+```
+
+**Key rules:**
+- Encounter board ends when patient leaves
+- Cancel/No-Show are scheduling actions, not pipeline columns
+- Encounter state never mirrors task boards automatically
+
+**Depends on:** django-basemodels, django-party
+
+**Status:** Not started
+
+---
+
+### 2.4 django-worklog
+
+**Purpose:** WorkSession timing for labor tracking
+
+**Extracts from:**
+- planning/worklog/*.md
+- planning/hr/TIME_ENTRY_MODEL.md
+
+**Provides:**
+```python
+from django_worklog.models import WorkSession
+from django_worklog.services import start_session, stop_session
+
+session = start_session(user=user, context_type='vitals', context_id=encounter.id)
+# ... work happens ...
+stop_session(session)  # Only on successful save
+```
+
+**Key rules:**
+- Server-side timestamps for start/stop
+- Idempotent start (returns existing running session)
+- HR owns all time tracking
+
+**Depends on:** django-basemodels
+
+**Status:** Not started
+
+---
+
+## Tier 3: Infrastructure (After Tier 2 Stable)
+
+### 3.1 django-modules
+
+**Purpose:** Dynamic module/feature configuration
+
+**Extracts from:**
+- SYSTEM_CHARTER.md: "Module Configuration"
+
+**Provides:**
+```python
+from django_modules.models import ModuleConfig, FeatureFlag
+
+# Disabled modules return 404
+ModuleConfig.objects.create(name='pharmacy', is_enabled=False)
+
+# Feature flags for granular control
+FeatureFlag.objects.create(module='store', flag='show_reviews', enabled=True)
+```
+
+**Status:** Not started
+
+---
+
+### 3.2 django-singleton
+
+**Purpose:** Singleton settings pattern (pk=1 enforcement)
+
+**Extracts from:**
+- SYSTEM_CHARTER.md: "Singleton Settings"
+
+**Provides:**
+```python
+from django_singleton.models import SingletonModel
+
+class StoreSettings(SingletonModel):
+    tax_rate = models.DecimalField(...)
+    # Enforces pk=1, provides get_instance() classmethod
+```
+
+**Status:** Not started
+
+---
+
+### 3.3 django-layers
+
+**Purpose:** Import boundary enforcement for CI
+
+**Extracts from:**
+- ARCHITECTURE_ENFORCEMENT.md
+
+**Provides:**
+```bash
+# CI command
+python -m django_layers.check --config layers.yaml
+
+# layers.yaml defines allowed import directions
+```
+
+**Status:** Not started
+
+---
+
+## Extraction Order Summary
+
+```
+Phase 1: Foundation
+  └── django-basemodels (no deps)
+  └── django-party (needs basemodels)
+  └── django-rbac (needs basemodels)
+  └── django-audit (needs basemodels)
+
+Phase 2: Domain
+  └── django-catalog (needs basemodels)
+  └── django-workitems (needs basemodels, catalog)
+  └── django-encounters (needs basemodels, party)
+  └── django-worklog (needs basemodels)
+
+Phase 3: Infrastructure
+  └── django-modules (needs basemodels)
+  └── django-singleton (no deps)
+  └── django-layers (standalone tool)
+```
+
+---
+
+## Success Criteria
+
+Each package is "done" when:
+
+1. [ ] Standalone repo with pyproject.toml
+2. [ ] 95%+ test coverage
+3. [ ] No imports from other primitives (except foundation)
+4. [ ] README with installation and usage
+5. [ ] Published to PyPI (or private index)
+6. [ ] VetFriendly migrated to use the package
