@@ -25,6 +25,14 @@ EXEMPT_MODELS = {
     "BaseModel",  # The base itself
     "AbstractBaseModel",
     "Migration",  # Django migrations
+    # django-basemodels mixin classes (they define the fields)
+    "TimeStampedModel",
+    "UUIDModel",
+    "SoftDeleteModel",
+    # django-audit-log is standalone (no BaseModel dependency)
+    "AuditLog",
+    # django-catalog base (standalone package)
+    "CatalogBaseModel",
 }
 
 
@@ -90,11 +98,22 @@ def check_file(filepath: Path) -> list[dict]:
 
 
 def find_model_files(root: Path) -> list[Path]:
-    """Find all models.py files in src/."""
-    src_dir = root / "src"
-    if not src_dir.exists():
+    """Find all models.py files in packages/*/src/."""
+    packages_dir = root / "packages"
+    if not packages_dir.exists():
         return []
-    return list(src_dir.rglob("models.py"))
+
+    files = []
+    for package_dir in packages_dir.iterdir():
+        if not package_dir.is_dir():
+            continue
+        src_dir = package_dir / "src"
+        if src_dir.exists():
+            for model_file in src_dir.rglob("models.py"):
+                # Skip test models
+                if "/tests/" not in str(model_file):
+                    files.append(model_file)
+    return files
 
 
 def main():

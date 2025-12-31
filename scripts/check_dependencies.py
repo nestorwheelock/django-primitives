@@ -102,12 +102,21 @@ def check_file(filepath: Path) -> list[dict]:
 def find_python_files(root: Path) -> list[Path]:
     """Find all Python files in primitive packages."""
     files = []
-    for package in PRIMITIVE_PACKAGES:
-        package_dir = root / "src" / package
-        if package_dir.exists():
-            for pyfile in package_dir.rglob("*.py"):
-                # Skip test files
-                if "/tests/" not in str(pyfile):
+    packages_dir = root / "packages"
+
+    if not packages_dir.exists():
+        return files
+
+    for package_dir in packages_dir.iterdir():
+        if not package_dir.is_dir():
+            continue
+        # Check src/ subdirectory
+        src_dir = package_dir / "src"
+        if src_dir.exists():
+            for pyfile in src_dir.rglob("*.py"):
+                # Skip test files and migrations
+                path_str = str(pyfile)
+                if "/tests/" not in path_str and "/migrations/" not in path_str:
                     files.append(pyfile)
     return files
 
@@ -124,7 +133,7 @@ def main():
 
     if not files:
         print("No primitive packages found yet. Skipping check.")
-        print("(Packages should be in src/django_*/)")
+        print("(Packages should be in packages/django-*/src/)")
         return 0
 
     for filepath in files:
