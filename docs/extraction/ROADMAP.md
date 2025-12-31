@@ -148,28 +148,46 @@ These packages implement domain-specific patterns and depend on Tier 1.
 
 ### 2.1 django-catalog
 
-**Purpose:** Definition layer for orderable/billable items
+**Purpose:** Order catalog with basket workflow and work item spawning
 
 **Extracts from:**
 - planning/catalog/*.md
 - SYSTEM_EXECUTION_RULES.md: "Catalog owns definitions"
+- planning/workitems/WORKITEM_SPAWNER_RULES.md
 
 **Provides:**
 ```python
-from django_catalog.models import CatalogItem, CatalogCategory
+from django_catalog.models import CatalogItem, Basket, BasketItem, WorkItem
+from django_catalog.services import commit_basket, get_or_create_draft_basket
 
-class CatalogItem(BaseModel):
-    kind = models.CharField(choices=KIND_CHOICES)
-    display_name = models.CharField(max_length=200)
-    is_billable = models.BooleanField(default=True)
-    # Definition only - no execution, no inventory, no accounting
+# CatalogItem: Definition layer for orderable items
+item = CatalogItem.objects.create(
+    kind='service',
+    service_category='lab',
+    display_name='Blood Test',
+)
+
+# Basket workflow: collect items, commit spawns WorkItems
+basket = get_or_create_draft_basket(encounter, user)
+BasketItem.objects.create(basket=basket, catalog_item=item, added_by=user)
+work_items = commit_basket(basket, user)
 ```
 
-**Key rule:** Catalog items become actionable only when added to a Basket and committed.
+**Key features:**
+- CatalogItem: services and stock items with routing rules
+- Basket: encounter-scoped container for items before commit
+- WorkItem: spawned executable tasks with board routing
+- DispenseLog: clinical record of pharmacy dispensing
+- Configurable encounter model via settings
 
-**Depends on:** django-basemodels
+**Key rules:**
+- Catalog items become actionable only when added to a Basket and committed
+- Tasks spawn only on Basket commit (idempotent)
+- Routing is deterministic and stored at spawn time
 
-**Status:** Not started
+**Depends on:** Configurable encounter model (no hard dependencies)
+
+**Status:** ✅ Complete (packages/django-catalog, 4 tests)
 
 ---
 
@@ -177,29 +195,9 @@ class CatalogItem(BaseModel):
 
 **Purpose:** Task spawning and execution tracking
 
-**Extracts from:**
-- planning/workitems/WORKITEM_SPAWNER_RULES.md
-- planning/emr/WORKITEM_SYSTEM_CURRENT_STATE.md
+**Note:** This functionality is now included in django-catalog as WorkItem model.
 
-**Provides:**
-```python
-from django_workitems.models import Basket, BasketItem, WorkItem
-from django_workitems.services import commit_basket
-
-# Basket collects items, commit spawns WorkItems
-basket = Basket.objects.create(encounter=encounter)
-BasketItem.objects.create(basket=basket, catalog_item=vaccine)
-work_items = commit_basket(basket)  # Idempotent spawn
-```
-
-**Key rules:**
-- Tasks spawn only on Basket commit
-- Spawning is idempotent (get_or_create pattern)
-- Routing is deterministic and stored at spawn time
-
-**Depends on:** django-basemodels, django-catalog
-
-**Status:** Not started
+**Status:** ✅ Merged into django-catalog
 
 ---
 
@@ -337,8 +335,8 @@ Phase 1: Foundation
   └── django-audit-log (standalone) ✅
 
 Phase 2: Domain
-  └── django-catalog (needs basemodels)
-  └── django-workitems (needs basemodels, catalog)
+  └── django-catalog (standalone, configurable encounter) ✅
+  └── django-workitems (merged into django-catalog) ✅
   └── django-encounters (needs basemodels, party)
   └── django-worklog (needs basemodels)
 
