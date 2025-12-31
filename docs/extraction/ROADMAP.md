@@ -77,15 +77,23 @@ rel = PartyRelationship.objects.create(
 
 **Provides:**
 ```python
-from django_rbac.models import Role, Permission
-from django_rbac.decorators import requires_hierarchy_level
+from django_rbac.models import Role, UserRole
+from django_rbac.mixins import RBACUserMixin
+from django_rbac.decorators import require_permission, requires_hierarchy_level
+from django_rbac.views import ModulePermissionMixin, HierarchyPermissionMixin
 
-class Role(BaseModel):
-    name = models.CharField(max_length=100)
-    hierarchy_level = models.IntegerField()  # 10-100
+# Add mixin to User model
+class User(RBACUserMixin, AbstractUser):
+    pass
+
+# User methods
+user.hierarchy_level  # 60 (from highest role)
+user.can_manage_user(other)  # True if level > other's level
+user.get_manageable_roles()  # Roles below user's level
+user.has_module_permission('practice', 'view')  # Permission check
 
 @requires_hierarchy_level(60)  # Manager or higher
-def approve_leave_request(request, user_id):
+def approve_leave_request(request):
     ...
 ```
 
@@ -93,7 +101,7 @@ def approve_leave_request(request, user_id):
 
 **Depends on:** django-basemodels
 
-**Status:** Not started
+**Status:** ✅ Complete (packages/django-rbac, 30 tests)
 
 ---
 
