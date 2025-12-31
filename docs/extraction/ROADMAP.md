@@ -311,19 +311,31 @@ FeatureFlag.objects.create(module='store', flag='show_reviews', enabled=True)
 
 **Purpose:** Singleton settings pattern (pk=1 enforcement)
 
-**Extracts from:**
-- SYSTEM_CHARTER.md: "Singleton Settings"
-
 **Provides:**
 ```python
 from django_singleton.models import SingletonModel
 
 class StoreSettings(SingletonModel):
-    tax_rate = models.DecimalField(...)
-    # Enforces pk=1, provides get_instance() classmethod
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2)
+
+    class Meta:
+        app_label = "store"
+
+# Access the singleton
+settings = StoreSettings.get_instance()
+settings.tax_rate = 7.5
+settings.save()
 ```
 
-**Status:** Not started
+**Key features:**
+- `pk=1` enforced on every save
+- `get_instance()` classmethod with race condition handling
+- `delete()` raises `SingletonDeletionError` (no silent no-ops)
+- Detects rogue rows and raises `SingletonViolationError`
+
+**Depends on:** None (standalone abstract model)
+
+**Status:** ✅ Complete (packages/django-singleton, 15 tests)
 
 ---
 
@@ -363,7 +375,7 @@ Phase 2: Domain
 
 Phase 3: Infrastructure
   └── django-modules (needs basemodels)
-  └── django-singleton (no deps)
+  └── django-singleton (no deps) ✅
   └── django-layers (standalone tool)
 ```
 
