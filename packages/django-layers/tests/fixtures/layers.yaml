@@ -1,0 +1,21 @@
+layers:
+  - name: tier1
+    packages:
+      - pkg-tier1
+  - name: tier2
+    packages:
+      - pkg-tier2
+  - name: tier3
+    packages:
+      - pkg-tier3
+
+rules:
+  default: same_or_lower
+
+ignore:
+  paths:
+    - "**/tests/**"
+    - "**/migrations/**"
+
+allow:
+  imports: []

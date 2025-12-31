@@ -368,13 +368,39 @@ settings.save()
 
 **Provides:**
 ```bash
-# CI command
-python -m django_layers.check --config layers.yaml
+# CLI command
+django-layers check --config layers.yaml --root /path/to/repo
 
-# layers.yaml defines allowed import directions
+# Exit 0 if clean, 1 if violations found
 ```
 
-**Status:** Not started
+```yaml
+# layers.yaml - defines allowed import directions
+layers:
+  - name: tier1
+    packages: [django-basemodels, django-parties, django-rbac, django-audit-log]
+  - name: tier2
+    packages: [django-catalog, django-encounters, django-worklog]
+  - name: tier3
+    packages: [django-singleton, django-modules, django-layers]
+
+rules:
+  default: same_or_lower  # Can import same layer or lower
+
+ignore:
+  paths: ["**/tests/**", "**/migrations/**"]
+```
+
+**Key features:**
+- AST-based import scanning (accurate for standard imports)
+- Ignores stdlib and third-party imports
+- Configurable ignore patterns for tests/migrations
+- Supports monorepo layout: `packages/<pkg>/src/<module>/`
+- JSON and text output formats
+
+**Depends on:** None (standalone CLI tool, uses PyYAML)
+
+**Status:** ✅ Complete (packages/django-layers, 64 tests)
 
 ---
 
@@ -396,7 +422,7 @@ Phase 2: Domain
 Phase 3: Infrastructure
   └── django-modules (needs basemodels) ✅
   └── django-singleton (no deps) ✅
-  └── django-layers (standalone tool)
+  └── django-layers (standalone tool) ✅
 ```
 
 ---
