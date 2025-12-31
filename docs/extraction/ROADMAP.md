@@ -287,23 +287,41 @@ start_session(user, task_b)  # Stops task_a, starts task_b
 
 ### 3.1 django-modules
 
-**Purpose:** Dynamic module/feature configuration
+**Purpose:** Module enable/disable per organization
 
 **Extracts from:**
 - SYSTEM_CHARTER.md: "Module Configuration"
 
 **Provides:**
 ```python
-from django_modules.models import ModuleConfig, FeatureFlag
+from django_modules import is_module_enabled, require_module, list_enabled_modules
+from django_modules.models import Module, OrgModuleState
 
-# Disabled modules return 404
-ModuleConfig.objects.create(name='pharmacy', is_enabled=False)
+# Define a module
+Module.objects.create(key='pharmacy', name='Pharmacy', active=True)
 
-# Feature flags for granular control
-FeatureFlag.objects.create(module='store', flag='show_reviews', enabled=True)
+# Per-org override (disable pharmacy for this org)
+OrgModuleState.objects.create(org=org, module=module, enabled=False)
+
+# Check if enabled (resolution: org override > global default)
+if is_module_enabled(org, 'pharmacy'):
+    # pharmacy features available
+
+# Enforce in views/services
+require_module(org, 'pharmacy')  # Raises ModuleDisabled if disabled
+
+# List all enabled modules for org
+enabled = list_enabled_modules(org)  # {'billing', 'lab', ...}
 ```
 
-**Status:** Not started
+**Key rules:**
+- One boolean: enabled/disabled (no variants, no percentage rollout)
+- Resolution order: OrgModuleState.enabled > Module.active (global default)
+- Swappable org model via MODULES_ORG_MODEL setting
+
+**Depends on:** django-basemodels
+
+**Status:** ✅ Complete (packages/django-modules, 57 tests)
 
 ---
 
@@ -376,7 +394,7 @@ Phase 2: Domain
   └── django-worklog (standalone) ✅
 
 Phase 3: Infrastructure
-  └── django-modules (needs basemodels)
+  └── django-modules (needs basemodels) ✅
   └── django-singleton (no deps) ✅
   └── django-layers (standalone tool)
 ```
