@@ -1,0 +1,113 @@
+{% extends "base_staff.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Audit Dashboard" %}{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">{% trans "Audit Trail" %}</h1>
+        <p class="text-gray-600 mt-1">{% trans "Monitor system activity and user actions" %}</p>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="text-sm font-medium text-gray-500">{% trans "Total Logs (30 days)" %}</div>
+            <div class="text-3xl font-bold text-gray-900 mt-2">{{ total_logs }}</div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="text-sm font-medium text-gray-500">{% trans "Unique Users" %}</div>
+            <div class="text-3xl font-bold text-blue-600 mt-2">{{ unique_users }}</div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="text-sm font-medium text-gray-500">{% trans "Sensitive Actions" %}</div>
+            <div class="text-3xl font-bold text-red-600 mt-2">{{ sensitive_actions }}</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Recent Logs -->
+        <div class="bg-white rounded-xl shadow">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-gray-900">{% trans "Recent Activity" %}</h2>
+                <a href="/staff-{{ staff_token }}/operations/audit/logs/" class="text-sm text-primary-600 hover:text-primary-700">{% trans "View All" %}</a>
+            </div>
+            <div class="divide-y divide-gray-200">
+                {% for log in recent_logs %}
+                <a href="/staff-{{ staff_token }}/operations/audit/logs/{{ log.pk }}/" class="block px-6 py-4 hover:bg-gray-50">
+                    <div class="flex justify-between">
+                        <span class="font-medium">{{ log.action }}</span>
+                        <span class="text-sm text-gray-500">{{ log.timestamp|date:"M d, H:i" }}</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-1">{{ log.user.email }} - {{ log.resource_type }}</p>
+                </a>
+                {% empty %}
+                <div class="px-6 py-8 text-center text-gray-500">{% trans "No recent activity" %}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Quick Links -->
+        <div class="bg-white rounded-xl shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">{% trans "Quick Actions" %}</h2>
+            </div>
+            <div class="p-6 grid grid-cols-2 gap-4">
+                <a href="/staff-{{ staff_token }}/operations/audit/logs/" class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-center">
+                    <div class="font-medium">{% trans "All Logs" %}</div>
+                </a>
+                <a href="/staff-{{ staff_token }}/operations/audit/users/" class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-center">
+                    <div class="font-medium">{% trans "User Activity" %}</div>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- DEV: All Audit Module Pages -->
+    <div class="mt-8 bg-yellow-50 border-2 border-yellow-300 border-dashed rounded-xl p-6">
+        <div class="flex items-center gap-2 mb-4">
+            <span class="text-xl">🛠️</span>
+            <h2 class="font-bold text-yellow-800">DEV: All Audit Module Pages</h2>
+            <span class="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded">TEMPORARY</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Dashboard -->
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>📊</span> Dashboard
+                </h3>
+                <ul class="text-sm space-y-1">
+                    <li><a href="/staff-{{ staff_token }}/operations/audit/" class="text-blue-600 hover:underline">Audit Dashboard</a></li>
+                </ul>
+            </div>
+
+            <!-- Logs -->
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>📋</span> Audit Logs
+                </h3>
+                <ul class="text-sm space-y-1">
+                    <li><a href="/staff-{{ staff_token }}/operations/audit/logs/" class="text-blue-600 hover:underline">Log List</a></li>
+                    <li class="text-gray-400 text-xs">logs/&lt;pk&gt;/ - Log Detail</li>
+                </ul>
+            </div>
+
+            <!-- User Activity -->
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>👤</span> User Activity
+                </h3>
+                <ul class="text-sm space-y-1">
+                    <li><a href="/staff-{{ staff_token }}/operations/audit/users/" class="text-blue-600 hover:underline">User Activity Report</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="mt-4 text-xs text-yellow-700">
+            <strong>Note:</strong> This section is temporary for development.
+        </div>
+    </div>
+</div>
+{% endblock staff_content %}

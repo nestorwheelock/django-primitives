@@ -1,0 +1,118 @@
+{% extends "base_staff.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Log Detail" %}{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="mb-6">
+        <a href="{% url 'audit:log_list' %}" class="text-primary-600 hover:text-primary-700">
+            &larr; {% trans "Back to Audit Logs" %}
+        </a>
+    </nav>
+
+    <!-- Log Header -->
+    <div class="bg-white rounded-xl shadow mb-8">
+        <div class="px-6 py-6">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">{% trans "Audit Log Entry" %} #{{ log.pk }}</h1>
+                    <p class="text-gray-500 mt-1">{{ log.created_at|date:"F d, Y H:i:s" }}</p>
+                </div>
+                <span class="px-3 py-1 text-sm font-medium rounded-full
+                    {% if log.sensitivity == 'critical' %}bg-red-100 text-red-800
+                    {% elif log.sensitivity == 'high' %}bg-orange-100 text-orange-800
+                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                    {{ log.get_sensitivity_display }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- User Information -->
+        <div class="bg-white rounded-xl shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">{% trans "User Information" %}</h2>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <div>
+                    <div class="text-sm text-gray-500">{% trans "User" %}</div>
+                    <div class="font-medium">{{ log.user.email|default:"Anonymous" }}</div>
+                </div>
+                {% if log.user %}
+                <div>
+                    <div class="text-sm text-gray-500">{% trans "Name" %}</div>
+                    <div class="font-medium">{{ log.user.get_full_name|default:"-" }}</div>
+                </div>
+                {% endif %}
+                <div>
+                    <div class="text-sm text-gray-500">{% trans "IP Address" %}</div>
+                    <div class="font-medium font-mono">{{ log.ip_address|default:"-" }}</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-500">{% trans "User Agent" %}</div>
+                    <div class="font-medium text-sm text-gray-700">{{ log.user_agent|default:"-"|truncatechars:100 }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Details -->
+        <div class="bg-white rounded-xl shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">{% trans "Action Details" %}</h2>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <div>
+                    <div class="text-sm text-gray-500">{% trans "Action" %}</div>
+                    <div>
+                        <span class="px-2 py-1 text-xs font-medium rounded-full
+                            {% if log.action == 'create' %}bg-green-100 text-green-800
+                            {% elif log.action == 'delete' %}bg-red-100 text-red-800
+                            {% elif log.action == 'update' %}bg-blue-100 text-blue-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ log.get_action_display }}
+                        </span>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-500">{% trans "Resource Type" %}</div>
+                    <div class="font-medium">{{ log.resource_type }}</div>
+                </div>
+                {% if log.resource_id %}
+                <div>
+                    <div class="text-sm text-gray-500">{% trans "Resource ID" %}</div>
+                    <div class="font-medium font-mono">{{ log.resource_id }}</div>
+                </div>
+                {% endif %}
+                {% if log.resource_repr %}
+                <div>
+                    <div class="text-sm text-gray-500">{% trans "Resource Description" %}</div>
+                    <div class="font-medium">{{ log.resource_repr }}</div>
+                </div>
+                {% endif %}
+                <div>
+                    <div class="text-sm text-gray-500">{% trans "URL Path" %}</div>
+                    <div class="font-medium font-mono text-sm">{{ log.url_path|default:"-" }}</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-500">{% trans "HTTP Method" %}</div>
+                    <div class="font-medium">{{ log.method|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Extra Data -->
+    {% if log.extra_data %}
+    <div class="bg-white rounded-xl shadow mt-8">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">{% trans "Additional Data" %}</h2>
+        </div>
+        <div class="px-6 py-4">
+            <pre class="bg-gray-100 rounded-lg p-4 text-sm overflow-x-auto">{{ log.extra_data|pprint }}</pre>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock staff_content %}

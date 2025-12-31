@@ -1,0 +1,133 @@
+{% extends "base_staff.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Audit Logs" %}{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="mb-6">
+        <a href="{% url 'audit:dashboard' %}" class="text-primary-600 hover:text-primary-700">
+            &larr; {% trans "Back to Audit Dashboard" %}
+        </a>
+    </nav>
+
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">{% trans "Audit Logs" %}</h1>
+        <p class="text-gray-600 mt-1">{% trans "Complete audit trail of system activity" %}</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-xl shadow p-4 mb-6">
+        <form method="get" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{% trans "User" %}</label>
+                <select name="user" class="rounded-lg border-gray-300">
+                    <option value="">{% trans "All Users" %}</option>
+                    {% for user in users %}
+                    <option value="{{ user.pk }}" {% if request.GET.user == user.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ user.email }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{% trans "Action" %}</label>
+                <select name="action" class="rounded-lg border-gray-300">
+                    <option value="">{% trans "All Actions" %}</option>
+                    {% for action_val, action_label in actions %}
+                    <option value="{{ action_val }}" {% if request.GET.action == action_val %}selected{% endif %}>
+                        {{ action_label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{% trans "Sensitivity" %}</label>
+                <select name="sensitivity" class="rounded-lg border-gray-300">
+                    <option value="">{% trans "All Levels" %}</option>
+                    {% for sens_val, sens_label in sensitivities %}
+                    <option value="{{ sens_val }}" {% if request.GET.sensitivity == sens_val %}selected{% endif %}>
+                        {{ sens_label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700">
+                {% trans "Filter" %}
+            </button>
+        </form>
+    </div>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Timestamp" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "User" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Action" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Resource" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Sensitivity" %}</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase"></th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for log in logs %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ log.created_at|date:"M d, Y H:i:s" }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm font-medium text-gray-900">{{ log.user.email|default:"Anonymous" }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="px-2 py-1 text-xs font-medium rounded-full
+                            {% if log.action == 'create' %}bg-green-100 text-green-800
+                            {% elif log.action == 'delete' %}bg-red-100 text-red-800
+                            {% elif log.action == 'update' %}bg-blue-100 text-blue-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ log.get_action_display }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ log.resource_type }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="px-2 py-1 text-xs font-medium rounded-full
+                            {% if log.sensitivity == 'critical' %}bg-red-100 text-red-800
+                            {% elif log.sensitivity == 'high' %}bg-orange-100 text-orange-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ log.get_sensitivity_display }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <a href="{% url 'audit:log_detail' pk=log.pk %}" class="text-primary-600 hover:text-primary-900">{% trans "View" %}</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="px-6 py-12 text-center text-gray-500">{% trans "No audit logs found" %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if is_paginated %}
+        <div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+            <div class="flex justify-between">
+                <div>
+                    {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}" class="text-primary-600 hover:text-primary-700">&larr; {% trans "Previous" %}</a>
+                    {% endif %}
+                </div>
+                <div class="text-sm text-gray-700">
+                    {% trans "Page" %} {{ page_obj.number }} {% trans "of" %} {{ page_obj.paginator.num_pages }}
+                </div>
+                <div>
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}" class="text-primary-600 hover:text-primary-700">{% trans "Next" %} &rarr;</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock staff_content %}

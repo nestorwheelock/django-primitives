@@ -105,7 +105,7 @@ def approve_leave_request(request):
 
 ---
 
-### 1.4 django-audit
+### 1.4 django-audit-log
 
 **Purpose:** Append-only audit trail for all model changes
 
@@ -116,18 +116,29 @@ def approve_leave_request(request):
 
 **Provides:**
 ```python
-from django_audit.models import AuditEntry
-from django_audit.decorators import audited
+from django_audit_log import log, log_event
 
-@audited
-class Pet(BaseModel):
-    name = models.CharField(max_length=100)
-    # All changes automatically logged to AuditEntry
+# Log a model operation
+log(action='create', obj=my_instance, actor=request.user, request=request)
+
+# Log with changes
+log(action='update', obj=customer, actor=request.user,
+    changes={'email': {'old': 'a@b.com', 'new': 'x@y.com'}})
+
+# Log a non-model event
+log_event(action='login', actor=user, metadata={'method': 'oauth'})
 ```
 
-**Depends on:** django-basemodels
+**Key features:**
+- UUID primary keys, immutable logs (no updates/deletes)
+- Actor tracking with string snapshots
+- Before/after change diffs (JSON)
+- Request context (IP, user agent, request ID)
+- Sensitivity classification (normal/high/critical)
 
-**Status:** Not started
+**Depends on:** None (standalone)
+
+**Status:** ✅ Complete (packages/django-audit-log, 23 tests)
 
 ---
 
@@ -320,10 +331,10 @@ python -m django_layers.check --config layers.yaml
 
 ```
 Phase 1: Foundation
-  └── django-basemodels (no deps)
-  └── django-party (needs basemodels)
-  └── django-rbac (needs basemodels)
-  └── django-audit (needs basemodels)
+  └── django-basemodels (no deps) ✅
+  └── django-parties (needs basemodels) ✅
+  └── django-rbac (needs basemodels) ✅
+  └── django-audit-log (standalone) ✅
 
 Phase 2: Domain
   └── django-catalog (needs basemodels)

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-audit-log"
+version = "0.1.0"
+description = "Generic audit logging for Django applications"
+readme = "README.md"
+license = {text = "Proprietary"}
+authors = [
+    {name = "Nestor Wheelock", email = "nestor@example.com"},
+]
+requires-python = ">=3.11"
+dependencies = [
+    "Django>=4.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-django>=4.5",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/django_audit_log"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/django_audit_log/templates" = "django_audit_log/templates"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+python_files = ["test_*.py"]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
