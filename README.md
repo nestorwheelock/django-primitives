@@ -1,32 +1,167 @@
 # django-primitives
 
-Reusable Django packages extracted from production patterns.
+Reusable Django packages for building ERP and business applications. **18 packages, 887 tests.**
 
 ---
 
 ## What This Is
 
-A collection of standalone, pip-installable Django packages that implement common architectural patterns:
+A complete set of standalone, pip-installable Django primitives that implement the core patterns needed for any business application: identity, catalog, accounting, workflow, time tracking, permissions, and more.
 
-- **django-basemodels**: UUID PKs, timestamps, soft delete
-- **django-party**: Party pattern (Person, Organization, relationships)
-- **django-rbac**: Role-based access control with hierarchy
-- **django-audit**: Append-only audit trails
-
-See [docs/extraction/ROADMAP.md](docs/extraction/ROADMAP.md) for the full extraction plan.
+These primitives compose together to build:
+- E-Commerce platforms
+- Healthcare/EMR systems
+- Inventory & warehouse management
+- Project management tools
+- CRM systems
+- Accounting software
+- Delivery & logistics
+- Multi-tenant SaaS
 
 ---
 
-## Documentation
+## Packages
 
-| Document | Purpose |
-|----------|---------|
-| [CONTRACT.md](docs/architecture/CONTRACT.md) | Architectural rules (what must be true) |
-| [DEPENDENCIES.md](docs/architecture/DEPENDENCIES.md) | Layer boundaries and import rules |
-| [CONVENTIONS.md](docs/architecture/CONVENTIONS.md) | Coding patterns and standards |
-| [DECISIONS.md](docs/architecture/DECISIONS.md) | Resolved contradictions and ADRs |
-| [TDD_CYCLE.md](docs/process/TDD_CYCLE.md) | 26-step development process |
-| [ROADMAP.md](docs/extraction/ROADMAP.md) | Package extraction plan |
+### Foundation Layer
+
+| Package | Purpose | Key Classes |
+|---------|---------|-------------|
+| **django-basemodels** | UUID PKs, timestamps, soft delete | `UUIDModel`, `TimeStampedModel`, `SoftDeleteModel`, `BaseModel` |
+| **django-singleton** | One-row configuration tables | `SingletonModel` |
+| **django-modules** | Feature flags per organization | `Module`, `OrgModuleState` |
+| **django-layers** | Import boundary enforcement | `Layer`, `LayersConfig` |
+
+### Identity & Access
+
+| Package | Purpose | Key Classes |
+|---------|---------|-------------|
+| **django-parties** | People, organizations, groups, contacts | `Party`, `Person`, `Organization`, `Group`, `Address`, `Phone`, `Email` |
+| **django-rbac** | Role-based access control | `Role`, `UserRole`, `RBACUserMixin` |
+
+### Time & Decision Infrastructure
+
+| Package | Purpose | Key Classes |
+|---------|---------|-------------|
+| **django-decisioning** | Temporal modeling, idempotency, backdating | `Decision`, `IdempotencyKey`, `TimeSemanticsMixin`, `EffectiveDatedMixin` |
+| **django-audit-log** | Immutable audit trail | `AuditLog` |
+
+### Domain Primitives
+
+| Package | Purpose | Key Classes |
+|---------|---------|-------------|
+| **django-catalog** | Products, orders, fulfillment | `CatalogItem`, `Basket`, `BasketItem`, `WorkItem`, `DispenseLog` |
+| **django-encounters** | Stateful visits/sessions | `Encounter`, `EncounterDefinition`, `EncounterTransition` |
+| **django-worklog** | Time tracking with switch policy | `WorkSession` |
+| **django-geo** | Locations, coordinates, service areas | `GeoPoint`, `Place`, `ServiceArea` |
+
+### Value Objects & Utilities
+
+| Package | Purpose | Key Classes |
+|---------|---------|-------------|
+| **django-money** | Immutable currency amounts | `Money` |
+| **django-sequence** | Human-readable IDs (INV-2024-0001) | `Sequence` |
+
+### Attachments & Content
+
+| Package | Purpose | Key Classes |
+|---------|---------|-------------|
+| **django-documents** | File attachments with checksums | `Document` |
+| **django-notes** | Comments and tagging | `Note`, `Tag`, `ObjectTag` |
+| **django-agreements** | Terms, consent, version tracking | `Agreement`, `AgreementVersion` |
+| **django-ledger** | Double-entry accounting | `Account`, `Transaction`, `Entry` |
+
+---
+
+## Installation
+
+Each package is independently installable:
+
+```bash
+pip install django-basemodels
+pip install django-parties
+pip install django-catalog
+# etc.
+```
+
+Or install from the monorepo:
+
+```bash
+cd packages/django-parties
+pip install -e .
+```
+
+---
+
+## Quick Start
+
+### 1. Add to INSTALLED_APPS
+
+```python
+INSTALLED_APPS = [
+    ...
+    'django_basemodels',
+    'django_parties',
+    'django_rbac',
+    'django_catalog',
+    # Add the packages you need
+]
+```
+
+### 2. Run Migrations
+
+```bash
+python manage.py migrate
+```
+
+### 3. Use the Primitives
+
+```python
+from django_parties.models import Person, Organization
+from django_catalog.models import CatalogItem, Basket
+from django_money import Money
+from django_geo.geo import GeoPoint
+
+# Create a customer
+customer = Person.objects.create(
+    first_name='Maria',
+    last_name='Garcia',
+)
+
+# Create a product
+product = CatalogItem.objects.create(
+    name='Widget Pro',
+    sku='WGT-001',
+    unit_price=Money('29.99', 'USD'),
+)
+
+# Create an order
+basket = Basket.objects.create(owner=customer)
+basket.add_item(product, quantity=2)
+
+# Geographic queries
+nearby = Place.objects.within_radius(lat=19.43, lng=-99.13, km=10)
+```
+
+---
+
+## ERP Primitive Coverage
+
+Based on ChatGPT's "10 ERP Primitives" analysis, this project provides complete coverage:
+
+| Primitive | Package | Status |
+|-----------|---------|--------|
+| 1. Party (who) | django-parties | ✅ |
+| 2. Catalog (what) | django-catalog | ✅ |
+| 3. Account (ledger) | django-ledger | ✅ |
+| 4. Encounter (session) | django-encounters | ✅ |
+| 5. Decision (event) | django-decisioning | ✅ |
+| 6. Worklog (time) | django-worklog | ✅ |
+| 7. RBAC (access) | django-rbac | ✅ |
+| 8. Audit (trail) | django-audit-log | ✅ |
+| 9. Singleton (config) | django-singleton | ✅ |
+| 10. Modules (features) | django-modules | ✅ |
+
+**Plus 8 additional primitives:** Money, Sequence, Documents, Notes, Agreements, Geo, Layers, BaseModels.
 
 ---
 
@@ -34,99 +169,77 @@ See [docs/extraction/ROADMAP.md](docs/extraction/ROADMAP.md) for the full extrac
 
 ```
 django-primitives/
+├── packages/
+│   ├── django-agreements/
+│   ├── django-audit-log/
+│   ├── django-basemodels/
+│   ├── django-catalog/
+│   ├── django-decisioning/
+│   ├── django-documents/
+│   ├── django-encounters/
+│   ├── django-geo/
+│   ├── django-layers/
+│   ├── django-ledger/
+│   ├── django-modules/
+│   ├── django-money/
+│   ├── django-notes/
+│   ├── django-parties/
+│   ├── django-rbac/
+│   ├── django-sequence/
+│   ├── django-singleton/
+│   └── django-worklog/
 ├── docs/
-│   ├── architecture/     # Canonical contracts and rules
-│   │   ├── CONTRACT.md
-│   │   ├── DEPENDENCIES.md
-│   │   ├── CONVENTIONS.md
-│   │   └── DECISIONS.md
-│   ├── extraction/       # Package extraction plan
-│   │   ├── ROADMAP.md
-│   │   ├── PACKAGE_TEMPLATE.md
-│   │   └── BOUNDARY_TESTS.md
-│   ├── process/          # Development process
-│   │   └── TDD_CYCLE.md
-│   └── archive/          # Historical docs (read-only)
-│       └── vetfriendly-planning/
-├── scripts/              # Enforcement scripts
-│   ├── check_all.py
-│   ├── check_dependencies.py
-│   └── check_basemodel.py
-└── src/                  # Package source (future)
-    ├── django_basemodels/
-    ├── django_party/
-    └── ...
+│   ├── architecture/
+│   └── extraction/
+└── scripts/
 ```
 
 ---
 
-## Quick Start
+## Testing
 
-### Run Boundary Checks
+Run tests for a specific package:
 
 ```bash
-python scripts/check_all.py
+cd packages/django-catalog
+pip install -e .
+pytest tests/ -v
 ```
 
-### Development Process
+Run all tests:
 
-Every task follows the [26-step TDD cycle](docs/process/TDD_CYCLE.md):
-
-1. **Planning** (Steps 1-6): Validate docs, review code, ask questions
-2. **TDD** (Steps 7-10): Write failing tests, make them pass
-3. **Quality** (Steps 11-14): Refactor, document, verify coverage
-4. **Git** (Steps 15-18): Commit with conventional format
-5. **Review** (Steps 19-23): Code review, fix issues
-6. **Ship** (Steps 24-26): Push, deploy staging, deploy production (manual)
+```bash
+./scripts/test_all.sh
+```
 
 ---
 
-## Key Principles
+## Key Architectural Principles
 
-From [CONTRACT.md](docs/architecture/CONTRACT.md):
-
-1. **Party Pattern**: Person/Organization/Group are foundational
-2. **User vs Person**: Authentication is separate from identity
-3. **RBAC Hierarchy**: Users can only manage lower-level users
-4. **BaseModel**: All domain models use UUID, timestamps, soft delete
-5. **Separation**: Clinical != Operational != Inventory != Accounting
-6. **Explicit Triggers**: Side effects happen at defined points only
+1. **Party Pattern**: Person/Organization/Group are foundational identity
+2. **User vs Person**: Authentication (User) is separate from identity (Person)
+3. **Time Semantics**: `effective_at` (when it happened) vs `recorded_at` (when logged)
+4. **Idempotency**: Critical operations use `IdempotencyKey` to prevent duplicates
+5. **Soft Delete**: Domain models use `is_deleted` flag, not hard delete
+6. **UUID Primary Keys**: All models use UUIDs for distributed-friendly IDs
+7. **Double-Entry**: Financial transactions always balance
 
 ---
 
-## Extraction Tiers
+## Documentation
 
-### Tier 1: Foundation (Extract First)
-
-| Package | Purpose |
-|---------|---------|
-| django-basemodels | UUID PKs, timestamps, soft delete |
-| django-party | Party pattern |
-| django-rbac | Role hierarchy |
-| django-audit | Audit trails |
-
-### Tier 2: Domain (After Tier 1)
-
-| Package | Purpose |
-|---------|---------|
-| django-catalog | Orderable item definitions |
-| django-workitems | Task spawning |
-| django-encounters | Clinical pipelines |
-| django-worklog | Time tracking |
-
-### Tier 3: Infrastructure
-
-| Package | Purpose |
-|---------|---------|
-| django-modules | Dynamic feature config |
-| django-singleton | Settings pattern |
-| django-layers | Import enforcement |
+| Document | Purpose |
+|----------|---------|
+| [CONTRACT.md](docs/architecture/CONTRACT.md) | Architectural rules |
+| [DEPENDENCIES.md](docs/architecture/DEPENDENCIES.md) | Layer boundaries |
+| [CONVENTIONS.md](docs/architecture/CONVENTIONS.md) | Coding patterns |
+| [ROADMAP.md](docs/extraction/ROADMAP.md) | Package extraction history |
 
 ---
 
 ## Origin
 
-These patterns were extracted from [VetFriendly](../vetfriendly/), a veterinary practice management system. The original planning documents are archived in [docs/archive/vetfriendly-planning/](docs/archive/vetfriendly-planning/).
+These patterns were extracted from production systems including [VetFriendly](https://github.com/nwheeler/vetfriendly), a veterinary practice management system.
 
 ---
 
