@@ -442,7 +442,7 @@ Each package is "done" when:
 
 ## Current Status
 
-**All 11 packages extracted and tested.** Layer boundaries enforced via `django-layers check`.
+**All 18 packages extracted and tested.** Layer boundaries enforced via `django-layers check`.
 
 | Package | Tests | Status |
 |---------|-------|--------|
@@ -456,15 +456,23 @@ Each package is "done" when:
 | django-modules | 57 | ✅ Complete |
 | django-singleton | 15 | ✅ Complete |
 | django-layers | 64 | ✅ Complete |
-| **Total** | **457** | ✅ |
+| django-decisioning | 78 | ✅ Complete |
+| django-money | 63 | ✅ Complete |
+| django-sequence | 40 | ✅ Complete |
+| django-documents | 61 | ✅ Complete |
+| django-notes | 37 | ✅ Complete |
+| django-agreements | 31 | ✅ Complete |
+| django-ledger | 48 | ✅ Complete |
+| **Total** | **815** | ✅ |
 
 **Remaining:**
 - Publish to PyPI (when ready for public release)
 - Migrate VetFriendly to use packages
+- Phase 8: Retrofit existing packages with time semantics + idempotency
 
 ---
 
-## Phase 4: Framework Correctness (Next)
+## Phase 4: Framework Correctness (Complete)
 
 **Goal:** Build the "constitutional law" of the framework - consistent decision surfaces that make every future vertical (pizza, vet, dive ops, rentals) behave the same under stress.
 
@@ -541,7 +549,7 @@ UserRole.objects.current()  # Currently valid records
 
 **Depends on:** django-basemodels
 
-**Status:** 🔜 Planned
+**Status:** ✅ Complete (packages/django-decisioning, 78 tests)
 
 ---
 
@@ -597,7 +605,7 @@ class Invoice(models.Model):
 
 **Depends on:** None (standalone)
 
-**Status:** 🔜 Planned
+**Status:** ✅ Complete (packages/django-money, 63 tests)
 
 ---
 
@@ -625,7 +633,7 @@ next_sequence('order', org_b)  # "ORD-0001" (separate sequence)
 
 **Depends on:** None (standalone)
 
-**Status:** 🔜 Planned
+**Status:** ✅ Complete (packages/django-sequence, 40 tests)
 
 ---
 
@@ -656,7 +664,7 @@ doc = attach_document(
 
 **Depends on:** None (standalone)
 
-**Status:** 🔜 Planned
+**Status:** ✅ Complete (packages/django-documents, 61 tests)
 
 ---
 
@@ -687,7 +695,7 @@ Invoice.objects.filter(tags__name='urgent')
 
 **Depends on:** None (standalone)
 
-**Status:** 🔜 Planned
+**Status:** ✅ Complete (packages/django-notes, 37 tests)
 
 ---
 
@@ -722,7 +730,7 @@ amend_agreement(agreement, new_terms={...}, reason="Price increase")
 
 **Depends on:** django-decisioning
 
-**Status:** 🔜 Planned
+**Status:** ✅ Complete (packages/django-agreements, 31 tests)
 
 ---
 
@@ -802,7 +810,7 @@ class Entry(UUIDModel, TimeSemanticsMixin):
 
 **Depends on:** django-decisioning, django-money
 
-**Status:** 🔜 Planned
+**Status:** ✅ Complete (packages/django-ledger, 48 tests)
 
 ---
 
@@ -813,37 +821,38 @@ Phase 0: Time Contract
   └── docs/architecture/TIME_SEMANTICS.md ✅
   └── docs/architecture/POSTGRES_GOTCHAS.md ✅
 
-Phase 1: django-decisioning
-  └── TimeSemanticsMixin (default=timezone.now), EffectiveDatedMixin
-  └── EventAsOfQuerySet (append-only facts), EffectiveDatedQuerySet (validity periods)
-  └── IdempotencyKey with state tracking (pending/processing/succeeded/failed)
-  └── Decision model (AUTH_USER_MODEL, CharField for GenericFK IDs)
-  └── @idempotent decorator
+Phase 1: django-decisioning ✅ (78 tests)
+  └── TimeSemanticsMixin (default=timezone.now), EffectiveDatedMixin ✅
+  └── EventAsOfQuerySet (append-only facts), EffectiveDatedQuerySet (validity periods) ✅
+  └── IdempotencyKey with state tracking (pending/processing/succeeded/failed) ✅
+  └── Decision model (AUTH_USER_MODEL, CharField for GenericFK IDs) ✅
+  └── @idempotent decorator ✅
 
-Phase 2: django-money
-  └── Money frozen dataclass (no MoneyField - use separate fields + property)
-  └── quantized() method, CurrencyMismatchError
+Phase 2: django-money ✅ (63 tests)
+  └── Money frozen dataclass (no MoneyField - use separate fields + property) ✅
+  └── quantized() method, CurrencyMismatchError ✅
 
-Phase 3: django-sequence
-  └── Sequence model, next_sequence() service
+Phase 3: django-sequence ✅ (40 tests)
+  └── Sequence model, next_sequence() service ✅
 
-Phase 4: django-documents
-  └── Document model, storage abstraction
+Phase 4: django-documents ✅ (61 tests)
+  └── Document model, storage abstraction ✅
+  └── Retention policy, checksum verification ✅
 
-Phase 5: django-notes
-  └── Note, Tag, ObjectTag models
+Phase 5: django-notes ✅ (37 tests)
+  └── Note, Tag, ObjectTag models ✅
 
-Phase 6: django-agreements
-  └── Agreement, AgreementVersion models
-  └── GenericFK parties with CharField IDs
+Phase 6: django-agreements ✅ (31 tests)
+  └── Agreement, AgreementVersion models ✅
+  └── GenericFK parties with CharField IDs ✅
 
-Phase 7: django-ledger
-  └── Account, Transaction, Entry models
-  └── Entry→Transaction is FK (not M2M)
-  └── Single reversal direction (reverses FK, find via related_name)
-  └── Currency match enforcement
+Phase 7: django-ledger ✅ (48 tests)
+  └── Account, Transaction, Entry models ✅
+  └── Entry→Transaction is FK (not M2M) ✅
+  └── Single reversal direction (reverses FK, find via related_name) ✅
+  └── Double-entry balance enforcement ✅
 
-Phase 8: Retrofit Existing Packages
+Phase 8: Retrofit Existing Packages (Next)
   └── Add time semantics + idempotency to existing packages
 ```
 
