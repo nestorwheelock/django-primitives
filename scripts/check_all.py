@@ -12,25 +12,48 @@ import sys
 from pathlib import Path
 
 
+# Check definitions: (name, command_type, command)
+# command_type: "script" for local Python scripts, "module" for Python modules
 CHECKS = [
-    ("Dependency Boundaries", "check_dependencies.py"),
-    ("BaseModel Usage", "check_basemodel.py"),
+    ("Layer Boundaries", "module", "django_layers.cli"),
+    ("BaseModel Usage", "script", "check_basemodel.py"),
 ]
 
 
-def run_check(name: str, script: str) -> bool:
-    """Run a single check script."""
-    script_path = Path(__file__).parent / script
+def run_check(name: str, cmd_type: str, cmd: str) -> bool:
+    """Run a single check."""
+    root = Path(__file__).parent.parent
 
     print(f"{'=' * 60}")
     print(f"Running: {name}")
     print(f"{'=' * 60}")
     print()
 
-    result = subprocess.run(
-        [sys.executable, str(script_path)],
-        capture_output=False
-    )
+    if cmd_type == "script":
+        script_path = Path(__file__).parent / cmd
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            capture_output=False
+        )
+    elif cmd_type == "module":
+        # Run django-layers check
+        env = {
+            **subprocess.os.environ,
+            "PYTHONPATH": str(root / "packages" / "django-layers" / "src"),
+        }
+        result = subprocess.run(
+            [
+                sys.executable, "-m", cmd, "check",
+                "--config", str(root / "layers.yaml"),
+                "--root", str(root / "packages"),
+                "--format", "text",
+            ],
+            capture_output=False,
+            env=env,
+        )
+    else:
+        print(f"Unknown command type: {cmd_type}")
+        return False
 
     print()
     return result.returncode == 0
@@ -45,8 +68,8 @@ def main():
     print()
 
     results = []
-    for name, script in CHECKS:
-        passed = run_check(name, script)
+    for name, cmd_type, cmd in CHECKS:
+        passed = run_check(name, cmd_type, cmd)
         results.append((name, passed))
 
     # Summary

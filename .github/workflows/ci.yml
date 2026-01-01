@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install base dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pytest pyyaml
+
+      - name: Install all packages (editable)
+        run: |
+          for pkg in packages/*/; do
+            echo "Installing $pkg..."
+            pip install -e "$pkg"
+          done
+
+      - name: Run package tests
+        run: |
+          failed=0
+          for pkg in packages/*/; do
+            echo "========================================"
+            echo "Testing $pkg"
+            echo "========================================"
+            if ! pytest "$pkg" -v --tb=short; then
+              failed=1
+            fi
+          done
+          exit $failed
+
+      - name: Check layer boundaries
+        run: |
+          PYTHONPATH=packages/django-layers/src \
+          python -m django_layers.cli check \
+            --config layers.yaml \
+            --root packages \
+            --format text
+
+  boundary-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Run layer boundary check
+        run: |
+          PYTHONPATH=packages/django-layers/src \
+          python -m django_layers.cli check \
+            --config layers.yaml \
+            --root packages \
+            --format text
+
+      - name: Run BaseModel check
+        run: python scripts/check_basemodel.py
