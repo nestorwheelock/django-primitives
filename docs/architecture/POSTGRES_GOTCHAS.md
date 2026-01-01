@@ -45,6 +45,22 @@ Use django-sequence for human-facing identifiers:
 
 UUIDs are for machines. Humans get sequences.
 
+### GenericFK Object IDs
+
+**Rule:** Always use `CharField(max_length=255)` for GenericFK object IDs.
+
+```python
+# CORRECT: CharField supports UUIDs
+target_type = models.ForeignKey(ContentType, on_delete=models.PROTECT)
+target_id = models.CharField(max_length=255)  # String for UUID support
+target = GenericForeignKey('target_type', 'target_id')
+
+# WRONG: PositiveIntegerField breaks in UUID-first codebase
+target_id = models.PositiveIntegerField()  # Can't store UUIDs!
+```
+
+This is a UUID-first framework. Integer assumptions will bite you.
+
 ---
 
 ## Timezone Handling

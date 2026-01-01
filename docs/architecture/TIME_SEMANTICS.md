@@ -106,30 +106,47 @@ local_time = effective_at.astimezone(user_timezone)
 
 **Date-only fields** (like `birth_date`) are an exception - store as `DateField` without timezone.
 
-### Rule 5: Point-in-Time Queries
+### Rule 5: Two Categories of Timestamped Records
 
-Every model with time semantics must support "as of" queries:
+**Critical distinction:** Not all timestamped records are the same. Use the correct query pattern.
+
+| Category | Description | Examples | Query Pattern |
+|----------|-------------|----------|---------------|
+| **Events** | Append-only facts | AuditLog, Entry, Transition | `effective_at <= ts` |
+| **Effective-dated** | Records with validity periods | Role assignments, Agreements | `valid_from <= ts AND (valid_to IS NULL OR valid_to > ts)` |
+
+### Rule 6: Separate Query Helpers
+
+**Do not combine these into one method.** The semantics are different.
 
 ```python
-# What was true at this moment?
-MyModel.objects.as_of(timestamp)
-
-# Implementation
-class AsOfQuerySet(models.QuerySet):
+class EventAsOfQuerySet(models.QuerySet):
+    """For append-only facts/events (AuditLog, Entry, Transition)."""
     def as_of(self, timestamp):
         return self.filter(effective_at__lte=timestamp)
-```
 
-For **effective-dated records** (valid_from/valid_to):
-
-```python
 class EffectiveDatedQuerySet(models.QuerySet):
+    """For records with validity periods (Role assignments, Agreements)."""
     def as_of(self, timestamp):
         return self.filter(
             valid_from__lte=timestamp
         ).filter(
             Q(valid_to__isnull=True) | Q(valid_to__gt=timestamp)
         )
+
+    def current(self):
+        """Return currently valid records."""
+        return self.as_of(timezone.now())
+```
+
+**Usage:**
+```python
+# Events: "What happened by this time?"
+AuditLog.objects.as_of(timestamp)  # Uses EventAsOfQuerySet
+
+# Effective-dated: "What was valid at this time?"
+UserRole.objects.as_of(timestamp)  # Uses EffectiveDatedQuerySet
+UserRole.objects.current()  # Convenience for "valid now"
 ```
 
 ---

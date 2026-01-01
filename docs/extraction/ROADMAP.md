@@ -1,7 +1,7 @@
 # Package Extraction Roadmap
 
 **Status:** Planning
-**Last Updated:** 2025-12-31
+**Last Updated:** 2026-01-01
 
 ---
 
@@ -509,30 +509,35 @@ Each package is "done" when:
 
 **Provides:**
 ```python
+from django.conf import settings
 from django_decisioning.mixins import TimeSemanticsMixin, EffectiveDatedMixin
 from django_decisioning.models import Decision, IdempotencyKey
 from django_decisioning.decorators import idempotent
-from django_decisioning.querysets import AsOfQuerySet
+from django_decisioning.querysets import EventAsOfQuerySet, EffectiveDatedQuerySet
 
 # Time semantics for any fact
 class MyFact(TimeSemanticsMixin, models.Model):
-    # Inherits: effective_at, recorded_at
+    # Inherits: effective_at (default=now), recorded_at (auto_now_add)
     pass
 
-# Idempotency protection
+# Idempotency with state tracking
 @idempotent(scope='basket_commit', key_from=lambda basket, user: str(basket.id))
 def commit_basket(basket, user):
     ...
 
-# Point-in-time queries
-MyModel.objects.as_of(timestamp)
+# Separate query helpers for different record types
+AuditLog.objects.as_of(timestamp)  # EventAsOfQuerySet
+UserRole.objects.as_of(timestamp)  # EffectiveDatedQuerySet
+UserRole.objects.current()  # Currently valid records
 ```
 
 **Key models:**
-- `TimeSemanticsMixin` - effective_at + recorded_at
-- `EffectiveDatedMixin` - valid_from/valid_to + as_of()
-- `IdempotencyKey` - request-level duplicate prevention
-- `Decision` - generic decision record with authority + snapshot
+- `TimeSemanticsMixin` - effective_at (default=timezone.now) + recorded_at (auto_now_add)
+- `EffectiveDatedMixin` - valid_from/valid_to
+- `EventAsOfQuerySet` - for append-only facts
+- `EffectiveDatedQuerySet` - for validity-period records
+- `IdempotencyKey` - with state tracking (pending/processing/succeeded/failed)
+- `Decision` - uses AUTH_USER_MODEL + Party, CharField for GenericFK IDs
 
 **Depends on:** django-basemodels
 
@@ -544,10 +549,12 @@ MyModel.objects.as_of(timestamp)
 
 **Purpose:** Immutable money value object with currency-aware arithmetic
 
+**Design Decision:** No custom MoneyField. Store as separate fields, use descriptor for convenience.
+
 **Provides:**
 ```python
 from django_money import Money
-from django_money.fields import MoneyField
+from django_money.exceptions import CurrencyMismatchError
 
 # Immutable, currency-safe arithmetic
 price = Money("19.99", "USD")
@@ -556,17 +563,37 @@ total = price * 3  # Money("59.97", "USD")
 # Currency mismatch prevention
 price_usd + price_eur  # Raises CurrencyMismatchError
 
-# Django field
-class Product(models.Model):
-    price = MoneyField()
-    currency = models.CharField(max_length=3)
+# Quantize for display/settlement (not during calculations)
+display_price = price.quantized()  # Rounds to currency decimals
+
+# Storage pattern: separate fields, property accessor
+class Invoice(models.Model):
+    amount = models.DecimalField(max_digits=19, decimal_places=4)  # Internal precision
+    currency = models.CharField(max_length=3, default='USD')
+
+    @property
+    def total(self) -> Money:
+        """Return Money object for calculations."""
+        return Money(self.amount, self.currency)
+
+    def set_total(self, money: Money):
+        """Set from Money object."""
+        self.amount = money.amount
+        self.currency = money.currency
 ```
 
 **Key features:**
-- Frozen dataclass with banker's rounding
+- Frozen dataclass (immutable)
+- No auto-quantization in `__post_init__` (preserve precision during calculations)
+- `quantized()` method for display/settlement (banker's rounding)
 - Currency-specific decimal precision (USD=2, JPY=0, BTC=8)
 - Arithmetic operators (+, -, *, negation)
 - `CurrencyMismatchError` for type safety
+
+**Precision policy:**
+- **Storage:** `decimal_places=4` for internal precision (discount pro-rating, tax calculations)
+- **Display/Settlement:** Quantize to currency decimals at decision surfaces
+- **Rule:** Never quantize during intermediate calculations, only at boundaries
 
 **Depends on:** None (standalone)
 
@@ -703,32 +730,75 @@ amend_agreement(agreement, new_terms={...}, reason="Price increase")
 
 **Purpose:** Universal obligation/reversal engine - append-only double-entry
 
+**Design Decision:** Transaction→Entry is FK (not M2M). Entry created with FK reference to Transaction.
+
 **Provides:**
 ```python
 from django_ledger.models import Account, Entry, Transaction
 from django_ledger.services import post_entry, reverse_entry, get_balance
 
-# Post an entry (immutable)
-entry = post_entry(
-    account=receivables_account,
-    amount=Money("100.00", "USD"),
-    entry_type='debit',
-    source=invoice,
-    effective_at=invoice.date
+# Create transaction first
+transaction = Transaction.objects.create(
+    description="Invoice payment",
+    metadata={'invoice_id': str(invoice.id)}
 )
 
-# Reverse (creates NEW entry, never edits)
-reversal = reverse_entry(entry, reason="Invoice cancelled")
+# Post entries referencing the transaction (FK, not M2M)
+debit_entry = Entry.objects.create(
+    transaction=transaction,  # FK reference
+    account=receivables_account,
+    amount=Decimal("100.00"),
+    entry_type='debit',
+    source=invoice
+)
+credit_entry = Entry.objects.create(
+    transaction=transaction,  # Same transaction
+    account=cash_account,
+    amount=Decimal("100.00"),
+    entry_type='credit',
+    source=invoice
+)
+
+# Post the transaction (validates double-entry, locks entries)
+transaction.posted_at = timezone.now()
+transaction.save()  # Validates sum(debits) == sum(credits)
+
+# Reverse (creates NEW entry, one direction only)
+reversal = reverse_entry(debit_entry, reason="Invoice cancelled")
+# reversal.reverses = debit_entry (FK reference)
+# Find reversals via: debit_entry.reversal_entries.all()
 
 # Get balance as of any point in time
 balance = get_balance(account, as_of=datetime(2024, 12, 31))
 ```
 
+**Key models:**
+```python
+class Entry(UUIDModel, TimeSemanticsMixin):
+    transaction = models.ForeignKey(Transaction, on_delete=models.PROTECT, related_name='entries')
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name='entries')
+    amount = models.DecimalField(max_digits=19, decimal_places=4)
+    entry_type = models.CharField(max_length=10)  # 'debit' or 'credit'
+
+    # Single reversal direction (find reversing entries via related_name)
+    reverses = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.PROTECT,
+        related_name='reversal_entries'
+    )
+
+    # Source (GenericFK with CharField for UUID support)
+    source_type = models.ForeignKey(ContentType, null=True, blank=True, on_delete=models.PROTECT)
+    source_id = models.CharField(max_length=255, blank=True)
+```
+
 **Key rules:**
-- Entries are immutable once posted
-- Reversals are NEW entries referencing the original
-- Double-entry constraint enforced per transaction
+- Entries are immutable once transaction is posted
+- Reversals are NEW entries with `reverses` FK to original (one direction only)
+- Find all reversals via `entry.reversal_entries.all()`
+- Double-entry constraint enforced on transaction post: sum(debits) == sum(credits)
+- Entry currency must match account currency (enforced on save)
 - `effective_at` vs `recorded_at` for backdating support
+- GenericFK source uses CharField for UUID support
 
 **Depends on:** django-decisioning, django-money
 
@@ -740,13 +810,19 @@ balance = get_balance(account, as_of=datetime(2024, 12, 31))
 
 ```
 Phase 0: Time Contract
-  └── docs/architecture/TIME_SEMANTICS.md 🔜
+  └── docs/architecture/TIME_SEMANTICS.md ✅
+  └── docs/architecture/POSTGRES_GOTCHAS.md ✅
 
 Phase 1: django-decisioning
-  └── TimeSemanticsMixin, IdempotencyKey, Decision, @idempotent
+  └── TimeSemanticsMixin (default=timezone.now), EffectiveDatedMixin
+  └── EventAsOfQuerySet (append-only facts), EffectiveDatedQuerySet (validity periods)
+  └── IdempotencyKey with state tracking (pending/processing/succeeded/failed)
+  └── Decision model (AUTH_USER_MODEL, CharField for GenericFK IDs)
+  └── @idempotent decorator
 
 Phase 2: django-money
-  └── Money dataclass, MoneyField, CurrencyMismatchError
+  └── Money frozen dataclass (no MoneyField - use separate fields + property)
+  └── quantized() method, CurrencyMismatchError
 
 Phase 3: django-sequence
   └── Sequence model, next_sequence() service
@@ -759,9 +835,13 @@ Phase 5: django-notes
 
 Phase 6: django-agreements
   └── Agreement, AgreementVersion models
+  └── GenericFK parties with CharField IDs
 
 Phase 7: django-ledger
-  └── Account, Entry, Transaction models
+  └── Account, Transaction, Entry models
+  └── Entry→Transaction is FK (not M2M)
+  └── Single reversal direction (reverses FK, find via related_name)
+  └── Currency match enforcement
 
 Phase 8: Retrofit Existing Packages
   └── Add time semantics + idempotency to existing packages
