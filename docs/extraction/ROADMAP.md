@@ -461,3 +461,356 @@ Each package is "done" when:
 **Remaining:**
 - Publish to PyPI (when ready for public release)
 - Migrate VetFriendly to use packages
+
+---
+
+## Phase 4: Framework Correctness (Next)
+
+**Goal:** Build the "constitutional law" of the framework - consistent decision surfaces that make every future vertical (pizza, vet, dive ops, rentals) behave the same under stress.
+
+### Architectural Decisions (Locked)
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **Decisioning location** | Standalone `django-decisioning` | basemodels stays boringly universal; decisioning is behavior+governance |
+| **Money location** | Standalone `django-money` | Not ledger-specific; needed by pricing, billing, refunds, points systems |
+| **Retrofit timing** | Contract-first, staged compliance | Lock time contract NOW, apply to new surfaces immediately, backport by risk |
+| **Build order** | decisioning → money → agreements → ledger | Each depends on the previous |
+
+### Non-Negotiable Rules
+
+- **Every decision surface must be idempotent** (commit basket, post transition, post settlement)
+- **Every irreversible fact must support reversals** (never edits)
+- **Every fact has `effective_at` + `recorded_at`** (even if effective_at defaults to recorded_at)
+- **Snapshots are required at the boundary** (don't point at mutable state and call it evidence)
+
+### Current Gaps Identified
+
+**Time Semantics:**
+- Mixed patterns: DispenseLog allows backdating, WorkSession prevents it
+- No `effective_at` vs `recorded_at` distinction
+- No `as_of()` query support
+
+**Idempotency:**
+- Database-level constraints exist (WorkItem, DispenseLog, UserRole)
+- **Gap:** No request-level idempotency key enforcement
+- **Gap:** BasketItem creation vulnerable to double-click
+
+**Decision Surface Inconsistency:**
+- Each package has implicit "commit / transition / log / switch"
+- No explicit contract for authority, finality, reversibility
+
+**Financial Primitives:**
+- No money value object, pricing, agreements, or ledger
+
+### 4.1 django-decisioning
+
+**Purpose:** Standardize the Decision Surface Contract across all packages
+
+**Provides:**
+```python
+from django_decisioning.mixins import TimeSemanticsMixin, EffectiveDatedMixin
+from django_decisioning.models import Decision, IdempotencyKey
+from django_decisioning.decorators import idempotent
+from django_decisioning.querysets import AsOfQuerySet
+
+# Time semantics for any fact
+class MyFact(TimeSemanticsMixin, models.Model):
+    # Inherits: effective_at, recorded_at
+    pass
+
+# Idempotency protection
+@idempotent(scope='basket_commit', key_from=lambda basket, user: str(basket.id))
+def commit_basket(basket, user):
+    ...
+
+# Point-in-time queries
+MyModel.objects.as_of(timestamp)
+```
+
+**Key models:**
+- `TimeSemanticsMixin` - effective_at + recorded_at
+- `EffectiveDatedMixin` - valid_from/valid_to + as_of()
+- `IdempotencyKey` - request-level duplicate prevention
+- `Decision` - generic decision record with authority + snapshot
+
+**Depends on:** django-basemodels
+
+**Status:** 🔜 Planned
+
+---
+
+### 4.2 django-money
+
+**Purpose:** Immutable money value object with currency-aware arithmetic
+
+**Provides:**
+```python
+from django_money import Money
+from django_money.fields import MoneyField
+
+# Immutable, currency-safe arithmetic
+price = Money("19.99", "USD")
+total = price * 3  # Money("59.97", "USD")
+
+# Currency mismatch prevention
+price_usd + price_eur  # Raises CurrencyMismatchError
+
+# Django field
+class Product(models.Model):
+    price = MoneyField()
+    currency = models.CharField(max_length=3)
+```
+
+**Key features:**
+- Frozen dataclass with banker's rounding
+- Currency-specific decimal precision (USD=2, JPY=0, BTC=8)
+- Arithmetic operators (+, -, *, negation)
+- `CurrencyMismatchError` for type safety
+
+**Depends on:** None (standalone)
+
+**Status:** 🔜 Planned
+
+---
+
+### 4.3 django-sequence
+
+**Purpose:** Atomic, per-org sequence generation for human-readable IDs
+
+**Provides:**
+```python
+from django_sequence import next_sequence
+
+# Generate: "INV-0001", "INV-0002", ...
+invoice_number = next_sequence(scope='invoice', org=org)
+
+# Per-org isolation
+next_sequence('order', org_a)  # "ORD-0001"
+next_sequence('order', org_b)  # "ORD-0001" (separate sequence)
+```
+
+**Key features:**
+- Atomic increment (safe under concurrency)
+- Per-org isolation
+- Configurable prefix and padding
+- Gap policy (allow gaps vs no gaps)
+
+**Depends on:** None (standalone)
+
+**Status:** 🔜 Planned
+
+---
+
+### 4.4 django-documents
+
+**Purpose:** Immutable document attachment with storage abstraction
+
+**Provides:**
+```python
+from django_documents.models import Document
+from django_documents.services import attach_document
+
+# Attach to any model via GenericFK
+doc = attach_document(
+    target=invoice,
+    file=uploaded_file,
+    uploaded_by=user
+)
+# Stores: checksum, content_type, storage_ref
+```
+
+**Key features:**
+- GenericFK attachment to any model
+- SHA256 checksum verification
+- Storage abstraction (local/S3)
+- Retention policy fields
+- Immutable after creation
+
+**Depends on:** None (standalone)
+
+**Status:** 🔜 Planned
+
+---
+
+### 4.5 django-notes
+
+**Purpose:** Notes and tags attachable to any model
+
+**Provides:**
+```python
+from django_notes.models import Note, Tag
+from django_notes.services import add_note, tag_object
+
+# Add note to any model
+note = add_note(target=customer, content="VIP client", author=user)
+
+# Tag any object
+tag_object(target=invoice, tags=['urgent', 'review-needed'])
+
+# Query by tag
+Invoice.objects.filter(tags__name='urgent')
+```
+
+**Key features:**
+- GenericFK for universal attachment
+- Note visibility levels (internal/external)
+- Tag with slug, name, color
+- ObjectTag many-to-many via GenericFK
+
+**Depends on:** None (standalone)
+
+**Status:** 🔜 Planned
+
+---
+
+### 4.6 django-agreements
+
+**Purpose:** Universal price/terms/consent snapshot - "we agreed to X at time T"
+
+**Provides:**
+```python
+from django_agreements.models import Agreement
+from django_agreements.services import create_agreement, amend_agreement
+
+# Create agreement between parties
+agreement = create_agreement(
+    party_a=customer,
+    party_b=organization,
+    scope_type='service_plan',
+    terms={'monthly_fee': 99.00, 'features': ['basic', 'reports']},
+    agreed_by=user
+)
+
+# Amend (creates new version, original preserved)
+amend_agreement(agreement, new_terms={...}, reason="Price increase")
+```
+
+**Use cases:**
+- Quotes and proposals
+- Consent/waivers
+- Service plans
+- Negotiated discounts
+- Terms of service acceptance
+
+**Depends on:** django-decisioning
+
+**Status:** 🔜 Planned
+
+---
+
+### 4.7 django-ledger
+
+**Purpose:** Universal obligation/reversal engine - append-only double-entry
+
+**Provides:**
+```python
+from django_ledger.models import Account, Entry, Transaction
+from django_ledger.services import post_entry, reverse_entry, get_balance
+
+# Post an entry (immutable)
+entry = post_entry(
+    account=receivables_account,
+    amount=Money("100.00", "USD"),
+    entry_type='debit',
+    source=invoice,
+    effective_at=invoice.date
+)
+
+# Reverse (creates NEW entry, never edits)
+reversal = reverse_entry(entry, reason="Invoice cancelled")
+
+# Get balance as of any point in time
+balance = get_balance(account, as_of=datetime(2024, 12, 31))
+```
+
+**Key rules:**
+- Entries are immutable once posted
+- Reversals are NEW entries referencing the original
+- Double-entry constraint enforced per transaction
+- `effective_at` vs `recorded_at` for backdating support
+
+**Depends on:** django-decisioning, django-money
+
+**Status:** 🔜 Planned
+
+---
+
+### Phase 4 Implementation Order
+
+```
+Phase 0: Time Contract
+  └── docs/architecture/TIME_SEMANTICS.md 🔜
+
+Phase 1: django-decisioning
+  └── TimeSemanticsMixin, IdempotencyKey, Decision, @idempotent
+
+Phase 2: django-money
+  └── Money dataclass, MoneyField, CurrencyMismatchError
+
+Phase 3: django-sequence
+  └── Sequence model, next_sequence() service
+
+Phase 4: django-documents
+  └── Document model, storage abstraction
+
+Phase 5: django-notes
+  └── Note, Tag, ObjectTag models
+
+Phase 6: django-agreements
+  └── Agreement, AgreementVersion models
+
+Phase 7: django-ledger
+  └── Account, Entry, Transaction models
+
+Phase 8: Retrofit Existing Packages
+  └── Add time semantics + idempotency to existing packages
+```
+
+### Dependency Graph (Phase 4)
+
+```
+                    ┌─────────────────┐
+                    │ django-basemodels │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+              ▼              ▼              ▼
+┌─────────────────┐  ┌─────────────┐  ┌─────────────────┐
+│ django-parties  │  │ django-rbac │  │ django-decisioning │ ◄── NEW
+└─────────────────┘  └─────────────┘  └────────┬────────┘
+                                               │
+                         ┌─────────────────────┼─────────────────────┐
+                         │                     │                     │
+                         ▼                     ▼                     ▼
+               ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+               │  django-money   │   │django-agreements│   │  django-ledger  │
+               │     (NEW)       │   │     (NEW)       │   │     (NEW)       │
+               └─────────────────┘   └─────────────────┘   └─────────────────┘
+```
+
+### Torture Tests (Framework-Level)
+
+Every decision surface must pass:
+
+| Test | Description | Packages |
+|------|-------------|----------|
+| **Retry** | Same request 3x → exactly one effect | All with idempotency |
+| **Backdate** | Record today, effective yesterday → coherent | All with effective_at |
+| **Reversal** | Undo requires authority + produces new facts | Ledger, Agreements |
+| **Delegation** | Actor vs on_behalf_of captured | Decisioning mixin |
+| **Snapshot** | Reconstruct decision without mutable state | Catalog, Agreements |
+
+---
+
+## Future Packages (Deferred)
+
+| Package | Purpose | When |
+|---------|---------|------|
+| **django-settlements** | Payment as decision surface | After ledger is proven |
+| **django-inventory** | Stock tracking with movements | When physical goods needed |
+| **django-notifications** | Multi-channel delivery | When user-facing alerts needed |
+| **django-scheduling** | Availability + booking | When time slots needed |
+
+These are NOT part of this roadmap. Build them when a vertical needs them
