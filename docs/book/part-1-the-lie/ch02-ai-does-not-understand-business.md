@@ -20,13 +20,25 @@ I hear this constantly. Founders who think their prompt was clear enough. Develo
 
 They're all wrong.
 
-AI does not understand your business. AI does not understand any business. AI predicts what text would plausibly come next, based on patterns in its training data.
+But here's what nobody wants to admit: most human developers don't understand your business either.
 
-That's it. That's the whole trick.
+I've watched senior engineers build invoicing systems that allowed invoices to be deleted. I've reviewed code from expensive consultancies that stored currency as floating-point numbers. I've inherited systems from "expert" contractors that had no audit trail, no immutability, no concept of the regulatory environment they operated in.
+
+The developer understood Python. The developer understood Django. The developer did not understand that an invoice is a legal document, that tax authorities have opinions about disappearing records, that the numbers in financial software must add up to the penny every single time.
+
+This is not a new problem. This is the oldest problem in software development.
+
+The business owner knows the constraints. The developer knows the syntax. The gap between them has destroyed projects since the first line of commercial code was written.
+
+AI didn't create this gap. AI made it faster.
+
+AI does not understand your business. AI does not understand any business. AI predicts what text would plausibly come next, based on patterns in its training data. That's it. That's the whole trick.
 
 When you ask an AI to build an invoicing system, it doesn't think about invoices. It doesn't imagine your customers. It doesn't consider your tax jurisdiction or your audit requirements. It looks at the statistical patterns of text that followed similar prompts in its training data, and it generates more text that fits those patterns.
 
 The output is fluent. The output sounds right. The output may even work—for a while. But the output is not based on understanding. It's based on pattern matching.
+
+A junior developer does the same thing. They copy patterns from Stack Overflow, from tutorials, from the last codebase they worked on. They don't understand your business either. They understand patterns. The difference is speed: the junior developer takes a week to produce bad code, and you might catch it in review. The AI produces bad code in seconds, and it looks so professional that you might not review it at all.
 
 This distinction is not academic. It's the difference between a system that survives an audit and a system that collapses under scrutiny.
 
@@ -114,6 +126,40 @@ This is why constraints matter so much. The AI is a pattern-completion engine of
 
 ---
 
+## The Failures Are Ancient
+
+Every mistake AI makes, humans have made before. The failures aren't new. The speed is.
+
+**Floating-point currency**
+
+In 1982, the Vancouver Stock Exchange introduced a new index, set at a base value of 1000. The index was recalculated thousands of times daily, and each calculation truncated the result to three decimal places instead of rounding. By November 1983, the index had drifted down to 524.811—a 47.5% loss that existed only in the computers. The actual stocks hadn't crashed. The arithmetic had. When they finally recalculated correctly, the index jumped to 1098.892.
+
+That's what happens when you get rounding wrong. The Vancouver Stock Exchange learned it with humans writing the code. Your AI will make the same mistake if you don't tell it otherwise.
+
+In 1991, during the Gulf War, a Patriot missile battery in Dhahran, Saudi Arabia, failed to intercept an incoming Scud missile. Twenty-eight American soldiers died. The cause: the system tracked time as a floating-point number, and after 100 hours of continuous operation, the accumulated rounding error was 0.34 seconds—enough that the Scud had moved half a kilometer from where the system expected. The Patriot looked in the wrong place and found nothing.
+
+Binary floating-point cannot exactly represent 0.1. This has been true since the IEEE 754 standard was published in 1985. It will remain true forever. It is not a bug. It is mathematics. The AI doesn't know this. Neither do most developers.
+
+**Mutable history and missing audit trails**
+
+In 2001, executives at Enron Corporation directed employees to destroy documents. Emails were deleted. Files were shredded. Arthur Andersen, Enron's auditor, joined in—their Houston office shredded over a ton of documents in a single day. When investigators came looking, the records were gone.
+
+This is why audit trails exist. This is why financial records are immutable. This is why "delete" is a forbidden operation on anything that matters. The Sarbanes-Oxley Act of 2002 exists because humans did what AI will do if you let it: destroy evidence that shouldn't be destroyed.
+
+When your AI-generated invoicing system allows invoices to be deleted, it's not making a novel mistake. It's automating the behavior that sent executives to prison and destroyed one of the largest accounting firms in the world.
+
+**The gap between builder and business**
+
+In 1999, the Mars Climate Orbiter approached Mars for orbital insertion and was never heard from again. Post-incident analysis revealed that one team had provided thrust data in pound-force seconds; another team's software expected newton-seconds. Nobody had verified the units. The spacecraft entered the atmosphere at the wrong angle and disintegrated. Cost: $327.6 million.
+
+Two teams. Both competent. Both correct in isolation. Neither understood what the other was doing. The constraint—"all thrust data must use SI units"—was never explicitly stated.
+
+This is the gap. It has always existed. It exists between departments. Between contractors. Between the business owner who knows that invoices are legal documents and the developer who thinks they're just rows in a database.
+
+AI inherits this gap. AI cannot bridge it. Only constraints can.
+
+---
+
 ## Fluency Is Not Correctness
 
 The most dangerous property of AI-generated code is that it reads well.
@@ -124,15 +170,19 @@ AI-generated code is fluent. The variable names are reasonable. The structure fo
 
 But the code can still be catastrophically wrong.
 
-I once reviewed an AI-generated invoicing system that was beautifully structured. Clean separation of concerns. Proper use of Django models. Well-documented API endpoints. It was a pleasure to read.
+I reviewed an invoicing system for a small manufacturing company in 2023. The code was AI-generated—the founder had been proud of how quickly they'd shipped. Clean separation of concerns. Proper use of Django models. Well-documented API endpoints. It was a pleasure to read.
 
 It also allowed invoices to be deleted. Not archived. Not voided. Deleted. Completely removed from the database.
 
-The AI didn't know that invoices are legal documents. The AI didn't know that tax authorities require you to maintain records. The AI didn't know that accountants have opinions about disappearing financial records.
+They discovered this during a tax audit. The auditor asked to see invoice #1247. It didn't exist. Neither did #1248, #1251, or a dozen others. The bookkeeper had "cleaned up" old invoices that had been voided and replaced—except "cleaned up" meant "deleted forever," and tax authorities don't accept "we deleted the evidence" as an explanation.
+
+The company spent four months reconstructing records from bank statements, email confirmations, and customer files. They paid penalties. They paid accountants. They paid lawyers. The "quick ship" saved maybe two weeks of development time. The cleanup cost six figures.
+
+The AI didn't know that invoices are legal documents. The AI didn't know that tax authorities require you to maintain records—the IRS requires seven years, HMRC requires six, and most countries have similar rules. The AI didn't know that accountants have opinions about disappearing financial records.
 
 The AI just generated code that looked like invoicing systems it had seen before. Some of those systems were demos. Some were tutorials. Some were badly designed production systems that nobody should copy.
 
-The output was fluent. The output was wrong.
+The output was fluent. The output was wrong. And nobody caught it until an auditor asked for a document that no longer existed.
 
 ---
 
@@ -275,6 +325,21 @@ The fix is constraints. Explicit rules that transform AI from an inventor to an 
 The next chapter addresses the third lie: that you'll refactor later. You won't. The shortcuts you take now become the architecture you're stuck with. AI makes this worse, because AI generates plausible shortcuts faster than you can recognize them.
 
 Understanding that AI requires constraints—and that constraints must be explicit—is the foundation. Without this, the primitives are just ideas. With this, they're enforceable physics.
+
+---
+
+## References
+
+- IEEE Computer Society. *IEEE Standard for Binary Floating-Point Arithmetic* (IEEE 754-1985). Institute of Electrical and Electronics Engineers, 1985.
+- Skeel, Robert. "Roundoff Error and the Patriot Missile." *SIAM News* 25, no. 4 (July 1992): 11.
+- Quinn, Michael J. *Ethics for the Information Age*. 7th ed. Pearson, 2017. (Vancouver Stock Exchange index case study)
+- U.S. Government Accountability Office. *Patriot Missile Defense: Software Problem Led to System Failure at Dhahran, Saudi Arabia*. GAO/IMTEC-92-26, February 1992.
+- U.S. House of Representatives. *The Role of the Board of Directors in Enron's Collapse*. S. Rep. No. 107-70, 2002.
+- Stephenson, Arthur G., et al. *Mars Climate Orbiter Mishap Investigation Board Phase I Report*. NASA, November 1999.
+- Internal Revenue Service. *How Long Should I Keep Records?* IRS Publication 583, 2023.
+- HM Revenue & Customs. *How Long to Keep Business Records*. GOV.UK guidance, 2023.
+- Sarbanes-Oxley Act of 2002, Pub. L. No. 107-204, 116 Stat. 745.
+- Vaswani, Ashish, et al. "Attention Is All You Need." *Advances in Neural Information Processing Systems* 30 (2017).
 
 ---
 
