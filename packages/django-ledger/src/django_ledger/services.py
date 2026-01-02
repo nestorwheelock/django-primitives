@@ -63,16 +63,20 @@ def record_transaction(
         metadata=metadata or {},
     )
 
-    # Create entries
-    for entry_data in entries:
-        Entry.objects.create(
+    # Create entries (bulk for efficiency)
+    entry_effective_at = effective_at or timezone.now()
+    entry_objects = [
+        Entry(
             transaction=tx,
             account=entry_data['account'],
             amount=entry_data['amount'],
             entry_type=entry_data['entry_type'],
             description=entry_data.get('description', ''),
-            effective_at=effective_at or timezone.now(),
+            effective_at=entry_effective_at,
         )
+        for entry_data in entries
+    ]
+    Entry.objects.bulk_create(entry_objects)
 
     # Post the transaction
     tx.posted_at = timezone.now()

@@ -120,76 +120,69 @@ class PerformanceAnalyzer(ast.NodeVisitor):
         self.in_loop = old_in_loop
 
     def visit_Call(self, node: ast.Call):
-        # Detect ORM operations
+        # Detect ORM operations - must have .objects in chain to be ORM
         call_str = self._get_call_string(node)
 
-        # N+1 patterns: DB calls inside loops
-        if self.in_loop:
-            db_operations = [
-                '.get(', '.filter(', '.exclude(', '.all()',
-                '.first()', '.last()', '.count()', '.exists()',
-                '.create(', '.save(', '.delete(',
-                '.objects.', '.values(', '.values_list(',
+        # Check if this is likely an ORM operation (has .objects somewhere)
+        is_orm_call = '.objects.' in call_str or '.objects)' in call_str
+
+        # N+1 patterns: DB calls inside loops (only flag confirmed ORM operations)
+        if self.in_loop and is_orm_call:
+            # These are definitely DB operations when preceded by .objects
+            orm_operations = [
+                ('.objects.get(', 'get'),
+                ('.objects.filter(', 'filter'),
+                ('.objects.exclude(', 'exclude'),
+                ('.objects.all()', 'all'),
+                ('.objects.first()', 'first'),
+                ('.objects.last()', 'last'),
+                ('.objects.count()', 'count'),
+                ('.objects.exists()', 'exists'),
+                ('.objects.create(', 'create'),
+                ('.objects.values(', 'values'),
+                ('.objects.values_list(', 'values_list'),
             ]
-            for op in db_operations:
-                if op in call_str:
+            for pattern, op_name in orm_operations:
+                if pattern in call_str:
                     self.issues.append(PerformanceIssue(
                         category="n_plus_one",
                         severity="critical",
                         file=self.filename,
                         line=node.lineno,
                         code=self.get_line(node.lineno),
-                        message=f"DB operation '{op.strip('.')}' inside loop (N+1 query pattern)",
+                        message=f"ORM operation '.objects.{op_name}()' inside loop (N+1 query pattern)",
                         fix=f"Move query outside loop, use prefetch_related/select_related, or batch with __in lookup"
                     ))
                     break
 
-        # Missing prefetch/select_related on FK/M2M access
-        if '.all()' in call_str and self.in_loop:
+        # Bulk operation opportunities - only flag .objects.create in loop
+        if self.in_loop and '.objects.create(' in call_str:
             self.issues.append(PerformanceIssue(
-                category="missing_prefetch",
-                severity="warning",
+                category="bulk_opportunity",
+                severity="critical",
                 file=self.filename,
                 line=node.lineno,
                 code=self.get_line(node.lineno),
-                message="Accessing related objects in loop without prefetch_related",
-                fix="Add prefetch_related() to the initial queryset"
+                message="Model.objects.create() inside loop",
+                fix="Use bulk_create() for batch insertion"
             ))
 
-        # Linear search patterns
-        if isinstance(node.func, ast.Attribute):
-            if node.func.attr == 'filter' and self.in_loop:
-                # .filter() inside loop often indicates missing index or wrong approach
-                self.issues.append(PerformanceIssue(
-                    category="loop_query",
-                    severity="warning",
-                    file=self.filename,
-                    line=node.lineno,
-                    code=self.get_line(node.lineno),
-                    message="QuerySet.filter() inside loop",
-                    fix="Pre-fetch data and use dict/set for O(1) lookups"
-                ))
-
-        # Bulk operation opportunities
-        if self.in_loop:
-            single_ops = ['.save()', '.create(', '.delete(']
-            for op in single_ops:
-                if op in call_str:
-                    bulk_alt = {
-                        '.save()': 'bulk_update()',
-                        '.create(': 'bulk_create()',
-                        '.delete(': 'QuerySet.delete() or _raw_delete()',
-                    }
+        # .save() in loop (need to check it's on a model instance)
+        if self.in_loop and isinstance(node.func, ast.Attribute):
+            if node.func.attr == 'save':
+                # Heuristic: if calling .save() on something, it might be a model
+                # Only flag if not in a list comprehension (those are often intentional)
+                line = self.get_line(node.lineno)
+                if '.save()' in line and 'for ' not in line:
                     self.issues.append(PerformanceIssue(
                         category="bulk_opportunity",
                         severity="warning",
                         file=self.filename,
                         line=node.lineno,
-                        code=self.get_line(node.lineno),
-                        message=f"Single {op.strip('.()')} in loop",
-                        fix=f"Consider using {bulk_alt.get(op, 'bulk operation')} for batch processing"
+                        code=line,
+                        message="Model.save() inside loop",
+                        fix="Consider bulk_update() if updating multiple rows"
                     ))
-                    break
 
         self.generic_visit(node)
 
