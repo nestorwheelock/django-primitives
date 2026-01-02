@@ -289,6 +289,28 @@ These constraints aren't features. They're physics. The LLM must work within the
 
 ---
 
+## The Problem With Off-the-Shelf Software
+
+Before we talk about what to build, let's acknowledge what you've probably already tried.
+
+**Enterprise software.** SAP, Oracle, Microsoft Dynamics. These systems promise to unify everything—identity, time, money, agreements—into a single platform. The promise is compelling. The reality is brutal.
+
+According to Gartner, 55% to 75% of ERP implementations fail to meet their objectives. The average cost overrun is 189%. These aren't small companies making amateur mistakes. Waste Management sued SAP for $500 million. HP's SAP migration cost them $160 million in lost sales. Lidl spent €500 million over seven years before abandoning their SAP implementation entirely.
+
+The pattern is always the same: the software's model of your business doesn't match *your* model of your business. Either you change your business to fit the software, or you customize the software to fit your business. The first defeats the purpose. The second creates complexity that eventually collapses under its own weight.
+
+**Open source alternatives.** Odoo, ERPNext. Lower cost. Greater flexibility. But the fundamental problem remains: you're still trying to force your business into someone else's conceptual model. Open source gives you more control over the customization. But customization is still the problem.
+
+**Point solutions.** QuickBooks for accounting. Square for payments. Gusto for payroll. Each tool is specialized. Costs are predictable. But the same customer appears in twelve different systems with twelve different versions of their identity. According to IBM, 82% of enterprises report that data silos disrupt critical workflows.
+
+There's no winning move. Every approach trades one set of problems for another.
+
+**This book offers a different path.**
+
+Instead of forcing your business into someone else's model, you define your own primitives—your identity, your time semantics, your money rules, your agreements—and AI generates the code that implements them. Instead of customizing someone else's software, you compose your own from proven building blocks.
+
+---
+
 ## Why ERP Systems?
 
 ERP stands for Enterprise Resource Planning. Fancy name for a simple question: how does this business actually work?
@@ -312,7 +334,7 @@ A lost update in a typical app means the user retries. In an ERP system, it's a 
 
 Mutable history in a typical app is a weird bug. In an ERP system, it's audit failure and legal liability.
 
-I've seen a restaurant lose $30,000 because their inventory system allowed negative quantities. I've seen a medical practice face an audit because their billing system edited records instead of creating corrections. I've seen a property manager sued because their lease system couldn't prove what terms were agreed to when.
+The National Restaurant Association estimates that 75% of inventory shortages are due to internal theft—and restaurants lose 4-7% of sales to employee theft. In an industry with 3-5% profit margins, that theft can eliminate profitability entirely. Medical practices have faced millions in penalties because their billing systems couldn't distinguish when services were rendered from when they were billed. Netflix faced a class-action lawsuit because their system couldn't prove what subscription terms customers originally agreed to.
 
 These aren't edge cases. They're what happens when you violate the physics.
 
@@ -453,6 +475,26 @@ You need to become a **constraint definer** and an **output verifier**.
 The LLM does the typing.
 
 You do the thinking.
+
+---
+
+## What Comes With This Book
+
+The primitives aren't abstract principles. They're working code.
+
+This book includes access to:
+
+**Django packages** — Installable Python packages that implement each primitive. Identity. Time. Money. Agreements. Catalog. Workflow. Decisions. Audit. Ledger. You can install them, extend them, and compose them into whatever your business actually needs.
+
+**Tests** — Comprehensive test suites that verify the primitives work correctly. You can run them yourself. You can extend them. You can use them as templates for your own domain-specific tests.
+
+**Constraints** — The rules that the LLM must follow when generating code. Documented, explicit, copy-pasteable into your own prompts.
+
+**Prompts** — Example prompts that demonstrate how to work with LLMs under constraint. Not magic incantations—just precise instructions that produce reliable results.
+
+**Examples** — Working applications that show how the primitives compose into real systems. A veterinary clinic. A property manager. A delivery service. Different businesses, same primitives.
+
+The code is available digitally alongside the text. The examples are real. The patterns are proven. You can verify everything yourself.
 
 ---
 
