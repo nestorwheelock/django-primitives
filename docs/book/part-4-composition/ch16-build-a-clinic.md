@@ -1127,6 +1127,291 @@ def complete_checkout(encounter, receptionist, payment_info=None):
 
 ---
 
+## Complete Rebuild Prompt
+
+The following prompt demonstrates how to instruct Claude to rebuild this clinic system from scratch. This is the methodology in action—constrained AI composing known primitives.
+
+```markdown
+# Prompt: Build Veterinary Clinic Management System
+
+## Role
+
+You are a Django developer building a veterinary clinic management system.
+You must compose existing primitives from django-primitives packages.
+You must NOT create new Django models for concepts that primitives already handle.
+
+## Instruction
+
+Build a veterinary practice management system by composing these primitives:
+- django-parties (patients, owners, staff)
+- django-rbac (veterinarian, technician, receptionist roles)
+- django-agreements (appointments, prescriptions, vaccination schedules)
+- django-encounters (visit workflow)
+- django-catalog (services, medications)
+- django-ledger (invoices, payments)
+- django-documents (lab results, x-rays)
+- django-notes (exam notes, SOAP format)
+- django-decisioning (diagnoses)
+- django-audit-log (vaccination lot tracking)
+
+## Domain Purpose
+
+Enable veterinary clinics to:
+- Manage pet patients with owner relationships
+- Schedule and confirm appointments
+- Track visits through check-in → exam → discharge → checkout workflow
+- Record medical notes in SOAP format
+- Capture diagnoses as auditable decisions
+- Track vaccinations with lot numbers for recall compliance
+- Generate invoices and process payments
+- Maintain complete medical history
+
+## NO NEW MODELS
+
+Do not create any new Django models for:
+- Pets (extend Person from django-parties)
+- Appointments (use Agreement)
+- Visits (use Encounter)
+- Invoices (use Basket/Transaction)
+- Medical records (use Note + Document + Decision)
+
+The ONLY new model allowed is Pet, which MUST extend Person from django-parties
+to inherit UUID, timestamps, soft delete, and relationship capabilities.
+
+## Primitive Composition
+
+### Patients and Owners
+- Pet extends Person (species, breed, weight as additional fields)
+- Owner is Person
+- PetOwnership extends PartyRelationship (tracks ownership over time)
+
+### Staff
+- Veterinarian = Person + Role (approver permissions)
+- Technician = Person + Role (can administer, cannot diagnose)
+- Receptionist = Person + Role (scheduling, checkout)
+
+### Appointments
+- Agreement (agreement_type="appointment")
+  - parties: [pet, owner]
+  - terms.scheduled_time, terms.duration_minutes, terms.provider_id
+  - valid_from: now, valid_to: day after appointment
+  - metadata.confirmation_status
+
+### Visits
+- Encounter with EncounterDefinition "outpatient_visit"
+- States: scheduled → checked_in → in_exam → discharged → completed
+- Validators enforce: weight recorded at check-in, notes before discharge
+
+### Medical Records
+- Note (note_type="exam_notes") with SOAP format content
+- Document (document_type="lab_results") for attachments
+- Decision (decision_type="diagnosis") with inputs, outcome, rationale
+
+### Vaccinations
+- AuditLog (event_type="vaccination_administered")
+  - metadata: lot_number, expiration_date, site, dose_ml
+- Agreement (agreement_type="vaccination_schedule") for next due date
+
+### Billing
+- Basket (basket_type="invoice") linked to Encounter
+- BasketItem with catalog_item (service/medication)
+- Transaction for payment (debit cash, credit receivables)
+
+## Service Functions
+
+### schedule_appointment()
+```python
+def schedule_appointment(
+    patient: Pet,
+    owner: Person,
+    appointment_type: str,
+    scheduled_time: datetime,
+    provider: Person = None,
+) -> tuple[Agreement, Encounter]:
+    """Schedule appointment and pre-create encounter."""
+```
+
+### check_in_patient()
+```python
+def check_in_patient(
+    encounter: Encounter,
+    receptionist: Person,
+    weight_kg: Decimal,
+) -> Encounter:
+    """Check in patient, record weight, transition to checked_in."""
+```
+
+### record_exam_notes()
+```python
+def record_exam_notes(
+    encounter: Encounter,
+    veterinarian: Person,
+    subjective: str,
+    objective: str,
+    assessment: str,
+    plan: str,
+) -> Note:
+    """Record SOAP notes for encounter."""
+```
+
+### record_diagnosis()
+```python
+def record_diagnosis(
+    encounter: Encounter,
+    veterinarian: Person,
+    diagnosis_code: str,
+    diagnosis_text: str,
+    severity: str,
+) -> Decision:
+    """Record diagnosis as auditable decision."""
+```
+
+### record_vaccination()
+```python
+def record_vaccination(
+    patient: Pet,
+    vaccine: CatalogItem,
+    veterinarian: Person,
+    lot_number: str,
+    expiration_date: date,
+    site: str,
+    dose_ml: float,
+    next_due_date: date = None,
+) -> Agreement:
+    """Record vaccination with lot tracking, create schedule if due date provided."""
+```
+
+### finalize_invoice()
+```python
+def finalize_invoice(
+    encounter: Encounter,
+    receptionist: Person,
+) -> tuple[Basket, Transaction]:
+    """Commit basket and create accounting transaction."""
+```
+
+## Test Cases (38 tests)
+
+### Patient Tests (6 tests)
+1. test_create_pet_extends_person
+2. test_pet_owner_relationship
+3. test_ownership_history
+4. test_pet_soft_delete
+5. test_multiple_owners
+6. test_ownership_transfer
+
+### Appointment Tests (6 tests)
+7. test_schedule_appointment
+8. test_confirm_appointment
+9. test_cancel_appointment
+10. test_reschedule_appointment
+11. test_appointment_creates_encounter
+12. test_daily_schedule_query
+
+### Visit Workflow Tests (8 tests)
+13. test_check_in_records_weight
+14. test_check_in_transitions_state
+15. test_start_exam
+16. test_exam_notes_required_for_discharge
+17. test_charges_required_for_discharge
+18. test_discharge_transition
+19. test_complete_checkout
+20. test_workflow_validators
+
+### Medical Records Tests (8 tests)
+21. test_soap_notes_format
+22. test_diagnosis_as_decision
+23. test_diagnosis_captures_inputs
+24. test_attach_lab_results
+25. test_document_immutable
+26. test_vaccination_lot_tracking
+27. test_vaccination_schedule
+28. test_due_vaccinations_query
+
+### Billing Tests (6 tests)
+29. test_create_invoice_for_encounter
+30. test_add_service_to_invoice
+31. test_apply_discount
+32. test_finalize_invoice
+33. test_record_payment
+34. test_ledger_entries_balance
+
+### Integration Tests (4 tests)
+35. test_complete_visit_flow
+36. test_visit_with_vaccination
+37. test_visit_audit_trail
+38. test_patient_history_query
+
+## Key Behaviors
+
+1. **Pets are Parties** - Extend Person, don't create separate model
+2. **Appointments are Agreements** - Time-bounded commitments
+3. **Visits are Encounters** - State machine with validators
+4. **Diagnoses are Decisions** - Capture inputs, outcome, rationale
+5. **Vaccinations are AuditLog events** - Lot tracking in metadata
+6. **Invoices use Catalog + Ledger** - Basket for items, Transaction for payment
+7. **Medical records are Notes + Documents** - Attached to encounter
+
+## Forbidden Operations
+
+- DELETE on any patient record (soft delete only)
+- Direct state assignment on encounters (use transition_encounter)
+- Storing diagnosis without rationale
+- Recording vaccination without lot number
+- Modifying committed invoices
+- Bypassing workflow validators
+
+## Acceptance Criteria
+
+- [ ] Pet model extends Person from django-parties
+- [ ] Appointments use Agreement with proper party relationships
+- [ ] Visits use Encounter with validated state transitions
+- [ ] Diagnoses capture inputs and rationale via Decision
+- [ ] Vaccinations tracked with lot numbers in AuditLog
+- [ ] Invoices use Basket + Transaction
+- [ ] Complete audit trail for every patient
+- [ ] All 38 tests passing
+- [ ] README with usage examples
+```
+
+---
+
+## Using This Prompt
+
+To rebuild this clinic system with Claude:
+
+**Step 1: Set up the instruction stack**
+
+Layer 1 (Foundation): "You are a Django developer..."
+Layer 2 (Domain): The primitive composition rules
+Layer 3 (Task): The specific service functions to implement
+Layer 4 (Safety): The forbidden operations
+
+**Step 2: Generate incrementally**
+
+Don't ask for everything at once. Request:
+1. First: Models and basic setup
+2. Then: Service functions one at a time
+3. Then: Tests for each function
+4. Finally: Integration tests
+
+**Step 3: Verify against constraints**
+
+After each generation, check:
+- Did it create new models it shouldn't have?
+- Did it bypass primitives for custom implementations?
+- Did it include the forbidden operations?
+
+**Step 4: Iterate with corrections**
+
+If Claude violates constraints, respond:
+"This creates a custom Appointment model. Use Agreement from django-agreements instead.
+The appointment is an agreement between clinic and owner with terms.scheduled_time."
+
+The prompt is the specification. The constraints prevent invention. The incremental approach catches violations early.
+
+---
+
 ## What We Didn't Build
 
 Notice what the clinic application does NOT contain:

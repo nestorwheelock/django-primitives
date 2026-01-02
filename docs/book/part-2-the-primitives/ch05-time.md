@@ -298,6 +298,34 @@ Get time wrong, and every system that depends on temporal queries will be compro
 
 ---
 
+## How to Rebuild This Primitive
+
+Time semantics are handled by `django-decisioning` which provides bitemporal tracking:
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-decisioning | `docs/prompts/django-decisioning.md` | ~50 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-decisioning.md | claude
+
+# Request: "Start with the temporal mixin that provides
+# effective_at and recorded_at fields, then add the as_of() queryset method."
+```
+
+### Key Constraints
+
+- **Two timestamps always**: `effective_at` (when it happened) and `recorded_at` (when logged)
+- **Immutable recorded_at**: Set once on creation, never changes
+- **as_of() method**: Query state at any point in time
+- **current() method**: Filter to currently-effective records
+
+If Claude stores only a single timestamp or allows `recorded_at` to be modified, that's a constraint violation.
+
+---
+
 ## Sources and References
 
 1. **Snodgrass, R.T.** (1999). *Developing Time-Oriented Database Applications in SQL*. Morgan Kaufmann.

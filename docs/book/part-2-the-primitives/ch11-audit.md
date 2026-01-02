@@ -766,6 +766,33 @@ Get auditing wrong, and you're flying blind. Get it right, and you have a perman
 
 ---
 
+## How to Rebuild This Primitive
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-audit-log | `docs/prompts/django-audit-log.md` | ~23 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-audit-log.md | claude
+
+# Request: "Implement AuditLog model with GenericFK target,
+# immutability enforcement, and actor snapshot.
+# Then add log(), log_create(), log_update(), log_delete() service functions."
+```
+
+### Key Constraints
+
+- **Immutable entries**: Cannot update or delete after creation (raises `ImmutableLogError`)
+- **Actor snapshot**: Store `actor_repr` string in case user is later deleted
+- **Change tracking**: `old_values`, `new_values`, `changed_fields` for reconstruction
+- **GenericFK target**: Audit logs can attach to any model
+
+If Claude allows editing or deleting audit entries, that's a constraint violation. Arthur Andersen got convicted for less.
+
+---
+
 ## Sources and References
 
 1. **Arthur Andersen Conviction** — United States v. Arthur Andersen LLP, 544 U.S. 696 (2005). The Supreme Court ultimately overturned the conviction, but by then the firm had already collapsed.

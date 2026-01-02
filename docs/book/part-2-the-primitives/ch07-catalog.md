@@ -419,6 +419,32 @@ Get the catalog wrong, and transactions become chaotic. Get it right, and you ha
 
 ---
 
+## How to Rebuild This Primitive
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-catalog | `docs/prompts/django-catalog.md` | ~60 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-catalog.md | claude
+
+# Request: "Start with CatalogItem and Category models,
+# then implement Basket with commit() for price locking."
+```
+
+### Key Constraints
+
+- **Price snapshots on BasketItem**: `unit_price_snapshot` captures price at add-time
+- **Basket.commit() locks everything**: Committed baskets are immutable
+- **Work spawning**: Committed baskets can spawn work items
+- **Idempotent operations**: Add-to-cart handles duplicates gracefully
+
+If Claude stores prices only on CatalogItem without snapshotting to BasketItem, that's a constraint violation.
+
+---
+
 ## Sources and References
 
 1. **Sears Catalog History** — "Sears, Roebuck & Co. Catalogs," National Museum of American History, Smithsonian Institution. The 1908 "big book" exceeded 1,000 pages.

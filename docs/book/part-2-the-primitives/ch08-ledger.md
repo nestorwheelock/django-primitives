@@ -565,6 +565,33 @@ Get the ledger wrong, and your financial data is unreliable. Get it right, and y
 
 ---
 
+## How to Rebuild This Primitive
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-ledger | `docs/prompts/django-ledger.md` | 48 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-ledger.md | claude
+
+# Request: "Implement Account model with GenericFK owner,
+# then Transaction with posted_at for immutability,
+# then Entry with debit/credit types."
+```
+
+### Key Constraints
+
+- **DecimalField for all amounts**: Never use FloatField for money
+- **Immutable posted entries**: Cannot modify after `posted_at` is set
+- **Balance enforcement**: `record_transaction` must validate debits = credits
+- **Reversal pattern**: Corrections create opposite entries, never delete
+
+If Claude allows editing a posted entry or stores amounts as Float, that's a constraint violation.
+
+---
+
 ## Sources and References
 
 1. **Pacioli, Luca** (1494). *Summa de arithmetica, geometria, proportioni et proportionalita*. The first published description of double-entry bookkeeping.

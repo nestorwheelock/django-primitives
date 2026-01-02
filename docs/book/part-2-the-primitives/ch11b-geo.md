@@ -433,4 +433,31 @@ The Geography primitive handles the complexity so your application doesn't have 
 
 ---
 
+## How to Rebuild This Primitive
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-geo | `docs/prompts/django-geo.md` | ~40 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-geo.md | claude
+
+# Request: "Implement Country and Region models with ISO codes,
+# then Address with optional geocoding fields.
+# Add ServiceArea with multiple boundary types."
+```
+
+### Key Constraints
+
+- **ISO-3166 codes**: Country uses 2-letter, Region uses subdivision codes
+- **Decimal coordinates**: Latitude/longitude as DecimalField (9,6), never Float
+- **Haversine distance**: Pure math calculation, no external dependencies required
+- **Optional geocoding**: Coordinates are nullable, geocoding is async
+
+If Claude uses FloatField for coordinates or hardcodes country data, that's a constraint violation.
+
+---
+
 *Status: Draft*

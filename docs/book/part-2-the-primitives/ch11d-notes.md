@@ -360,4 +360,31 @@ The Notes primitive handles the complexity so your application doesn't have to r
 
 ---
 
+## How to Rebuild This Primitive
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-notes | `docs/prompts/django-notes.md` | ~25 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-notes.md | claude
+
+# Request: "Implement Note model with GenericFK target,
+# visibility controls (public/private/internal),
+# and @mention extraction with NoteMention records."
+```
+
+### Key Constraints
+
+- **GenericFK target**: Notes attach to any model
+- **Soft delete preservation**: Deleted notes remain for audit
+- **Mention processing**: Extract @usernames and create NoteMention records
+- **Thread support**: Notes can reply to other notes via parent FK
+
+If Claude hard-deletes notes or skips mention extraction, that's a constraint violation.
+
+---
+
 *Status: Draft*

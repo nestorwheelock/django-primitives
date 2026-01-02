@@ -388,6 +388,32 @@ Get agreements wrong, and every system that depends on "what was promised" becom
 
 ---
 
+## How to Rebuild This Primitive
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-agreements | `docs/prompts/django-agreements.md` | ~40 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-agreements.md | claude
+
+# Request: "Implement Agreement model with terms JSONField,
+# then AgreementParty with GenericForeignKey for polymorphic parties."
+```
+
+### Key Constraints
+
+- **Terms are immutable after execution**: Once status="executed", terms cannot change
+- **Amendments are new agreements**: Reference the original, don't modify it
+- **Parties via GenericForeignKey**: Any party type can participate
+- **Validity tracking**: valid_from/valid_to for temporal queries
+
+If Claude allows modifying terms on an executed agreement, that's a constraint violation. Corrections require amendments.
+
+---
+
 ## Sources and References
 
 1. **Code of Hammurabi** — Written circa 1754 BCE, the earliest known written legal code, primarily addressing contractual relationships. British Museum, London.

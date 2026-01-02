@@ -972,6 +972,33 @@ Get decisions wrong, and your system is a black box. Get them right, and you hav
 
 ---
 
+## How to Rebuild This Primitive
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-decisioning | `docs/prompts/django-decisioning.md` | ~78 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-decisioning.md | claude
+
+# Request: "Implement TimeSemanticsMixin with effective_at/recorded_at,
+# then EffectiveDatedMixin with valid_from/valid_to,
+# then IdempotencyKey model and @idempotent decorator."
+```
+
+### Key Constraints
+
+- **Two timestamps always**: `effective_at` (when it happened) and `recorded_at` (when logged)
+- **Immutable recorded_at**: Set once on creation, never changes
+- **Idempotency enforcement**: Duplicate operations return cached results
+- **Context capture**: Decisions store snapshot of information available at decision time
+
+If Claude stores only a single timestamp or allows `recorded_at` to be modified, that's a constraint violation.
+
+---
+
 ## Sources and References
 
 1. **Enron Scandal** — Powers, William C., Jr. "Report of Investigation by the Special Investigative Committee of the Board of Directors of Enron Corp." February 1, 2002. The definitive account of decision-making failures.

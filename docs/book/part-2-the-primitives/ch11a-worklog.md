@@ -531,6 +531,33 @@ The Worklog primitive handles the complexity so your application doesn't have to
 
 ---
 
+## How to Rebuild This Primitive
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-worklog | `docs/prompts/django-worklog.md` | ~35 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-worklog.md | claude
+
+# Request: "Implement WorklogEntry with GenericFK target,
+# duration tracking (minutes not hours), and approval workflow.
+# Then add Timesheet aggregation."
+```
+
+### Key Constraints
+
+- **Duration in minutes**: Integer field, never float hours
+- **Billing rate as Decimal**: Never FloatField for money
+- **Approval workflow**: draft → submitted → approved → billed
+- **GenericFK target**: Time entries attach to any work item
+
+If Claude stores duration as hours or uses Float for rates, that's a constraint violation.
+
+---
+
 ## References
 
 - Fair Labor Standards Act (FLSA) timekeeping requirements

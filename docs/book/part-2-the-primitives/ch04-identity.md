@@ -386,6 +386,36 @@ The primitives build on each other. Identity comes first because everything else
 
 ---
 
+## How to Rebuild These Primitives
+
+The Identity packages can be rebuilt from scratch using constrained prompts:
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-parties | `docs/prompts/django-parties.md` | 44 tests |
+| django-rbac | `docs/prompts/django-rbac.md` | ~35 tests |
+
+### Using the Prompts
+
+```bash
+# Rebuild django-parties
+cat docs/prompts/django-parties.md | claude
+
+# Request: "Implement the Person and Organization models first,
+# then PartyRelationship with GenericForeignKey."
+```
+
+### Key Constraints
+
+- **Party pattern enforced**: Person and Organization share PartyBaseMixin
+- **GenericForeignKey for contact info**: Address, Phone, Email attach to any party type
+- **Relationship validity**: PartyRelationship has valid_from/valid_to for temporal queries
+- **Soft delete via BaseModel**: Parties are never hard-deleted
+
+If Claude creates separate Customer and Vendor models instead of using Person with roles, that's a constraint violation.
+
+---
+
 ## References
 
 - Fellegi, Ivan P., and Alan B. Sunter. "A Theory for Record Linkage." *Journal of the American Statistical Association* 64, no. 328 (1969): 1183-1210.

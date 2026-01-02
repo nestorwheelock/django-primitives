@@ -1069,6 +1069,33 @@ Every system that tracks "things moving through stages" needs this pattern. The 
 
 ---
 
+## How to Rebuild This Primitive
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-encounters | `docs/prompts/django-encounters.md` | 80 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-encounters.md | claude
+
+# Request: "Implement EncounterDefinition with state machine config,
+# then Encounter with GenericFK subject,
+# then EncounterTransition for append-only logging."
+```
+
+### Key Constraints
+
+- **Append-only transitions**: `EncounterTransition` records cannot be modified after creation
+- **State machine configuration**: Definitions declare valid states, transitions, and validators
+- **Pluggable validators**: Custom validation via class paths in JSONField
+- **GenericFK subject**: Encounters can track any model type
+
+If Claude allows updating transition records or permits transitions outside the defined state machine, that's a constraint violation.
+
+---
+
 ## Sources and References
 
 1. **Patriot Missile Failure** — Report by the Government Accountability Office, "Patriot Missile Defense: Software Problem Led to System Failure at Dhahran, Saudi Arabia," GAO/IMTEC-92-26, February 1992. The 0.34-second drift after 100 hours of operation.

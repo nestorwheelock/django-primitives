@@ -379,6 +379,33 @@ The Sequence primitive handles the complexity so your application doesn't have t
 
 ---
 
+## How to Rebuild This Primitive
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-sequence | `docs/prompts/django-sequence.md` | ~25 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-sequence.md | claude
+
+# Request: "Implement SequenceDefinition with configurable format patterns,
+# then SequenceAllocation for tracking every number assigned.
+# Use select_for_update() for concurrency."
+```
+
+### Key Constraints
+
+- **Atomic increment**: Use `select_for_update()` to prevent race conditions
+- **Allocation tracking**: Every number is recorded with who/what/when
+- **Void support**: Numbers can be voided but allocation records persist
+- **Gap detection**: Can identify missing numbers in a sequence
+
+If Claude allows concurrent access without locking or skips allocation tracking, that's a constraint violation.
+
+---
+
 ## References
 
 - IRS Publication 583: Record retention requirements for sequential numbering

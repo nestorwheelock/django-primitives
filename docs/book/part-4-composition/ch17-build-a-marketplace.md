@@ -899,6 +899,299 @@ def notify_pizzeria(pizzeria, order):
 
 ---
 
+## Complete Rebuild Prompt
+
+The following prompt demonstrates how to instruct Claude to rebuild this marketplace from scratch.
+
+```markdown
+# Prompt: Build Pizza Delivery Marketplace
+
+## Role
+
+You are a Django developer building a multi-vendor pizza delivery marketplace.
+You must compose existing primitives from django-primitives packages.
+You must NOT create new Django models for concepts that primitives already handle.
+
+## Instruction
+
+Build a pizza delivery marketplace by composing these primitives:
+- django-parties (customers, pizzerias, drivers)
+- django-catalog (menus, sizes, toppings, combos)
+- django-agreements (combo deals, promotions)
+- django-ledger (orders, payments, split settlements)
+- django-encounters (delivery tracking workflow)
+- django-worklog (driver shifts)
+- django-geo (delivery zones, service areas)
+- django-rbac (vendor admin, driver roles)
+- django-audit-log (order events)
+
+## Domain Purpose
+
+Enable pizza marketplace to:
+- Multiple vendor menus with sizes and toppings (including half-toppings)
+- Combo deals that bundle items at discount
+- Delivery zone calculation with distance-based fees
+- Driver shift management
+- Real-time delivery tracking through state machine
+- Split payments (platform fee, vendor payment, driver tips)
+- Complete order audit trail
+
+## NO NEW MODELS
+
+Do not create any new Django models for:
+- Pizzerias (use Organization from django-parties)
+- Drivers (use Person from django-parties)
+- Menu items (use CatalogItem from django-catalog)
+- Orders (use Basket from django-catalog)
+- Line items (use BasketItem from django-catalog)
+- Payments (use Transaction from django-ledger)
+- Deliveries (use Encounter from django-encounters)
+- Delivery zones (use ServiceArea from django-geo)
+- Deals/promotions (use Agreement from django-agreements)
+
+## Primitive Composition
+
+### Vendors and Staff
+- Pizzeria = Organization (org_type="restaurant")
+- Driver = Person + PartyRelationship to pizzeria
+- Customer = Person
+
+### Menu System
+- Category = Menu section (Pizzas, Sides, Drinks)
+- CatalogItem = Menu item with metadata:
+  - metadata.available_sizes: ["small", "medium", "large"]
+  - metadata.base_prices: {"small": 12.99, ...}
+  - metadata.is_topping: true/false
+  - metadata.topping_price: 1.50
+
+### Half-Topping Pattern
+- BasketItem for toppings with:
+  - unit_price_snapshot: price * 0.5 for half topping
+  - metadata.coverage: "left" | "right" | "full"
+  - metadata.parent_pizza_id: links to pizza line item
+
+### Combo Deals
+- Agreement (agreement_type="combo_deal")
+  - terms.items: ["item_sku1", "item_sku2", ...]
+  - terms.fixed_price: 24.99
+  - metadata.savings_description: "Save $5"
+
+### Orders and Checkout
+- Basket = The cart and order
+  - basket_type="order"
+  - metadata.order_number, delivery_address, etc.
+- BasketItem = Line items with price snapshots
+- Basket.commit() = Lock prices at checkout
+
+### Delivery Zones
+- ServiceArea with radius or postal codes
+  - metadata.delivery_fee: 3.99
+  - metadata.min_order: 15.00
+  - metadata.estimated_minutes: 30
+
+### Delivery Tracking
+- Encounter with EncounterDefinition "pizza_delivery"
+- States: order_placed → preparing → ready → picked_up → en_route → delivered
+- EncounterTransition records each state change with timestamp
+
+### Split Payments
+- Transaction with multiple Entry records:
+  - Debit: Cash/Card (full amount)
+  - Credit: Platform Revenue (commission)
+  - Credit: Vendor Payable (vendor share)
+  - Credit: Driver Tips (tip amount)
+
+### Driver Shifts
+- WorkSession (session_type="delivery_shift")
+  - target=pizzeria
+  - started_at, ended_at
+  - metadata.deliveries_completed
+
+## Service Functions
+
+### add_pizza_to_cart()
+```python
+def add_pizza_to_cart(
+    basket: Basket,
+    pizza: CatalogItem,
+    size: str,
+    toppings: list[dict],  # [{item, coverage}]
+    quantity: int = 1,
+) -> list[BasketItem]:
+    """Add pizza with toppings to cart."""
+```
+
+### apply_combo_deal()
+```python
+def apply_combo_deal(
+    basket: Basket,
+    deal: Agreement,
+) -> Decimal:
+    """Apply combo deal, return savings amount."""
+```
+
+### calculate_delivery_fee()
+```python
+def calculate_delivery_fee(
+    pizzeria: Organization,
+    delivery_address: str,
+) -> dict:
+    """Calculate delivery fee and ETA for address."""
+```
+
+### checkout_order()
+```python
+def checkout_order(
+    basket: Basket,
+    customer: Person,
+    payment_method: str,
+    tip_amount: Decimal = Decimal("0"),
+) -> tuple[Basket, Transaction]:
+    """Process payment with platform/vendor/tip split."""
+```
+
+### create_delivery_encounter()
+```python
+def create_delivery_encounter(
+    order: Basket,
+) -> Encounter:
+    """Create delivery tracking encounter for order."""
+```
+
+### update_delivery_status()
+```python
+def update_delivery_status(
+    delivery: Encounter,
+    new_status: str,
+    actor: Person,
+    notes: str = "",
+) -> Encounter:
+    """Transition delivery to new state."""
+```
+
+## Test Cases (40 tests)
+
+### Menu Tests (6 tests)
+1. test_create_pizzeria_menu
+2. test_pizza_with_sizes
+3. test_topping_catalog_item
+4. test_menu_item_availability
+5. test_price_by_size
+6. test_seasonal_menu_item
+
+### Cart Tests (10 tests)
+7. test_add_pizza_to_cart
+8. test_add_topping_full
+9. test_add_topping_half_left
+10. test_add_topping_half_right
+11. test_half_topping_half_price
+12. test_pizza_with_multiple_toppings
+13. test_apply_combo_deal
+14. test_combo_validates_items
+15. test_remove_item_from_cart
+16. test_cart_total_calculation
+
+### Delivery Zone Tests (4 tests)
+17. test_address_in_zone
+18. test_address_outside_zone
+19. test_delivery_fee_calculation
+20. test_minimum_order_enforcement
+
+### Checkout Tests (8 tests)
+21. test_commit_basket_locks_prices
+22. test_payment_creates_transaction
+23. test_platform_commission_entry
+24. test_vendor_payable_entry
+25. test_tip_entry_to_driver
+26. test_entries_balance
+27. test_order_number_generated
+28. test_checkout_creates_delivery
+
+### Delivery Tracking Tests (8 tests)
+29. test_create_delivery_encounter
+30. test_delivery_initial_state
+31. test_transition_to_preparing
+32. test_transition_to_ready
+33. test_driver_picks_up
+34. test_transition_en_route
+35. test_transition_delivered
+36. test_invalid_transition_rejected
+
+### Driver Tests (4 tests)
+37. test_start_driver_shift
+38. test_end_driver_shift
+39. test_assign_delivery_to_driver
+40. test_driver_shift_deliveries
+
+## Key Behaviors
+
+1. **Half-toppings via metadata** - coverage field, half price multiplier
+2. **Combo deals as Agreements** - terms.items, terms.fixed_price
+3. **Orders are Baskets** - commit() locks prices
+4. **Split payments via Entries** - platform, vendor, driver accounts
+5. **Delivery is Encounter** - state machine with transitions
+6. **Zones are ServiceAreas** - fee and min_order in metadata
+
+## Forbidden Operations
+
+- Creating custom Order or LineItem models
+- Storing prices without snapshots
+- Bypassing Basket.commit() at checkout
+- Direct state assignment on deliveries
+- Modifying committed basket items
+- Processing payment without balanced entries
+
+## Acceptance Criteria
+
+- [ ] No new Django models for core concepts
+- [ ] Half-toppings work via BasketItem metadata
+- [ ] Combo deals use Agreement with terms
+- [ ] Orders use Basket with commit()
+- [ ] Payments use Transaction with balanced entries
+- [ ] Deliveries use Encounter with state machine
+- [ ] Zones use ServiceArea
+- [ ] All 40 tests passing
+- [ ] README with ordering flow example
+```
+
+---
+
+## Using This Prompt
+
+To rebuild this marketplace with Claude:
+
+**Step 1: Provide the constraint context**
+
+Before the rebuild prompt, give Claude:
+- The django-primitives package documentation
+- The CLAUDE.md file with layer rules
+- This prompt as the specification
+
+**Step 2: Request incrementally**
+
+Break into phases:
+1. "Set up the catalog: pizzeria, menu categories, menu items with sizes"
+2. "Implement add_pizza_to_cart with half-topping support"
+3. "Implement combo deals using Agreement"
+4. "Implement checkout with split payment entries"
+5. "Create the delivery encounter workflow"
+
+**Step 3: Validate each output**
+
+After each generation, check:
+- Are all models from primitives (not custom)?
+- Is the half-topping logic using metadata, not a custom model?
+- Are payments using Transaction with balanced Entry records?
+
+**Step 4: Correct constraint violations**
+
+If Claude creates a custom model:
+"Don't create a DeliveryZone model. Use ServiceArea from django-geo with metadata.delivery_fee and metadata.min_order."
+
+**The prompt is the contract. Enforce it.**
+
+---
+
 ## What We Didn't Build
 
 Notice what the marketplace does NOT contain:

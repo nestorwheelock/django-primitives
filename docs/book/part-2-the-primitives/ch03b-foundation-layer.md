@@ -738,6 +738,52 @@ The boring foundations enable the interesting business logic. Build them right, 
 
 ---
 
+## How to Rebuild These Primitives
+
+The Foundation packages can be rebuilt from scratch using constrained prompts. Each package has a detailed specification in `docs/prompts/`:
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-basemodels | `docs/prompts/django-basemodels.md` | 30 tests |
+| django-singleton | `docs/prompts/django-singleton.md` | ~15 tests |
+| django-modules | `docs/prompts/django-modules.md` | ~20 tests |
+| django-layers | `docs/prompts/django-layers.md` | ~25 tests |
+
+### Using the Prompts
+
+Each prompt file contains:
+
+1. **Instruction** - What to build and why
+2. **File Structure** - Exact directory layout
+3. **Models Specification** - Fields, methods, behaviors
+4. **Test Cases** - Numbered tests to implement first (TDD)
+5. **Known Gotchas** - Common mistakes to avoid
+6. **Acceptance Criteria** - Definition of done
+
+### Example Workflow
+
+To rebuild `django-basemodels`:
+
+```bash
+# Step 1: Give Claude the prompt
+cat docs/prompts/django-basemodels.md | claude
+
+# Step 2: Request TDD approach
+"Start with the TimeStampedModel tests. Write failing tests first,
+then implement minimal code to pass."
+
+# Step 3: Verify constraints
+# - Abstract models only (no migrations)
+# - SoftDeleteManager is default manager
+# - QuerySet.delete() gotcha is documented
+```
+
+### Key Constraint
+
+The prompts enforce the **NO DATABASE MIGRATIONS** rule for abstract base models. If Claude generates migration files for these packages, that's a constraint violation—abstract models don't create tables.
+
+---
+
 ## References
 
 - Django Model documentation: https://docs.djangoproject.com/en/stable/topics/db/models/

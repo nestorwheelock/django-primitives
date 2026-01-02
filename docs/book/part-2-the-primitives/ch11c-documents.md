@@ -363,4 +363,31 @@ The Documents primitive handles the complexity so your application doesn't have 
 
 ---
 
+## How to Rebuild This Primitive
+
+| Package | Prompt File | Test Count |
+|---------|-------------|------------|
+| django-documents | `docs/prompts/django-documents.md` | ~30 tests |
+
+### Using the Prompt
+
+```bash
+cat docs/prompts/django-documents.md | claude
+
+# Request: "Implement Document model with version history,
+# GenericFK for attaching to any model, and file metadata.
+# Add DocumentCollection for folder hierarchy."
+```
+
+### Key Constraints
+
+- **Immutable versions**: DocumentVersion records cannot be modified
+- **Content hash**: SHA-256 of file content for integrity verification
+- **Soft delete**: Documents are never hard deleted
+- **GenericFK attachment**: Documents attach to any model
+
+If Claude allows editing document versions or skips content hashing, that's a constraint violation.
+
+---
+
 *Status: Draft*
