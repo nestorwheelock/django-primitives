@@ -184,3 +184,58 @@ That's not trendy. It's durable.
 
 **Current coverage:** 8/10 primitives implemented
 **Missing:** Inventory, Communication (intentionally deferred as infrastructure)
+
+---
+
+## Research: ERP Success/Failure Statistics
+
+### The Case for ERP (and Primitives)
+
+Businesses that use ERP systems generally experience higher success rates:
+
+| Attribute | Businesses Using ERP | Businesses Not Using ERP |
+|-----------|---------------------|--------------------------|
+| Success Rate | ~88% successful | Often below 50% |
+| Failure Rate | 10-20% failure | Higher due to lack of integration |
+| Operational Efficiency | Improved, streamlined | Inefficiencies and silos |
+| Data Management | Centralized, accurate | Fragmented, inconsistent |
+| Scalability | Easily scalable | Limited adaptability |
+
+**Sources:** datixinc.com, erpadvisorsgroup.com
+
+### But ERP Implementations Are Hard
+
+According to Gartner:
+- **55-75%** of ERP projects fail to meet their objectives
+- **67%** of implementations take longer than expected
+- **64%** of implementations go over budget
+
+### Why ERP Implementations Fail
+
+1. **Choosing the wrong implementation partner**
+2. **Inadequate planning and scoping** - insufficient upfront planning is a leading cause
+3. **Lack of user adoption** - insufficient training and buy-in
+4. **Ineffective project team** - lacking skills, experience, or commitment
+5. **Lack of leadership buy-in** - insufficient resources and direction
+6. **Insufficient resource allocation** - rushed timelines, overworked teams
+
+### Why Constrained Primitives Help
+
+The primitive approach addresses several failure modes:
+
+- **Clear scope**: Primitives are finite and well-defined
+- **Proven patterns**: Based on decades of ERP evolution
+- **Composable**: Build complex systems from simple, tested parts
+- **No invention**: AI composes rather than creates novel abstractions
+
+**Key insight:** Organizations fail not because ERP is bad, but because they try to invent their own abstractions instead of using proven primitives. The 55-75% failure rate is largely about *implementation*, not the underlying patterns.
+
+### Rand Group Statistics (for contrast)
+
+- **100%** implementation success rate
+- **60%** of clients came after failed implementations elsewhere
+- **20+** years in business
+
+Their success comes from: expertise, commitment, and **getting it right the first time**.
+
+**Lesson for the book:** The primitives ARE "getting it right the first time." They encode the patterns that successful ERP implementations converge on anyway.
