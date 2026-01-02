@@ -1,4 +1,4 @@
-# Chapter 17: Build a Marketplace
+# Chapter 24: Build a Marketplace
 
 ## The Pizza Problem
 

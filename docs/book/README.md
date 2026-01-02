@@ -29,7 +29,7 @@ Non-technical idea makers who want to learn how to develop working software. Bus
 | The Primitives Preview | **Draft** |
 | How to Read This Book | **Draft** |
 
-### Part I: The Lie
+### Part I: The Lie (Chapters 1-3)
 
 | Chapter | Title | Status |
 |---------|-------|--------|
@@ -37,49 +37,49 @@ Non-technical idea makers who want to learn how to develop working software. Bus
 | 2 | AI Does Not Understand Business | **Draft** |
 | 3 | You Will Not Refactor Later | **Draft** |
 
-### Part II: The Primitives
+### Part II: The Primitives (Chapters 4-18)
 
 | Chapter | Title | django-primitives Package | Status |
 |---------|-------|---------------------------|--------|
-| 3.5 | Setting Up Your Project (Interlude) | Project structure guide | **Draft** |
-| 3b | Foundation Layer | django-basemodels, django-singleton, django-modules, django-layers | **Draft** |
-| 4 | Identity | django-parties, django-rbac | **Draft** |
-| 5 | Time | django-decisioning | **Draft** |
-| 6 | Agreements | django-agreements | **Draft** |
-| 7 | Catalog | django-catalog | **Draft** |
-| 8 | Ledger | django-ledger, django-money | **Draft** |
-| 9 | Workflow | django-encounters | **Draft** |
-| 10 | Decisions | django-decisioning | **Draft** |
-| 11 | Audit | django-audit-log | **Draft** |
-| 11a | Worklog | django-worklog | **Draft** |
-| 11b | Geography | django-geo | **Draft** |
-| 11c | Documents | django-documents | **Draft** |
-| 11d | Notes | django-notes | **Draft** |
-| 11e | Sequence | django-sequence | **Draft** |
+| 4 | Project Structure | Project structure guide | **Draft** |
+| 5 | Foundation Layer | django-basemodels, django-singleton, django-modules, django-layers | **Draft** |
+| 6 | Identity | django-parties, django-rbac | **Draft** |
+| 7 | Time | django-decisioning | **Draft** |
+| 8 | Agreements | django-agreements | **Draft** |
+| 9 | Catalog | django-catalog | **Draft** |
+| 10 | Ledger | django-ledger, django-money | **Draft** |
+| 11 | Workflow | django-encounters | **Draft** |
+| 12 | Decisions | django-decisioning | **Draft** |
+| 13 | Audit | django-audit-log | **Draft** |
+| 14 | Worklog | django-worklog | **Draft** |
+| 15 | Geography | django-geo | **Draft** |
+| 16 | Documents | django-documents | **Draft** |
+| 17 | Notes | django-notes | **Draft** |
+| 18 | Sequence | django-sequence | **Draft** |
 
-### Part III: Constraining the Machine
-
-| Chapter | Title | Status |
-|---------|-------|--------|
-| 12 | The Instruction Stack | **Draft** |
-| 13 | Prompt Contracts | **Draft** |
-| 14 | Schema-First Generation | **Draft** |
-| 15 | Forbidden Operations | **Draft** |
-
-### Part IV: Composition
+### Part III: Constraining the Machine (Chapters 19-22)
 
 | Chapter | Title | Status |
 |---------|-------|--------|
-| 16 | Build a Clinic | **Draft** |
-| 17 | Build a Marketplace | **Draft** |
-| 18 | Build a Subscription Service | **Draft** |
-| 19 | Build a Government Form Workflow | **Draft** |
+| 19 | The Instruction Stack | **Draft** |
+| 20 | Prompt Contracts | **Draft** |
+| 21 | Schema-First Generation | **Draft** |
+| 22 | Forbidden Operations | **Draft** |
+
+### Part IV: Composition (Chapters 23-26)
+
+| Chapter | Title | Status |
+|---------|-------|--------|
+| 23 | Build a Clinic | **Draft** |
+| 24 | Build a Marketplace | **Draft** |
+| 25 | Build a Subscription Service | **Draft** |
+| 26 | Build a Government Form Workflow | **Draft** |
 
 ### Conclusion
 
 | Chapter | Title | Status |
 |---------|-------|--------|
-| 20 | Conclusion | **Draft** |
+| 27 | Conclusion | **Draft** |
 
 ---
 
@@ -89,37 +89,40 @@ Non-technical idea makers who want to learn how to develop working software. Bus
 docs/book/
 ├── README.md                    # This file
 ├── BOOK_NOTES.md               # Raw notes and framing
+├── 00-title.md                 # Title page
+├── 00-copyright.md             # Copyright page
+├── 00-introduction.md          # Introduction
 ├── part-1-the-lie/
 │   ├── ch01-modern-software-is-old.md
 │   ├── ch02-ai-does-not-understand-business.md
 │   └── ch03-you-will-refactor-later.md
 ├── part-2-the-primitives/
-│   ├── ch03a-project-structure.md    # Interlude
-│   ├── ch03b-foundation-layer.md     # Foundation packages
-│   ├── ch04-identity.md
-│   ├── ch05-time.md
-│   ├── ch06-agreements.md
-│   ├── ch07-catalog.md
-│   ├── ch08-ledger.md
-│   ├── ch09-workflow.md
-│   ├── ch10-decisions.md
-│   ├── ch11-audit.md
-│   ├── ch11a-worklog.md
-│   ├── ch11b-geo.md
-│   ├── ch11c-documents.md
-│   ├── ch11d-notes.md
-│   └── ch11e-sequence.md
+│   ├── ch04-project-structure.md
+│   ├── ch05-foundation-layer.md
+│   ├── ch06-identity.md
+│   ├── ch07-time.md
+│   ├── ch08-agreements.md
+│   ├── ch09-catalog.md
+│   ├── ch10-ledger.md
+│   ├── ch11-workflow.md
+│   ├── ch12-decisions.md
+│   ├── ch13-audit.md
+│   ├── ch14-worklog.md
+│   ├── ch15-geo.md
+│   ├── ch16-documents.md
+│   ├── ch17-notes.md
+│   └── ch18-sequence.md
 ├── part-3-constraining-the-machine/
-│   ├── ch12-the-instruction-stack.md
-│   ├── ch13-prompt-contracts.md
-│   ├── ch14-schema-first-generation.md
-│   └── ch15-forbidden-operations.md
+│   ├── ch19-the-instruction-stack.md
+│   ├── ch20-prompt-contracts.md
+│   ├── ch21-schema-first-generation.md
+│   └── ch22-forbidden-operations.md
 ├── part-4-composition/
-│   ├── ch16-build-a-clinic.md
-│   ├── ch17-build-a-marketplace.md
-│   ├── ch18-build-a-subscription-service.md
-│   └── ch19-build-a-government-form-workflow.md
-└── ch20-conclusion.md
+│   ├── ch23-build-a-clinic.md
+│   ├── ch24-build-a-marketplace.md
+│   ├── ch25-build-a-subscription-service.md
+│   └── ch26-build-a-government-form-workflow.md
+└── ch27-conclusion.md
 ```
 
 ---
@@ -162,27 +165,27 @@ docs/book/
 | I | 1 | Modern Software Is Old | - |
 | I | 2 | AI Does Not Understand Business | - |
 | I | 3 | You Will Not Refactor Later | - |
-| II | 3.5 | Setting Up Your Project (Interlude) | - |
-| II | 3b | Foundation Layer | django-basemodels, django-singleton, django-modules, django-layers |
-| II | 4 | Identity | django-parties, django-rbac |
-| II | 5 | Time | django-decisioning |
-| II | 6 | Agreements | django-agreements |
-| II | 7 | Catalog | django-catalog |
-| II | 8 | Ledger | django-ledger, django-money |
-| II | 9 | Workflow | django-encounters |
-| II | 10 | Decisions | django-decisioning |
-| II | 11 | Audit | django-audit-log |
-| II | 11a | Worklog | django-worklog |
-| II | 11b | Geography | django-geo |
-| II | 11c | Documents | django-documents |
-| II | 11d | Notes | django-notes |
-| II | 11e | Sequence | django-sequence |
-| III | 12 | The Instruction Stack | - |
-| III | 13 | Prompt Contracts | - |
-| III | 14 | Schema-First Generation | - |
-| III | 15 | Forbidden Operations | - |
-| IV | 16 | Build a Clinic | - |
-| IV | 17 | Build a Marketplace | - |
-| IV | 18 | Build a Subscription Service | - |
-| IV | 19 | Build a Government Form Workflow | - |
-| - | 20 | Conclusion | - |
+| II | 4 | Project Structure | - |
+| II | 5 | Foundation Layer | django-basemodels, django-singleton, django-modules, django-layers |
+| II | 6 | Identity | django-parties, django-rbac |
+| II | 7 | Time | django-decisioning |
+| II | 8 | Agreements | django-agreements |
+| II | 9 | Catalog | django-catalog |
+| II | 10 | Ledger | django-ledger, django-money |
+| II | 11 | Workflow | django-encounters |
+| II | 12 | Decisions | django-decisioning |
+| II | 13 | Audit | django-audit-log |
+| II | 14 | Worklog | django-worklog |
+| II | 15 | Geography | django-geo |
+| II | 16 | Documents | django-documents |
+| II | 17 | Notes | django-notes |
+| II | 18 | Sequence | django-sequence |
+| III | 19 | The Instruction Stack | - |
+| III | 20 | Prompt Contracts | - |
+| III | 21 | Schema-First Generation | - |
+| III | 22 | Forbidden Operations | - |
+| IV | 23 | Build a Clinic | - |
+| IV | 24 | Build a Marketplace | - |
+| IV | 25 | Build a Subscription Service | - |
+| IV | 26 | Build a Government Form Workflow | - |
+| - | 27 | Conclusion | - |

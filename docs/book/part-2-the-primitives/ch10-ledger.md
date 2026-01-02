@@ -1,4 +1,4 @@
-# Chapter 8: Ledger
+# Chapter 10: Ledger
 
 > "For every debit, there must be a credit."
 >

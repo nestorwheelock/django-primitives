@@ -1,4 +1,4 @@
-# Chapter 13: Prompt Contracts
+# Chapter 20: Prompt Contracts
 
 ## The $440 Million Misunderstanding
 
@@ -169,7 +169,7 @@ This produces an invoicing system that survives audits.
 
 ## Contract Layers: Where Rules Live
 
-Not all contracts belong in the same place. The instruction stack from Chapter 12 determines where each rule lives.
+Not all contracts belong in the same place. The instruction stack from Chapter 19 determines where each rule lives.
 
 ### Global CLAUDE.md: Universal Rules
 

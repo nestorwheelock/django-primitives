@@ -1,4 +1,4 @@
-# Chapter 12: Worklog
+# Chapter 14: Worklog
 
 > "What did you do, and how long did it take?"
 
@@ -515,11 +515,11 @@ def calculate_overtime(worker, week_start, regular_hours=40):
 
 The Worklog primitive connects to:
 
-- **Identity** (Chapter 4): Workers are parties. Clients are parties.
-- **Agreements** (Chapter 6): Billing rates come from service agreements.
-- **Ledger** (Chapter 8): Billable entries become invoice line items.
-- **Workflow** (Chapter 9): Approval is a state machine.
-- **Audit** (Chapter 11): Every entry, approval, and rejection is logged.
+- **Identity** (Chapter 6): Workers are parties. Clients are parties.
+- **Agreements** (Chapter 8): Billing rates come from service agreements.
+- **Ledger** (Chapter 10): Billable entries become invoice line items.
+- **Workflow** (Chapter 11): Approval is a state machine.
+- **Audit** (Chapter 13): Every entry, approval, and rejection is logged.
 
 Time tracking seems simple until you need to:
 - Prove to a client that 47.5 hours of work was performed

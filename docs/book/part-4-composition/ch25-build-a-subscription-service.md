@@ -1,4 +1,4 @@
-# Chapter 18: Build a Subscription Service
+# Chapter 25: Build a Subscription Service
 
 ## The Churn Spreadsheet
 

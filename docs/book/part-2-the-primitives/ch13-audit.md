@@ -1,4 +1,4 @@
-# Chapter 11: Audit
+# Chapter 13: Audit
 
 > "The absence of evidence is not the evidence of absence—but in court, it might as well be."
 >
@@ -731,9 +731,9 @@ These three primitives capture different types of historical data:
 
 **Audit Log**: What changed in the system, when, and by whom. Low-level field changes. "The email field changed from X to Y."
 
-**Decisions** (Chapter 10): Human choices with context. "The loan was approved because the credit score exceeded 650."
+**Decisions** (Chapter 12): Human choices with context. "The loan was approved because the credit score exceeded 650."
 
-**Transitions** (Chapter 9): State changes in workflows. "The encounter moved from 'checked_in' to 'in_progress'."
+**Transitions** (Chapter 11): State changes in workflows. "The encounter moved from 'checked_in' to 'in_progress'."
 
 All three are append-only. All three capture who and when. But they serve different purposes:
 

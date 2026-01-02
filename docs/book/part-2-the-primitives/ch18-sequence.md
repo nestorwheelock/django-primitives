@@ -1,4 +1,4 @@
-# Chapter 11e: Sequence
+# Chapter 18: Sequence
 
 > "Numbers that never skip, never repeat, and never lie."
 
@@ -364,10 +364,10 @@ class Invoice(SequencedModelMixin, SoftDeleteModel):
 
 The Sequence primitive connects to:
 
-- **Ledger** (Chapter 8): Transaction numbers, check numbers.
-- **Agreements** (Chapter 6): Contract numbers.
-- **Audit** (Chapter 11): Sequence allocations are logged.
-- **Documents** (Chapter 11c): Document reference numbers.
+- **Ledger** (Chapter 10): Transaction numbers, check numbers.
+- **Agreements** (Chapter 8): Contract numbers.
+- **Audit** (Chapter 13): Sequence allocations are logged.
+- **Documents** (Chapter 16): Document reference numbers.
 
 Sequential numbering seems simple until you need to:
 - Prove to an auditor that no invoice numbers are missing

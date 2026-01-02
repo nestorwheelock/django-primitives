@@ -1,4 +1,4 @@
-# Chapter 11b: Geography
+# Chapter 15: Geography
 
 > "Where in the world is this?"
 
@@ -417,11 +417,11 @@ class GeocodingService:
 
 The Geography primitive connects to:
 
-- **Identity** (Chapter 4): Parties have addresses.
-- **Agreements** (Chapter 6): Service areas define where agreements apply.
-- **Ledger** (Chapter 8): Tax jurisdictions affect transaction amounts.
-- **Catalog** (Chapter 7): Product availability varies by location.
-- **Worklog** (Chapter 11a): Service calls have locations.
+- **Identity** (Chapter 6): Parties have addresses.
+- **Agreements** (Chapter 8): Service areas define where agreements apply.
+- **Ledger** (Chapter 10): Tax jurisdictions affect transaction amounts.
+- **Catalog** (Chapter 9): Product availability varies by location.
+- **Worklog** (Chapter 14): Service calls have locations.
 
 Location seems simple until you need to:
 - Calculate shipping costs across borders

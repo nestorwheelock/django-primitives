@@ -1,4 +1,4 @@
-# Chapter 1: The Programming Operating System
+# Chapter 19: The Programming Operating System
 
 ## Claude Is Not a Brain. It's an Operating System With Applications.
 

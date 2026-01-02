@@ -1,4 +1,4 @@
-# Chapter 6: Agreements
+# Chapter 8: Agreements
 
 > "The palest ink is better than the best memory."
 >

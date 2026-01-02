@@ -1,4 +1,4 @@
-# Chapter 3b: The Foundation Layer
+# Chapter 5: The Foundation Layer
 
 > "Every great building rests on foundations nobody sees."
 
@@ -81,7 +81,7 @@ class TimestampedModel(UUIDModel):
         abstract = True
 ```
 
-These are system timestamps—when the database recorded the event, not when it happened in the real world. Chapter 5 (Time) explains why this distinction matters.
+These are system timestamps—when the database recorded the event, not when it happened in the real world. Chapter 7 (Time) explains why this distinction matters.
 
 ### SoftDeleteModel
 
@@ -292,7 +292,7 @@ def create_agreement(party_a, party_b, terms, agreed_by, valid_from=None):
 
 4. **Concurrency safety.** Services use `select_for_update()` when incrementing version counters.
 
-This pattern appears throughout the primitives. Chapter 6 (Agreements) shows it in full detail.
+This pattern appears throughout the primitives. Chapter 8 (Agreements) shows it in full detail.
 
 ---
 
@@ -812,7 +812,7 @@ That invisibility is the point.
 
 Every primitive in Part II inherits from `BaseModel`. Every primitive respects layer boundaries. Every primitive can be tested in isolation because the architecture is clean.
 
-When you see `class Invoice(BaseModel)` in Chapter 8, you know:
+When you see `class Invoice(BaseModel)` in Chapter 10, you know:
 - It has a UUID primary key
 - It has created_at and updated_at timestamps
 - Calling delete() sets deleted_at instead of removing the row

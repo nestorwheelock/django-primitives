@@ -1,4 +1,4 @@
-# Chapter 7: Catalog
+# Chapter 9: Catalog
 
 > "Before you can sell it, you have to know what it is."
 >

@@ -1,4 +1,4 @@
-# Chapter 4: Identity
+# Chapter 6: Identity
 
 > Who is this, really? The same person can appear as customer, vendor, and employee. The same company can have five names. Identity is a graph, not a row.
 

@@ -1,4 +1,4 @@
-# Chapter 14: Schema-First Generation
+# Chapter 21: Schema-First Generation
 
 ## The Rebuild Test
 
@@ -650,15 +650,15 @@ The complete rebuild prompts for all primitives are in Part II of this book:
 
 | Package | Chapter | Test Count |
 |---------|---------|------------|
-| django-parties | Chapter 4: Identity | 44 tests |
-| django-rbac | Chapter 4: Identity | 30 tests |
-| django-agreements | Chapter 6: Agreements | 31 tests |
-| django-catalog | Chapter 7: Catalog | 83 tests |
-| django-ledger | Chapter 8: Ledger | 48 tests |
-| django-money | Chapter 8: Ledger | 63 tests |
-| django-encounters | Chapter 9: Workflow | 80 tests |
-| django-decisioning | Chapter 10: Decisions | 78 tests |
-| django-audit-log | Chapter 11: Audit | 23 tests |
+| django-parties | Chapter 6: Identity | 44 tests |
+| django-rbac | Chapter 6: Identity | 30 tests |
+| django-agreements | Chapter 8: Agreements | 47 tests |
+| django-catalog | Chapter 9: Catalog | 83 tests |
+| django-ledger | Chapter 10: Ledger | 48 tests |
+| django-money | Chapter 10: Ledger | 63 tests |
+| django-encounters | Chapter 11: Workflow | 80 tests |
+| django-decisioning | Chapter 12: Decisions | 78 tests |
+| django-audit-log | Chapter 13: Audit | 23 tests |
 
 Each prompt follows the pattern in this chapter. Each package can be rebuilt from its prompt.
 

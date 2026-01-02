@@ -1,4 +1,4 @@
-# Chapter 10: Decisions
+# Chapter 12: Decisions
 
 > "It is not the strongest of the species that survives, nor the most intelligent that survives. It is the one that is most adaptable to change."
 >
@@ -46,7 +46,7 @@ When something goes wrong, you need both:
 - The decision trail: Who approved this? What did they know?
 - The action trail: What actually happened? When?
 
-The encounters primitive (Chapter 9) handles actions—state transitions through a workflow. The decisioning primitive handles the decisions that trigger those transitions.
+The encounters primitive (Chapter 11) handles actions—state transitions through a workflow. The decisioning primitive handles the decisions that trigger those transitions.
 
 ## The IdempotencyKey Pattern
 
@@ -88,7 +88,7 @@ def process_order(order_id, items):
 
 ## Time Semantics for Decisions
 
-Decisions have the same time semantics as all business facts (Chapter 5):
+Decisions have the same time semantics as all business facts (Chapter 7):
 
 **effective_at** — When the decision was actually made (business time). A decision made yesterday but recorded today has effective_at = yesterday.
 

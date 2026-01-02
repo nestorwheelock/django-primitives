@@ -1,4 +1,4 @@
-# Chapter 11d: Notes
+# Chapter 17: Notes
 
 > "The context that explains everything."
 
@@ -345,10 +345,10 @@ class NoteTemplate(models.Model):
 
 The Notes primitive connects to:
 
-- **Identity** (Chapter 4): Notes are created by users, mention users.
-- **Workflow** (Chapter 9): Notes explain state transitions.
-- **Audit** (Chapter 11): Notes are part of the audit trail.
-- **Decisions** (Chapter 10): Notes capture decision rationale.
+- **Identity** (Chapter 6): Notes are created by users, mention users.
+- **Workflow** (Chapter 11): Notes explain state transitions.
+- **Audit** (Chapter 13): Notes are part of the audit trail.
+- **Decisions** (Chapter 12): Notes capture decision rationale.
 
 Note-taking seems simple until you need to:
 - Reconstruct the complete history of a customer relationship

@@ -1,4 +1,4 @@
-# Interlude: Setting Up Your Project
+# Chapter 4: Project Structure
 
 Before we dive into the primitives, you need a place to put them.
 
@@ -532,4 +532,4 @@ class NewPrimitive(UUIDModel, BaseModel):
 | CLAUDE.md | AI instructions for your project |
 | TDD | Tests first for all primitives |
 
-With this structure in place, you're ready to learn the primitives themselves. Chapter 4 begins with the most fundamental: Identity.
+With this structure in place, you're ready to learn the primitives themselves. Chapter 5 covers the Foundation Layer, followed by Chapter 6: Identity—the most fundamental domain primitive.

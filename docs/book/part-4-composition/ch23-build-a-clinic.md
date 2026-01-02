@@ -1,4 +1,4 @@
-# Chapter 16: Build a Clinic
+# Chapter 23: Build a Clinic
 
 ## The Veterinary Challenge
 

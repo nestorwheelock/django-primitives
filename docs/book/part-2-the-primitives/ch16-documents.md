@@ -1,4 +1,4 @@
-# Chapter 11c: Documents
+# Chapter 16: Documents
 
 > "The paper trail that proves everything."
 
@@ -348,10 +348,10 @@ class DocumentAccess(models.Model):
 
 The Documents primitive connects to:
 
-- **Identity** (Chapter 4): Documents have owners and access lists.
-- **Agreements** (Chapter 6): Contracts are documents.
-- **Audit** (Chapter 11): Document access is logged.
-- **Workflow** (Chapter 9): Documents flow through approval processes.
+- **Identity** (Chapter 6): Documents have owners and access lists.
+- **Agreements** (Chapter 8): Contracts are documents.
+- **Audit** (Chapter 13): Document access is logged.
+- **Workflow** (Chapter 11): Documents flow through approval processes.
 
 Document management seems simple until you need to:
 - Prove what version of a contract was signed
