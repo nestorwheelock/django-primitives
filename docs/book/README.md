@@ -9,15 +9,31 @@
 
 ERP primitives are not a business domain. They're physics.
 
+## Audience
+
+Non-technical idea makers who want to learn how to develop working software. Business owners. Entrepreneurs. Anyone who understands their domain but has been told they need to "learn to code" or "hire a team" before they can build.
+
 ---
 
 ## Book Structure
+
+### Introduction: Vibe Coding With Constraints
+
+| Section | Status |
+|---------|--------|
+| Who This Book Is For | **Draft** |
+| The LLM Liberation | **Draft** |
+| The End of Trivial Arguments | **Draft** |
+| You Are the Manager | **Draft** |
+| The Two Ways to Fail | **Draft** |
+| The Primitives Preview | **Draft** |
+| How to Read This Book | **Draft** |
 
 ### Part I: The Lie
 
 | Chapter | Title | Status |
 |---------|-------|--------|
-| 1 | Modern Software Is Old | Planned |
+| 1 | Modern Software Is Old | **Draft** |
 | 2 | AI Does Not Understand Business | Planned |
 | 3 | You Will Not Refactor Later | Planned |
 
