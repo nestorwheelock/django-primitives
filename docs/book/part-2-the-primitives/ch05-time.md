@@ -120,7 +120,7 @@ For these, you need validity periods:
 
 ```python
 class EffectiveDatedMixin(TimeSemanticsMixin):
-    valid_from = DateTimeField()
+    valid_from = DateTimeField()  # NO DEFAULT - caller must specify
     valid_to = DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -130,6 +130,35 @@ class EffectiveDatedMixin(TimeSemanticsMixin):
 Notice that this inherits from `TimeSemanticsMixin`. You still have `effective_at` and `recorded_at` for the fact of the validity period itself. But now you also have `valid_from` and `valid_to` defining when the fact applies.
 
 The `valid_to` field is nullable. A `NULL` value means "until further notice"—the fact remains valid indefinitely until something explicitly supersedes it.
+
+### Defaults: Model vs Service
+
+Notice the difference between `effective_at` and `valid_from`:
+
+- **`effective_at` has a default** (`default=timezone.now`). For point-in-time events, "now" is usually correct—most events are recorded when they happen. The default is a sensible convenience.
+
+- **`valid_from` has NO default**. For validity periods, there is no sensible default. When does this agreement start? When does this assignment take effect? The caller must decide.
+
+This reflects a design principle: **models enforce correctness; services provide convenience.**
+
+If a service function wants to default `valid_from` to now, it can:
+
+```python
+def create_agreement(party_a, party_b, terms, valid_from=None, **kwargs):
+    """Service provides convenience default."""
+    if valid_from is None:
+        valid_from = timezone.now()
+
+    return Agreement.objects.create(
+        party_a=party_a,
+        party_b=party_b,
+        terms=terms,
+        valid_from=valid_from,  # Required by model
+        **kwargs
+    )
+```
+
+The model forces the question: "When does this become effective?" The service can answer "now" as a convenience, but the question is always asked explicitly.
 
 ### The Close-Then-Open Pattern
 
@@ -259,9 +288,11 @@ When using AI to generate code, the constraint is explicit:
 
 ```
 Every model that records business facts must inherit from TimeSemanticsMixin.
+Every model with validity periods must have valid_from (NO default) and valid_to (nullable).
 Every query that retrieves business data must specify "as of" unless explicitly fetching current state.
 recorded_at must never be modified after initial insert.
 Historical records must never be updated or deleted.
+Service functions may provide convenience defaults; models must not.
 ```
 
 An AI given these constraints will generate bitemporal code by default. An AI without them will generate systems that can't answer the Watergate question.
@@ -280,7 +311,11 @@ Without explicit constraints, AI-generated code typically:
 
 5. **Queries "current state"** without considering that "current" is a point in time, not an absolute truth
 
-The fix is the same as always: explicit constraints. Tell the AI what time semantics mean in your domain. Tell it that every fact needs two timestamps. Tell it that history is immutable. The AI will follow these rules consistently—more consistently than human developers who might cut corners under deadline pressure.
+6. **Adds defaults where they don't belong** — `valid_from = DateTimeField(default=timezone.now)` hides accidental omissions instead of forcing explicit decisions
+
+7. **Puts time logic in models** — Validation like "valid_to must be after valid_from" belongs in service functions or database constraints, not in `model.save()`
+
+The fix is the same as always: explicit constraints. Tell the AI what time semantics mean in your domain. Tell it that every fact needs two timestamps. Tell it that history is immutable. Tell it that services provide convenience, models enforce correctness. The AI will follow these rules consistently—more consistently than human developers who might cut corners under deadline pressure.
 
 ## Why This Matters Later
 

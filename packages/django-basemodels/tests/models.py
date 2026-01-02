@@ -40,8 +40,8 @@ class BaseTestModel(BaseModel):
         app_label = 'tests'
 
 
-class UUIDBaseTestModel(UUIDModel, BaseModel):
-    """Concrete model testing the recommended pattern: UUID + BaseModel."""
+class BaseModelWithConstraintTest(BaseModel):
+    """Test model demonstrating BaseModel with soft-delete-aware unique constraint."""
     name = models.CharField(max_length=100)
     email = models.EmailField()
 

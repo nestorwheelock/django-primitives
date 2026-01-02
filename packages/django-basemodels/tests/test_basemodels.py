@@ -11,7 +11,7 @@ from tests.models import (
     UUIDTestModel,
     SoftDeleteTestModel,
     BaseTestModel,
-    UUIDBaseTestModel,
+    BaseModelWithConstraintTest,
 )
 
 
@@ -194,7 +194,13 @@ class TestSoftDeleteModel(TestCase):
 
 
 class TestBaseModel(TestCase):
-    """Tests for BaseModel (combined functionality)."""
+    """Tests for BaseModel (UUID + timestamps + soft delete)."""
+
+    def test_has_uuid_primary_key(self):
+        """BaseModel should have UUID primary key."""
+        obj = BaseTestModel.objects.create(name='Test')
+        assert isinstance(obj.id, uuid.UUID)
+        assert obj.pk == obj.id
 
     def test_has_timestamps(self):
         """BaseModel should have created_at and updated_at."""
@@ -228,12 +234,12 @@ class TestBaseModel(TestCase):
         assert hasattr(default_manager, 'deleted_only')
 
 
-class TestUUIDBaseModel(TestCase):
-    """Tests for recommended pattern: UUIDModel + BaseModel."""
+class TestBaseModelWithConstraint(TestCase):
+    """Tests for BaseModel with soft-delete-aware unique constraints."""
 
-    def test_combined_uuid_and_basemodel(self):
-        """UUIDModel + BaseModel should provide all features."""
-        obj = UUIDBaseTestModel.objects.create(name='Test', email='test@example.com')
+    def test_basemodel_provides_all_features(self):
+        """BaseModel should provide UUID, timestamps, and soft delete."""
+        obj = BaseModelWithConstraintTest.objects.create(name='Test', email='test@example.com')
 
         # UUID PK
         assert isinstance(obj.id, uuid.UUID)
@@ -245,21 +251,21 @@ class TestUUIDBaseModel(TestCase):
         # Soft delete
         obj.delete()
         assert obj.is_deleted is True
-        assert UUIDBaseTestModel.objects.filter(pk=obj.pk).exists() is False
+        assert BaseModelWithConstraintTest.objects.filter(pk=obj.pk).exists() is False
 
     def test_conditional_unique_constraint(self):
         """Unique constraint should only apply to active records."""
-        obj1 = UUIDBaseTestModel.objects.create(name='User1', email='same@example.com')
+        obj1 = BaseModelWithConstraintTest.objects.create(name='User1', email='same@example.com')
         obj1.delete()  # Soft delete
 
         # Should be able to create another with same email (first is deleted)
-        obj2 = UUIDBaseTestModel.objects.create(name='User2', email='same@example.com')
+        obj2 = BaseModelWithConstraintTest.objects.create(name='User2', email='same@example.com')
         assert obj2.pk is not None
 
         # But cannot create another active one with same email
         from django.db import IntegrityError
         with pytest.raises(IntegrityError):
-            UUIDBaseTestModel.objects.create(name='User3', email='same@example.com')
+            BaseModelWithConstraintTest.objects.create(name='User3', email='same@example.com')
 
 
 class TestBulkDeleteGotcha(TestCase):

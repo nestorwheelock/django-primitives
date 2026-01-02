@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-basemodels"
-version = "0.1.0"
-description = "Reusable Django base models with timestamps and soft delete"
+version = "0.2.0"
+description = "Standard Django base model: UUID + timestamps + soft delete"
 readme = "README.md"
 license = {text = "Proprietary"}
 requires-python = ">=3.11"
@@ -26,7 +26,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-keywords = ["django", "models", "soft-delete", "timestamps", "base-models"]
+keywords = ["django", "models", "uuid", "soft-delete", "timestamps", "base-models"]
 dependencies = [
     "Django>=4.2",
 ]

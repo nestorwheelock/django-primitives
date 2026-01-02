@@ -1,10 +1,13 @@
 """Reusable abstract base models for Django projects.
 
-This module provides common base model patterns:
-- TimeStampedModel: Automatic created_at/updated_at timestamps
-- UUIDModel: UUID primary key instead of auto-increment
+This module provides the standard base model for django-primitives:
+
+- BaseModel: UUID PK + timestamps + soft delete (the standard)
+
+Component mixins are available but rarely needed directly:
+- UUIDModel: UUID primary key
+- TimeStampedModel: created_at/updated_at timestamps
 - SoftDeleteModel: Soft delete with restore capability
-- BaseModel: Combines timestamps + soft delete (recommended default)
 
 Usage:
     from django_basemodels import BaseModel
@@ -12,8 +15,13 @@ Usage:
     class MyModel(BaseModel):
         name = models.CharField(max_length=100)
 
-        class Meta(BaseModel.Meta):
-            pass  # Inherits abstract = True behavior
+    # That's it. You get:
+    # - id: UUID primary key
+    # - created_at: auto-set on create
+    # - updated_at: auto-set on save
+    # - deleted_at: soft delete timestamp
+    # - objects: manager excluding deleted
+    # - all_objects: manager including deleted
 """
 import uuid
 
@@ -107,21 +115,26 @@ class SoftDeleteModel(models.Model):
         return self.deleted_at is not None
 
 
-class BaseModel(TimeStampedModel, SoftDeleteModel):
-    """Standard base model combining timestamps and soft delete.
+class BaseModel(UUIDModel, TimeStampedModel, SoftDeleteModel):
+    """The standard base class for all domain models.
 
-    This is the recommended base class for most models. It provides:
+    Provides:
+    - id: UUID primary key (globally unique, non-guessable)
     - created_at: When the record was created
     - updated_at: When the record was last modified
     - deleted_at: Soft delete timestamp (None if active)
-    - Automatic filtering of deleted records
-    - Restore capability for deleted records
+    - objects: Manager that excludes deleted records
+    - all_objects: Manager that includes all records
 
     Usage:
         class Customer(BaseModel):
             name = models.CharField(max_length=100)
 
-        # Soft delete
+        # Create
+        customer = Customer.objects.create(name="Acme")
+        customer.id  # UUID like '550e8400-e29b-41d4-a716-446655440000'
+
+        # Soft delete (sets deleted_at, does NOT remove row)
         customer.delete()
 
         # Restore
@@ -135,6 +148,12 @@ class BaseModel(TimeStampedModel, SoftDeleteModel):
 
         # Query all including deleted
         Customer.all_objects.all()  # Includes deleted
+
+        # Hard delete (permanent, use sparingly)
+        customer.hard_delete()
+
+    If you need a model without UUID (rare), use plain models.Model.
+    If you need a model without soft-delete (rare), don't use django-basemodels.
     """
 
     class Meta:

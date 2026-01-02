@@ -162,15 +162,59 @@ class SoftDeleteModel(TimestampedModel):
 
 4. **Compliance requires it.** Many regulations require retaining records for years.
 
+### BaseModel: The Standard
+
+As of v0.2.0, `BaseModel` combines all three patterns into the standard base class for all domain models:
+
+```python
+class BaseModel(UUIDModel, TimeStampedModel, SoftDeleteModel):
+    """The standard base class for all domain models.
+
+    Provides:
+    - id: UUID primary key (globally unique, non-guessable)
+    - created_at: When the record was created
+    - updated_at: When the record was last modified
+    - deleted_at: Soft delete timestamp (None if active)
+    - objects: Manager that excludes deleted records
+    - all_objects: Manager that includes all records
+    """
+    class Meta:
+        abstract = True
+```
+
+**Use BaseModel.** Don't manually combine the pieces. Don't "pick the level you need." BaseModel is the answer for domain models.
+
+```python
+from django_basemodels import BaseModel
+
+class Invoice(BaseModel):
+    """An invoice. Gets UUID, timestamps, soft delete automatically."""
+    number = models.CharField(max_length=50)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        app_label = 'billing'
+```
+
+**The inheritance hierarchy:**
+
+```
+UUIDModel ─────────────┐
+TimeStampedModel ──────┼──► BaseModel (use this)
+SoftDeleteModel ───────┘
+```
+
+The individual mixins still exist for rare cases where you need only part of the pattern. But those cases are rare. If you're reaching for `TimeStampedModel` alone, ask yourself why you don't want UUID primary keys and soft delete. Usually, you do.
+
 ### AuditedModel
 
-Track who made changes:
+For models that need to track who made changes (not just when):
 
 ```python
 from django.conf import settings
 
 
-class AuditedModel(SoftDeleteModel):
+class AuditedModel(BaseModel):
     """Base model with full audit support."""
 
     created_by = models.ForeignKey(
@@ -196,16 +240,59 @@ class AuditedModel(SoftDeleteModel):
         abstract = True
 ```
 
-**The inheritance hierarchy:**
+Most business models use `BaseModel`. Models that need actor tracking use `AuditedModel`.
 
-```
-UUIDModel
-    └── TimestampedModel
-            └── SoftDeleteModel
-                    └── AuditedModel
+### The Service Layer Pattern
+
+Models define structure. Services enforce business rules.
+
+This is a foundational principle that applies to all primitives. When a model has invariants, business rules, or multi-step operations, those live in a service layer—not in `model.save()`.
+
+```python
+# models.py - defines structure only
+class Agreement(BaseModel):
+    terms = models.JSONField()
+    current_version = models.PositiveIntegerField(default=1)
+    valid_from = models.DateTimeField()  # NO DEFAULT - service provides it
+    valid_to = models.DateTimeField(null=True, blank=True)
+
+
+# services.py - enforces business rules
+from django.db import transaction
+
+def create_agreement(party_a, party_b, terms, agreed_by, valid_from=None):
+    """Create agreement with initial version."""
+    if valid_from is None:
+        valid_from = timezone.now()  # Service provides convenience default
+
+    with transaction.atomic():
+        agreement = Agreement.objects.create(
+            party_a=party_a,
+            party_b=party_b,
+            terms=terms,
+            agreed_by=agreed_by,
+            valid_from=valid_from,
+        )
+        AgreementVersion.objects.create(
+            agreement=agreement,
+            version=1,
+            terms=terms,
+            reason="Initial agreement",
+        )
+    return agreement
 ```
 
-Pick the level you need. Most business models use `SoftDeleteModel` or `AuditedModel`. Internal system models might use `TimestampedModel`. Truly ephemeral data might use `UUIDModel`.
+**Why services?**
+
+1. **Atomic operations.** Creating an agreement requires creating a version record too. The service wraps both in a transaction.
+
+2. **Invariant enforcement.** The service ensures `Agreement.current_version` always equals `max(AgreementVersion.version)`.
+
+3. **Convenience defaults.** The model requires `valid_from`—no default. The service can default it to "now" as a convenience. Model enforces correctness; service provides convenience.
+
+4. **Concurrency safety.** Services use `select_for_update()` when incrementing version counters.
+
+This pattern appears throughout the primitives. Chapter 6 (Agreements) shows it in full detail.
 
 ---
 
@@ -723,14 +810,20 @@ The Foundation layer is invisible in working applications. You don't think about
 
 That invisibility is the point.
 
-Every primitive in Part II inherits from these base classes. Every primitive respects layer boundaries. Every primitive can be tested in isolation because the architecture is clean.
+Every primitive in Part II inherits from `BaseModel`. Every primitive respects layer boundaries. Every primitive can be tested in isolation because the architecture is clean.
 
-When you see `class Invoice(SoftDeleteModel)` in Chapter 8, you know:
+When you see `class Invoice(BaseModel)` in Chapter 8, you know:
 - It has a UUID primary key
 - It has created_at and updated_at timestamps
 - Calling delete() sets deleted_at instead of removing the row
 - Default queries exclude soft-deleted records
 - You can access deleted records through `all_objects`
+
+When you see a `services.py` file, you know:
+- Business rules live there, not in `model.save()`
+- Multi-step operations are atomic
+- Invariants are enforced
+- Convenience defaults are provided
 
 You know all of this because the Foundation layer defined it once, correctly.
 

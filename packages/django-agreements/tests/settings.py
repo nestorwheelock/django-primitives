@@ -7,6 +7,7 @@ DEBUG = True
 INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.auth',
+    'django_basemodels',
     'django_agreements',
     'tests',
 ]
