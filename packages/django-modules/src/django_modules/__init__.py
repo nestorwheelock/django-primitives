@@ -2,8 +2,6 @@
 
 __version__ = "0.1.0"
 
-default_app_config = "django_modules.apps.DjangoModulesConfig"
-
 
 def is_module_enabled(org, module_key: str) -> bool:
     """Check if a module is enabled for an organization."""

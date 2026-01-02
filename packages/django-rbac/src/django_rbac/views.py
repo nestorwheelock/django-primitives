@@ -149,8 +149,8 @@ class CombinedPermissionMixin(ModulePermissionMixin, HierarchyPermissionMixin):
             if target is not None:
                 return self.request.user.can_manage_user(target)
         except NotImplementedError:
-            # No target user specified, just check module permission
-            pass
+            # No target user specified - permission granted based on module access alone
+            return True
 
         return True
 

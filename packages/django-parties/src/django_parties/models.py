@@ -361,6 +361,33 @@ class PartyRelationship(BaseModel):
         verbose_name_plural = _('party relationships')
         ordering = ['-created_at']
 
+    def clean(self):
+        """Validate relationship invariants (applies across all entry points)."""
+        from django.core.exceptions import ValidationError
+
+        super().clean()
+
+        # Validate exactly one "from" party is set
+        if not self.from_person and not self.from_organization:
+            raise ValidationError(
+                {'from_person': _('You must select either a from person or from organization.')}
+            )
+        if self.from_person and self.from_organization:
+            raise ValidationError(
+                {'from_person': _('Select only one from party (person or organization).')}
+            )
+
+        # Validate exactly one "to" party is set
+        to_count = sum([bool(self.to_person), bool(self.to_organization), bool(self.to_group)])
+        if to_count == 0:
+            raise ValidationError(
+                {'to_person': _('You must select a to party (person, organization, or group).')}
+            )
+        if to_count > 1:
+            raise ValidationError(
+                {'to_person': _('Select only one to party (person, organization, or group).')}
+            )
+
     def __str__(self):
         from_party = self.from_person or self.from_organization
         to_party = self.to_person or self.to_organization or self.to_group

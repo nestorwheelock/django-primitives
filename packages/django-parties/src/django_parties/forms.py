@@ -63,7 +63,11 @@ class GroupForm(forms.ModelForm):
 
 
 class PartyRelationshipForm(forms.ModelForm):
-    """Form for creating/editing a PartyRelationship."""
+    """Form for creating/editing a PartyRelationship.
+
+    Note: Validation logic (exactly-one-from, exactly-one-to) is enforced
+    at the model level via PartyRelationship.clean().
+    """
 
     class Meta:
         model = PartyRelationship
@@ -77,37 +81,6 @@ class PartyRelationshipForm(forms.ModelForm):
             'contract_start': forms.DateInput(attrs={'type': 'date'}),
             'contract_end': forms.DateInput(attrs={'type': 'date'}),
         }
-
-    def clean(self):
-        cleaned_data = super().clean()
-        from_person = cleaned_data.get('from_person')
-        from_organization = cleaned_data.get('from_organization')
-        to_person = cleaned_data.get('to_person')
-        to_organization = cleaned_data.get('to_organization')
-        to_group = cleaned_data.get('to_group')
-
-        # Validate that exactly one "from" party is set
-        if not from_person and not from_organization:
-            raise forms.ValidationError(
-                _('You must select either a from person or from organization.')
-            )
-        if from_person and from_organization:
-            raise forms.ValidationError(
-                _('Select only one from party (person or organization).')
-            )
-
-        # Validate that exactly one "to" party is set
-        to_count = sum([bool(to_person), bool(to_organization), bool(to_group)])
-        if to_count == 0:
-            raise forms.ValidationError(
-                _('You must select a to party (person, organization, or group).')
-            )
-        if to_count > 1:
-            raise forms.ValidationError(
-                _('Select only one to party (person, organization, or group).')
-            )
-
-        return cleaned_data
 
 
 class DemographicsForm(forms.ModelForm):

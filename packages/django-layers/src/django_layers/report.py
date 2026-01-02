@@ -56,7 +56,7 @@ def format_text(violations: list[Violation], root_dir: Path | None = None) -> st
             try:
                 file_display = str(v.file_path.relative_to(root_dir))
             except ValueError:
-                pass
+                file_display = str(v.file_path)  # Keep absolute if not relative to root
 
         lines.append(f"  {file_display}:{v.line_number}")
         lines.append(f"    Import: {v.import_module}")

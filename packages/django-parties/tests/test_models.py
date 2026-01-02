@@ -196,6 +196,139 @@ class TestGroupModel:
 
 
 @pytest.mark.django_db
+class TestPartyRelationshipValidation:
+    """Tests for PartyRelationship.clean() validation (model-level invariants)."""
+
+    def test_no_from_party_fails(self):
+        """Relationship without any from_party raises ValidationError."""
+        from django.core.exceptions import ValidationError
+        from django_parties.models import Person, PartyRelationship
+
+        person = Person.objects.create(first_name='Target')
+        rel = PartyRelationship(
+            to_person=person,
+            relationship_type='emergency_contact',
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            rel.full_clean()
+
+        assert 'from_person' in exc_info.value.message_dict
+
+    def test_both_from_parties_fails(self):
+        """Relationship with both from_person and from_organization raises ValidationError."""
+        from django.core.exceptions import ValidationError
+        from django_parties.models import Person, Organization, PartyRelationship
+
+        person = Person.objects.create(first_name='From Person')
+        org = Organization.objects.create(name='From Org')
+        target = Person.objects.create(first_name='Target')
+
+        rel = PartyRelationship(
+            from_person=person,
+            from_organization=org,
+            to_person=target,
+            relationship_type='contact',
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            rel.full_clean()
+
+        assert 'from_person' in exc_info.value.message_dict
+
+    def test_no_to_party_fails(self):
+        """Relationship without any to_party raises ValidationError."""
+        from django.core.exceptions import ValidationError
+        from django_parties.models import Person, PartyRelationship
+
+        person = Person.objects.create(first_name='From')
+        rel = PartyRelationship(
+            from_person=person,
+            relationship_type='employee',
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            rel.full_clean()
+
+        assert 'to_person' in exc_info.value.message_dict
+
+    def test_multiple_to_parties_fails(self):
+        """Relationship with multiple to_party fields raises ValidationError."""
+        from django.core.exceptions import ValidationError
+        from django_parties.models import Person, Organization, PartyRelationship
+
+        from_person = Person.objects.create(first_name='From')
+        to_person = Person.objects.create(first_name='To Person')
+        to_org = Organization.objects.create(name='To Org')
+
+        rel = PartyRelationship(
+            from_person=from_person,
+            to_person=to_person,
+            to_organization=to_org,
+            relationship_type='contact',
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            rel.full_clean()
+
+        assert 'to_person' in exc_info.value.message_dict
+
+    def test_valid_person_to_person_passes(self):
+        """Valid person -> person relationship passes validation."""
+        from django_parties.models import Person, PartyRelationship
+
+        person1 = Person.objects.create(first_name='From')
+        person2 = Person.objects.create(first_name='To')
+
+        rel = PartyRelationship(
+            from_person=person1,
+            to_person=person2,
+            relationship_type='emergency_contact',
+        )
+
+        # Should not raise
+        rel.full_clean()
+        rel.save()
+        assert rel.pk is not None
+
+    def test_valid_person_to_org_passes(self):
+        """Valid person -> organization relationship passes validation."""
+        from django_parties.models import Person, Organization, PartyRelationship
+
+        person = Person.objects.create(first_name='Employee')
+        org = Organization.objects.create(name='Company')
+
+        rel = PartyRelationship(
+            from_person=person,
+            to_organization=org,
+            relationship_type='employee',
+        )
+
+        # Should not raise
+        rel.full_clean()
+        rel.save()
+        assert rel.pk is not None
+
+    def test_valid_org_to_org_passes(self):
+        """Valid organization -> organization relationship passes validation."""
+        from django_parties.models import Organization, PartyRelationship
+
+        org1 = Organization.objects.create(name='Vendor')
+        org2 = Organization.objects.create(name='Client')
+
+        rel = PartyRelationship(
+            from_organization=org1,
+            to_organization=org2,
+            relationship_type='vendor',
+        )
+
+        # Should not raise
+        rel.full_clean()
+        rel.save()
+        assert rel.pk is not None
+
+
+@pytest.mark.django_db
 class TestPartyRelationshipModel:
     """Tests for PartyRelationship model."""
 

@@ -21,5 +21,3 @@ See conf.py for all configuration options.
 """
 
 __version__ = "0.1.0"
-
-default_app_config = "django_catalog.apps.DjangoCatalogConfig"

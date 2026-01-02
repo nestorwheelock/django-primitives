@@ -39,12 +39,20 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
+
+# Optional: Claude API integration
+try:
+    import anthropic
+    HAS_ANTHROPIC = True
+except ImportError:
+    HAS_ANTHROPIC = False
 
 
 # =============================================================================
@@ -566,6 +574,45 @@ def generate_checklist(test_results: list[TestResult]) -> str:
 
 
 # =============================================================================
+# CLAUDE API INTEGRATION
+# =============================================================================
+
+def call_claude_api(prompt: str, model: str = "claude-sonnet-4-20250514") -> str:
+    """Call Claude API with the given prompt and return the response."""
+    if not HAS_ANTHROPIC:
+        raise RuntimeError(
+            "anthropic package not installed. Run: pip install anthropic"
+        )
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY environment variable not set.\n"
+            "Get your API key from: https://console.anthropic.com/"
+        )
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    print("🔄 Sending to Claude API...", file=sys.stderr)
+
+    message = client.messages.create(
+        model=model,
+        max_tokens=8192,
+        messages=[
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    # Extract text from response
+    response_text = ""
+    for block in message.content:
+        if hasattr(block, "text"):
+            response_text += block.text
+
+    return response_text
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -591,6 +638,12 @@ def main() -> int:
                     help="Generate comprehensive senior review prompt (architecture-aware)")
     ap.add_argument("--max-lines", type=int, default=500,
                     help="Max lines of code to include in prompts (default: 500)")
+    ap.add_argument("--execute", action="store_true",
+                    help="Execute the prompt via Claude API (requires ANTHROPIC_API_KEY)")
+    ap.add_argument("--model", default="claude-sonnet-4-20250514",
+                    help="Claude model to use (default: claude-sonnet-4-20250514)")
+    ap.add_argument("--output", "-o",
+                    help="Write results to file instead of stdout")
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
@@ -658,7 +711,26 @@ def main() -> int:
     # Output
     if args.full_review:
         # Generate comprehensive senior review prompt
-        print(FULL_REVIEW_PROMPT.format(code=formatted_code))
+        prompt = FULL_REVIEW_PROMPT.format(code=formatted_code)
+
+        if args.execute:
+            # Execute via Claude API
+            try:
+                result = call_claude_api(prompt, model=args.model)
+                print("✅ Review complete!\n", file=sys.stderr)
+
+                if args.output:
+                    Path(args.output).write_text(result)
+                    print(f"Report written to: {args.output}", file=sys.stderr)
+                else:
+                    print(result)
+
+            except RuntimeError as e:
+                print(f"ERROR: {e}", file=sys.stderr)
+                return 1
+        else:
+            # Just print the prompt for manual copy/paste
+            print(prompt)
 
     elif args.prompt:
         # Generate prompts for Claude review
