@@ -89,6 +89,30 @@ The disruption was in the interface. Not in the entity model.
 
 ---
 
+## Before Software
+
+These primitives are not inventions of the computer age. They predate electricity. They predate the printing press. Some predate writing itself.
+
+**Identity** — The first recorded census was conducted in Babylon around 3800 BC. The Roman census of 6 BC—the one that brought Mary and Joseph to Bethlehem—required citizens to return to their ancestral towns to be counted. In 1086, William the Conqueror commissioned the Domesday Book, a survey of every landholder, every manor, every pig and plow in England. The data structure was: who owns what, and who owes what to whom.
+
+That's identity. It hasn't changed.
+
+**Time** — The Sumerians developed calendars around 2100 BC to track agricultural cycles and religious festivals. The Julian calendar, introduced in 45 BC, remained the standard for 1,600 years. Medieval monasteries kept meticulous records of when events occurred—not just the date, but the canonical hour. Legal disputes hinged on whether a contract was signed before or after sunset.
+
+Business time versus system time is not a database problem. It's a human problem. The distinction between when something happened and when it was recorded has mattered for millennia.
+
+**Money** — The oldest known financial records are Sumerian clay tablets from around 2600 BC. They recorded debts, not currency. "Ur-Nanshe owes the temple 300 measures of barley, to be repaid at harvest." The medieval English Exchequer used tally sticks—notched pieces of wood split in half, one for the creditor, one for the debtor. They worked because both halves had to match.
+
+Double-entry bookkeeping was first documented by Luca Pacioli in *Summa de Arithmetica* (Venice, 1494), but merchants in Florence, Genoa, and the Islamic world had been using similar systems for at least two centuries before. The principle is simple: every transaction has two sides. If they don't balance, someone made an error—or someone is lying.
+
+**Agreements** — The Code of Hammurabi, carved into a stone stele around 1754 BC, contains 282 laws governing contracts, wages, liability, and property. Law 48: "If a man has borrowed money to plant his fields, and a storm destroys the crop, he does not have to repay the debt that year." That's a force majeure clause. It's in your software contracts today.
+
+Roman law distinguished between different types of agreements: *emptio venditio* (sale), *locatio conductio* (lease), *mandatum* (agency). Each had different rules for formation, performance, and breach. These distinctions survive in modern contract law—and in every ERP system that handles orders, rentals, and services.
+
+The primitives are older than software. They're older than paper. They're as old as organized commerce itself.
+
+---
+
 ## The Four Primitives
 
 Across dozens of projects—restaurants, medical practices, logistics companies, government contracts—the same four primitives appeared every time.
@@ -97,15 +121,13 @@ Across dozens of projects—restaurants, medical practices, logistics companies,
 
 Users, accounts, parties. Who are the actors in this system?
 
-This hasn't changed since the first census. Every business system starts with the same question: who?
-
-The same person appears as customer, vendor, and employee. The same company has five names and three tax IDs. Identity is messier than a single row in a database. It always has been.
+The same person appears as customer, vendor, and employee. The same company has five names and three tax IDs. Identity is messier than a single row in a database. It always has been. The Domesday Book struggled with this. Your database will too.
 
 **Time** — When did this happen?
 
 When something happened. When we recorded it. The difference between those two.
 
-This hasn't changed since humans started keeping calendars. Every audit, every legal proceeding, every financial reconciliation depends on getting time right.
+Every audit, every legal proceeding, every financial reconciliation depends on getting time right. The monasteries knew this. The courts knew this. Your system must know this.
 
 Business time is not system time. The sale closed on Friday. The system recorded it Monday. Both facts matter. Confuse them and you fail audits.
 
@@ -113,17 +135,15 @@ Business time is not system time. The sale closed on Friday. The system recorded
 
 Double-entry ledgers. Debits equal credits. Balances are computed, never stored.
 
-This hasn't changed since Luca Pacioli formalized it in 1494. Every business that handles money either uses double-entry accounting or eventually fails an audit.
+This is not a software pattern. It's a pattern that predates software by five centuries. Pacioli didn't invent it—he documented what merchants already knew. Every business that handles money either uses double-entry accounting or eventually fails an audit.
 
-Money doesn't move. It transforms. Cash becomes inventory. Inventory becomes receivables. Receivables become cash. The total never changes. If it does, someone is lying or confused.
+Money doesn't move. It transforms. Cash becomes inventory. Inventory becomes receivables. Receivables become cash. The total never changes. If it does, someone is lying or confused. The tally sticks worked because both halves had to match. Your ledger works the same way.
 
 **Agreements** — What did we promise?
 
 Contracts, terms, obligations. What was promised, by whom, under what conditions.
 
-This hasn't changed since Hammurabi carved laws into stone. Every transaction more complex than a cash sale requires an agreement.
-
-Terms change over time. The terms that applied when the order was placed are the terms that govern the order. Never point to current terms from historical transactions.
+Hammurabi carved 282 laws into stone because verbal agreements created disputes. Your terms of service exist for the same reason. The terms that applied when the order was placed are the terms that govern the order. Never point to current terms from historical transactions. The Romans knew this. You should too.
 
 ---
 
