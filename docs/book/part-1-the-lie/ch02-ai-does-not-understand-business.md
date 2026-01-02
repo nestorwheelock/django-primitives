@@ -224,7 +224,7 @@ AI is the agent. It executes quickly. It doesn't argue. It doesn't get tired. It
 
 A good manager gives clear, complete instructions. A bad manager says "just figure it out" and blames the employee when things go wrong.
 
-The instructions are the constraints. This book teaches you what constraints matter.
+The instructions are the constraints. This book teaches you what constraints matter, and how to give good instructions.
 
 ---
 
