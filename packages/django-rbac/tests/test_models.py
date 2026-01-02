@@ -533,3 +533,57 @@ class TestUserRoleEffectiveDating:
 
         # User's level should be 20 (staff), not 60 (expired manager)
         assert user.hierarchy_level == 20
+
+
+@pytest.mark.django_db
+class TestUserRoleSoftDelete:
+    """Tests for UserRole soft delete combined with effective dating."""
+
+    def test_deleted_userrole_excluded_from_objects(self):
+        """Soft-deleted UserRole is excluded from objects.all()."""
+        from tests.models import User
+
+        user = User.objects.create_user(username='softdel', password='pass')
+        group = Group.objects.create(name='SoftDel Role')
+        role = Role.objects.create(name='SoftDel Role', slug='softdel-role', group=group)
+
+        user_role = UserRole.objects.create(user=user, role=role)
+        assert UserRole.objects.filter(user=user).count() == 1
+
+        # Soft delete
+        user_role.delete()
+
+        # Should be excluded from default queryset
+        assert UserRole.objects.filter(user=user).count() == 0
+
+    def test_deleted_userrole_excluded_from_current(self):
+        """Soft-deleted UserRole is excluded from current()."""
+        from tests.models import User
+
+        user = User.objects.create_user(username='softdelcurr', password='pass')
+        group = Group.objects.create(name='SoftDelCurr Role')
+        role = Role.objects.create(name='SoftDelCurr Role', slug='softdelcurr-role', group=group)
+
+        user_role = UserRole.objects.create(user=user, role=role)
+        assert UserRole.objects.current().filter(user=user).count() == 1
+
+        # Soft delete
+        user_role.delete()
+
+        # Should be excluded from current()
+        assert UserRole.objects.current().filter(user=user).count() == 0
+
+    def test_deleted_userrole_accessible_via_all_objects(self):
+        """Soft-deleted UserRole is accessible via all_objects."""
+        from tests.models import User
+
+        user = User.objects.create_user(username='allobj', password='pass')
+        group = Group.objects.create(name='AllObj Role')
+        role = Role.objects.create(name='AllObj Role', slug='allobj-role', group=group)
+
+        user_role = UserRole.objects.create(user=user, role=role)
+        user_role.delete()
+
+        # all_objects should include deleted
+        assert UserRole.all_objects.filter(user=user).count() == 1
+        assert UserRole.all_objects.filter(user=user).first().is_deleted

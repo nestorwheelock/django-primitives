@@ -103,27 +103,12 @@ class Person(BaseModel, Party):
     # Status
     is_active = models.BooleanField(_('active'), default=True)
 
-    # Primary contact info (convenience fields for quick entry)
-    # Full contact info is stored in normalized Phone/Email/Address tables
-    email = models.EmailField(_('primary email'), blank=True)
-    phone = models.CharField(_('primary phone'), max_length=20, blank=True)
+    # Person-specific phone metadata (phone number itself inherited from Party)
     phone_is_mobile = models.BooleanField(_('is mobile'), default=True)
     phone_has_whatsapp = models.BooleanField(_('has WhatsApp'), default=False)
     phone_can_receive_sms = models.BooleanField(_('can receive SMS'), default=True)
-    postal_code = models.CharField(
-        _('postal code'),
-        max_length=10,
-        blank=True,
-        help_text=_('Primary area/zip code for this person'),
-    )
 
-    # Primary address (convenience fields for quick entry)
-    # Full addresses are stored in normalized Address table
-    address_line1 = models.CharField(_('address line 1'), max_length=255, blank=True)
-    address_line2 = models.CharField(_('address line 2'), max_length=255, blank=True)
-    city = models.CharField(_('city'), max_length=100, blank=True)
-    state = models.CharField(_('state'), max_length=100, blank=True)
-    country = models.CharField(_('country'), max_length=100, blank=True)
+    # Person-specific address metadata (address fields inherited from Party)
     address_is_home = models.BooleanField(_('home address'), default=True)
     address_is_billing = models.BooleanField(_('billing address'), default=False)
     address_is_shipping = models.BooleanField(_('shipping address'), default=False)

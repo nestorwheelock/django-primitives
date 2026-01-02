@@ -26,11 +26,73 @@ Hierarchy levels:
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from django_basemodels import BaseModel
-from django_decisioning.querysets import EffectiveDatedQuerySet
+
+
+class SoftDeleteEffectiveDatedQuerySet(models.QuerySet):
+    """Combined queryset with soft-delete filtering AND effective dating.
+
+    Combines:
+    - Soft-delete: default filtering of deleted_at__isnull=True
+    - Effective dating: as_of() and current() for valid_from/valid_to queries
+
+    This preserves BaseModel's soft-delete contract while adding effective dating.
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+    def as_of(self, timestamp):
+        """Return records valid at the given timestamp (excluding deleted)."""
+        return self.filter(
+            valid_from__lte=timestamp
+        ).filter(
+            Q(valid_to__isnull=True) | Q(valid_to__gt=timestamp)
+        )
+
+    def current(self):
+        """Return currently valid records (excluding deleted)."""
+        return self.as_of(timezone.now())
+
+    def with_deleted(self):
+        """Include soft-deleted objects in queryset."""
+        # Clone the queryset without the deleted_at filter
+        return self.model._default_manager.all()
+
+    def deleted_only(self):
+        """Return only soft-deleted objects."""
+        return self.model._default_manager.filter(deleted_at__isnull=False)
+
+
+class SoftDeleteEffectiveDatedManager(models.Manager):
+    """Manager that combines soft-delete filtering with effective dating."""
+
+    def get_queryset(self):
+        return SoftDeleteEffectiveDatedQuerySet(self.model, using=self._db).filter(
+            deleted_at__isnull=True
+        )
+
+    def as_of(self, timestamp):
+        """Return records valid at the given timestamp."""
+        return self.get_queryset().as_of(timestamp)
+
+    def current(self):
+        """Return currently valid records."""
+        return self.get_queryset().current()
+
+    def with_deleted(self):
+        """Include soft-deleted objects in queryset."""
+        return SoftDeleteEffectiveDatedQuerySet(self.model, using=self._db)
+
+    def deleted_only(self):
+        """Return only soft-deleted objects."""
+        return SoftDeleteEffectiveDatedQuerySet(self.model, using=self._db).filter(
+            deleted_at__isnull=False
+        )
 
 
 class Role(BaseModel):
@@ -157,7 +219,8 @@ class UserRole(BaseModel):
         help_text=_('When this role assignment expires (null = indefinite)'),
     )
 
-    objects = EffectiveDatedQuerySet.as_manager()
+    objects = SoftDeleteEffectiveDatedManager()
+    all_objects = models.Manager()  # Access to all records including deleted
 
     class Meta:
         verbose_name = _('user role')
