@@ -34,8 +34,8 @@ Non-technical idea makers who want to learn how to develop working software. Bus
 | Chapter | Title | Status |
 |---------|-------|--------|
 | 1 | Modern Software Is Old | **Draft** |
-| 2 | AI Does Not Understand Business | Planned |
-| 3 | You Will Not Refactor Later | Planned |
+| 2 | AI Does Not Understand Business | **Draft** |
+| 3 | You Will Not Refactor Later | **Draft** |
 
 ### Part II: The Primitives
 
@@ -69,6 +69,12 @@ Non-technical idea makers who want to learn how to develop working software. Bus
 | 18 | Build a Subscription Service | **Draft** |
 | 19 | Build a Government Form Workflow | **Draft** |
 
+### Conclusion
+
+| Chapter | Title | Status |
+|---------|-------|--------|
+| 20 | Conclusion | **Draft** |
+
 ---
 
 ## File Structure
@@ -80,7 +86,7 @@ docs/book/
 ├── part-1-the-lie/
 │   ├── ch01-modern-software-is-old.md
 │   ├── ch02-ai-does-not-understand-business.md
-│   └── ch03-you-will-not-refactor-later.md
+│   └── ch03-you-will-refactor-later.md
 ├── part-2-the-primitives/
 │   ├── ch03a-project-structure.md    # Interlude
 │   ├── ch04-identity.md
@@ -96,11 +102,12 @@ docs/book/
 │   ├── ch13-prompt-contracts.md
 │   ├── ch14-schema-first-generation.md
 │   └── ch15-forbidden-operations.md
-└── part-4-composition/
-    ├── ch16-build-a-clinic.md
-    ├── ch17-build-a-marketplace.md
-    ├── ch18-build-a-subscription-service.md
-    └── ch19-build-a-government-form-workflow.md
+├── part-4-composition/
+│   ├── ch16-build-a-clinic.md
+│   ├── ch17-build-a-marketplace.md
+│   ├── ch18-build-a-subscription-service.md
+│   └── ch19-build-a-government-form-workflow.md
+└── ch20-conclusion.md
 ```
 
 ---
@@ -131,15 +138,18 @@ docs/book/
 
 ## Progress
 
-- **Total Chapters:** 20 (including interlude)
-- **Drafted:** 17
-- **Planned:** 3
+- **Total Chapters:** 21 (including interlude and conclusion)
+- **Drafted:** 21
+- **Planned:** 0
 
-### Completed Chapters
+### All Chapters Complete
 
 | Part | Chapter | Title |
 |------|---------|-------|
+| Intro | - | Introduction: Vibe Coding With Constraints |
 | I | 1 | Modern Software Is Old |
+| I | 2 | AI Does Not Understand Business |
+| I | 3 | You Will Not Refactor Later |
 | II | 3.5 | Setting Up Your Project (Interlude) |
 | II | 4 | Identity |
 | II | 5 | Time |
@@ -157,10 +167,4 @@ docs/book/
 | IV | 17 | Build a Marketplace |
 | IV | 18 | Build a Subscription Service |
 | IV | 19 | Build a Government Form Workflow |
-
-### Remaining Chapters
-
-| Part | Chapter | Title |
-|------|---------|-------|
-| I | 2 | AI Does Not Understand Business |
-| I | 3 | You Will Not Refactor Later |
+| - | 20 | Conclusion |
