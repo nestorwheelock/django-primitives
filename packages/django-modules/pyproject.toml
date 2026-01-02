@@ -28,7 +28,7 @@ classifiers = [
 keywords = ["django", "modules", "features", "organization", "enable", "disable"]
 dependencies = [
     "Django>=4.2",
-    "django-basemodels",
+    "django-basemodels>=0.2.0",
 ]
 
 [project.urls]
