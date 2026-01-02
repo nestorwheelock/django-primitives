@@ -5,6 +5,8 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 
+from django_basemodels import BaseModel
+
 
 class NoteQuerySet(models.QuerySet):
     """Custom queryset for Note model."""
@@ -30,7 +32,7 @@ class NoteQuerySet(models.QuerySet):
         return self.filter(author=author)
 
 
-class Note(models.Model):
+class Note(BaseModel):
     """
     Note attachment model.
 
@@ -99,9 +101,7 @@ class Note(models.Model):
         help_text="Additional metadata",
     )
 
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # BaseModel provides: id (UUID), created_at, updated_at, deleted_at
 
     objects = NoteQuerySet.as_manager()
 
@@ -125,7 +125,7 @@ class Note(models.Model):
         return f"Note: {preview}"
 
 
-class Tag(models.Model):
+class Tag(BaseModel):
     """
     Tag model for categorization.
 
@@ -157,9 +157,7 @@ class Tag(models.Model):
         help_text="Optional description of the tag",
     )
 
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # BaseModel provides: id (UUID), created_at, updated_at, deleted_at
 
     class Meta:
         app_label = 'django_notes'
@@ -187,7 +185,7 @@ class ObjectTagQuerySet(models.QuerySet):
         return self.filter(tag=tag)
 
 
-class ObjectTag(models.Model):
+class ObjectTag(BaseModel):
     """
     GenericFK-based many-to-many tagging.
 
@@ -233,8 +231,7 @@ class ObjectTag(models.Model):
         help_text="User who applied the tag",
     )
 
-    # Timestamp
-    created_at = models.DateTimeField(auto_now_add=True)
+    # BaseModel provides: id (UUID), created_at, updated_at, deleted_at
 
     objects = ObjectTagQuerySet.as_manager()
 

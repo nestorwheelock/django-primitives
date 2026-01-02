@@ -29,13 +29,14 @@ Key Design:
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from django_basemodels import BaseModel, UUIDModel
+from django_basemodels import BaseModel
 
 
 # =============================================================================
 # Party Pattern - Core Models
 # =============================================================================
 
+# PRIMITIVES: allow-plain-model
 class Party(models.Model):
     """Abstract base for any entity that can own things and do business.
 
@@ -60,7 +61,7 @@ class Party(models.Model):
     country = models.CharField(_('country'), max_length=100, blank=True)
 
 
-class Person(UUIDModel, BaseModel, Party):
+class Person(BaseModel, Party):
     """A human being - the real-world identity.
 
     Separate from User (login account). One Person can have multiple User
@@ -170,7 +171,7 @@ class Person(UUIDModel, BaseModel, Party):
         return age
 
 
-class Organization(UUIDModel, BaseModel, Party):
+class Organization(BaseModel, Party):
     """A formal business entity - company, clinic, school, supplier, etc."""
 
     ORGANIZATION_TYPES = [
@@ -214,7 +215,7 @@ class Organization(UUIDModel, BaseModel, Party):
         return self.name
 
 
-class Group(UUIDModel, BaseModel, Party):
+class Group(BaseModel, Party):
     """An informal grouping of people - household, family, partnership.
 
     Use for: spouses sharing a pet, roommates, family units.
@@ -258,7 +259,7 @@ class Group(UUIDModel, BaseModel, Party):
         return self.name
 
 
-class PartyRelationship(UUIDModel, BaseModel):
+class PartyRelationship(BaseModel):
     """Relationship between any two parties.
 
     Supports:
@@ -390,7 +391,7 @@ class PartyRelationship(UUIDModel, BaseModel):
 # Address - Normalized address table
 # =============================================================================
 
-class Address(UUIDModel, BaseModel):
+class Address(BaseModel):
     """Physical or mailing address for any party."""
 
     ADDRESS_TYPES = [
@@ -502,7 +503,7 @@ class Address(UUIDModel, BaseModel):
 # Phone - Normalized phone number table
 # =============================================================================
 
-class Phone(UUIDModel, BaseModel):
+class Phone(BaseModel):
     """Phone number for any party."""
 
     PHONE_TYPES = [
@@ -593,7 +594,7 @@ class Phone(UUIDModel, BaseModel):
 # Email - Normalized email table
 # =============================================================================
 
-class Email(UUIDModel, BaseModel):
+class Email(BaseModel):
     """Email address for any party."""
 
     EMAIL_TYPES = [
@@ -666,7 +667,7 @@ class Email(UUIDModel, BaseModel):
 # Demographics - Person demographics
 # =============================================================================
 
-class Demographics(UUIDModel, BaseModel):
+class Demographics(BaseModel):
     """Extended demographics for a Person.
 
     Note: Basic demographics (date_of_birth) are on Person model.
@@ -761,7 +762,7 @@ class Demographics(UUIDModel, BaseModel):
 # URL / Social Media - Party web presence
 # =============================================================================
 
-class PartyURL(UUIDModel, BaseModel):
+class PartyURL(BaseModel):
     """Website or social media URL for any party."""
 
     URL_TYPES = [

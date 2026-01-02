@@ -1,3 +1,4 @@
+# PRIMITIVES: package-kind=utility
 """Models for django-singleton."""
 
 from django.db import IntegrityError, models, transaction

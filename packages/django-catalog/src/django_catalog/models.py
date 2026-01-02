@@ -15,44 +15,24 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from django_basemodels import BaseModel
 from django_catalog.conf import ENCOUNTER_MODEL, INVENTORY_ITEM_MODEL, PRESCRIPTION_MODEL
 from django_decisioning.querysets import EventAsOfQuerySet
 from django_singleton.models import SingletonModel
 
 
 # =============================================================================
-# Base Model Mixin (timestamps + soft delete)
+# Base Model Alias (uses django-basemodels)
 # =============================================================================
 
-class CatalogBaseModel(models.Model):
-    """Base model with timestamps and soft delete.
+class CatalogBaseModel(BaseModel):
+    """Base model for catalog - extends django_basemodels.BaseModel.
 
-    If you have django-basemodels installed, you can configure
-    CATALOG_BASE_MODEL to use your preferred base class instead.
+    Provides: UUID PK, created_at, updated_at, deleted_at, soft delete.
     """
-
-    created_at = models.DateTimeField(_('created at'), auto_now_add=True)
-    updated_at = models.DateTimeField(_('updated at'), auto_now=True)
-    deleted_at = models.DateTimeField(_('deleted at'), null=True, blank=True)
 
     class Meta:
         abstract = True
-
-    def soft_delete(self):
-        """Mark record as deleted without removing from database."""
-        from django.utils import timezone
-        self.deleted_at = timezone.now()
-        self.save(update_fields=['deleted_at', 'updated_at'])
-
-    def restore(self):
-        """Restore a soft-deleted record."""
-        self.deleted_at = None
-        self.save(update_fields=['deleted_at', 'updated_at'])
-
-    @property
-    def is_deleted(self):
-        """Check if record is soft-deleted."""
-        return self.deleted_at is not None
 
 
 # =============================================================================
@@ -604,6 +584,7 @@ if PRESCRIPTION_MODEL:
 # CatalogSettings - Singleton Configuration
 # =============================================================================
 
+# PRIMITIVES: allow-plain-model
 class CatalogSettings(SingletonModel):
     """Singleton configuration for catalog behavior.
 

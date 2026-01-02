@@ -1,3 +1,4 @@
+# PRIMITIVES: package-kind=system
 """Audit log models for Django applications.
 
 Provides a generic, B2B-grade audit log with:

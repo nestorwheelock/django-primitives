@@ -7,6 +7,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils import timezone
 
+from django_basemodels import BaseModel
+
 
 class DocumentQuerySet(models.QuerySet):
     """Custom queryset for Document model."""
@@ -33,7 +35,7 @@ class DocumentQuerySet(models.QuerySet):
         )
 
 
-class Document(models.Model):
+class Document(BaseModel):
     """
     Document attachment model with checksum verification.
 
@@ -135,9 +137,7 @@ class Document(models.Model):
         help_text="Explicit expiration date (None = never expires)",
     )
 
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # BaseModel provides: id (UUID), created_at, updated_at, deleted_at
 
     objects = DocumentQuerySet.as_manager()
 

@@ -217,7 +217,7 @@ class TestEncounterTransitionCreation:
         assert encounter.transitions.count() == 2
 
     def test_transitions_cascade_on_encounter_delete(self, definition, subject):
-        """Transitions are deleted when encounter is deleted."""
+        """Transitions are deleted when encounter is hard deleted."""
         encounter = Encounter.objects.create(
             definition=definition,
             subject_type=ContentType.objects.get_for_model(subject),
@@ -231,7 +231,7 @@ class TestEncounterTransitionCreation:
         )
 
         encounter_pk = encounter.pk
-        encounter.delete()
+        encounter.hard_delete()  # Use hard_delete to test CASCADE behavior
 
         assert EncounterTransition.objects.filter(encounter_id=encounter_pk).count() == 0
 
@@ -249,7 +249,7 @@ class TestSoftDelete:
             state="pending",
         )
 
-        encounter.soft_delete()
+        encounter.delete()  # BaseModel.delete() performs soft delete
 
         assert encounter.is_deleted is True
         assert encounter.deleted_at is not None
@@ -262,7 +262,7 @@ class TestSoftDelete:
             subject_id=subject.pk,
             state="pending",
         )
-        encounter.soft_delete()
+        encounter.delete()  # BaseModel.delete() performs soft delete
         encounter.restore()
 
         assert encounter.is_deleted is False

@@ -13,35 +13,20 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from django_basemodels import BaseModel
 from django_decisioning.querysets import EventAsOfQuerySet
 
 from .graph import validate_definition_graph
 
 
-class EncountersBaseModel(models.Model):
-    """Base model with timestamps and soft delete."""
+class EncountersBaseModel(BaseModel):
+    """Base model for encounters - extends django_basemodels.BaseModel.
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
+    Provides: UUID PK, created_at, updated_at, deleted_at, soft delete.
+    """
 
     class Meta:
         abstract = True
-
-    def soft_delete(self):
-        """Mark as deleted without removing from database."""
-        self.deleted_at = timezone.now()
-        self.save(update_fields=["deleted_at", "updated_at"])
-
-    def restore(self):
-        """Restore a soft-deleted record."""
-        self.deleted_at = None
-        self.save(update_fields=["deleted_at", "updated_at"])
-
-    @property
-    def is_deleted(self) -> bool:
-        """Check if record is soft-deleted."""
-        return self.deleted_at is not None
 
 
 class EncounterDefinition(EncountersBaseModel):

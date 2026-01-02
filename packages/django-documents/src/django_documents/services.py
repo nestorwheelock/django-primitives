@@ -115,8 +115,8 @@ def verify_document_integrity(document: Union[Document, int]) -> bool:
         DocumentNotFoundError: If document ID doesn't exist.
         ChecksumMismatchError: If checksum doesn't match file content.
     """
-    # Get document if ID was passed
-    if isinstance(document, int):
+    # Get document if ID was passed (supports int, str, or UUID)
+    if not isinstance(document, Document):
         try:
             document = Document.objects.get(pk=document)
         except Document.DoesNotExist:

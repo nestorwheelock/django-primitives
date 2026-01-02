@@ -4,8 +4,10 @@ from datetime import date
 from django.conf import settings
 from django.db import models
 
+from django_basemodels import BaseModel
 
-class Sequence(models.Model):
+
+class Sequence(BaseModel):
     """
     Human-readable sequence generator.
 
@@ -60,8 +62,7 @@ class Sequence(models.Model):
         help_text="Whether to include the year in the formatted value"
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # BaseModel provides: id (UUID), created_at, updated_at, deleted_at
 
     class Meta:
         app_label = 'django_sequence'

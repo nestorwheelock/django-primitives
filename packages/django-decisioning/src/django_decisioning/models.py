@@ -5,6 +5,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models
 
 
+# PRIMITIVES: allow-plain-model
 class IdempotencyKey(models.Model):
     """
     Prevents duplicate operations from retries.
@@ -48,7 +49,7 @@ class IdempotencyKey(models.Model):
         help_text="Hash of request body for mismatch detection"
     )
 
-    # Timestamps
+    # Timestamps  # PRIMITIVES: allow-manual-timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(
         null=True,
@@ -105,6 +106,7 @@ class IdempotencyKey(models.Model):
         return f"{self.scope}:{self.key} ({self.state})"
 
 
+# PRIMITIVES: allow-plain-model
 class Decision(models.Model):
     """
     Generic decision record for any decision surface.

@@ -1,15 +1,16 @@
 """Models for django-geo package."""
-import uuid
 from decimal import Decimal
 
 from django.db import models
 from django.utils import timezone
 
+from django_basemodels import BaseModel
+
 from .geo import GeoPoint
 from .querysets import PlaceQuerySet, ServiceAreaQuerySet
 
 
-class Place(models.Model):
+class Place(BaseModel):
     """A standalone geographic location entity.
 
     Represents a physical place with coordinates and address information,
@@ -24,7 +25,7 @@ class Place(models.Model):
         ('other', 'Other'),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # BaseModel provides: id (UUID), created_at, updated_at, deleted_at
 
     # Basic info
     name = models.CharField(max_length=255)
@@ -45,10 +46,6 @@ class Place(models.Model):
     # Metadata
     is_verified = models.BooleanField(default=False)
     verified_at = models.DateTimeField(null=True, blank=True)
-
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     objects = PlaceQuerySet.as_manager()
 
@@ -75,7 +72,7 @@ class Place(models.Model):
         return GeoPoint(latitude=self.latitude, longitude=self.longitude)
 
 
-class ServiceArea(models.Model):
+class ServiceArea(BaseModel):
     """A geographic service zone defined by center and radius.
 
     Used for delivery zones, coverage areas, tax jurisdictions, etc.
@@ -88,7 +85,7 @@ class ServiceArea(models.Model):
         ('other', 'Other'),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # BaseModel provides: id (UUID), created_at, updated_at, deleted_at
 
     # Basic info
     name = models.CharField(max_length=255)
@@ -104,10 +101,6 @@ class ServiceArea(models.Model):
 
     # Status
     is_active = models.BooleanField(default=True)
-
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     objects = ServiceAreaQuerySet.as_manager()
 

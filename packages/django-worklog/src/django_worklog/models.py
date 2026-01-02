@@ -1,22 +1,20 @@
 """Models for django-worklog."""
 
-import uuid
-
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils import timezone
 
+from django_basemodels import BaseModel
 from django_decisioning.querysets import EventAsOfQuerySet
 
 
-class WorklogBaseModel(models.Model):
-    """Base model with UUID PK and timestamps."""
+class WorklogBaseModel(BaseModel):
+    """Base model for worklog - extends django_basemodels.BaseModel.
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    Provides: UUID PK, created_at, updated_at, deleted_at, soft delete.
+    """
 
     class Meta:
         abstract = True

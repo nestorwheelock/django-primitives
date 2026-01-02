@@ -5,6 +5,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils import timezone
 
+from django_basemodels import BaseModel
 from django_ledger.exceptions import ImmutableEntryError
 
 
@@ -28,7 +29,7 @@ class AccountQuerySet(models.QuerySet):
         return self.filter(currency=currency)
 
 
-class Account(models.Model):
+class Account(BaseModel):
     """
     Ledger account model.
 
@@ -69,9 +70,7 @@ class Account(models.Model):
         help_text="Optional account name",
     )
 
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # BaseModel provides: id (UUID), created_at, updated_at, deleted_at
 
     objects = AccountQuerySet.as_manager()
 
@@ -93,6 +92,7 @@ class Account(models.Model):
         return f"{self.account_type} ({self.currency})"
 
 
+# PRIMITIVES: allow-plain-model
 class Transaction(models.Model):
     """
     Transaction model that groups balanced entries.
@@ -148,6 +148,7 @@ class Transaction(models.Model):
         return self.posted_at is not None
 
 
+# PRIMITIVES: allow-plain-model
 class Entry(models.Model):
     """
     Immutable ledger entry.

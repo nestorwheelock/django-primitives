@@ -29,11 +29,11 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from django_basemodels import BaseModel, UUIDModel
+from django_basemodels import BaseModel
 from django_decisioning.querysets import EffectiveDatedQuerySet
 
 
-class Role(UUIDModel, BaseModel):
+class Role(BaseModel):
     """Custom role with configurable permissions and hierarchy.
 
     Each Role is linked to a Django Group for permission management.
@@ -81,7 +81,7 @@ class Role(UUIDModel, BaseModel):
         return self.name
 
 
-class UserRole(UUIDModel, BaseModel):
+class UserRole(BaseModel):
     """Links users to roles with assignment tracking and effective dating.
 
     This is the many-to-many relationship between User and Role,
