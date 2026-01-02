@@ -88,6 +88,7 @@ The framework used in this book is Django, and the language is Python. This choi
 - **Django is proven**. It's been running production systems since 2005. Instagram, Pinterest, Mozilla—they all run on Django. It's not exciting. It's reliable.
 - **Django is flexible**. It has opinions where you want them and gets out of the way where you don't.
 - **AI assistants know Django better than almost anything else**. There's more Python and Django in their training data than most other languages and frameworks. When you ask for Django code, the LLM has seen your pattern a hundred thousand times. That makes its suggestions reliable.
+- **Django developers are everywhere**. When you need human help—and eventually you will—you can throw a stick at any job board and hit a few hundred Django developers. The ecosystem is mature. The talent pool is deep. You're not betting on an obscure technology that three people understand.
 
 But the primitives outlive the framework. They worked before Django existed. They'll work after Django is forgotten. Django is the implementation vehicle, not the idea. If you prefer Rails, Laravel, or Spring, the primitives translate. The constraints are universal.
 
