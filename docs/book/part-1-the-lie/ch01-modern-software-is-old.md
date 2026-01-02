@@ -36,6 +36,8 @@ Your "next-generation CRM" is a contact database with better CSS.
 
 This is not cynicism. This is observation.
 
+And yes—this book is about old ideas. That's the point. Old ideas that survived millennia of use are called fundamentals. The goal is not to invent new primitives. The goal is to stop reinventing them badly.
+
 ---
 
 ## What Actually Changes
@@ -48,7 +50,7 @@ Each wave promised transformation. Each wave delivered better tools for the same
 
 The job is: track who did what, when, for how much, under what terms.
 
-That job hasn't changed since Babylonian merchants scratched tallies into clay tablets.
+That job hasn't changed since Mesopotamian merchants pressed tallies into clay tablets five thousand years ago.
 
 ---
 
@@ -63,7 +65,7 @@ Agreements: fare calculations, terms of service.
 Money: payments and payouts.
 Time: pickup times, trip duration, surge windows.
 
-The innovation was GPS and a smartphone app. The primitives were unchanged.
+The business model innovation was real—regulatory arbitrage, network effects, surge pricing. The data model was not. The primitives were unchanged.
 
 **Airbnb** lets people rent rooms to strangers.
 
@@ -72,7 +74,7 @@ Agreements: booking terms, house rules, cancellation policies.
 Money: payments, deposits, refunds.
 Time: check-in, check-out, availability calendars.
 
-The innovation was photos and trust signals. The primitives were unchanged.
+The trust innovation was real—reviews, photos, identity verification. The data model was not. The primitives were unchanged.
 
 **Stripe** processes payments over the internet.
 
@@ -81,7 +83,7 @@ Agreements: payment terms, dispute policies.
 Money: the entire product.
 Time: transaction timestamps, settlement periods.
 
-The innovation was a clean API. The primitives were unchanged.
+The API innovation was real—developer experience that didn't require a sales call. The data model was not. The primitives were unchanged.
 
 None of these companies invented new primitives. They composed existing primitives better than incumbents, wrapped them in better interfaces, and scaled them with modern infrastructure.
 
@@ -93,21 +95,21 @@ The disruption was in the interface. Not in the entity model.
 
 These primitives are not inventions of the computer age. They predate electricity. They predate the printing press. Some predate writing itself.
 
-**Identity** — The first recorded census was conducted in Babylon around 3800 BC. The Roman census of 6 BC—the one that brought Mary and Joseph to Bethlehem—required citizens to return to their ancestral towns to be counted. In 1086, William the Conqueror commissioned the Domesday Book, a survey of every landholder, every manor, every pig and plow in England. The data structure was: who owns what, and who owes what to whom.
+**Identity** — The earliest known census records come from Babylon and Egypt around 3000 BC, used to count laborers and calculate tax obligations. The Roman Empire conducted regular censuses; the one described in Luke 2:1-3 (whether dated to 6 BC or 6 AD—historians dispute this) required citizens to register in their ancestral towns. In 1086, William the Conqueror commissioned the Domesday Book, a survey of every landholder, every manor, every pig and plow in England. The data structure was: who owns what, and who owes what to whom.
 
 That's identity. It hasn't changed.
 
-**Time** — The Sumerians developed calendars around 2100 BC to track agricultural cycles and religious festivals. The Julian calendar, introduced in 45 BC, remained the standard for 1,600 years. Medieval monasteries kept meticulous records of when events occurred—not just the date, but the canonical hour. Legal disputes hinged on whether a contract was signed before or after sunset.
+**Time** — The Sumerians developed lunar calendars before 2000 BC to track agricultural cycles and religious festivals. The Julian calendar, introduced by Julius Caesar in 45 BC, remained the standard for 1,600 years. Medieval monasteries kept meticulous records of when events occurred—not just the date, but the canonical hour. Legal disputes hinged on whether a contract was signed before or after sunset.
 
 Business time versus system time is not a database problem. It's a human problem. The distinction between when something happened and when it was recorded has mattered for millennia.
 
-**Money** — The oldest known financial records are Sumerian clay tablets from around 2600 BC. They recorded debts, not currency. "Ur-Nanshe owes the temple 300 measures of barley, to be repaid at harvest." The medieval English Exchequer used tally sticks—notched pieces of wood split in half, one for the creditor, one for the debtor. They worked because both halves had to match.
+**Money** — The oldest known financial records are Sumerian cuneiform tablets from around 2600 BC. They recorded debts, not currency—obligations like "10 measures of barley owed to the temple, to be repaid at harvest." The medieval English Exchequer used tally sticks: notched pieces of wood split in half, one for the creditor, one for the debtor. They worked because both halves had to match. This system remained in use until 1826.
 
-Double-entry bookkeeping was first documented by Luca Pacioli in *Summa de Arithmetica* (Venice, 1494), but merchants in Florence, Genoa, and the Islamic world had been using similar systems for at least two centuries before. The principle is simple: every transaction has two sides. If they don't balance, someone made an error—or someone is lying.
+Double-entry bookkeeping appears in Fibonacci's *Liber Abaci* (1202) and was formalized by Luca Pacioli in *Summa de Arithmetica* (Venice, 1494). But merchants in Florence, Genoa, and the Islamic world had been using similar systems for at least two centuries before Pacioli published. The principle is simple: every transaction has two sides. If they don't balance, someone made an error—or someone is lying.
 
-**Agreements** — The Code of Hammurabi, carved into a stone stele around 1754 BC, contains 282 laws governing contracts, wages, liability, and property. Law 48: "If a man has borrowed money to plant his fields, and a storm destroys the crop, he does not have to repay the debt that year." That's a force majeure clause. It's in your software contracts today.
+**Agreements** — The Code of Hammurabi, carved into a stone stele around 1754 BC, contains 282 laws governing contracts, wages, liability, and property. Law 48 addresses crop failure: if a storm destroys a farmer's harvest, he is released from that year's debt obligation. That's force majeure. It's in your software contracts today.
 
-Roman law distinguished between different types of agreements: *emptio venditio* (sale), *locatio conductio* (lease), *mandatum* (agency). Each had different rules for formation, performance, and breach. These distinctions survive in modern contract law—and in every ERP system that handles orders, rentals, and services.
+Roman law distinguished between types of agreements: *emptio venditio* (sale), *locatio conductio* (lease), *mandatum* (agency). Each had different rules for formation, performance, and breach. Justinian's *Digest* (533 AD) codified these distinctions. They survive in modern contract law—and in every ERP system that handles orders, rentals, and services.
 
 The primitives are older than software. They're older than paper. They're as old as organized commerce itself.
 
@@ -115,7 +117,7 @@ The primitives are older than software. They're older than paper. They're as old
 
 ## The Four Primitives
 
-Across dozens of projects—restaurants, medical practices, logistics companies, government contracts—the same four primitives appeared every time.
+This chapter focuses on four foundational primitives. Later chapters cover additional primitives—Catalog, Workflow, Decisions, Audit, Ledger—but these four are the foundation. Everything else builds on top of them.
 
 **Identity** — Who is this?
 
@@ -147,27 +149,27 @@ Hammurabi carved 282 laws into stone because verbal agreements created disputes.
 
 ---
 
+## What Happens When You Get It Wrong
+
+Most projects eventually implement these primitives. Most implement them badly.
+
+**Time confusion:** A medical billing system I reviewed stored only one timestamp per claim: `created_at`. When a claim was submitted on Friday but processed on Monday, there was no way to know. The practice failed an insurance audit because they couldn't prove when services were actually rendered versus when they were billed. The fix required a database migration and months of manual record correction.
+
+**Money that doesn't balance:** A restaurant inventory system allowed negative quantities. When the count showed -47 hamburger patties, the manager assumed it was a software bug and ignored it. It wasn't a bug—it was theft, masked by a system that didn't enforce the constraint that quantities cannot go below zero. They lost $30,000 before catching it.
+
+**Agreements that point to current terms:** A subscription service updated their pricing tier definitions in place. When customers disputed charges, there was no way to prove what the terms were at the time of signup. The terms they saw when they subscribed had been overwritten. This is a lawsuit waiting to happen.
+
+These are not edge cases. These are what happens when you violate the physics.
+
+---
+
 ## Why Projects Reinvent Primitives
 
-Every development team eventually builds identity, time, money, and agreements.
+Every development team eventually builds identity, time, money, and agreements. Most build them badly. Not because developers are incompetent—because extracting and generalizing primitives used to cost more than rebuilding them.
 
-Most build them badly.
+The documentation tax was brutal. Specifications. Test plans. Requirements documents. Most of the energy went into planning and writing, not building. Every project started from scratch. Every project reimplemented identity, authentication, roles, permissions, transactions, audit trails.
 
-Not because developers are incompetent. Because extracting and generalizing these primitives used to cost more than rebuilding them.
-
-I learned this firsthand.
-
-In 2006, my partner and I started building systems for clients. We used Sharpie markers and index cards. Clients would write user stories. We'd stick them on a metal wall with magnets. Pennies, nickels, dimes, and quarters glued to magnets showed the budget.
-
-It worked. Clients could see exactly what they were getting each sprint. Scope creep was contained. Dependencies were visible.
-
-But the documentation tax was brutal.
-
-Specifications. Test plans. Requirements documents. Most of the energy went into planning and writing, not building. Every project started from scratch. Every project reimplemented the same patterns.
-
-Identity. Authentication. Roles. Permissions. Transactions. Audit trails.
-
-We knew these were the same across projects. We just couldn't afford to extract them.
+We saw the same patterns in every client project. We just couldn't afford to extract them.
 
 ---
 
@@ -242,6 +244,16 @@ Understanding that primitives are physics, not features, is the first constraint
 Clever breaks under audit.
 
 Boring survives.
+
+---
+
+## References
+
+- Pacioli, Luca. *Summa de Arithmetica, Geometria, Proportioni et Proportionalita*. Venice, 1494.
+- Fibonacci, Leonardo. *Liber Abaci*. Pisa, 1202.
+- King, L.W. (translator). *The Code of Hammurabi*. Yale Law School, 1910.
+- *Domesday Book*. National Archives, UK. 1086.
+- Justinian I. *Digest of Justinian* (Corpus Juris Civilis). Constantinople, 533 AD.
 
 ---
 
