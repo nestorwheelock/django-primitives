@@ -122,7 +122,7 @@ The arguments that remain are the ones that actually matter:
 - What happens when this fails?
 - Who is allowed to see this?
 
-These are the arguments worth having. These are the constraints this book teaches you to define.
+These are the arguments worth having. These are the constraints this book teaches you to define. These are the things that actually matter to business people.
 
 ---
 
