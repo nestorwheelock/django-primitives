@@ -22,13 +22,33 @@ Hope is not a strategy.
 
 ---
 
-## The Eight Primitives
+## The Eighteen Primitives
 
-This book introduced eight primitives. They are not features you choose. They are physics you obey.
+This book introduced eighteen primitives organized in tiers. They are not features you choose. They are physics you obey.
 
-**Identity** — Who is this? The same person appears as customer, vendor, and employee. The same company has five names and three tax IDs. A person gets married and changes their name. A company merges and inherits obligations. Identity is messier than a single row in a database. It always has been.
+### Foundation Tier
+
+These primitives provide the bedrock that everything else builds upon.
+
+**Base Models** — Every model needs an identity, timestamps, and lifecycle management. UUIDs that don't expose row counts. Created and updated timestamps for debugging. Soft deletion that preserves history. Audit fields that track who did what. These aren't optional features—they're the foundation every business model inherits.
+
+**Singleton** — Some data exists exactly once. Site configuration. System settings. Feature flags. The Singleton primitive ensures one row, cached efficiently, with a clean API that doesn't require you to remember `.first()` or handle missing records.
+
+**Modules** — As systems grow, related models cluster together. Modules provide organizational boundaries—namespace, ownership, versioning—so you can reason about billing models separately from clinical models, even when they share a database.
+
+**Layers** — Dependencies flow downward. Foundation doesn't import from Domain. Domain doesn't import from Application. The Layer primitive enforces this at the AST level, catching violations before they become architectural rot.
+
+### Identity Tier
+
+**Parties** — Who is this? The same person appears as customer, vendor, and employee. The same company has five names and three tax IDs. A person gets married and changes their name. A company merges and inherits obligations. Identity is messier than a single row in a database. It always has been.
+
+**Roles** — What can they do? Role-based access control that separates identity from capability. A user has a role within a context—admin of this clinic, viewer of that report. Permissions check what the role allows, not what the user table says.
+
+### Time Tier
 
 **Time** — When did this happen? When something happened versus when we recorded it. The sale closed Friday; the system recorded it Monday. Both facts matter. Confuse them and you fail audits. Handle them correctly with `valid_from`, `valid_to`, `as_of()`, and `current()`.
+
+### Domain Tier
 
 **Agreements** — What did we promise? Contracts, terms, obligations. The terms that applied when the order was placed govern the order—not the current terms. Agreements are immutable once executed. Amendments are new agreements that reference old ones.
 
@@ -38,11 +58,31 @@ This book introduced eight primitives. They are not features you choose. They ar
 
 **Workflow** — What's happening now? State machines that track entities through defined processes. Encounters that record what happened, when, who was involved, and what was decided. Status is not a string field—it's a constrained transition between valid states.
 
+**Worklog** — Where did the time go? Billable hours. Timesheets. Approval workflows. Every professional service business tracks time against clients, projects, and tasks. The Worklog primitive captures duration, billing rates, and the paper trail that justifies every invoice.
+
+**Geography** — Where is this? Addresses are not strings. They're structured data with components, geocoding, and jurisdictional implications. Tax rates depend on location. Service areas define boundaries. Shipping costs depend on distance. Geography turns "123 Main St" into queryable, calculable data.
+
+### Infrastructure Tier
+
 **Decisions** — Who decided what? Every business decision has inputs, an outcome, a rationale, and an actor. Recording decisions creates an audit trail that survives personnel changes, lawsuits, and regulatory inquiries. The decision log answers "why did we do this?" years after the fact.
 
 **Audit** — What changed and when? Every mutation, logged immutably. Actor, timestamp, before state, after state. Audit logs are not optional for any system that handles money, health data, or legal obligations. They're the difference between "we don't know what happened" and "here's exactly what happened."
 
-These primitives compose. A clinic visit is an Encounter (workflow) involving a Patient and Provider (identity), governed by an InsurancePlan (agreement), recording services from a ServiceCatalog (catalog), generating charges in a financial Ledger (ledger), with ClinicalDecisions captured at each step (decisions), all logged in an immutable AuditLog (audit), with temporal tracking throughout (time).
+### Content Tier
+
+**Documents** — Where's the paper trail? Contracts need PDFs. Compliance needs certificates. Operations need reports. The Documents primitive handles versioning, hashing for integrity, retention policies, and access control. When an auditor asks for the signed contract, you produce the exact file that was signed.
+
+**Notes** — What's the context? Every business record accumulates human context—phone calls, observations, decisions. The Notes primitive provides threaded, searchable, attributable notes that attach to any record. When someone asks "what happened with this account?", the notes tell the story.
+
+### Value Object Tier
+
+**Money** — How much? Currency amounts are not floats. They're exact decimals with currency codes and rounding rules. The Money primitive prevents the $0.01 errors that accumulate into audit findings. It handles multi-currency, exchange rates, and the precision that finance requires.
+
+**Sequence** — What number? Invoice numbers must be gapless. Check numbers must never repeat. Order numbers must be sequential. The Sequence primitive provides concurrent-safe, gapless numbering with format templates, reset periods, and allocation tracking. When an auditor asks about invoice #1047, you can prove it was voided, not missing.
+
+---
+
+These eighteen primitives compose. A clinic visit is an Encounter (workflow) involving a Patient and Provider (parties), governed by an InsurancePlan (agreement), recording services from a ServiceCatalog (catalog), generating charges in a financial Ledger (ledger), with Money amounts calculated exactly, ClinicalDecisions captured at each step (decisions), Documents attached for compliance, Notes recording context, time tracked in Worklog entries for billing, all logged in an immutable AuditLog (audit), with temporal tracking throughout (time), at a verified geographic Location (geography), with gapless claim numbers from Sequence.
 
 You don't invent new primitives. You configure existing ones.
 

@@ -42,6 +42,7 @@ Non-technical idea makers who want to learn how to develop working software. Bus
 | Chapter | Title | django-primitives Package | Status |
 |---------|-------|---------------------------|--------|
 | 3.5 | Setting Up Your Project (Interlude) | Project structure guide | **Draft** |
+| 3b | Foundation Layer | django-basemodels, django-singleton, django-modules, django-layers | **Draft** |
 | 4 | Identity | django-parties, django-rbac | **Draft** |
 | 5 | Time | django-decisioning | **Draft** |
 | 6 | Agreements | django-agreements | **Draft** |
@@ -50,6 +51,11 @@ Non-technical idea makers who want to learn how to develop working software. Bus
 | 9 | Workflow | django-encounters | **Draft** |
 | 10 | Decisions | django-decisioning | **Draft** |
 | 11 | Audit | django-audit-log | **Draft** |
+| 11a | Worklog | django-worklog | **Draft** |
+| 11b | Geography | django-geo | **Draft** |
+| 11c | Documents | django-documents | **Draft** |
+| 11d | Notes | django-notes | **Draft** |
+| 11e | Sequence | django-sequence | **Draft** |
 
 ### Part III: Constraining the Machine
 
@@ -89,6 +95,7 @@ docs/book/
 │   └── ch03-you-will-refactor-later.md
 ├── part-2-the-primitives/
 │   ├── ch03a-project-structure.md    # Interlude
+│   ├── ch03b-foundation-layer.md     # Foundation packages
 │   ├── ch04-identity.md
 │   ├── ch05-time.md
 │   ├── ch06-agreements.md
@@ -96,7 +103,12 @@ docs/book/
 │   ├── ch08-ledger.md
 │   ├── ch09-workflow.md
 │   ├── ch10-decisions.md
-│   └── ch11-audit.md
+│   ├── ch11-audit.md
+│   ├── ch11a-worklog.md
+│   ├── ch11b-geo.md
+│   ├── ch11c-documents.md
+│   ├── ch11d-notes.md
+│   └── ch11e-sequence.md
 ├── part-3-constraining-the-machine/
 │   ├── ch12-the-instruction-stack.md
 │   ├── ch13-prompt-contracts.md
@@ -138,33 +150,39 @@ docs/book/
 
 ## Progress
 
-- **Total Chapters:** 21 (including interlude and conclusion)
-- **Drafted:** 21
+- **Total Chapters:** 27 (covering all 18 django-primitives packages)
+- **Drafted:** 27
 - **Planned:** 0
 
 ### All Chapters Complete
 
-| Part | Chapter | Title |
-|------|---------|-------|
-| Intro | - | Introduction: Vibe Coding With Constraints |
-| I | 1 | Modern Software Is Old |
-| I | 2 | AI Does Not Understand Business |
-| I | 3 | You Will Not Refactor Later |
-| II | 3.5 | Setting Up Your Project (Interlude) |
-| II | 4 | Identity |
-| II | 5 | Time |
-| II | 6 | Agreements |
-| II | 7 | Catalog |
-| II | 8 | Ledger |
-| II | 9 | Workflow |
-| II | 10 | Decisions |
-| II | 11 | Audit |
-| III | 12 | The Instruction Stack |
-| III | 13 | Prompt Contracts |
-| III | 14 | Schema-First Generation |
-| III | 15 | Forbidden Operations |
-| IV | 16 | Build a Clinic |
-| IV | 17 | Build a Marketplace |
-| IV | 18 | Build a Subscription Service |
-| IV | 19 | Build a Government Form Workflow |
-| - | 20 | Conclusion |
+| Part | Chapter | Title | Packages Covered |
+|------|---------|-------|------------------|
+| Intro | - | Introduction: Vibe Coding With Constraints | - |
+| I | 1 | Modern Software Is Old | - |
+| I | 2 | AI Does Not Understand Business | - |
+| I | 3 | You Will Not Refactor Later | - |
+| II | 3.5 | Setting Up Your Project (Interlude) | - |
+| II | 3b | Foundation Layer | django-basemodels, django-singleton, django-modules, django-layers |
+| II | 4 | Identity | django-parties, django-rbac |
+| II | 5 | Time | django-decisioning |
+| II | 6 | Agreements | django-agreements |
+| II | 7 | Catalog | django-catalog |
+| II | 8 | Ledger | django-ledger, django-money |
+| II | 9 | Workflow | django-encounters |
+| II | 10 | Decisions | django-decisioning |
+| II | 11 | Audit | django-audit-log |
+| II | 11a | Worklog | django-worklog |
+| II | 11b | Geography | django-geo |
+| II | 11c | Documents | django-documents |
+| II | 11d | Notes | django-notes |
+| II | 11e | Sequence | django-sequence |
+| III | 12 | The Instruction Stack | - |
+| III | 13 | Prompt Contracts | - |
+| III | 14 | Schema-First Generation | - |
+| III | 15 | Forbidden Operations | - |
+| IV | 16 | Build a Clinic | - |
+| IV | 17 | Build a Marketplace | - |
+| IV | 18 | Build a Subscription Service | - |
+| IV | 19 | Build a Government Form Workflow | - |
+| - | 20 | Conclusion | - |
