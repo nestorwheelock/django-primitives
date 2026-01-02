@@ -44,6 +44,28 @@ The model doesn't know which is right for your system. It doesn't even know what
 
 This works remarkably well for generating plausible text. It works remarkably poorly for generating correct systems.
 
+But here's the thing that makes AI genuinely revolutionary for software development: it works *spectacularly* well for generating code.
+
+Not because AI understands programming. It doesn't. But because code isn't like natural language. Code is *constrained*. Code has grammar that compilers enforce. Code has patterns that repeat across millions of repositories. Code has archetypes—shapes that appear so consistently that predicting the next token becomes almost deterministic.
+
+When you write `for item in`, the next token is almost certainly `items` or `collection` or `list`. When you write `def __init__(self,`, what follows is parameter definitions. When you write `try:` in Python, an `except:` block is coming. The patterns are rigid. The variations are finite. The structure is predictable in ways that English prose never is.
+
+This is why AI can write code so fast it feels like magic.
+
+A human developer typing `class Invoice:` has to think about what fields an invoice needs, what methods it should have, how it relates to other classes. An AI seeing `class Invoice:` has seen ten million invoice classes. It knows that invoices have line items, totals, dates, statuses, and customer references—not because it understands invoicing, but because that's what invoice classes look like in the training data. The pattern is so strong that the prediction is almost automatic.
+
+Consider a database query. When you write `SELECT * FROM orders WHERE`, the model doesn't need to understand your business to predict reasonable completions. `status = 'pending'` or `customer_id = ?` or `created_at > ?` are all statistically likely because that's what WHERE clauses on order tables look like. Everywhere. In every codebase. The archetype is universal.
+
+This is the superpower and the trap.
+
+The superpower: AI can produce syntactically correct, structurally sound, conventionally organized code at speeds no human can match. It can scaffold an entire application in minutes. It can implement CRUD operations, API endpoints, authentication flows, and database migrations without breaking a sweat. The patterns are so well-established that the predictions are reliable.
+
+The trap: reliable patterns are not the same as correct systems.
+
+The AI predicts what code *looks like*. It doesn't evaluate what code *should do*. It generates invoice classes that match the statistical shape of invoice classes—but those classes might allow deletion of sent invoices, use floating-point for currency, or store mutable totals. The patterns are right. The business logic is wrong.
+
+This is why constraints matter so much. The AI is a pattern-completion engine of extraordinary power. Point it at a well-defined archetype with explicit constraints, and it executes flawlessly. Point it at an ambiguous problem with implicit business rules, and it invents confidently—generating code that looks professional and fails audits.
+
 ---
 
 ## Fluency Is Not Correctness
