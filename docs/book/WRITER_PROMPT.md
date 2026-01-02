@@ -108,6 +108,51 @@ The argument is stronger when readers can verify it.
 - Identify what the reader should stop doing after reading it
 - Identify which primitives or constraints are involved
 
+## Research First (use your tools)
+
+**You have access to web search and research tools. Use them.**
+
+Before writing any section that needs evidence:
+
+1. **Search for real statistics**
+   - Industry surveys (Basware, Gartner, McKinsey, etc.)
+   - Government data (IRS, HMRC, SEC filings)
+   - Academic studies with sample sizes and methodology
+
+2. **Search for real disasters**
+   - Named companies that failed audits
+   - Documented software failures with consequences
+   - Legal cases with outcomes and penalties
+   - Historical examples with dates and sources
+
+3. **Search for regulatory requirements**
+   - Specific retention periods (IRS 7 years, etc.)
+   - Compliance frameworks (SOX, GDPR, PCI-DSS)
+   - Industry-specific rules (HIPAA, FDA, financial services)
+
+4. **Search for technical standards**
+   - IEEE, RFC, ISO standards
+   - Official documentation
+   - Peer-reviewed papers
+
+**Research workflow:**
+```
+1. Identify claim you want to make
+2. Search for supporting evidence
+3. If found: cite it with source
+4. If not found: reframe as hypothetical or cut
+5. Never invent what you could research
+```
+
+**Example research queries:**
+- "invoice compliance fines statistics 2024"
+- "floating point currency bug disasters"
+- "audit trail requirements by country"
+- "Sarbanes-Oxley record retention requirements"
+- "companies penalized for missing financial records"
+
+The difference between a weak chapter and a strong one is often 15 minutes of research. Do the research.
+
 ## While Writing
 
 - Explain the problem first

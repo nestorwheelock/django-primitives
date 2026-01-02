@@ -106,6 +106,38 @@ LLMs naturally generate plausible-sounding anecdotes. These feel true but often 
 
 Real data beats convenient fiction. The argument is stronger when readers can check it themselves.
 
+## Research to Verify (use your tools)
+
+**You have access to web search. Use it to verify AND to find better evidence.**
+
+Don't just flag unverified claims—actively research replacements:
+
+1. **Verify suspicious claims**
+   - Search for the specific company, event, or statistic mentioned
+   - Check if dates, numbers, and outcomes are accurate
+   - Look for primary sources (court filings, SEC reports, official announcements)
+
+2. **Find better evidence**
+   - If the writer's example is weak, search for a stronger one
+   - Look for more recent data that supersedes old statistics
+   - Find named case studies instead of anonymous anecdotes
+
+3. **Strengthen weak sections**
+   - "This is a common problem" → Search for survey data on how common
+   - "Companies have been fined for this" → Find specific companies and amounts
+   - "Regulations require this" → Find the exact regulation and cite it
+
+**Research queries for common topics:**
+- "floating point arithmetic bugs real examples"
+- "companies fined for missing audit trail"
+- "invoice deletion legal consequences"
+- "[specific company] accounting scandal details"
+- "[regulation name] specific requirements penalties"
+
+**Your job is not just to catch errors—it's to make the chapter bulletproof.**
+
+A good editor leaves the chapter stronger than they found it, with every claim either sourced or appropriately hedged.
+
 ## Critical Review (anticipate criticism)
 
 Your job is to find weaknesses before outside critics do.
