@@ -312,3 +312,82 @@ class TestAuditLogIndexes:
 
         # Should have indexes on common query patterns
         assert 'created_at' in index_fields or any('created_at' in f for f in index_fields)
+
+
+@pytest.mark.django_db
+class TestAuditLogTimeSemantics:
+    """Tests for AuditLog time semantics (effective_at).
+
+    AuditLog has:
+    - created_at: When the log entry was created (recorded_at semantically)
+    - effective_at: When the logged event happened (can be backdated)
+    """
+
+    def test_audit_log_has_effective_at_field(self):
+        """AuditLog should have effective_at field."""
+        from django_audit_log.models import AuditLog
+
+        log = AuditLog.objects.create(action='test', model_label='test.Test')
+
+        assert hasattr(log, 'effective_at')
+        assert log.effective_at is not None
+
+    def test_audit_log_effective_at_defaults_to_now(self):
+        """AuditLog effective_at should default to now."""
+        from django.utils import timezone
+        from django_audit_log.models import AuditLog
+
+        before = timezone.now()
+        log = AuditLog.objects.create(action='test', model_label='test.Test')
+        after = timezone.now()
+
+        assert log.effective_at >= before
+        assert log.effective_at <= after
+
+    def test_audit_log_can_log_past_events(self):
+        """AuditLog effective_at can be set to past time."""
+        from django.utils import timezone
+        import datetime
+        from django_audit_log.models import AuditLog
+
+        past = timezone.now() - datetime.timedelta(days=7)
+        log = AuditLog.objects.create(
+            action='test',
+            model_label='test.Test',
+            effective_at=past,
+        )
+
+        assert log.effective_at == past
+
+    def test_audit_log_as_of_query(self):
+        """AuditLog.objects.as_of(timestamp) returns logs effective at that time."""
+        from django.utils import timezone
+        import datetime
+        from django_audit_log.models import AuditLog
+
+        now = timezone.now()
+        past = now - datetime.timedelta(days=7)
+
+        # Old log entry
+        old_log = AuditLog.objects.create(
+            action='old_action',
+            model_label='test.Test',
+            effective_at=past,
+        )
+
+        # New log entry
+        new_log = AuditLog.objects.create(
+            action='new_action',
+            model_label='test.Test',
+            effective_at=now,
+        )
+
+        # Query as of 5 days ago (should only see old log)
+        five_days_ago = now - datetime.timedelta(days=5)
+        logs_then = AuditLog.objects.as_of(five_days_ago).filter(model_label='test.Test')
+        assert logs_then.count() == 1
+        assert logs_then.first() == old_log
+
+        # Query as of now (should see both)
+        logs_now = AuditLog.objects.as_of(now).filter(model_label='test.Test')
+        assert logs_now.count() == 2

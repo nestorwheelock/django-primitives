@@ -12,9 +12,11 @@ Provides order catalog functionality:
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from django_catalog.conf import ENCOUNTER_MODEL, INVENTORY_ITEM_MODEL, PRESCRIPTION_MODEL
+from django_decisioning.querysets import EventAsOfQuerySet
 from django_singleton.models import SingletonModel
 
 
@@ -188,6 +190,10 @@ class Basket(CatalogBaseModel):
     - Basket is editable until committed
     - One active basket per encounter at a time
     - On commit, BasketItems are transformed into WorkItems
+
+    Time semantics:
+    - effective_at: When the basket was created in business terms (can be backdated)
+    - recorded_at: When the system learned about the basket (immutable)
     """
 
     STATUS_CHOICES = [
@@ -229,12 +235,27 @@ class Basket(CatalogBaseModel):
         blank=True,
     )
 
+    effective_at = models.DateTimeField(
+        _('effective at'),
+        default=timezone.now,
+        db_index=True,
+        help_text=_('When the basket was created in business terms'),
+    )
+    recorded_at = models.DateTimeField(
+        _('recorded at'),
+        auto_now_add=True,
+        help_text=_('When the system learned about this basket'),
+    )
+
+    objects = EventAsOfQuerySet.as_manager()
+
     class Meta:
         verbose_name = _('basket')
         verbose_name_plural = _('baskets')
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['encounter', 'status']),
+            models.Index(fields=['effective_at']),
         ]
 
     def __str__(self):
@@ -338,6 +359,10 @@ class WorkItem(CatalogBaseModel):
     - Inventory decrements only on WorkItem completion
 
     Idempotency is enforced by the unique constraint on (basket_item, spawn_role).
+
+    Time semantics:
+    - effective_at: When the work "happened" in business terms (distinct from started_at)
+    - recorded_at: When the system learned about this work item (immutable)
     """
 
     TARGET_BOARD_CHOICES = [
@@ -466,6 +491,21 @@ class WorkItem(CatalogBaseModel):
         verbose_name=_('completed by'),
     )
 
+    # Time semantics
+    effective_at = models.DateTimeField(
+        _('effective at'),
+        default=timezone.now,
+        db_index=True,
+        help_text=_('When the work item was created in business terms'),
+    )
+    recorded_at = models.DateTimeField(
+        _('recorded at'),
+        auto_now_add=True,
+        help_text=_('When the system learned about this work item'),
+    )
+
+    objects = EventAsOfQuerySet.as_manager()
+
     class Meta:
         verbose_name = _('work item')
         verbose_name_plural = _('work items')
@@ -474,6 +514,7 @@ class WorkItem(CatalogBaseModel):
             models.Index(fields=['encounter', 'status']),
             models.Index(fields=['target_board', 'status']),
             models.Index(fields=['target_board', 'target_lane', 'status']),
+            models.Index(fields=['effective_at']),
         ]
         constraints = [
             models.UniqueConstraint(

@@ -39,12 +39,16 @@ class RBACUserMixin:
 
     @property
     def hierarchy_level(self) -> int:
-        """Get user's highest hierarchy level from all assigned roles.
+        """Get user's highest hierarchy level from currently valid roles.
+
+        Only considers roles where:
+        - valid_from <= now
+        - valid_to is null OR valid_to > now
 
         Returns:
-            int: The highest hierarchy level from all assigned roles.
+            int: The highest hierarchy level from all current roles.
                  100 for superusers (is_superuser=True).
-                 0 for users with no roles.
+                 0 for users with no current roles.
 
         Examples:
             >>> user.hierarchy_level
@@ -56,7 +60,7 @@ class RBACUserMixin:
         if self.is_superuser:
             return 100
 
-        levels = self.user_roles.values_list('role__hierarchy_level', flat=True)
+        levels = self.user_roles.current().values_list('role__hierarchy_level', flat=True)
         return max(levels) if levels else 0
 
     def can_manage_user(self, other_user) -> bool:
@@ -138,10 +142,10 @@ class RBACUserMixin:
         # Build the permission codename
         codename = f'{module}.{action}'
 
-        # Check permissions via Role's groups
+        # Check permissions via Role's groups (only current roles)
         from django.contrib.auth.models import Permission
 
-        role_group_ids = self.user_roles.values_list('role__group_id', flat=True)
+        role_group_ids = self.user_roles.current().values_list('role__group_id', flat=True)
         return Permission.objects.filter(
             group__id__in=role_group_ids,
             codename=codename,

@@ -11,6 +11,7 @@ license = {text = "Proprietary"}
 requires-python = ">=3.11"
 dependencies = [
     "Django>=4.2",
+    "django-decisioning>=0.1.0",
 ]
 
 [project.optional-dependencies]

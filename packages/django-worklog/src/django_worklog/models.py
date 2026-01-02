@@ -6,6 +6,9 @@ from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.utils import timezone
+
+from django_decisioning.querysets import EventAsOfQuerySet
 
 
 class WorklogBaseModel(models.Model):
@@ -27,6 +30,10 @@ class WorkSession(WorklogBaseModel):
     - One active session per user (stopped_at IS NULL)
     - All timestamps are server-side
     - duration_seconds is derived, immutable once set
+
+    Time semantics:
+    - effective_at: When session "actually" started (can be backdated)
+    - recorded_at: When the system learned about this session (immutable)
     """
 
     user = models.ForeignKey(
@@ -51,10 +58,24 @@ class WorkSession(WorklogBaseModel):
     # Optional metadata
     metadata = models.JSONField(default=dict, blank=True)
 
+    # Time semantics
+    effective_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        help_text="When the session started in business terms",
+    )
+    recorded_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When the system learned about this session",
+    )
+
+    objects = EventAsOfQuerySet.as_manager()
+
     class Meta:
         indexes = [
             models.Index(fields=["user", "stopped_at"]),
             models.Index(fields=["context_content_type", "context_object_id"]),
+            models.Index(fields=["effective_at"]),
         ]
 
     def __str__(self):

@@ -267,3 +267,139 @@ class TestSoftDelete:
 
         assert encounter.is_deleted is False
         assert encounter.deleted_at is None
+
+
+@pytest.mark.django_db
+class TestEncounterTransitionTimeSemantics:
+    """Tests for EncounterTransition time semantics (effective_at/recorded_at).
+
+    EncounterTransition has effective_at for when transition "happened"
+    (can be backdated for late recording scenarios).
+    """
+
+    def test_transition_has_effective_at_field(self, definition, subject, user):
+        """EncounterTransition should have effective_at field."""
+        encounter = Encounter.objects.create(
+            definition=definition,
+            subject_type=ContentType.objects.get_for_model(subject),
+            subject_id=subject.pk,
+            state="pending",
+        )
+
+        transition = EncounterTransition.objects.create(
+            encounter=encounter,
+            from_state="pending",
+            to_state="active",
+            transitioned_by=user,
+        )
+
+        assert hasattr(transition, 'effective_at')
+        assert transition.effective_at is not None
+
+    def test_transition_has_recorded_at_field(self, definition, subject, user):
+        """EncounterTransition should have recorded_at field."""
+        encounter = Encounter.objects.create(
+            definition=definition,
+            subject_type=ContentType.objects.get_for_model(subject),
+            subject_id=subject.pk,
+            state="pending",
+        )
+
+        transition = EncounterTransition.objects.create(
+            encounter=encounter,
+            from_state="pending",
+            to_state="active",
+            transitioned_by=user,
+        )
+
+        assert hasattr(transition, 'recorded_at')
+        assert transition.recorded_at is not None
+
+    def test_transition_effective_at_defaults_to_now(self, definition, subject, user):
+        """EncounterTransition effective_at should default to now."""
+        from django.utils import timezone
+
+        encounter = Encounter.objects.create(
+            definition=definition,
+            subject_type=ContentType.objects.get_for_model(subject),
+            subject_id=subject.pk,
+            state="pending",
+        )
+
+        before = timezone.now()
+        transition = EncounterTransition.objects.create(
+            encounter=encounter,
+            from_state="pending",
+            to_state="active",
+            transitioned_by=user,
+        )
+        after = timezone.now()
+
+        assert transition.effective_at >= before
+        assert transition.effective_at <= after
+
+    def test_transition_can_be_backdated(self, definition, subject, user):
+        """EncounterTransition effective_at can be set to past time."""
+        from django.utils import timezone
+        import datetime
+
+        encounter = Encounter.objects.create(
+            definition=definition,
+            subject_type=ContentType.objects.get_for_model(subject),
+            subject_id=subject.pk,
+            state="pending",
+        )
+
+        past = timezone.now() - datetime.timedelta(days=7)
+        transition = EncounterTransition.objects.create(
+            encounter=encounter,
+            from_state="pending",
+            to_state="active",
+            transitioned_by=user,
+            effective_at=past,
+        )
+
+        assert transition.effective_at == past
+
+    def test_transition_as_of_query(self, definition, subject, user):
+        """EncounterTransition.objects.as_of(timestamp) returns transitions at that time."""
+        from django.utils import timezone
+        import datetime
+
+        encounter = Encounter.objects.create(
+            definition=definition,
+            subject_type=ContentType.objects.get_for_model(subject),
+            subject_id=subject.pk,
+            state="pending",
+        )
+
+        now = timezone.now()
+        past = now - datetime.timedelta(days=7)
+
+        # Old transition
+        old_transition = EncounterTransition.objects.create(
+            encounter=encounter,
+            from_state="pending",
+            to_state="active",
+            transitioned_by=user,
+            effective_at=past,
+        )
+
+        # New transition
+        new_transition = EncounterTransition.objects.create(
+            encounter=encounter,
+            from_state="active",
+            to_state="completed",
+            transitioned_by=user,
+            effective_at=now,
+        )
+
+        # Query as of 5 days ago (should only see old transition)
+        five_days_ago = now - datetime.timedelta(days=5)
+        trans_then = EncounterTransition.objects.as_of(five_days_ago).filter(encounter=encounter)
+        assert trans_then.count() == 1
+        assert trans_then.first() == old_transition
+
+        # Query as of now (should see both)
+        trans_now = EncounterTransition.objects.as_of(now).filter(encounter=encounter)
+        assert trans_now.count() == 2

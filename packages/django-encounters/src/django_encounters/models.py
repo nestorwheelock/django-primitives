@@ -13,6 +13,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from django_decisioning.querysets import EventAsOfQuerySet
+
 from .graph import validate_definition_graph
 
 
@@ -173,6 +175,10 @@ class EncounterTransition(EncountersBaseModel):
     Audit log of all state changes.
 
     Records who changed the state, when, and any metadata.
+
+    Time semantics:
+    - effective_at: When the transition happened in business terms (can be backdated)
+    - recorded_at: When the system learned about this transition (immutable)
     """
 
     encounter = models.ForeignKey(
@@ -207,10 +213,24 @@ class EncounterTransition(EncountersBaseModel):
         help_text="Overrides, notes, validator responses"
     )
 
+    # Time semantics
+    effective_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        help_text="When the transition happened in business terms",
+    )
+    recorded_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When the system learned about this transition",
+    )
+
+    objects = EventAsOfQuerySet.as_manager()
+
     class Meta:
         ordering = ["-transitioned_at"]
         indexes = [
             models.Index(fields=["encounter", "-transitioned_at"]),
+            models.Index(fields=["effective_at"]),
         ]
 
     def __str__(self):

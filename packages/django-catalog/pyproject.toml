@@ -29,6 +29,7 @@ keywords = ["django", "catalog", "orders", "basket", "workflow", "work-items"]
 dependencies = [
     "Django>=4.2",
     "django-singleton",
+    "django-decisioning>=0.1.0",
 ]
 
 [project.urls]

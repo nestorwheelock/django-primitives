@@ -26,9 +26,11 @@ Hierarchy levels:
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from django_basemodels import BaseModel, UUIDModel
+from django_decisioning.querysets import EffectiveDatedQuerySet
 
 
 class Role(UUIDModel, BaseModel):
@@ -80,13 +82,23 @@ class Role(UUIDModel, BaseModel):
 
 
 class UserRole(UUIDModel, BaseModel):
-    """Links users to roles with assignment tracking.
+    """Links users to roles with assignment tracking and effective dating.
 
     This is the many-to-many relationship between User and Role,
     with additional metadata like who assigned the role and when.
 
+    Effective dating allows:
+    - valid_from: When this role assignment becomes effective
+    - valid_to: When this role assignment expires (null = indefinite)
+
+    This enables:
+    - Role revocation by setting valid_to
+    - Historical queries: UserRole.objects.as_of(some_past_date)
+    - Current roles only: UserRole.objects.current()
+    - Multiple historical assignments of the same role to same user
+
     Examples:
-        # Assign a role to a user
+        # Assign a role to a user (currently effective)
         UserRole.objects.create(
             user=staff_member,
             role=staff_role,
@@ -94,8 +106,15 @@ class UserRole(UUIDModel, BaseModel):
             is_primary=True,
         )
 
-        # Get all roles for a user
-        user_roles = UserRole.objects.filter(user=user)
+        # Get only currently valid roles for a user
+        current_roles = UserRole.objects.current().filter(user=user)
+
+        # Get roles valid at a specific point in time
+        roles_then = UserRole.objects.as_of(some_date).filter(user=user)
+
+        # Revoke a role by setting valid_to
+        user_role.valid_to = timezone.now()
+        user_role.save()
     """
 
     user = models.ForeignKey(
@@ -126,10 +145,23 @@ class UserRole(UUIDModel, BaseModel):
         help_text=_("User's main role for display purposes"),
     )
 
+    valid_from = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        help_text=_('When this role assignment becomes effective'),
+    )
+    valid_to = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_('When this role assignment expires (null = indefinite)'),
+    )
+
+    objects = EffectiveDatedQuerySet.as_manager()
+
     class Meta:
         verbose_name = _('user role')
         verbose_name_plural = _('user roles')
-        unique_together = ['user', 'role']
         ordering = ['-assigned_at']
 
     def __str__(self):

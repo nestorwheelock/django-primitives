@@ -15,6 +15,9 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
+
+from django_decisioning.querysets import EventAsOfQuerySet
 
 
 class AuditLog(models.Model):
@@ -33,8 +36,17 @@ class AuditLog(models.Model):
     # Primary key
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    # Timestamp (auto-populated, immutable)
+    # Time semantics
+    # created_at = recorded_at semantically (when system learned about the event)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    # effective_at = when the event happened in business terms (can be backdated)
+    effective_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        help_text='When the logged event happened (can differ from created_at for backdated events)',
+    )
+
+    objects = EventAsOfQuerySet.as_manager()
 
     # Actor - who performed the action
     actor_user = models.ForeignKey(
@@ -131,6 +143,7 @@ class AuditLog(models.Model):
             models.Index(fields=['model_label', 'created_at']),
             models.Index(fields=['action', 'created_at']),
             models.Index(fields=['object_id', 'model_label']),
+            models.Index(fields=['effective_at']),
         ]
 
     def __str__(self):

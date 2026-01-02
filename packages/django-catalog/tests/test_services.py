@@ -277,3 +277,100 @@ class TestCommitBasketMultipleItems:
         work_items = commit_basket(basket, user)
 
         assert work_items[0].quantity == 10
+
+
+@pytest.mark.django_db
+class TestCommitBasketIdempotency:
+    """Tests for commit_basket idempotency via @idempotent decorator."""
+
+    def test_commit_basket_idempotent_prevents_duplicate_execution(self, user, encounter):
+        """Double-calling commit_basket doesn't create duplicate work items."""
+        catalog_item = CatalogItem.objects.create(
+            kind='service',
+            service_category='lab',
+            display_name='Idempotent Test Item',
+            active=True,
+        )
+        basket = get_or_create_draft_basket(encounter, user)
+        add_item_to_basket(basket, catalog_item, user)
+
+        # First call - returns list of WorkItem objects
+        work_items = commit_basket(basket, user)
+        assert len(work_items) == 1
+        work_item_count = WorkItem.objects.count()
+
+        # Refresh basket from DB (it's already committed now)
+        basket.refresh_from_db()
+
+        # Second call should NOT create more work items
+        commit_basket(basket, user)
+
+        # Count should be unchanged
+        assert WorkItem.objects.count() == work_item_count
+
+    def test_commit_basket_retry_returns_cached_serialized_result(self, user, encounter):
+        """Retrying commit returns cached serialized result (PKs, not objects)."""
+        catalog_item = CatalogItem.objects.create(
+            kind='service',
+            service_category='lab',
+            display_name='Retry Test Item',
+            active=True,
+        )
+        basket = get_or_create_draft_basket(encounter, user)
+        add_item_to_basket(basket, catalog_item, user)
+
+        # First commit - returns list of WorkItem objects
+        work_items = commit_basket(basket, user)
+        assert len(work_items) == 1
+        assert isinstance(work_items[0], WorkItem)
+
+        # Retry commit - returns cached serialized result
+        cached_result = commit_basket(basket, user)
+
+        # Cached result is serialized as list of dicts with PKs
+        assert isinstance(cached_result, list)
+        assert len(cached_result) == 1
+        assert cached_result[0]['__model__'] is True
+        assert cached_result[0]['pk'] == str(work_items[0].pk)
+
+    def test_commit_basket_idempotency_key_created(self, user, encounter):
+        """commit_basket creates IdempotencyKey record."""
+        from django_decisioning.models import IdempotencyKey
+
+        catalog_item = CatalogItem.objects.create(
+            kind='service',
+            service_category='lab',
+            display_name='Key Test Item',
+            active=True,
+        )
+        basket = get_or_create_draft_basket(encounter, user)
+        add_item_to_basket(basket, catalog_item, user)
+
+        commit_basket(basket, user)
+
+        # Should have created idempotency key
+        assert IdempotencyKey.objects.filter(
+            scope='basket_commit',
+            key=str(basket.pk),
+        ).exists()
+
+    def test_commit_basket_idempotency_key_succeeded_state(self, user, encounter):
+        """commit_basket marks IdempotencyKey as succeeded."""
+        from django_decisioning.models import IdempotencyKey
+
+        catalog_item = CatalogItem.objects.create(
+            kind='service',
+            service_category='lab',
+            display_name='State Test Item',
+            active=True,
+        )
+        basket = get_or_create_draft_basket(encounter, user)
+        add_item_to_basket(basket, catalog_item, user)
+
+        commit_basket(basket, user)
+
+        idem_key = IdempotencyKey.objects.get(
+            scope='basket_commit',
+            key=str(basket.pk),
+        )
+        assert idem_key.state == IdempotencyKey.State.SUCCEEDED

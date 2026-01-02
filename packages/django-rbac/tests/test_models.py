@@ -171,17 +171,33 @@ class TestUserRoleModel:
 
         assert user_role.assigned_by == admin
 
-    def test_user_role_unique_together(self):
-        """Same user cannot have same role twice."""
+    def test_user_role_allows_historical_assignments(self):
+        """Same user can have same role multiple times with different validity periods."""
         from tests.models import User
+        from django.utils import timezone
+        import datetime
 
-        user = User.objects.create_user(username='unique', password='pass')
-        group = Group.objects.create(name='Unique Role')
-        role = Role.objects.create(name='Unique Role', slug='unique-role', group=group)
+        user = User.objects.create_user(username='multi', password='pass')
+        group = Group.objects.create(name='Multi Role')
+        role = Role.objects.create(name='Multi Role', slug='multi-role', group=group)
 
-        UserRole.objects.create(user=user, role=role)
-        with pytest.raises(Exception):
-            UserRole.objects.create(user=user, role=role)
+        now = timezone.now()
+        past = now - datetime.timedelta(days=30)
+        mid = now - datetime.timedelta(days=15)
+
+        # First assignment: historical (expired)
+        UserRole.objects.create(user=user, role=role, valid_from=past, valid_to=mid)
+
+        # Second assignment: current
+        UserRole.objects.create(user=user, role=role, valid_from=now)
+
+        # Both assignments exist
+        all_assignments = UserRole.objects.filter(user=user, role=role)
+        assert all_assignments.count() == 2
+
+        # Only one is current
+        current_assignments = UserRole.objects.current().filter(user=user, role=role)
+        assert current_assignments.count() == 1
 
 
 @pytest.mark.django_db
@@ -330,3 +346,190 @@ class TestRBACUserMixin:
 
         user = User.objects.create_user(username='noperm', password='pass')
         assert user.has_module_permission('anything', 'any') is False
+
+
+@pytest.mark.django_db
+class TestUserRoleEffectiveDating:
+    """Tests for UserRole effective dating (valid_from/valid_to)."""
+
+    def test_userrole_has_valid_from_field(self):
+        """UserRole should have valid_from field."""
+        from tests.models import User
+
+        user = User.objects.create_user(username='validfrom', password='pass')
+        group = Group.objects.create(name='ValidFrom Role')
+        role = Role.objects.create(name='ValidFrom Role', slug='validfrom-role', group=group)
+
+        user_role = UserRole.objects.create(user=user, role=role)
+
+        assert hasattr(user_role, 'valid_from')
+        assert user_role.valid_from is not None
+
+    def test_userrole_has_valid_to_nullable(self):
+        """UserRole should have nullable valid_to field."""
+        from tests.models import User
+
+        user = User.objects.create_user(username='validto', password='pass')
+        group = Group.objects.create(name='ValidTo Role')
+        role = Role.objects.create(name='ValidTo Role', slug='validto-role', group=group)
+
+        user_role = UserRole.objects.create(user=user, role=role)
+
+        assert hasattr(user_role, 'valid_to')
+        assert user_role.valid_to is None  # Defaults to null (indefinite)
+
+    def test_userrole_valid_from_defaults_to_now(self):
+        """UserRole valid_from should default to now."""
+        from tests.models import User
+        from django.utils import timezone
+        import datetime
+
+        user = User.objects.create_user(username='defaultnow', password='pass')
+        group = Group.objects.create(name='DefaultNow Role')
+        role = Role.objects.create(name='DefaultNow Role', slug='defaultnow-role', group=group)
+
+        before = timezone.now()
+        user_role = UserRole.objects.create(user=user, role=role)
+        after = timezone.now()
+
+        assert user_role.valid_from >= before
+        assert user_role.valid_from <= after
+
+    def test_current_returns_only_active_roles(self):
+        """UserRole.objects.current() returns only currently valid roles."""
+        from tests.models import User
+        from django.utils import timezone
+        import datetime
+
+        user = User.objects.create_user(username='current', password='pass')
+        group1 = Group.objects.create(name='Current Role')
+        group2 = Group.objects.create(name='Expired Role')
+        role1 = Role.objects.create(name='Current Role', slug='current-role', group=group1)
+        role2 = Role.objects.create(name='Expired Role', slug='expired-role', group=group2)
+
+        # Active role (no end date)
+        UserRole.objects.create(user=user, role=role1)
+
+        # Expired role (valid_to in the past)
+        past = timezone.now() - datetime.timedelta(days=1)
+        UserRole.objects.create(user=user, role=role2, valid_to=past)
+
+        current_roles = UserRole.objects.current().filter(user=user)
+        assert current_roles.count() == 1
+        assert current_roles.first().role == role1
+
+    def test_as_of_returns_roles_valid_at_timestamp(self):
+        """UserRole.objects.as_of(timestamp) returns roles valid at that time."""
+        from tests.models import User
+        from django.utils import timezone
+        import datetime
+
+        user = User.objects.create_user(username='asof', password='pass')
+        group1 = Group.objects.create(name='Old Role')
+        group2 = Group.objects.create(name='New Role')
+        role1 = Role.objects.create(name='Old Role', slug='old-role', group=group1)
+        role2 = Role.objects.create(name='New Role', slug='new-role', group=group2)
+
+        now = timezone.now()
+        past = now - datetime.timedelta(days=30)
+        mid = now - datetime.timedelta(days=15)
+
+        # Old role: valid from 30 days ago, ended 15 days ago
+        UserRole.objects.create(user=user, role=role1, valid_from=past, valid_to=mid)
+
+        # New role: started 15 days ago, still active
+        UserRole.objects.create(user=user, role=role2, valid_from=mid)
+
+        # Query as of 20 days ago (should only see old role)
+        twenty_days_ago = now - datetime.timedelta(days=20)
+        roles_then = UserRole.objects.as_of(twenty_days_ago).filter(user=user)
+        assert roles_then.count() == 1
+        assert roles_then.first().role == role1
+
+        # Query as of now (should only see new role)
+        roles_now = UserRole.objects.as_of(now).filter(user=user)
+        assert roles_now.count() == 1
+        assert roles_now.first().role == role2
+
+    def test_expired_role_excluded_from_current(self):
+        """Roles with valid_to in the past are excluded from current()."""
+        from tests.models import User
+        from django.utils import timezone
+        import datetime
+
+        user = User.objects.create_user(username='expired', password='pass')
+        group = Group.objects.create(name='Expired Test')
+        role = Role.objects.create(name='Expired Test', slug='expired-test', group=group)
+
+        past = timezone.now() - datetime.timedelta(days=1)
+        UserRole.objects.create(user=user, role=role, valid_to=past)
+
+        current_roles = UserRole.objects.current().filter(user=user)
+        assert current_roles.count() == 0
+
+    def test_future_role_excluded_from_current(self):
+        """Roles with valid_from in the future are excluded from current()."""
+        from tests.models import User
+        from django.utils import timezone
+        import datetime
+
+        user = User.objects.create_user(username='future', password='pass')
+        group = Group.objects.create(name='Future Test')
+        role = Role.objects.create(name='Future Test', slug='future-test', group=group)
+
+        future = timezone.now() + datetime.timedelta(days=1)
+        UserRole.objects.create(user=user, role=role, valid_from=future)
+
+        current_roles = UserRole.objects.current().filter(user=user)
+        assert current_roles.count() == 0
+
+    def test_can_have_multiple_historical_assignments(self):
+        """User can have same role multiple times in history (different validity periods)."""
+        from tests.models import User
+        from django.utils import timezone
+        import datetime
+
+        user = User.objects.create_user(username='history', password='pass')
+        group = Group.objects.create(name='History Role')
+        role = Role.objects.create(name='History Role', slug='history-role', group=group)
+
+        now = timezone.now()
+        past = now - datetime.timedelta(days=60)
+        mid = now - datetime.timedelta(days=30)
+
+        # First assignment: 60-30 days ago
+        UserRole.objects.create(user=user, role=role, valid_from=past, valid_to=mid)
+
+        # Second assignment: from now (currently active)
+        UserRole.objects.create(user=user, role=role, valid_from=now)
+
+        # All assignments for this user+role
+        all_roles = UserRole.objects.filter(user=user, role=role)
+        assert all_roles.count() == 2
+
+        # Only one is current
+        current_roles = UserRole.objects.current().filter(user=user, role=role)
+        assert current_roles.count() == 1
+
+    def test_user_hierarchy_level_uses_current_roles(self):
+        """User hierarchy_level only considers currently valid roles."""
+        from tests.models import User
+        from django.utils import timezone
+        import datetime
+
+        user = User.objects.create_user(username='levelcurrent', password='pass')
+        group1 = Group.objects.create(name='Manager Expired')
+        group2 = Group.objects.create(name='Staff Current')
+        manager_role = Role.objects.create(name='Manager Expired', slug='manager-expired', hierarchy_level=60, group=group1)
+        staff_role = Role.objects.create(name='Staff Current', slug='staff-current', hierarchy_level=20, group=group2)
+
+        past = timezone.now() - datetime.timedelta(days=1)
+
+        # Manager role expired yesterday
+        UserRole.objects.create(user=user, role=manager_role, valid_to=past)
+
+        # Staff role is current
+        UserRole.objects.create(user=user, role=staff_role)
+
+        # User's level should be 20 (staff), not 60 (expired manager)
+        assert user.hierarchy_level == 20

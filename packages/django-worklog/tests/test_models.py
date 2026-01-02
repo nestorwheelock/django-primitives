@@ -180,3 +180,100 @@ class TestWorkSessionStringRepresentation:
 
         str_repr = str(session)
         assert user.username in str_repr or str(session.pk) in str_repr
+
+
+@pytest.mark.django_db
+class TestWorkSessionTimeSemantics:
+    """Tests for WorkSession time semantics (effective_at/recorded_at).
+
+    WorkSession has effective_at for when session "actually" started
+    (can differ from recorded_at if backdated).
+    """
+
+    def test_worksession_has_effective_at_field(self, user, task):
+        """WorkSession should have effective_at field."""
+        content_type = ContentType.objects.get_for_model(task)
+        session = WorkSession.objects.create(
+            user=user,
+            context_content_type=content_type,
+            context_object_id=str(task.pk),
+        )
+
+        assert hasattr(session, 'effective_at')
+        assert session.effective_at is not None
+
+    def test_worksession_has_recorded_at_field(self, user, task):
+        """WorkSession should have recorded_at field."""
+        content_type = ContentType.objects.get_for_model(task)
+        session = WorkSession.objects.create(
+            user=user,
+            context_content_type=content_type,
+            context_object_id=str(task.pk),
+        )
+
+        assert hasattr(session, 'recorded_at')
+        assert session.recorded_at is not None
+
+    def test_worksession_effective_at_defaults_to_now(self, user, task):
+        """WorkSession effective_at should default to now."""
+        content_type = ContentType.objects.get_for_model(task)
+        before = timezone.now()
+        session = WorkSession.objects.create(
+            user=user,
+            context_content_type=content_type,
+            context_object_id=str(task.pk),
+        )
+        after = timezone.now()
+
+        assert session.effective_at >= before
+        assert session.effective_at <= after
+
+    def test_worksession_can_be_backdated(self, user, task):
+        """WorkSession effective_at can be set to past time."""
+        import datetime
+        content_type = ContentType.objects.get_for_model(task)
+        past = timezone.now() - datetime.timedelta(days=7)
+
+        session = WorkSession.objects.create(
+            user=user,
+            context_content_type=content_type,
+            context_object_id=str(task.pk),
+            effective_at=past,
+        )
+
+        assert session.effective_at == past
+
+    def test_worksession_as_of_query(self, user, task, project):
+        """WorkSession.objects.as_of(timestamp) returns sessions effective at that time."""
+        import datetime
+        task_ct = ContentType.objects.get_for_model(task)
+        project_ct = ContentType.objects.get_for_model(project)
+
+        now = timezone.now()
+        past = now - datetime.timedelta(days=7)
+
+        # Old session
+        old_session = WorkSession.objects.create(
+            user=user,
+            context_content_type=task_ct,
+            context_object_id=str(task.pk),
+            effective_at=past,
+        )
+
+        # New session
+        new_session = WorkSession.objects.create(
+            user=user,
+            context_content_type=project_ct,
+            context_object_id=str(project.pk),
+            effective_at=now,
+        )
+
+        # Query as of 5 days ago (should only see old session)
+        five_days_ago = now - datetime.timedelta(days=5)
+        sessions_then = WorkSession.objects.as_of(five_days_ago).filter(user=user)
+        assert sessions_then.count() == 1
+        assert sessions_then.first() == old_session
+
+        # Query as of now (should see both)
+        sessions_now = WorkSession.objects.as_of(now).filter(user=user)
+        assert sessions_now.count() == 2

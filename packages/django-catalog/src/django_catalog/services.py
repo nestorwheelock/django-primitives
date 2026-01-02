@@ -2,6 +2,7 @@
 
 - WorkItems spawn only on basket commit
 - Spawning must be idempotent (enforced via DB unique constraint)
+- Commit operation uses @idempotent decorator for double-click protection
 - Routing is deterministic and stored on creation
 - No implicit spawns from SOAP/Vitals/documentation
 """
@@ -9,6 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from django_catalog.models import Basket, BasketItem, CatalogItem, CatalogSettings, WorkItem
+from django_decisioning.decorators import idempotent
 
 
 def get_catalog_settings() -> CatalogSettings:
@@ -100,16 +102,25 @@ def snapshot_basket_item(basket_item: BasketItem) -> None:
     basket_item.save(update_fields=['display_name_snapshot', 'kind_snapshot', 'updated_at'])
 
 
-@transaction.atomic
+@idempotent(
+    scope='basket_commit',
+    key_from=lambda basket, user: str(basket.pk)
+)
 def commit_basket(basket: Basket, user) -> list[WorkItem]:
     """Transform BasketItems into WorkItems on basket commit.
 
     - Basket is editable until committed
     - On commit, BasketItems are transformed into WorkItems
     - CatalogItem identity is snapshotted
+    - Idempotent: double-calling returns cached result via IdempotencyKey
+
+    Note: On first call, returns list of WorkItem objects.
+    On retry (idempotent cache hit), returns list of serialized PKs.
+    For consistency, callers should check the return type or use
+    WorkItem.objects.filter(basket_item__basket=basket) to get the actual objects.
 
     Returns:
-        List of spawned WorkItems (includes existing ones for idempotency)
+        List of spawned WorkItems (first call) or cached PKs (retry).
     """
     work_items = []
 

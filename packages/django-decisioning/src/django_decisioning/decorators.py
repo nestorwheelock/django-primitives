@@ -1,7 +1,37 @@
 """Decorators for decisioning operations."""
 import functools
-from django.db import transaction
+import json
+from django.db import models, transaction
 from django.utils import timezone
+
+
+def _serialize_result(result):
+    """Serialize result for JSON storage, converting Django models to PKs."""
+    if result is None:
+        return None
+
+    if isinstance(result, models.Model):
+        return {'__model__': True, 'pk': str(result.pk)}
+
+    if isinstance(result, (list, tuple)):
+        serialized = []
+        for item in result:
+            if isinstance(item, models.Model):
+                serialized.append({'__model__': True, 'pk': str(item.pk)})
+            else:
+                serialized.append(item)
+        return serialized
+
+    if isinstance(result, dict):
+        serialized = {}
+        for k, v in result.items():
+            if isinstance(v, models.Model):
+                serialized[k] = {'__model__': True, 'pk': str(v.pk)}
+            else:
+                serialized[k] = v
+        return serialized
+
+    return result
 
 
 def idempotent(scope, key_from=None, timeout=None):
@@ -24,6 +54,10 @@ def idempotent(scope, key_from=None, timeout=None):
         def commit_basket(basket, user):
             # This will only execute once per basket
             return create_work_items(basket)
+
+    Note: If the function returns Django model instances, they will be serialized
+    as PKs in the cache. On retry, the cached PKs are returned (not model instances).
+    Callers should query the database if they need the actual objects.
 
     Returns:
         Decorated function that ensures idempotent execution
@@ -91,7 +125,8 @@ def idempotent(scope, key_from=None, timeout=None):
                 with transaction.atomic():
                     idem.refresh_from_db()
                     idem.state = IdempotencyKey.State.SUCCEEDED
-                    idem.response_snapshot = result
+                    # Serialize result for JSON storage
+                    idem.response_snapshot = _serialize_result(result)
                     idem.save()
 
                 return result
