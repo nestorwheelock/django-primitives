@@ -92,6 +92,8 @@ The framework used in this book is Django, and the language is Python. This choi
 
 But the primitives outlive the framework. They worked before Django existed. They'll work after Django is forgotten. Django is the implementation vehicle, not the idea. If you prefer Rails, Laravel, or Spring, the primitives translate. The constraints are universal.
 
+And when it's time to make things fast—really fast—you profile, find the bottlenecks, and rewrite those pieces in Rust. The boring Django system that "just works" becomes the foundation. The primitives stay the same. The hot paths get optimized. This is how real systems scale: correct first, fast later, in the places that actually matter.
+
 ---
 
 ## The End of Trivial Arguments
