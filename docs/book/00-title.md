@@ -26,7 +26,7 @@
 
 \vspace{0.5cm}
 
-{\small January 2025}
+{\small January 2026}
 
 \end{center}
 

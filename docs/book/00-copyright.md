@@ -10,7 +10,7 @@
 
 \vspace{1cm}
 
-Copyright © 2025 Nestor Wheelock
+Copyright © 2026 Nestor Wheelock
 
 All rights reserved.
 
@@ -40,6 +40,6 @@ Django is a registered trademark of the Django Software Foundation. Python is a 
 
 \vspace*{\fill}
 
-{\small First Draft Edition: January 2025}
+{\small First Draft Edition: January 2026}
 
 \newpage
