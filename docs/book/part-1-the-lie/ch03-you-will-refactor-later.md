@@ -200,6 +200,196 @@ Every AI-generated shortcut that slips through review becomes a future maintenan
 
 ---
 
+## Constrained AI: The Antidote
+
+Here's the twist: AI can also be the solution.
+
+The same tool that generates shortcuts at machine speed can generate correct code at machine speed—if you constrain it properly. The same tool that produces mysterious legacy code can produce well-documented, well-tested, well-structured code—if you demand it.
+
+The difference is discipline. The difference is constraints.
+
+**AI can write documentation**
+
+The documentation tax was one reason teams skipped correct implementations. Writing specifications, user stories, and test plans took as long as writing the code. Teams chose speed over documentation.
+
+AI changes this equation. You describe what you want in plain language. The AI produces:
+
+- User stories with acceptance criteria
+- Technical specifications
+- API documentation
+- Code comments
+- README files
+- Architecture decision records
+
+The documentation that used to take days takes minutes. The excuse for skipping it disappears.
+
+**AI can write tests first**
+
+Test-driven development (TDD) has been proven to reduce defects and improve design. But writing tests before implementation requires discipline—and time. Teams under deadline pressure skip tests, promising to add them later.
+
+AI can write the tests first. You describe the behavior. The AI produces failing tests. Then you (or the AI) write the implementation to make them pass. The tests exist from the beginning, not as an afterthought.
+
+"Write tests for an Invoice model where: invoices cannot be deleted (only voided), totals are computed from line items, and all monetary amounts use Decimal."
+
+The AI produces tests. You run them. They fail (no implementation yet). Now you have a specification that executes.
+
+**AI can enforce constraints in prompts**
+
+The shortcuts AI takes come from its training data—tutorials, Stack Overflow answers, random GitHub repositories. The patterns in that data include good practices and bad practices, with no way for the AI to distinguish them.
+
+But when you provide explicit constraints in your prompts, those constraints override the statistical patterns. The AI follows your rules instead of inventing its own.
+
+"Build an invoicing system. Constraints: No DELETE operations on any model—use soft delete with deleted_at timestamp. All monetary values use Decimal, never float. Totals are always computed from line items, never stored. Every change is logged with actor and timestamp."
+
+The AI follows these rules. Not because it understands why they matter, but because you told it to. The constraints are your knowledge, encoded as instructions.
+
+**AI can review code against primitives**
+
+Code review catches shortcuts—if reviewers know what to look for. AI can be that reviewer.
+
+"Review this code against the following invariants: No floating-point currency. No mutable history. All models have soft delete. All timestamps distinguish business time from system time."
+
+The AI scans the code and reports violations. The human decides what to do. The review happens at machine speed.
+
+---
+
+## The Discipline: Build It Right the First Time
+
+The solution is not to avoid AI. The solution is to use AI within constraints that prevent technical debt from forming.
+
+**Step 1: Document before coding**
+
+Before generating any code, generate the documentation.
+
+- What is this system supposed to do? (User stories)
+- What must never happen? (Constraints and invariants)
+- How will we verify it works? (Acceptance criteria)
+- What data structures do we need? (Schema specification)
+
+AI can draft all of this. You review and refine. The documentation becomes the specification the AI must satisfy.
+
+**Step 2: Test before implementing**
+
+Write tests (or have AI write tests) that verify the constraints before writing implementation code.
+
+- Test that invoices cannot be deleted
+- Test that totals equal the sum of line items
+- Test that monetary values have correct precision
+- Test that soft delete sets deleted_at instead of removing rows
+
+Run the tests. They should fail—there's no implementation yet. Now you have executable specifications.
+
+**Step 3: Constrain the generation**
+
+When you ask AI to generate implementation code, include the constraints explicitly.
+
+"Implement the Invoice model. It must pass all tests in test_invoice.py. Constraints: Soft delete only. Decimal for money. Computed totals. Audit logging on all changes."
+
+The AI generates code. You run the tests. They pass—or they don't, and you iterate.
+
+**Step 4: Review against physics**
+
+Before shipping, review every generated file against the primitives.
+
+- Identity: Are parties distinct from users? Are roles hierarchical? Are relationships temporal?
+- Time: Is business time separate from system time? Can we query as-of any date?
+- Money: Is everything Decimal? Do ledger entries balance?
+- Agreements: Are terms immutable? Can we reconstruct what was agreed at any point in time?
+
+AI can help with this review. But a human must verify. The human is the final judge of whether the constraints are satisfied.
+
+---
+
+## Hands-On: See the Difference
+
+Let's make this concrete. Try these prompts yourself with any LLM.
+
+**Exercise 1: Unconstrained Invoice System**
+
+Ask the AI:
+
+```
+Build me a simple invoicing system in Django with Invoice and LineItem models.
+```
+
+Examine what you get. Look for:
+- Can invoices be deleted? (Probably yes)
+- What data type is used for amounts? (Probably FloatField or IntegerField)
+- Are totals stored or computed? (Probably stored)
+- Is there any audit logging? (Probably not)
+- Is there soft delete? (Almost certainly not)
+
+This is what "vibe coding" produces: functional code that accumulates technical debt from day one.
+
+**Exercise 2: Constrained Invoice System**
+
+Now ask the AI:
+
+```
+Build me an invoicing system in Django with Invoice and LineItem models.
+
+Constraints:
+1. No model may be physically deleted. Implement soft delete with a deleted_at DateTimeField. Override the delete() method to set deleted_at instead of removing the row. Add a manager that excludes soft-deleted records by default.
+
+2. All monetary amounts must use DecimalField with max_digits=19 and decimal_places=4. Never use FloatField for money.
+
+3. Invoice totals must be computed from line items using a property or method, not stored as a field. The total is always the sum of (quantity * unit_price) for all line items.
+
+4. All changes must be logged. Add created_at (auto_now_add), updated_at (auto_now), and created_by/updated_by fields to track who made changes and when.
+
+5. Invoices have a status field with choices: draft, sent, paid, voided. Once an invoice leaves 'draft' status, it cannot be modified—only voided.
+
+Include tests that verify each constraint.
+```
+
+Examine what you get. It should:
+- Have soft delete implemented correctly
+- Use DecimalField for all monetary amounts
+- Compute totals dynamically
+- Include audit fields
+- Enforce immutability after leaving draft status
+- Include passing tests
+
+This is constrained AI development. Same tool, radically different output.
+
+**Exercise 3: Test-First Development**
+
+Try a TDD approach:
+
+```
+Write pytest tests for an Invoice model with these requirements:
+1. test_invoice_soft_delete: Calling delete() should set deleted_at, not remove the record
+2. test_invoice_total_computed: Invoice total should equal sum of line item amounts
+3. test_invoice_uses_decimal: All monetary fields should be DecimalField
+4. test_invoice_immutable_after_sent: Saving an invoice with status != 'draft' should raise an error
+5. test_invoice_audit_fields: Created_at, updated_at, created_by should be populated
+
+Do not write the implementation yet. Just the tests.
+```
+
+Run the tests. They fail. Now ask:
+
+```
+Implement the Invoice and LineItem models to make all tests in the previous response pass.
+```
+
+This is TDD with AI. The tests came first. The implementation exists to satisfy them.
+
+**What to notice**
+
+Compare the code from Exercise 1 to Exercise 2. The constrained version:
+- Has more lines of code (constraints add complexity)
+- Is harder to break (soft delete prevents data loss)
+- Is auditable (you know who changed what)
+- Won't accumulate currency rounding errors
+- Can't be modified in ways that violate invariants
+
+The unconstrained version is simpler—and will require a rewrite when you discover the problems. The constrained version is more complex upfront—and works correctly forever.
+
+This is the difference between technical debt and technical investment.
+
+---
+
 ## The Primitives Are the Payoff
 
 This book exists because of everything in this chapter.
