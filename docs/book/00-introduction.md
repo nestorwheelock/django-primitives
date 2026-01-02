@@ -12,21 +12,39 @@ This book is for business owners who are tired of explaining their domain to dev
 
 I've watched it happen dozens of times. You sit in a meeting room with someone half your age who keeps interrupting to ask questions you answered ten minutes ago. You explain your business—the one you built, the one you've run for years—and they nod while typing. Three months later, you get software that technically does what you asked for but somehow misses the point entirely.
 
-The invoices are correct but confusing. The workflow is logical but backwards. The reports are accurate but useless.
+The invoices are correct but confusing.
+The workflow is logical but backwards.
+The reports are accurate but useless.
 
-They didn't listen. Or they listened but didn't understand. Or they understood but didn't care. It doesn't matter which—the result is the same. You paid for software that doesn't fit.
+They didn't listen. Or they listened but didn't understand. Or they understood but didn't care. It doesn't matter which. The result is the same. You paid for software that doesn't fit.
 
-This book is for the entrepreneur who knows exactly what the system should do—but has been told they need to hire a team, raise money, or learn to code before they can build it.
+This book is for the entrepreneur who knows exactly what the system *should* do—but has been told they need to hire a team, raise money, or learn to code before they're allowed to build it.
 
-You don't need a computer science degree. You don't need perfect recall of programming languages. You don't need to memorize algorithms or understand Big O notation. You don't need to pass a whiteboard interview.
+You don't.
 
-What you need is:
+You don't need a computer science degree.
+You don't need perfect recall of programming languages.
+You don't need to memorize algorithms or understand Big-O notation.
+You don't need to pass a whiteboard interview.
 
-- **Domain knowledge**: You understand your business
-- **The ability to define constraints**: You can say "this must never happen"
-- **The ability to recognize correct behavior**: You know when it's working
+What you need is something far more valuable: **clarity about your business**.
 
-That's it. That's the job now.
+Most failed software projects don't fail because of bad code. They fail because the business logic was never made precise enough to survive translation. Somewhere between "this is how we actually work" and "here's the system we shipped," meaning is lost. Edge cases get rounded off. Exceptions become bugs. Workarounds become features. Reality gets simplified until it breaks.
+
+Developers aren't stupid. They're just trained to think in abstractions. Business owners live in exceptions.
+
+This book is about closing that gap.
+
+It's about taking what you already know—your rules, your constraints, your "we never do it that way"—and expressing it in a form that software can't misunderstand. Not by turning you into a programmer, but by giving you primitives. Simple, durable building blocks that map cleanly to how real businesses operate.
+
+And here's the part nobody tells you: once those primitives are clear, modern AI tools can do most of the mechanical work. Not the thinking. Not the judgment. The typing. The wiring. The boring parts that used to require a team and a budget.
+
+The mistake is letting AI think for you.
+The leverage is making it obey.
+
+This book will not teach you how to code. It will teach you how to **describe your business so precisely that code becomes inevitable**.
+
+Once you can do that, the rest stops being magic.
 
 **For the technical professional:**
 
