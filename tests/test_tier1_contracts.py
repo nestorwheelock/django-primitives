@@ -192,6 +192,15 @@ def test_rbac_userrole_manager_respects_soft_delete():
         )
 
 
+def test_rbac_has_migrations():
+    """All packages with models must ship migrations."""
+    ok, msg = has_migrations("django_rbac")
+    assert ok, (
+        f"{msg}. "
+        "Packages must ship migrations - downstream projects shouldn't generate schema."
+    )
+
+
 @pytest.mark.django_db
 def test_rbac_role_manager_respects_soft_delete():
     """Same check for Role model."""
@@ -220,50 +229,39 @@ def test_rbac_role_manager_respects_soft_delete():
 
 
 # -----------------------------
-# 3) django-decisioning: missing app config / migrations / non-UUID PK
+# 3) django-decisioning: app config / migrations / PK policy
 # -----------------------------
 
 def test_decisioning_has_app_config():
-    """
-    Catches missing apps.py / AppConfig (common when packages rely on Django defaults).
-    """
+    """All packages must have apps.py for explicit configuration."""
     pkg_dir = package_dir("django_decisioning")
     apps_py = pkg_dir / "apps.py"
-    # Note: django-decisioning is a system package that may not have apps.py
-    # This test documents the expectation; skip if intentionally omitted
-    if not apps_py.exists():
-        pytest.skip(
-            f"django-decisioning missing apps.py at {apps_py}. "
-            "If this is intentional for a system package, this test can be removed."
-        )
+    assert apps_py.exists(), (
+        f"django-decisioning missing apps.py at {apps_py}. "
+        "All packages need AppConfig for explicit default_auto_field."
+    )
 
 
 def test_decisioning_has_migrations():
-    """
-    Catches missing migrations/ directory and migration modules.
-
-    Note: django-decisioning is classified as a 'system' package with models
-    that are intentionally NOT persisted (Decision is ephemeral, IdempotencyKey
-    may be app-specific). If this is by design, this test documents that exception.
-    """
+    """All packages with models must ship migrations."""
     ok, msg = has_migrations("django_decisioning")
-    if not ok:
-        pytest.skip(
-            f"{msg}. "
-            "django-decisioning is a system package - if models are intentionally "
-            "non-persistent or app-specific, this is expected."
-        )
+    assert ok, (
+        f"{msg}. "
+        "Packages must ship migrations - downstream projects shouldn't generate schema."
+    )
 
 
-@pytest.mark.django_db
-def test_decisioning_models_use_uuid_primary_keys_or_basemodel():
+def test_decisioning_models_pk_policy_is_documented():
     """
-    Catches out-of-contract models using implicit AutoField PKs in a UUID-first ecosystem.
+    django-decisioning uses integer PKs (system package exception).
 
-    django-decisioning is classified as 'system' (Tier 1) and may have intentionally
-    different rules. This test documents the divergence.
+    This test verifies the exception is documented via allow-plain-model marker.
+    Models without the marker using non-UUID PKs would fail.
     """
     from django_decisioning import models as decisioning_models
+
+    models_path = module_path("django_decisioning.models")
+    source = models_path.read_text()
 
     model_classes = [
         getattr(decisioning_models, name)
@@ -274,23 +272,23 @@ def test_decisioning_models_use_uuid_primary_keys_or_basemodel():
         and getattr(decisioning_models, name).__module__ == decisioning_models.__name__
     ]
 
-    if not model_classes:
-        pytest.skip("No concrete models found in django_decisioning.models")
-
-    offenders = []
     for m in model_classes:
         pk = m._meta.pk
         if not isinstance(pk, models.UUIDField):
-            offenders.append(f"{m.__name__} pk is {pk.__class__.__name__} (expected UUIDField)")
+            # Check for allow-plain-model marker before the class definition
+            class_pattern = f"class {m.__name__}"
+            class_pos = source.find(class_pattern)
+            if class_pos == -1:
+                pytest.fail(f"Could not find {m.__name__} in source")
 
-    if offenders:
-        pytest.skip(
-            "django-decisioning models are not using UUID primary keys.\n"
-            + "\n".join(offenders)
-            + "\n\ndjango-decisioning is a system package. If integer PKs are "
-            "intentional (e.g., for IdempotencyKey collision resistance), "
-            "document this exception in ARCHITECTURE.md."
-        )
+            # Look for marker in the 200 chars before class definition
+            preceding = source[max(0, class_pos - 200):class_pos]
+            if "allow-plain-model" not in preceding:
+                pytest.fail(
+                    f"{m.__name__} uses {pk.__class__.__name__} PK but lacks "
+                    "'# PRIMITIVES: allow-plain-model' marker. "
+                    "Either use BaseModel (UUID PK) or document the exception."
+                )
 
 
 # -----------------------------
