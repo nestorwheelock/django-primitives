@@ -252,6 +252,11 @@ class PartyRelationship(BaseModel):
     - Person -> Person (spouse, parent, emergency contact)
     - Organization -> Organization (contractor, vendor, partner)
     - Person -> Group (member, head of household)
+
+    Note on CASCADE: We intentionally use CASCADE for party ForeignKeys because
+    relationships are subordinate to parties. When a party is deleted (soft or hard),
+    its relationships should be deleted too. This is NOT append-only audit history -
+    it's mutable relationship state that tracks current connections between parties.
     """
 
     RELATIONSHIP_TYPES = [

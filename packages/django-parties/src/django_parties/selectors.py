@@ -8,6 +8,7 @@ Usage:
     from django_parties.selectors import get_person_by_id, get_pet_owners
 """
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from django.db.models import QuerySet, Q
 
@@ -26,7 +27,7 @@ from django_parties.models import (
 # PERSON SELECTORS
 # =============================================================================
 
-def get_person_by_id(person_id: int) -> Person | None:
+def get_person_by_id(person_id: UUID) -> Person | None:
     """Get a person by ID, or None if not found."""
     return Person.objects.filter(id=person_id).first()
 
@@ -70,7 +71,7 @@ def get_person_count() -> int:
 # ORGANIZATION SELECTORS
 # =============================================================================
 
-def get_organization_by_id(org_id: int) -> Organization | None:
+def get_organization_by_id(org_id: UUID) -> Organization | None:
     """Get an organization by ID, or None if not found."""
     return Organization.objects.filter(id=org_id).first()
 
@@ -108,7 +109,7 @@ def get_partner_organizations() -> QuerySet[Organization]:
 # GROUP SELECTORS
 # =============================================================================
 
-def get_group_by_id(group_id: int) -> Group | None:
+def get_group_by_id(group_id: UUID) -> Group | None:
     """Get a group by ID, or None if not found."""
     return Group.objects.filter(id=group_id).first()
 
@@ -118,7 +119,7 @@ def get_active_groups() -> QuerySet[Group]:
     return Group.objects.filter(is_active=True)
 
 
-def get_groups_for_person(person_id: int) -> QuerySet[Group]:
+def get_groups_for_person(person_id: UUID) -> QuerySet[Group]:
     """Get all groups that a person is a member of."""
     return Group.objects.filter(
         relationships_to__from_person_id=person_id,
@@ -138,7 +139,7 @@ def get_households() -> QuerySet[Group]:
 # =============================================================================
 
 def get_relationships_for_person(
-    person_id: int,
+    person_id: UUID,
     relationship_type: str | None = None,
     active_only: bool = True
 ) -> QuerySet[PartyRelationship]:
@@ -152,7 +153,7 @@ def get_relationships_for_person(
 
 
 def get_relationships_to_person(
-    person_id: int,
+    person_id: UUID,
     relationship_type: str | None = None,
     active_only: bool = True
 ) -> QuerySet[PartyRelationship]:
@@ -165,7 +166,7 @@ def get_relationships_to_person(
     return qs.select_related('from_person', 'from_organization')
 
 
-def get_employees_of_organization(org_id: int) -> QuerySet[PartyRelationship]:
+def get_employees_of_organization(org_id: UUID) -> QuerySet[PartyRelationship]:
     """Get all employee relationships for an organization."""
     return PartyRelationship.objects.filter(
         to_organization_id=org_id,
@@ -174,7 +175,7 @@ def get_employees_of_organization(org_id: int) -> QuerySet[PartyRelationship]:
     ).select_related('from_person')
 
 
-def get_organization_for_employee(person_id: int) -> Organization | None:
+def get_organization_for_employee(person_id: UUID) -> Organization | None:
     """Get the organization a person is employed by (primary employment)."""
     rel = PartyRelationship.objects.filter(
         from_person_id=person_id,
@@ -185,7 +186,7 @@ def get_organization_for_employee(person_id: int) -> Organization | None:
     return rel.to_organization if rel else None
 
 
-def get_emergency_contacts(person_id: int) -> QuerySet[PartyRelationship]:
+def get_emergency_contacts(person_id: UUID) -> QuerySet[PartyRelationship]:
     """Get emergency contact relationships for a person."""
     return PartyRelationship.objects.filter(
         from_person_id=person_id,
@@ -198,17 +199,17 @@ def get_emergency_contacts(person_id: int) -> QuerySet[PartyRelationship]:
 # ADDRESS SELECTORS
 # =============================================================================
 
-def get_addresses_for_person(person_id: int) -> QuerySet[Address]:
+def get_addresses_for_person(person_id: UUID) -> QuerySet[Address]:
     """Get all addresses for a person."""
     return Address.objects.filter(person_id=person_id).order_by('-is_primary', '-created_at')
 
 
-def get_primary_address_for_person(person_id: int) -> Address | None:
+def get_primary_address_for_person(person_id: UUID) -> Address | None:
     """Get the primary address for a person."""
     return Address.objects.filter(person_id=person_id, is_primary=True).first()
 
 
-def get_addresses_for_organization(org_id: int) -> QuerySet[Address]:
+def get_addresses_for_organization(org_id: UUID) -> QuerySet[Address]:
     """Get all addresses for an organization."""
     return Address.objects.filter(organization_id=org_id).order_by('-is_primary', '-created_at')
 
@@ -217,12 +218,12 @@ def get_addresses_for_organization(org_id: int) -> QuerySet[Address]:
 # PHONE SELECTORS
 # =============================================================================
 
-def get_phones_for_person(person_id: int) -> QuerySet[Phone]:
+def get_phones_for_person(person_id: UUID) -> QuerySet[Phone]:
     """Get all phone numbers for a person."""
     return Phone.objects.filter(person_id=person_id).order_by('-is_primary', '-created_at')
 
 
-def get_primary_phone_for_person(person_id: int) -> Phone | None:
+def get_primary_phone_for_person(person_id: UUID) -> Phone | None:
     """Get the primary phone number for a person."""
     return Phone.objects.filter(person_id=person_id, is_primary=True).first()
 
@@ -236,12 +237,12 @@ def get_whatsapp_numbers() -> QuerySet[Phone]:
 # EMAIL SELECTORS
 # =============================================================================
 
-def get_emails_for_person(person_id: int) -> QuerySet[Email]:
+def get_emails_for_person(person_id: UUID) -> QuerySet[Email]:
     """Get all email addresses for a person."""
     return Email.objects.filter(person_id=person_id).order_by('-is_primary', '-created_at')
 
 
-def get_primary_email_for_person(person_id: int) -> Email | None:
+def get_primary_email_for_person(person_id: UUID) -> Email | None:
     """Get the primary email address for a person."""
     return Email.objects.filter(person_id=person_id, is_primary=True).first()
 
