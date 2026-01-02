@@ -170,19 +170,23 @@ AI-generated code is fluent. The variable names are reasonable. The structure fo
 
 But the code can still be catastrophically wrong.
 
-I reviewed an invoicing system for a small manufacturing company in 2023. The code was AI-generated—the founder had been proud of how quickly they'd shipped. Clean separation of concerns. Proper use of Django models. Well-documented API endpoints. It was a pleasure to read.
+I've reviewed AI-generated invoicing systems that were beautifully structured. Clean separation of concerns. Proper use of Django models. Well-documented API endpoints. A pleasure to read.
 
-It also allowed invoices to be deleted. Not archived. Not voided. Deleted. Completely removed from the database.
+They also allowed invoices to be deleted. Not archived. Not voided. Deleted. Completely removed from the database.
 
-They discovered this during a tax audit. The auditor asked to see invoice #1247. It didn't exist. Neither did #1248, #1251, or a dozen others. The bookkeeper had "cleaned up" old invoices that had been voided and replaced—except "cleaned up" meant "deleted forever," and tax authorities don't accept "we deleted the evidence" as an explanation.
+This matters more than most developers realize.
 
-The company spent four months reconstructing records from bank statements, email confirmations, and customer files. They paid penalties. They paid accountants. They paid lawyers. The "quick ship" saved maybe two weeks of development time. The cleanup cost six figures.
+In a November 2025 industry survey, 36% of companies reported paying fines resulting from incorrect tax audits tied to invoicing and compliance issues. More than half—56%—said invoicing problems blocked their ability to expand internationally. The cost isn't hypothetical. It's quantified and widespread.
 
-The AI didn't know that invoices are legal documents. The AI didn't know that tax authorities require you to maintain records—the IRS requires seven years, HMRC requires six, and most countries have similar rules. The AI didn't know that accountants have opinions about disappearing financial records.
+The regulatory environment is unforgiving. The IRS routinely requests full backup files from electronic accounting systems during examinations and uses that data to test the accuracy of returns. In jurisdictions like Dubai, authorities now validate invoice formats and content in real time—duplicate numbers, missing fields, or incorrect tax codes trigger penalties, blocked VAT claims, and deeper audits. Once a financial document is issued, it cannot be modified without trace and control. Corrections must be handled through formal counterpart documents—credit notes, rectifying invoices—not edits to the original.
+
+At the corporate level, the stakes are even higher. In October 2025, audit errors discovered in IT services company Atos wiped more than €1 billion off its market valuation when auditors flagged accounting misstatements. Financial data integrity isn't academic—it's investor confidence and market value.
+
+The AI didn't know any of this. The AI didn't know that invoices are legal documents. The AI didn't know that tax authorities require you to maintain records—the IRS requires seven years, HMRC requires six, and most countries have similar rules. The AI didn't know that modern tax authorities treat electronic records as legal evidence, not just bookkeeping convenience.
 
 The AI just generated code that looked like invoicing systems it had seen before. Some of those systems were demos. Some were tutorials. Some were badly designed production systems that nobody should copy.
 
-The output was fluent. The output was wrong. And nobody caught it until an auditor asked for a document that no longer existed.
+The output was fluent. The output was wrong. And when the audit comes, nobody will accept "the software let us delete it" as an excuse.
 
 ---
 
@@ -330,7 +334,11 @@ Understanding that AI requires constraints—and that constraints must be explic
 
 ## References
 
+- Arnifi. "Common E-Invoicing Errors That Could Cost Penalties." Arnifi Blog, 2025. https://arnifi.com/blog/e-invoicing-errors-in-dubai-uae-and-penalty-risks/
+- Basware. "The One Thing 56% of Businesses Say Is Holding Them Back from Expanding." PR Newswire, November 2025. https://www.prnewswire.com/news-releases/basware--the-one-thing-56-of-businesses-say-are-holding-them-back-from-expanding-302602222.html
 - IEEE Computer Society. *IEEE Standard for Binary Floating-Point Arithmetic* (IEEE 754-1985). Institute of Electrical and Electronics Engineers, 1985.
+- Internal Revenue Service. "Use of Electronic Accounting Software Records: Frequently Asked Questions." IRS.gov, 2023. https://www.irs.gov/businesses/small-businesses-self-employed/use-of-electronic-accounting-software-records-frequently-asked-questions-and-answers
+- Startup Savant. "$1.2 Billion Wiped Off Atos Valuation on Accounting Errors." Startup Savant News, October 2025. https://startupsavant.com/news/atos-valuation-errors
 - Skeel, Robert. "Roundoff Error and the Patriot Missile." *SIAM News* 25, no. 4 (July 1992): 11.
 - Quinn, Michael J. *Ethics for the Information Age*. 7th ed. Pearson, 2017. (Vancouver Stock Exchange index case study)
 - U.S. Government Accountability Office. *Patriot Missile Defense: Software Problem Led to System Failure at Dhahran, Saudi Arabia*. GAO/IMTEC-92-26, February 1992.
