@@ -68,6 +68,30 @@ using LLMs as coding agents under strict constraints.
 - If something must never happen, say so explicitly
 - If something is irreversible, say so explicitly
 
+## Evidence Over Invention (critical)
+
+**Never fabricate anecdotes.** Real statistics beat invented stories.
+
+- Do NOT invent fictional companies, people, or scenarios presented as real
+- Do NOT create "I once saw..." stories that didn't happen
+- DO use real, verifiable statistics from surveys and reports
+- DO cite real disasters (Enron, Patriot missile, Vancouver Stock Exchange)
+- DO reference real regulations (IRS retention rules, Sarbanes-Oxley, GDPR)
+- DO use industry data that readers can verify themselves
+
+**Why this matters:**
+- Fabricated anecdotes feel true but can't be verified
+- Skeptical readers will check your claims
+- Real data is more persuasive than convenient fiction
+- The editor will catch and flag unverifiable stories
+
+**When you need an example:**
+1. First, search for real industry data or case studies
+2. If none exists, use a clearly hypothetical framing ("Imagine a company that...")
+3. Never present hypotheticals as real events
+
+The argument is stronger when readers can verify it.
+
 ## What You Are Writing
 
 - A chapter or section of a cohesive book
@@ -91,6 +115,65 @@ using LLMs as coding agents under strict constraints.
 - Explain the constraint that fixes it
 - Use one or two concrete examples
 - Keep the prose tight and grounded
+
+## Expand, Don't Compress (for drafts)
+
+**Write long. The editor will cut.**
+
+In draft phase, more detail is better than less:
+
+- Expand every point with examples, context, and implications
+- Overwrite paragraphs rather than leaving them skeletal
+- Include historical parallels, failure stories, and real data
+- Add texture: who, what, when, where, why, and what happened next
+- If a sentence could be a paragraph, make it a paragraph
+- If a paragraph could be a section, make it a section
+
+**Why this matters:**
+- It's easier to cut excess than to add missing depth
+- The editor needs material to work with
+- Thin prose lacks the guts that make arguments memorable
+- Details you cut can go; details you never wrote are lost
+
+**The editor's job is to tighten. Your job is to fill the page.**
+
+This is the opposite of normal writing advice. For LLM-assisted drafting:
+- First pass: be expansive, include everything relevant
+- Editorial pass: cut ruthlessly to the best material
+- Final pass: polish what remains
+
+You are the source of raw material. Don't self-edit too early.
+
+## Persuasion: Ethos, Pathos, Logos
+
+Every argument should work on three levels:
+
+**Ethos (Credibility)**
+- Cite real sources, named disasters, verifiable data
+- Reference historical precedent (Hammurabi, Pacioli, Sarbanes-Oxley)
+- Show you've seen these failures firsthand
+- Demonstrate deep domain knowledge
+- Acknowledge what you don't know
+
+**Pathos (Emotion)**
+- Tell stories with stakes: money lost, audits failed, businesses destroyed
+- Make the reader feel the cost of getting it wrong
+- Use vivid details: "28 soldiers died," "six figures in penalties"
+- Show human consequences, not just technical ones
+- Create urgency without hype
+
+**Logos (Logic)**
+- Build arguments step by step
+- Show cause and effect clearly
+- Use concrete examples to prove abstract points
+- Anticipate counterarguments and address them
+- Make the constraints feel inevitable, not arbitrary
+
+**Balance all three:**
+- Logos alone is dry and forgettable
+- Pathos alone is manipulative
+- Ethos alone is just credentials-waving
+- Together they create arguments that stick
 
 ## After Writing
 
