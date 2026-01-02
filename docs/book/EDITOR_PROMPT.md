@@ -1,6 +1,6 @@
 # Editor Prompt
 
-Use this prompt when working with an LLM to write or revise book chapters.
+Use this prompt when working with an LLM to edit, verify, and strengthen book chapters.
 
 ---
 
@@ -48,6 +48,61 @@ that survive audits, retries, money, time, and human error.
 - If something is a system-wide rule, say so explicitly
 - If something is a primitive, explain what class of problems it solves
 
+## Source Verification (critical)
+
+You are responsible for fact-checking and source integrity.
+
+**Verify all claims:**
+- Historical claims (dates, people, events) must be accurate
+- Technical claims must be correct and current
+- Statistics and numbers must have sources
+- If a claim cannot be verified, flag it or remove it
+
+**Include sources when missing:**
+- If the text makes a factual claim without attribution, find and add the source
+- Prefer primary sources over secondary
+- Prefer canonical references (RFCs, academic papers, official docs) over blog posts
+- Format sources consistently (footnotes, inline citations, or end-of-chapter references)
+
+**Examples of claims that need sources:**
+- "Luca Pacioli formalized double-entry accounting in 1494" — cite the actual work
+- "Instagram runs on Django" — cite official confirmation
+- "This pattern has been used since the 1970s" — cite specific systems or papers
+
+**If a source cannot be found:**
+- Weaken the claim to match what can be verified
+- Or remove the claim entirely
+- Do not leave unverified assertions in the text
+
+## Critical Review (anticipate criticism)
+
+Your job is to find weaknesses before outside critics do.
+
+**Read the text as a skeptic:**
+- What would a hostile reviewer attack?
+- What claims are overreaching?
+- What examples are too convenient?
+- Where is the logic weak?
+
+**Common criticisms to preempt:**
+- "This is just rebranding old ideas" — acknowledge openly, explain why that's the point
+- "This oversimplifies complex topics" — add nuance or scope the claim more precisely
+- "This doesn't apply to my domain" — address edge cases or state limitations explicitly
+- "Where's the evidence?" — add sources, examples, or case studies
+- "This sounds like consulting-speak" — cut jargon, be more direct
+
+**Ask these questions:**
+- Is this claim defensible under scrutiny?
+- Would I be embarrassed if an expert challenged this?
+- Is this precise enough, or am I hand-waving?
+- Am I making promises the book doesn't deliver?
+
+**If something is vulnerable:**
+- Strengthen the argument with evidence
+- Scope the claim more narrowly
+- Add a caveat that acknowledges limitations
+- Or remove the claim entirely
+
 ## What I want you to produce
 
 - A chapter or section that:
@@ -55,6 +110,8 @@ that survive audits, retries, money, time, and human error.
   - Grounds it in real-world failure modes
   - Shows how constraints guide LLM-generated code
   - Uses concrete examples (ERP, pizza, vet clinic, accounting, etc.)
+  - Has verified sources for factual claims
+  - Can withstand hostile review
 - The output should feel like part of a cohesive book, not a blog post
 - Assume earlier chapters introduced:
   - Vibe coding with constraints
@@ -62,23 +119,28 @@ that survive audits, retries, money, time, and human error.
   - Primitives vs applications
   - The manager/agent model with LLMs
 
-## Before writing
+## Before editing
 
 - Identify the core constraint(s) this chapter is about
 - Identify the failure modes it prevents
 - Identify which primitives are involved
 - Decide what the reader should *stop doing* after reading this
+- List all factual claims that need verification
 
-## While writing
+## While editing
 
 - Be explicit about tradeoffs
 - Call out common wrong assumptions
 - Use short sections with strong headings
 - Prefer "this must never happen" over "best practice"
+- Verify or remove unsourced claims
+- Anticipate and address likely criticisms
 
-## After writing
+## After editing
 
 - End with a short "Why this matters later" section that tees up future chapters
+- Include a sources/references section if the chapter makes factual claims
+- Confirm all claims are either sourced or appropriately hedged
 
 ## If something is unclear or underspecified
 
