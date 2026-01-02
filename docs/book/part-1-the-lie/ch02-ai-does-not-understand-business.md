@@ -56,6 +56,52 @@ A human developer typing `class Invoice:` has to think about what fields an invo
 
 Consider a database query. When you write `SELECT * FROM orders WHERE`, the model doesn't need to understand your business to predict reasonable completions. `status = 'pending'` or `customer_id = ?` or `created_at > ?` are all statistically likely because that's what WHERE clauses on order tables look like. Everywhere. In every codebase. The archetype is universal.
 
+---
+
+## Predictions: Right and Wrong
+
+To understand what AI gets right and what it gets catastrophically wrong, you need to see both in action.
+
+**Predictions the AI nails:**
+
+"Write a Django model for a blog post."
+
+The AI produces a model with title, slug, body, author, created_at, updated_at, and published status. This is correct. Not because the AI understands blogs, but because this is what every blog model looks like. The archetype is burned into the training data. The prediction is almost deterministic.
+
+"Add pagination to this API endpoint."
+
+The AI adds page and page_size parameters, calculates offset, returns total count. Correct. Pagination is pagination. The pattern hasn't changed since the 90s.
+
+"Create a login form with email and password."
+
+The AI generates HTML with proper labels, input types, CSRF tokens, validation attributes. Correct. Login forms look the same everywhere. The archetype is universal.
+
+**Predictions the AI invents—confidently and wrong:**
+
+"Build an invoicing system."
+
+The AI creates an Invoice model with a `total` field that's directly editable. Wrong. Totals should be computed from line items, not stored. A user could edit the total without changing line items. An auditor would have questions.
+
+"Add a refund feature."
+
+The AI deletes the original transaction and creates a new one with negative amounts. Wrong. You've just destroyed audit history. The original transaction should remain immutable. A refund is a *new* transaction that references the original.
+
+"Handle currency conversion."
+
+The AI stores amounts as floats and multiplies by exchange rates. Wrong on two counts. Floats introduce rounding errors. And exchange rates change—you need to store the rate *at the time of conversion*, not look it up later.
+
+**The pattern that emerges:**
+
+The AI gets *structure* right. Models, fields, relationships, API shapes, UI components—these are patterns it has seen millions of times. The predictions are reliable.
+
+The AI gets *business rules* wrong. Immutability, audit requirements, temporal semantics, financial constraints—these are invisible in the code. The AI can't predict what it can't see. So it invents. And the inventions are plausible-looking violations of rules you thought were obvious.
+
+Here's the uncomfortable truth: the more domain-specific the rule, the more likely the AI is to violate it. "A refund is a new transaction, not a deletion" is not written in any Django tutorial. "Exchange rates must be captured at transaction time" is not in the Python documentation. "Invoices cannot be modified after sending" is not a syntax error.
+
+These are your rules. Your constraints. Your business physics.
+
+The AI doesn't know them. The AI can't infer them. The AI will confidently generate code that violates them while following every Python convention perfectly.
+
 This is the superpower and the trap.
 
 The superpower: AI can produce syntactically correct, structurally sound, conventionally organized code at speeds no human can match. It can scaffold an entire application in minutes. It can implement CRUD operations, API endpoints, authentication flows, and database migrations without breaking a sweat. The patterns are so well-established that the predictions are reliable.
