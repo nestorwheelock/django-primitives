@@ -562,3 +562,134 @@ class TestCompleteTripView:
         expected_redirect = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
         assert response.status_code == 302
         assert expected_redirect in response.url
+
+
+@pytest.mark.django_db
+class TestFullBookingWorkflow:
+    """End-to-end integration tests for the full booking workflow."""
+
+    def test_full_workflow_trip_to_completion(
+        self, staff_client, dive_trip, diver_profile, beginner_diver, staff_user
+    ):
+        """Test complete workflow: list → detail → book → check-in → start → complete."""
+        from primitives_testbed.diveops.models import Booking, TripRoster
+
+        # Step 1: View trip list
+        list_url = reverse("diveops:trip-list")
+        response = staff_client.get(list_url)
+        assert response.status_code == 200
+        assert dive_trip.dive_site.name.encode() in response.content
+
+        # Step 2: View trip detail
+        detail_url = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        response = staff_client.get(detail_url)
+        assert response.status_code == 200
+        assert b"Book Diver" in response.content  # Should show booking link
+
+        # Step 3: Book first diver via form
+        book_url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        response = staff_client.post(book_url, {"diver": diver_profile.pk})
+        assert response.status_code == 302
+        booking1 = Booking.objects.get(trip=dive_trip, diver=diver_profile)
+        assert booking1.status == "confirmed"
+
+        # Step 4: Book second diver
+        response = staff_client.post(book_url, {"diver": beginner_diver.pk})
+        assert response.status_code == 302
+        booking2 = Booking.objects.get(trip=dive_trip, diver=beginner_diver)
+        assert booking2.status == "confirmed"
+
+        # Step 5: Check in first diver
+        checkin_url = reverse("diveops:check-in", kwargs={"pk": booking1.pk})
+        response = staff_client.post(checkin_url)
+        assert response.status_code == 302
+        booking1.refresh_from_db()
+        assert booking1.status == "checked_in"
+        assert TripRoster.objects.filter(booking=booking1).exists()
+
+        # Step 6: Check in second diver
+        checkin_url = reverse("diveops:check-in", kwargs={"pk": booking2.pk})
+        response = staff_client.post(checkin_url)
+        assert response.status_code == 302
+        booking2.refresh_from_db()
+        assert booking2.status == "checked_in"
+
+        # Verify roster has 2 entries
+        assert TripRoster.objects.filter(trip=dive_trip).count() == 2
+
+        # Step 7: Start the trip
+        start_url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        response = staff_client.post(start_url)
+        assert response.status_code == 302
+        dive_trip.refresh_from_db()
+        assert dive_trip.encounter.state == "in_progress"
+
+        # Step 8: Complete the trip
+        initial_dives1 = diver_profile.total_dives
+        initial_dives2 = beginner_diver.total_dives
+
+        complete_url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        response = staff_client.post(complete_url)
+        assert response.status_code == 302
+
+        dive_trip.refresh_from_db()
+        assert dive_trip.encounter.state == "completed"
+
+        # Verify diver stats were incremented
+        diver_profile.refresh_from_db()
+        beginner_diver.refresh_from_db()
+        assert diver_profile.total_dives == initial_dives1 + 1
+        assert beginner_diver.total_dives == initial_dives2 + 1
+
+    def test_workflow_shows_eligibility_error_for_ineligible_diver(
+        self, staff_client, deep_site, beginner_diver, dive_shop, staff_user
+    ):
+        """Test that booking workflow properly blocks ineligible divers."""
+        from primitives_testbed.diveops.models import DiveTrip
+
+        # Create trip at deep site (requires AOW cert)
+        tomorrow = timezone.now() + timedelta(days=1)
+        deep_trip = DiveTrip.objects.create(
+            dive_shop=dive_shop,
+            dive_site=deep_site,
+            departure_time=tomorrow,
+            return_time=tomorrow + timedelta(hours=4),
+            max_divers=8,
+            price_per_diver=Decimal("150.00"),
+            currency="USD",
+            created_by=staff_user,
+        )
+
+        # Try to book beginner diver (only OW cert) on deep dive
+        book_url = reverse("diveops:book-diver", kwargs={"trip_pk": deep_trip.pk})
+        response = staff_client.post(book_url, {"diver": beginner_diver.pk})
+
+        # Should not redirect - should show error
+        assert response.status_code == 200
+        assert b"not eligible" in response.content.lower() or b"certification" in response.content.lower()
+
+    def test_urls_are_correctly_namespaced(self):
+        """Verify all diveops URLs use the correct namespace."""
+        import uuid
+
+        fake_pk = uuid.uuid4()
+
+        # All URLs should resolve under diveops namespace
+        trip_list = reverse("diveops:trip-list")
+        assert "/diveops/" in trip_list
+
+        trip_detail = reverse("diveops:trip-detail", kwargs={"pk": fake_pk})
+        assert "/diveops/" in trip_detail
+        assert str(fake_pk) in trip_detail
+
+        book_diver = reverse("diveops:book-diver", kwargs={"trip_pk": fake_pk})
+        assert "/diveops/" in book_diver
+
+        check_in = reverse("diveops:check-in", kwargs={"pk": fake_pk})
+        assert "/diveops/" in check_in
+
+        start_trip = reverse("diveops:start-trip", kwargs={"pk": fake_pk})
+        assert "/diveops/" in start_trip
+
+        complete_trip = reverse("diveops:complete-trip", kwargs={"pk": fake_pk})
+        assert "/diveops/" in complete_trip
