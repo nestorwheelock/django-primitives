@@ -1,7 +1,8 @@
-"""Clinic Scheduler scenario: Full-stack integration of 5 primitives.
+"""Clinic Scheduler scenario: Full-stack integration of 6 primitives.
 
 Demonstrates: encounters (7-state visit), parties (patients/providers),
-catalog (services/orders), worklog (provider time), rbac (role hierarchy).
+catalog (services/orders), worklog (provider time), rbac (role hierarchy),
+agreements (patient consent forms).
 """
 
 from datetime import timedelta
@@ -12,6 +13,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from django_agreements.services import create_agreement
 from django_catalog.models import CatalogItem, Basket, BasketItem, WorkItem
 from django_encounters.models import EncounterDefinition, Encounter
 from django_encounters.services import create_encounter, transition
@@ -98,6 +100,10 @@ def seed():
     # 7. Create sample visits
     visits = _seed_sample_visits(clinic_visit)
     count += visits
+
+    # 8. Create patient consents (for returning patients)
+    consents = _seed_patient_consents(clinic)
+    count += consents
 
     return count
 
@@ -381,6 +387,72 @@ def _seed_sample_visits(definition):
                     count += 1
                 except Exception:
                     break
+
+    return count
+
+
+def _seed_patient_consents(clinic):
+    """Create consent agreements for returning patients.
+
+    John Smith and Maria Garcia are 'returning' patients with all consents signed.
+    Other patients are 'new' and need to sign during check-in.
+    """
+    count = 0
+
+    from django_agreements.models import Agreement
+
+    consent_types = [
+        ("general_consent", "General Consent to Treatment", "2024-01"),
+        ("hipaa_acknowledgment", "HIPAA Privacy Acknowledgment", "2024-01"),
+        ("financial_responsibility", "Financial Responsibility", "2024-01"),
+    ]
+
+    # Get front desk user to sign consents
+    signing_user = User.objects.filter(username="ma_wilson").first()
+    if not signing_user:
+        signing_user = User.objects.filter(username="dr_chen").first()
+
+    if not signing_user:
+        return count
+
+    # Returning patients with existing consents
+    returning_patients = ["John Smith", "Maria Garcia"]
+
+    for patient_name in returning_patients:
+        first_name, last_name = patient_name.split(" ", 1)
+        patient = Person.objects.filter(
+            first_name=first_name,
+            last_name=last_name
+        ).first()
+
+        if not patient:
+            continue
+
+        for consent_type, consent_name, form_version in consent_types:
+            # Check if consent already exists
+            existing = Agreement.objects.for_party(patient).current().filter(
+                scope_type="consent",
+                terms__consent_type=consent_type,
+            ).exists()
+
+            if not existing:
+                valid_from = timezone.now() - timedelta(days=180)  # Signed 6 months ago
+                valid_to = valid_from + timedelta(days=365)  # Valid for 1 year
+
+                create_agreement(
+                    party_a=patient,
+                    party_b=clinic,
+                    scope_type="consent",
+                    terms={
+                        "consent_type": consent_type,
+                        "consent_name": consent_name,
+                        "form_version": form_version,
+                    },
+                    agreed_by=signing_user,
+                    valid_from=valid_from,
+                    valid_to=valid_to,
+                )
+                count += 1
 
     return count
 

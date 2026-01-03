@@ -35,6 +35,17 @@
         .nav-links a { color: #2563eb; text-decoration: none; margin-right: 1rem; }
         .nav-links a:hover { text-decoration: underline; }
         .transition-buttons { margin-top: 1rem; }
+        .consent-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid #eee; }
+        .consent-item:last-child { border-bottom: none; }
+        .consent-status { font-size: 0.8rem; padding: 0.25rem 0.5rem; border-radius: 4px; }
+        .consent-status.signed { background: #dcfce7; color: #166534; }
+        .consent-status.missing { background: #fef3c7; color: #92400e; }
+        .consent-card.complete { border: 2px solid #16a34a; }
+        .consent-card.incomplete { border: 2px solid #f59e0b; }
+        .consent-header { display: flex; justify-content: space-between; align-items: center; }
+        .consent-badge { font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 600; }
+        .consent-badge.complete { background: #dcfce7; color: #166534; }
+        .consent-badge.incomplete { background: #fef3c7; color: #92400e; }
     </style>
 </head>
 <body>
@@ -58,6 +69,16 @@
                 {% empty %}
                 <p style="color: #666;">This visit is in a terminal state (no further transitions allowed).</p>
                 {% endfor %}
+            </div>
+        </div>
+
+        <div class="card consent-card" id="consent-card">
+            <div class="consent-header">
+                <h2>Patient Consent Forms</h2>
+                <span class="consent-badge" id="consent-badge">Loading...</span>
+            </div>
+            <div id="consent-list">
+                <p style="color: #666;">Loading consent status...</p>
             </div>
         </div>
 
@@ -191,6 +212,70 @@
             })
             .catch(err => alert('Error: ' + err));
         }
+
+        function loadConsents() {
+            fetch(`/clinic/api/visits/${visitId}/consents/`)
+            .then(response => response.json())
+            .then(data => {
+                const card = document.getElementById('consent-card');
+                const badge = document.getElementById('consent-badge');
+                const list = document.getElementById('consent-list');
+
+                if (data.all_signed) {
+                    card.classList.add('complete');
+                    card.classList.remove('incomplete');
+                    badge.textContent = 'All Signed';
+                    badge.classList.add('complete');
+                    badge.classList.remove('incomplete');
+                } else {
+                    card.classList.add('incomplete');
+                    card.classList.remove('complete');
+                    badge.textContent = 'Action Required';
+                    badge.classList.add('incomplete');
+                    badge.classList.remove('complete');
+                }
+
+                let html = '';
+                data.required_consents.forEach(consent => {
+                    html += `<div class="consent-item">
+                        <div>
+                            <strong>${consent.name}</strong>
+                            ${consent.signed ? `<br><small style="color: #666;">Signed: ${new Date(consent.signed_at).toLocaleDateString()}</small>` : ''}
+                        </div>
+                        <div>
+                            ${consent.signed
+                                ? `<span class="consent-status signed">Signed</span>`
+                                : `<button class="btn" onclick="signConsent('${consent.type}')">Sign Now</button>`
+                            }
+                        </div>
+                    </div>`;
+                });
+                list.innerHTML = html || '<p style="color: #666;">No consent forms configured.</p>';
+            })
+            .catch(err => {
+                document.getElementById('consent-list').innerHTML = '<p style="color: #dc2626;">Error loading consents.</p>';
+            });
+        }
+
+        function signConsent(consentType) {
+            fetch(`/clinic/api/visits/${visitId}/consents/sign/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ consent_type: consentType })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    loadConsents();
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+        }
+
+        // Load consents on page load
+        document.addEventListener('DOMContentLoaded', loadConsents);
     </script>
 </body>
 </html>

@@ -258,3 +258,53 @@ def api_time_stop(request, provider_id: int):
             return JsonResponse({"error": "No active session"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
+
+
+# =============================================================================
+# Consent API Views
+# =============================================================================
+
+@require_GET
+def api_visit_consents(request, visit_id: UUID):
+    """API: Get consent status for a visit's patient."""
+    encounter = get_object_or_404(Encounter, pk=visit_id)
+    status = services.get_consent_status(encounter)
+    return JsonResponse(status)
+
+
+@csrf_exempt
+@require_POST
+def api_visit_sign_consent(request, visit_id: UUID):
+    """API: Sign a consent form for the visit's patient."""
+    try:
+        encounter = get_object_or_404(Encounter, pk=visit_id)
+        body = json.loads(request.body)
+        consent_type = body.get("consent_type")
+
+        if not consent_type:
+            return JsonResponse({"error": "consent_type is required"}, status=400)
+
+        if consent_type not in services.REQUIRED_CONSENTS:
+            return JsonResponse({"error": f"Unknown consent type: {consent_type}"}, status=400)
+
+        patient = services.get_patient_from_encounter(encounter)
+        clinic = services.get_clinic_organization()
+
+        if not patient or not clinic:
+            return JsonResponse({"error": "Patient or clinic not found"}, status=400)
+
+        # Get user (in real app, use authenticated user)
+        user = User.objects.filter(username="dr_chen").first()
+        if not user:
+            user = User.objects.first()
+
+        agreement = services.sign_consent(patient, clinic, consent_type, user)
+
+        return JsonResponse({
+            "signed": True,
+            "consent_type": consent_type,
+            "agreement_id": str(agreement.pk),
+            "expires_at": agreement.valid_to.isoformat() if agreement.valid_to else None,
+        })
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)

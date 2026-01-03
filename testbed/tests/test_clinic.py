@@ -1,21 +1,23 @@
 """Tests for clinic scheduler scenario.
 
-Tests the integration of 5 primitives:
+Tests the integration of 6 primitives:
 - django-encounters (visit state machine)
 - django-parties (patients/providers)
 - django-catalog (services/orders)
 - django-worklog (provider time tracking)
 - django-rbac (role hierarchy)
+- django-agreements (patient consent forms)
 """
 
 import pytest
 from django.db import IntegrityError, transaction
 from django.contrib.contenttypes.models import ContentType
 
+from django_agreements.models import Agreement
 from django_catalog.models import CatalogItem, Basket, BasketItem, WorkItem
 from django_encounters.models import EncounterDefinition, Encounter
 from django_encounters.exceptions import InvalidTransition
-from django_parties.models import Person
+from django_parties.models import Organization, Person
 from django_worklog.models import WorkSession
 
 
@@ -457,3 +459,224 @@ class TestClinicViewsUnseeded:
         """API visits endpoint should handle missing EncounterDefinition."""
         response = client.get("/clinic/api/visits/")
         assert response.status_code == 200
+
+
+# =============================================================================
+# Patient Consent Tests
+# =============================================================================
+
+@pytest.mark.django_db(transaction=True)
+class TestPatientConsents:
+    """Test patient consent form requirements using django-agreements."""
+
+    def test_required_consents_constant_exists(self, seeded_database):
+        """REQUIRED_CONSENTS constant defines consent form types."""
+        from primitives_testbed.clinic.services import REQUIRED_CONSENTS
+
+        assert len(REQUIRED_CONSENTS) >= 3
+        assert "general_consent" in REQUIRED_CONSENTS
+        assert "hipaa_acknowledgment" in REQUIRED_CONSENTS
+        assert "financial_responsibility" in REQUIRED_CONSENTS
+
+    def test_new_patient_needs_all_consents(self, seeded_database):
+        """New patient with no agreements needs all consent types."""
+        from primitives_testbed.clinic.services import get_missing_consents
+        from django.contrib.auth import get_user_model
+
+        # Create a brand new patient with no agreements
+        new_patient = Person.objects.create(
+            first_name="New",
+            last_name="Patient",
+        )
+        clinic = Organization.objects.filter(name="Springfield Family Clinic").first()
+
+        missing = get_missing_consents(new_patient, clinic)
+
+        assert len(missing) == 3
+        assert "general_consent" in missing
+        assert "hipaa_acknowledgment" in missing
+        assert "financial_responsibility" in missing
+
+    def test_returning_patient_has_valid_consents(self, seeded_database):
+        """Patient with current agreements has no missing consents."""
+        from primitives_testbed.clinic.services import (
+            get_missing_consents,
+            sign_consent,
+            REQUIRED_CONSENTS,
+        )
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        user = User.objects.filter(username="dr_chen").first()
+        patient = Person.objects.filter(first_name="John").first()
+        clinic = Organization.objects.filter(name="Springfield Family Clinic").first()
+
+        # Sign all consents
+        for consent_type in REQUIRED_CONSENTS.keys():
+            sign_consent(patient, clinic, consent_type, user)
+
+        missing = get_missing_consents(patient, clinic)
+        assert len(missing) == 0
+
+    def test_expired_consent_is_missing(self, seeded_database):
+        """Expired agreement counts as missing consent."""
+        from primitives_testbed.clinic.services import get_missing_consents
+        from django_agreements.services import create_agreement
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+        from datetime import timedelta
+
+        User = get_user_model()
+        user = User.objects.filter(username="dr_chen").first()
+        patient = Person.objects.filter(first_name="Robert").first()
+        clinic = Organization.objects.filter(name="Springfield Family Clinic").first()
+
+        # Create an expired consent
+        past_date = timezone.now() - timedelta(days=400)
+        expired_date = timezone.now() - timedelta(days=35)
+
+        create_agreement(
+            party_a=patient,
+            party_b=clinic,
+            scope_type="consent",
+            terms={"consent_type": "general_consent", "form_version": "2024-01"},
+            agreed_by=user,
+            valid_from=past_date,
+            valid_to=expired_date,  # Expired
+        )
+
+        missing = get_missing_consents(patient, clinic)
+        assert "general_consent" in missing
+
+    def test_sign_consent_creates_agreement(self, seeded_database):
+        """Signing consent creates Agreement with correct structure."""
+        from primitives_testbed.clinic.services import sign_consent
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+
+        User = get_user_model()
+        user = User.objects.filter(username="dr_chen").first()
+        patient = Person.objects.filter(first_name="Lisa").first()
+        clinic = Organization.objects.filter(name="Springfield Family Clinic").first()
+
+        agreement = sign_consent(patient, clinic, "hipaa_acknowledgment", user)
+
+        assert agreement is not None
+        assert agreement.scope_type == "consent"
+        assert agreement.terms["consent_type"] == "hipaa_acknowledgment"
+        assert agreement.valid_from <= timezone.now()
+        assert agreement.valid_to > timezone.now()  # Not expired
+        assert agreement.agreed_by == user
+
+    def test_cannot_transition_to_checked_in_without_consents(self, seeded_database):
+        """Transition from confirmed to checked_in blocked without consents."""
+        from primitives_testbed.clinic.services import transition_visit
+        from primitives_testbed.clinic.exceptions import ConsentRequiredError
+        from django_encounters.services import create_encounter, transition
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        user = User.objects.filter(username="dr_chen").first()
+
+        # Create a new patient with no consents
+        new_patient = Person.objects.create(
+            first_name="NoConsent",
+            last_name="Patient",
+        )
+
+        encounter = create_encounter("clinic_visit", new_patient, created_by=user)
+        encounter = transition(encounter, "confirmed", by_user=user)
+
+        # Should raise ConsentRequiredError when trying to check in
+        with pytest.raises(ConsentRequiredError):
+            transition_visit(encounter, "checked_in", by_user=user)
+
+    def test_can_transition_to_checked_in_with_consents(self, seeded_database):
+        """Transition allowed when all consents are signed."""
+        from primitives_testbed.clinic.services import (
+            transition_visit,
+            sign_consent,
+            REQUIRED_CONSENTS,
+        )
+        from django_encounters.services import create_encounter, transition
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        user = User.objects.filter(username="dr_chen").first()
+
+        # Create patient and sign all consents
+        patient = Person.objects.create(
+            first_name="AllConsents",
+            last_name="Patient",
+        )
+        clinic = Organization.objects.filter(name="Springfield Family Clinic").first()
+
+        for consent_type in REQUIRED_CONSENTS.keys():
+            sign_consent(patient, clinic, consent_type, user)
+
+        encounter = create_encounter("clinic_visit", patient, created_by=user)
+        encounter = transition(encounter, "confirmed", by_user=user)
+
+        # Should succeed
+        updated = transition_visit(encounter, "checked_in", by_user=user)
+        assert updated.state == "checked_in"
+
+    def test_consent_api_returns_status(self, seeded_database, client):
+        """API returns correct consent status for patient."""
+        from primitives_testbed.clinic.services import sign_consent, REQUIRED_CONSENTS
+        from django_encounters.services import create_encounter
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        user = User.objects.filter(username="dr_chen").first()
+        clinic = Organization.objects.filter(name="Springfield Family Clinic").first()
+
+        # Use Robert Johnson - a patient without seeded consents
+        patient = Person.objects.filter(first_name="Robert").first()
+
+        # Sign one consent
+        sign_consent(patient, clinic, "general_consent", user)
+
+        # Create visit
+        encounter = create_encounter("clinic_visit", patient, created_by=user)
+
+        response = client.get(f"/clinic/api/visits/{encounter.pk}/consents/")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["patient_name"] == "Robert Johnson"
+        assert data["all_signed"] is False
+        assert len(data["required_consents"]) == 3
+
+        # Check that general_consent is signed
+        general = next(c for c in data["required_consents"] if c["type"] == "general_consent")
+        assert general["signed"] is True
+
+        # Check that others are not signed
+        hipaa = next(c for c in data["required_consents"] if c["type"] == "hipaa_acknowledgment")
+        assert hipaa["signed"] is False
+
+    def test_consent_sign_api_creates_agreement(self, seeded_database, client):
+        """POST to sign API creates agreement and returns success."""
+        from django_encounters.services import create_encounter
+        from django.contrib.auth import get_user_model
+        import json
+
+        User = get_user_model()
+        user = User.objects.filter(username="dr_chen").first()
+        patient = Person.objects.filter(first_name="James").first()
+
+        encounter = create_encounter("clinic_visit", patient, created_by=user)
+
+        response = client.post(
+            f"/clinic/api/visits/{encounter.pk}/consents/sign/",
+            data=json.dumps({"consent_type": "financial_responsibility"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["signed"] is True
+        assert data["consent_type"] == "financial_responsibility"
+        assert "agreement_id" in data
+        assert "expires_at" in data

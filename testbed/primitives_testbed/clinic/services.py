@@ -1,6 +1,6 @@
 """Clinic Scheduler business logic.
 
-Wraps primitives (encounters, catalog, worklog) with clinic-specific operations.
+Wraps primitives (encounters, catalog, worklog, agreements) with clinic-specific operations.
 """
 
 from datetime import date, timedelta
@@ -12,6 +12,8 @@ from django.db import transaction
 from django.db.models import QuerySet, Sum
 from django.utils import timezone
 
+from django_agreements.models import Agreement
+from django_agreements.services import create_agreement
 from django_catalog.models import Basket, BasketItem, CatalogItem, WorkItem
 from django_encounters.models import Encounter, EncounterDefinition
 from django_encounters.services import (
@@ -27,7 +29,155 @@ from django_worklog.services import (
     stop_session,
 )
 
+from .exceptions import ConsentRequiredError
+
 User = get_user_model()
+
+
+# =============================================================================
+# Required Consent Forms
+# =============================================================================
+
+REQUIRED_CONSENTS = {
+    "general_consent": {
+        "name": "General Consent to Treatment",
+        "validity_days": 365,
+        "form_version": "2024-01",
+    },
+    "hipaa_acknowledgment": {
+        "name": "HIPAA Privacy Acknowledgment",
+        "validity_days": 365,
+        "form_version": "2024-01",
+    },
+    "financial_responsibility": {
+        "name": "Financial Responsibility",
+        "validity_days": 365,
+        "form_version": "2024-01",
+    },
+}
+
+
+def get_clinic_organization() -> Optional[Organization]:
+    """Get the clinic organization."""
+    return Organization.objects.filter(name="Springfield Family Clinic").first()
+
+
+def get_patient_from_encounter(encounter: Encounter) -> Optional[Person]:
+    """Get the patient (Person) from an encounter."""
+    person_ct = ContentType.objects.get_for_model(Person)
+    if encounter.subject_type == person_ct:
+        return Person.objects.filter(pk=encounter.subject_id).first()
+    return None
+
+
+def get_patient_consents(patient: Person, clinic: Organization) -> list[Agreement]:
+    """Get all current valid consent agreements for a patient with the clinic."""
+    return list(
+        Agreement.objects.for_party(patient)
+        .current()
+        .filter(scope_type="consent")
+    )
+
+
+def get_missing_consents(patient: Person, clinic: Organization) -> list[str]:
+    """Get list of consent types that the patient has not signed or are expired."""
+    current_consents = get_patient_consents(patient, clinic)
+
+    # Extract consent types from current agreements
+    signed_types = set()
+    for agreement in current_consents:
+        consent_type = agreement.terms.get("consent_type")
+        if consent_type:
+            signed_types.add(consent_type)
+
+    # Return missing consent types
+    return [ct for ct in REQUIRED_CONSENTS.keys() if ct not in signed_types]
+
+
+def sign_consent(
+    patient: Person,
+    clinic: Organization,
+    consent_type: str,
+    signed_by: User,
+) -> Agreement:
+    """Sign a consent form, creating an Agreement between patient and clinic."""
+    if consent_type not in REQUIRED_CONSENTS:
+        raise ValueError(f"Unknown consent type: {consent_type}")
+
+    config = REQUIRED_CONSENTS[consent_type]
+    valid_from = timezone.now()
+    valid_to = valid_from + timedelta(days=config["validity_days"])
+
+    return create_agreement(
+        party_a=patient,
+        party_b=clinic,
+        scope_type="consent",
+        terms={
+            "consent_type": consent_type,
+            "form_version": config["form_version"],
+            "consent_name": config["name"],
+        },
+        agreed_by=signed_by,
+        valid_from=valid_from,
+        valid_to=valid_to,
+    )
+
+
+def can_check_in(encounter: Encounter) -> bool:
+    """Check if a patient can check in (has all required consents)."""
+    patient = get_patient_from_encounter(encounter)
+    clinic = get_clinic_organization()
+
+    if not patient or not clinic:
+        return False
+
+    missing = get_missing_consents(patient, clinic)
+    return len(missing) == 0
+
+
+def get_consent_status(encounter: Encounter) -> dict:
+    """Get consent status for a visit's patient."""
+    patient = get_patient_from_encounter(encounter)
+    clinic = get_clinic_organization()
+
+    if not patient or not clinic:
+        return {
+            "patient_id": None,
+            "patient_name": None,
+            "required_consents": [],
+            "all_signed": False,
+            "can_check_in": False,
+        }
+
+    current_consents = get_patient_consents(patient, clinic)
+
+    # Build consent type to agreement mapping
+    consent_map = {}
+    for agreement in current_consents:
+        ct = agreement.terms.get("consent_type")
+        if ct:
+            consent_map[ct] = agreement
+
+    required_consents = []
+    for consent_type, config in REQUIRED_CONSENTS.items():
+        agreement = consent_map.get(consent_type)
+        required_consents.append({
+            "type": consent_type,
+            "name": config["name"],
+            "signed": agreement is not None,
+            "signed_at": agreement.agreed_at.isoformat() if agreement else None,
+            "expires_at": agreement.valid_to.isoformat() if agreement and agreement.valid_to else None,
+        })
+
+    all_signed = all(c["signed"] for c in required_consents)
+
+    return {
+        "patient_id": str(patient.pk),
+        "patient_name": f"{patient.first_name} {patient.last_name}",
+        "required_consents": required_consents,
+        "all_signed": all_signed,
+        "can_check_in": all_signed,
+    }
 
 
 # =============================================================================
@@ -89,7 +239,19 @@ def transition_visit(
     to_state: str,
     by_user: Optional[User] = None,
 ) -> Encounter:
-    """Transition a visit to a new state."""
+    """Transition a visit to a new state.
+
+    Enforces consent requirement when transitioning to checked_in.
+    """
+    # Enforce consent check when transitioning to checked_in
+    if encounter.state == "confirmed" and to_state == "checked_in":
+        if not can_check_in(encounter):
+            patient = get_patient_from_encounter(encounter)
+            clinic = get_clinic_organization()
+            if patient and clinic:
+                missing = get_missing_consents(patient, clinic)
+                raise ConsentRequiredError(missing)
+
     return transition(encounter, to_state, by_user=by_user)
 
 
