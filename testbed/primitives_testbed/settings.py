@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     # Testbed modules (built on primitives)
     "primitives_testbed.pricing",
     "primitives_testbed.invoicing",
+    "primitives_testbed.checkin",
 ]
 
 MIDDLEWARE = [
