@@ -16,6 +16,8 @@ from .sequence import seed as seed_sequence, verify as verify_sequence
 from .ledger import seed as seed_ledger, verify as verify_ledger
 from .worklog import seed as seed_worklog, verify as verify_worklog
 from .agreements import seed as seed_agreements, verify as verify_agreements
+from .pricing import seed as seed_pricing, verify as verify_pricing
+from .invoicing import seed as seed_invoicing, verify as verify_invoicing
 from .clinic import seed as seed_clinic, verify as verify_clinic
 
 # Order matters: dependencies first
@@ -31,6 +33,8 @@ SCENARIOS = [
     ("ledger", seed_ledger, verify_ledger),
     ("worklog", seed_worklog, verify_worklog),
     ("agreements", seed_agreements, verify_agreements),
+    ("pricing", seed_pricing, verify_pricing),
+    ("invoicing", seed_invoicing, verify_invoicing),
     ("clinic", seed_clinic, verify_clinic),
 ]
 
