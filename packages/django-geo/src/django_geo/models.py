@@ -51,6 +51,18 @@ class Place(BaseModel):
 
     class Meta:
         ordering = ['name']
+        constraints = [
+            # Latitude must be between -90 and 90
+            models.CheckConstraint(
+                condition=models.Q(latitude__gte=-90) & models.Q(latitude__lte=90),
+                name="place_valid_latitude",
+            ),
+            # Longitude must be between -180 and 180
+            models.CheckConstraint(
+                condition=models.Q(longitude__gte=-180) & models.Q(longitude__lte=180),
+                name="place_valid_longitude",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -106,6 +118,23 @@ class ServiceArea(BaseModel):
 
     class Meta:
         ordering = ['name']
+        constraints = [
+            # Center latitude must be between -90 and 90
+            models.CheckConstraint(
+                condition=models.Q(center_latitude__gte=-90) & models.Q(center_latitude__lte=90),
+                name="servicearea_valid_latitude",
+            ),
+            # Center longitude must be between -180 and 180
+            models.CheckConstraint(
+                condition=models.Q(center_longitude__gte=-180) & models.Q(center_longitude__lte=180),
+                name="servicearea_valid_longitude",
+            ),
+            # Radius must be positive
+            models.CheckConstraint(
+                condition=models.Q(radius_km__gt=0),
+                name="servicearea_positive_radius",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name

@@ -237,6 +237,13 @@ class Basket(CatalogBaseModel):
             models.Index(fields=['encounter', 'status']),
             models.Index(fields=['effective_at']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['encounter'],
+                condition=models.Q(status='draft') & models.Q(deleted_at__isnull=True),
+                name='unique_active_basket_per_encounter',
+            ),
+        ]
 
     def __str__(self):
         return f"Basket #{self.pk} - Encounter #{self.encounter_id} ({self.status})"

@@ -249,9 +249,10 @@ class TestIntegrityVerification:
         # Verify original is valid
         assert verify_document_integrity(doc) is True
 
-        # Simulate tampering by changing checksum
-        doc.checksum = "tampered_checksum_value"
-        doc.save()
+        # Simulate tampering by changing checksum directly in database
+        # (bypasses model save() to simulate database-level corruption)
+        Document.objects.filter(pk=doc.pk).update(checksum="tampered_checksum_value")
+        doc.refresh_from_db()
 
         # Verification should fail
         with pytest.raises(ChecksumMismatchError):

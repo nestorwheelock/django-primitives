@@ -21,6 +21,171 @@ def project(db):
 
 
 @pytest.mark.django_db
+class TestWorkSessionUniqueActiveConstraint:
+    """Tests for one active session per user constraint.
+
+    The WorkSession model docstring says: "One active session per user (stopped_at IS NULL)"
+    This is enforced by a partial UniqueConstraint.
+    """
+
+    def test_cannot_create_two_active_sessions_for_same_user(self, user, task, project):
+        """Cannot create two active sessions for the same user."""
+        from django.db import IntegrityError
+
+        task_ct = ContentType.objects.get_for_model(task)
+        project_ct = ContentType.objects.get_for_model(project)
+
+        # First active session - OK
+        WorkSession.objects.create(
+            user=user,
+            context_content_type=task_ct,
+            context_object_id=str(task.pk),
+        )
+
+        # Second active session - should fail
+        with pytest.raises(IntegrityError):
+            WorkSession.objects.create(
+                user=user,
+                context_content_type=project_ct,
+                context_object_id=str(project.pk),
+            )
+
+    def test_can_create_active_after_stopping_previous(self, user, task, project):
+        """Can create new active session after stopping the previous one."""
+        task_ct = ContentType.objects.get_for_model(task)
+        project_ct = ContentType.objects.get_for_model(project)
+
+        # First session - stop it
+        session1 = WorkSession.objects.create(
+            user=user,
+            context_content_type=task_ct,
+            context_object_id=str(task.pk),
+        )
+        session1.stopped_at = timezone.now()
+        session1.duration_seconds = 100
+        session1.save()
+
+        # Second session - should work since first is stopped
+        session2 = WorkSession.objects.create(
+            user=user,
+            context_content_type=project_ct,
+            context_object_id=str(project.pk),
+        )
+
+        assert session2.pk is not None
+        assert session2.stopped_at is None
+
+    def test_can_create_active_after_soft_deleting_previous(self, user, task, project):
+        """Can create new active session after soft-deleting the previous one."""
+        task_ct = ContentType.objects.get_for_model(task)
+        project_ct = ContentType.objects.get_for_model(project)
+
+        # First session - soft delete it
+        session1 = WorkSession.objects.create(
+            user=user,
+            context_content_type=task_ct,
+            context_object_id=str(task.pk),
+        )
+        session1.delete()  # BaseModel soft delete
+
+        # Second session - should work since first is soft-deleted
+        session2 = WorkSession.objects.create(
+            user=user,
+            context_content_type=project_ct,
+            context_object_id=str(project.pk),
+        )
+
+        assert session2.pk is not None
+        assert session2.stopped_at is None
+
+    def test_different_users_can_have_active_sessions(self, user, other_user, task):
+        """Different users can each have an active session."""
+        task_ct = ContentType.objects.get_for_model(task)
+
+        # Both should work - different users
+        session1 = WorkSession.objects.create(
+            user=user,
+            context_content_type=task_ct,
+            context_object_id=str(task.pk),
+        )
+        session2 = WorkSession.objects.create(
+            user=other_user,
+            context_content_type=task_ct,
+            context_object_id=str(task.pk),
+        )
+
+        assert session1.pk is not None
+        assert session2.pk is not None
+
+
+@pytest.mark.django_db
+class TestWorkSessionDurationConsistency:
+    """Tests for duration consistency constraint.
+
+    When stopped_at IS NULL, duration_seconds must be NULL.
+    When stopped_at IS NOT NULL, duration_seconds must be NOT NULL.
+    """
+
+    def test_cannot_set_duration_without_stopped_at(self, user, task):
+        """Cannot have duration_seconds set when stopped_at is null."""
+        from django.db import IntegrityError
+
+        task_ct = ContentType.objects.get_for_model(task)
+
+        with pytest.raises(IntegrityError):
+            WorkSession.objects.create(
+                user=user,
+                context_content_type=task_ct,
+                context_object_id=str(task.pk),
+                stopped_at=None,
+                duration_seconds=100,  # Invalid: has duration but not stopped
+            )
+
+    def test_cannot_have_stopped_at_without_duration(self, user, task):
+        """Cannot have stopped_at set without duration_seconds."""
+        from django.db import IntegrityError
+
+        task_ct = ContentType.objects.get_for_model(task)
+
+        with pytest.raises(IntegrityError):
+            WorkSession.objects.create(
+                user=user,
+                context_content_type=task_ct,
+                context_object_id=str(task.pk),
+                stopped_at=timezone.now(),
+                duration_seconds=None,  # Invalid: stopped but no duration
+            )
+
+    def test_valid_active_session(self, user, task):
+        """Active session has null stopped_at and null duration_seconds."""
+        task_ct = ContentType.objects.get_for_model(task)
+
+        session = WorkSession.objects.create(
+            user=user,
+            context_content_type=task_ct,
+            context_object_id=str(task.pk),
+        )
+
+        assert session.stopped_at is None
+        assert session.duration_seconds is None
+
+    def test_valid_stopped_session(self, user, task):
+        """Stopped session has both stopped_at and duration_seconds set."""
+        task_ct = ContentType.objects.get_for_model(task)
+
+        session = WorkSession.objects.create(
+            user=user,
+            context_content_type=task_ct,
+            context_object_id=str(task.pk),
+            stopped_at=timezone.now(),
+            duration_seconds=100,
+        )
+
+        assert session.stopped_at is not None
+        assert session.duration_seconds == 100
+
+
+@pytest.mark.django_db
 class TestWorkSessionCreation:
     """Tests for WorkSession model creation."""
 
@@ -252,15 +417,17 @@ class TestWorkSessionTimeSemantics:
         now = timezone.now()
         past = now - datetime.timedelta(days=7)
 
-        # Old session
+        # Old session - stopped so we can create another
         old_session = WorkSession.objects.create(
             user=user,
             context_content_type=task_ct,
             context_object_id=str(task.pk),
             effective_at=past,
+            stopped_at=past + datetime.timedelta(hours=1),
+            duration_seconds=3600,
         )
 
-        # New session
+        # New session - can be active since old one is stopped
         new_session = WorkSession.objects.create(
             user=user,
             context_content_type=project_ct,

@@ -19,6 +19,122 @@ This is a monorepo of 18 standalone Django packages that compose to build ERP/bu
 
 ---
 
+## DATABASE: PostgreSQL Only
+
+**This ecosystem is PostgreSQL-only.** All packages assume PostgreSQL semantics for:
+
+- **Constraints:** Partial UniqueConstraints, CheckConstraints, expression indexes
+- **Concurrency:** `select_for_update()`, row-level locking, transaction isolation
+- **Data types:** UUID (native), JSONB, array fields where appropriate
+- **Indexes:** Partial indexes, GIN/GiST indexes for JSONB
+
+**Hard Rules:**
+
+1. **No SQLite fallback** - Tests run against PostgreSQL
+2. **Prefer DB-enforced invariants** - Use constraints instead of application validation
+3. **Use PostgreSQL-specific features** - When they provide correctness or performance benefits
+4. **CI runs PostgreSQL** - Development and CI both use PostgreSQL containers
+
+---
+
+### Standardized Patterns
+
+**1. UUIDField (Native PostgreSQL UUID)**
+```python
+# All models use native PostgreSQL UUID type
+id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+```
+- Uses PostgreSQL `uuid` type, not `varchar(36)`
+- Indexed efficiently, compares as native type
+- All GenericFKs use `CharField(max_length=255)` for UUID compatibility
+
+**2. Default Indexes for Common Query Paths**
+```python
+class Meta:
+    indexes = [
+        # Composite for GenericFK lookups
+        models.Index(fields=["content_type", "object_id"]),
+        # Temporal queries (common in all time-semantic models)
+        models.Index(fields=["effective_at"]),
+        models.Index(fields=["created_at"]),
+        # Soft-delete aware queries
+        models.Index(fields=["deleted_at"]),
+        # State machine lookups
+        models.Index(fields=["status", "created_at"]),
+    ]
+```
+
+**3. Soft-Delete Pattern (Standardized via BaseModel)**
+```python
+# All domain models inherit from django_basemodels.BaseModel
+# which provides:
+deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+class SoftDeleteManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+    def with_deleted(self):
+        return super().get_queryset()
+
+objects = SoftDeleteManager()  # Default excludes deleted
+all_objects = models.Manager()  # Includes deleted
+
+def delete(self):  # Soft delete
+    self.deleted_at = timezone.now()
+    self.save(update_fields=["deleted_at", "updated_at"])
+
+def hard_delete(self):  # Actual deletion
+    super().delete()
+```
+
+**4. Deferrable Constraints (For Ledger Integrity)**
+```python
+# Use DEFERRABLE INITIALLY DEFERRED for ledger-like constraints
+# that need to be validated at COMMIT, not INSERT
+
+# Example: Transaction must balance (sum of debits = sum of credits)
+# This is validated in post() service, not as a DB constraint
+# because cross-row constraints require triggers in PostgreSQL
+
+# For foreign key cycles (rare), use:
+models.ForeignKey(
+    ...,
+    db_constraint=True,
+    # Add in migration: ALTER TABLE ... ADD CONSTRAINT ... DEFERRABLE INITIALLY DEFERRED
+)
+```
+
+**Decision on Deferrable Constraints:**
+- **Ledger balancing:** Use service layer validation (post() method) rather than DB triggers
+- **FK cycles:** Use deferrable constraints if needed for circular references
+- **General rule:** Prefer immediate constraints; use deferrable only when insertion order matters
+
+---
+
+**Test Configuration:**
+
+```python
+# tests/settings.py - USE THIS TEMPLATE
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "test_db",
+        "USER": "postgres",
+        "PASSWORD": "postgres",
+        "HOST": "localhost",
+        "PORT": "5432",
+    }
+}
+```
+
+For local development, run PostgreSQL in Docker:
+```bash
+docker run -d --name postgres-test -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16
+```
+
+---
+
 ## PHASE 1: SPEC (When Asked to Create a New Package)
 
 When asked to create a new django primitive package, FIRST create planning documents before any code.
@@ -361,9 +477,11 @@ def do_operation(entity, **kwargs):
 
 ### tests/settings.py
 
-Always use this template:
+Always use this template (PostgreSQL required):
 
 ```python
+import os
+
 SECRET_KEY = "test-secret-key"
 DEBUG = True
 INSTALLED_APPS = [
@@ -371,24 +489,43 @@ INSTALLED_APPS = [
     "django.contrib.auth",
     "django_{name}",
 ]
-DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("POSTGRES_DB", "test_db"),
+        "USER": os.environ.get("POSTGRES_USER", "postgres"),
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "postgres"),
+        "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
+        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+    }
+}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 ```
 
 ### tests/conftest.py
 
-Always use this template:
+Always use this template (uses settings.py for PostgreSQL config):
 
 ```python
 import django
+import os
 from django.conf import settings
 
 def pytest_configure():
     if not settings.configured:
         settings.configure(
             DEBUG=True,
-            DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
+            DATABASES={
+                "default": {
+                    "ENGINE": "django.db.backends.postgresql",
+                    "NAME": os.environ.get("POSTGRES_DB", "test_db"),
+                    "USER": os.environ.get("POSTGRES_USER", "postgres"),
+                    "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "postgres"),
+                    "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
+                    "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+                }
+            },
             INSTALLED_APPS=["django.contrib.contenttypes", "django.contrib.auth", "django_{name}"],
             DEFAULT_AUTO_FIELD="django.db.models.BigAutoField",
             USE_TZ=True,

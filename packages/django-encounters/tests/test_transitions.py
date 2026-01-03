@@ -235,3 +235,38 @@ class TestTransitionWithValidators:
         # Should not raise
         result = transition(encounter, "active")
         assert result.state == "active"
+
+
+@pytest.mark.django_db
+class TestTransitionImmutability:
+    """Tests for EncounterTransition immutability."""
+
+    def test_transition_is_immutable_after_creation(self, definition, subject):
+        """EncounterTransition cannot be modified after creation."""
+        from django_encounters.exceptions import ImmutableTransitionError
+
+        encounter = create_encounter("test_workflow", subject)
+        transition(encounter, "active")
+
+        # Get the transition record
+        trans = encounter.transitions.first()
+
+        # Attempt to modify should raise
+        trans.to_state = "review"
+        with pytest.raises(ImmutableTransitionError):
+            trans.save()
+
+    def test_transition_error_includes_id(self, definition, subject):
+        """ImmutableTransitionError includes transition ID."""
+        from django_encounters.exceptions import ImmutableTransitionError
+
+        encounter = create_encounter("test_workflow", subject)
+        transition(encounter, "active")
+
+        trans = encounter.transitions.first()
+
+        with pytest.raises(ImmutableTransitionError) as exc_info:
+            trans.to_state = "review"
+            trans.save()
+
+        assert str(trans.pk) in str(exc_info.value)

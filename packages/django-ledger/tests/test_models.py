@@ -302,6 +302,67 @@ class TestEntryModel:
 
 
 @pytest.mark.django_db
+class TestEntryAmountConstraint:
+    """Tests for entry amount constraints.
+
+    Entries must have positive amounts - use debit/credit for direction.
+    """
+
+    @pytest.fixture
+    def org(self):
+        """Create a test organization."""
+        return Organization.objects.create(name="Test Org")
+
+    @pytest.fixture
+    def account(self, org):
+        """Create a test account."""
+        return Account.objects.create(
+            owner=org,
+            account_type='revenue',
+            currency='USD',
+        )
+
+    @pytest.fixture
+    def transaction(self):
+        """Create a test transaction."""
+        return Transaction.objects.create(description="Test")
+
+    def test_cannot_create_entry_with_negative_amount(self, account, transaction):
+        """Cannot create entry with negative amount."""
+        from django.db import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            Entry.objects.create(
+                transaction=transaction,
+                account=account,
+                amount=Decimal('-100.00'),
+                entry_type='debit',
+            )
+
+    def test_cannot_create_entry_with_zero_amount(self, account, transaction):
+        """Cannot create entry with zero amount."""
+        from django.db import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            Entry.objects.create(
+                transaction=transaction,
+                account=account,
+                amount=Decimal('0.00'),
+                entry_type='debit',
+            )
+
+    def test_can_create_entry_with_positive_amount(self, account, transaction):
+        """Can create entry with positive amount."""
+        entry = Entry.objects.create(
+            transaction=transaction,
+            account=account,
+            amount=Decimal('0.01'),  # Minimum positive
+            entry_type='debit',
+        )
+        assert entry.amount == Decimal('0.01')
+
+
+@pytest.mark.django_db
 class TestEntryImmutability:
     """Test suite for entry immutability after posting."""
 

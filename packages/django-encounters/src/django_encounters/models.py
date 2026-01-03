@@ -16,6 +16,7 @@ from django.utils import timezone
 from django_basemodels import BaseModel
 from django_decisioning.querysets import EventAsOfQuerySet
 
+from .exceptions import ImmutableTransitionError
 from .graph import validate_definition_graph
 
 
@@ -111,8 +112,9 @@ class Encounter(EncountersBaseModel):
         on_delete=models.PROTECT,
         help_text="Content type of the subject"
     )
-    subject_id = models.PositiveIntegerField(
-        help_text="Primary key of the subject"
+    subject_id = models.CharField(
+        max_length=255,
+        help_text="Primary key of the subject (supports UUID and integer PKs)"
     )
     subject = GenericForeignKey("subject_type", "subject_id")
 
@@ -217,6 +219,13 @@ class EncounterTransition(EncountersBaseModel):
             models.Index(fields=["encounter", "-transitioned_at"]),
             models.Index(fields=["effective_at"]),
         ]
+
+    def save(self, *args, **kwargs):
+        """Enforce immutability - transitions are audit records."""
+        # Check if this is an update to an existing record (not a new insert)
+        if not self._state.adding:
+            raise ImmutableTransitionError(self.pk)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.encounter}: {self.from_state} -> {self.to_state}"

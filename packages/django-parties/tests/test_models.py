@@ -397,6 +397,153 @@ class TestPartyRelationshipModel:
 
 
 @pytest.mark.django_db
+class TestAddressExactlyOnePartyConstraint:
+    """Tests for Address exactly-one-party FK constraint.
+
+    Each Address must belong to exactly one party (person, organization, or group).
+    This is enforced by a CheckConstraint at the DB level.
+    """
+
+    def test_cannot_create_address_with_no_party(self):
+        """Cannot create Address without any party FK."""
+        from django.db import IntegrityError
+        from django_parties.models import Address
+
+        with pytest.raises(IntegrityError):
+            Address.objects.create(
+                address_type='home',
+                line1='123 Main St',
+                city='Anytown',
+            )
+
+    def test_cannot_create_address_with_multiple_parties(self):
+        """Cannot create Address with multiple party FKs."""
+        from django.db import IntegrityError
+        from django_parties.models import Person, Organization, Address
+
+        person = Person.objects.create(first_name='John')
+        org = Organization.objects.create(name='Acme')
+
+        with pytest.raises(IntegrityError):
+            Address.objects.create(
+                person=person,
+                organization=org,
+                address_type='home',
+                line1='123 Main St',
+                city='Anytown',
+            )
+
+    def test_can_create_address_for_person_only(self):
+        """Can create Address with exactly one party (person)."""
+        from django_parties.models import Person, Address
+
+        person = Person.objects.create(first_name='John')
+        address = Address.objects.create(
+            person=person,
+            line1='123 Main St',
+            city='Anytown',
+        )
+        assert address.pk is not None
+        assert address.party == person
+
+
+@pytest.mark.django_db
+class TestPhoneExactlyOnePartyConstraint:
+    """Tests for Phone exactly-one-party FK constraint."""
+
+    def test_cannot_create_phone_with_no_party(self):
+        """Cannot create Phone without any party FK."""
+        from django.db import IntegrityError
+        from django_parties.models import Phone
+
+        with pytest.raises(IntegrityError):
+            Phone.objects.create(
+                phone_type='mobile',
+                number='555-1234',
+            )
+
+    def test_cannot_create_phone_with_multiple_parties(self):
+        """Cannot create Phone with multiple party FKs."""
+        from django.db import IntegrityError
+        from django_parties.models import Person, Organization, Phone
+
+        person = Person.objects.create(first_name='John')
+        org = Organization.objects.create(name='Acme')
+
+        with pytest.raises(IntegrityError):
+            Phone.objects.create(
+                person=person,
+                organization=org,
+                phone_type='mobile',
+                number='555-1234',
+            )
+
+
+@pytest.mark.django_db
+class TestEmailExactlyOnePartyConstraint:
+    """Tests for Email exactly-one-party FK constraint."""
+
+    def test_cannot_create_email_with_no_party(self):
+        """Cannot create Email without any party FK."""
+        from django.db import IntegrityError
+        from django_parties.models import Email
+
+        with pytest.raises(IntegrityError):
+            Email.objects.create(
+                email_type='personal',
+                email='test@example.com',
+            )
+
+    def test_cannot_create_email_with_multiple_parties(self):
+        """Cannot create Email with multiple party FKs."""
+        from django.db import IntegrityError
+        from django_parties.models import Person, Organization, Email
+
+        person = Person.objects.create(first_name='John')
+        org = Organization.objects.create(name='Acme')
+
+        with pytest.raises(IntegrityError):
+            Email.objects.create(
+                person=person,
+                organization=org,
+                email_type='personal',
+                email='test@example.com',
+            )
+
+
+@pytest.mark.django_db
+class TestPartyURLExactlyOnePartyConstraint:
+    """Tests for PartyURL exactly-one-party FK constraint."""
+
+    def test_cannot_create_url_with_no_party(self):
+        """Cannot create PartyURL without any party FK."""
+        from django.db import IntegrityError
+        from django_parties.models import PartyURL
+
+        with pytest.raises(IntegrityError):
+            PartyURL.objects.create(
+                url_type='website',
+                url='https://example.com',
+            )
+
+    def test_cannot_create_url_with_multiple_parties(self):
+        """Cannot create PartyURL with multiple party FKs."""
+        from django.db import IntegrityError
+        from django_parties.models import Person, Organization, PartyURL
+
+        person = Person.objects.create(first_name='John')
+        org = Organization.objects.create(name='Acme')
+
+        with pytest.raises(IntegrityError):
+            PartyURL.objects.create(
+                person=person,
+                organization=org,
+                url_type='website',
+                url='https://example.com',
+            )
+
+
+@pytest.mark.django_db
 class TestAddressModel:
     """Tests for Address model."""
 

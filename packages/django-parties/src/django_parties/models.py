@@ -494,6 +494,17 @@ class Address(BaseModel):
         verbose_name = _('address')
         verbose_name_plural = _('addresses')
         ordering = ['-is_primary', '-created_at']
+        constraints = [
+            # Exactly one party FK must be set
+            models.CheckConstraint(
+                condition=(
+                    (models.Q(person__isnull=False) & models.Q(organization__isnull=True) & models.Q(group__isnull=True)) |
+                    (models.Q(person__isnull=True) & models.Q(organization__isnull=False) & models.Q(group__isnull=True)) |
+                    (models.Q(person__isnull=True) & models.Q(organization__isnull=True) & models.Q(group__isnull=False))
+                ),
+                name="address_exactly_one_party",
+            ),
+        ]
 
     def __str__(self):
         return f'{self.line1}, {self.city}'
@@ -588,6 +599,17 @@ class Phone(BaseModel):
         verbose_name = _('phone number')
         verbose_name_plural = _('phone numbers')
         ordering = ['-is_primary', '-created_at']
+        constraints = [
+            # Exactly one party FK must be set
+            models.CheckConstraint(
+                condition=(
+                    (models.Q(person__isnull=False) & models.Q(organization__isnull=True) & models.Q(group__isnull=True)) |
+                    (models.Q(person__isnull=True) & models.Q(organization__isnull=False) & models.Q(group__isnull=True)) |
+                    (models.Q(person__isnull=True) & models.Q(organization__isnull=True) & models.Q(group__isnull=False))
+                ),
+                name="phone_exactly_one_party",
+            ),
+        ]
 
     def __str__(self):
         if self.country_code:
@@ -671,6 +693,17 @@ class Email(BaseModel):
         verbose_name = _('email address')
         verbose_name_plural = _('email addresses')
         ordering = ['-is_primary', '-created_at']
+        constraints = [
+            # Exactly one party FK must be set
+            models.CheckConstraint(
+                condition=(
+                    (models.Q(person__isnull=False) & models.Q(organization__isnull=True) & models.Q(group__isnull=True)) |
+                    (models.Q(person__isnull=True) & models.Q(organization__isnull=False) & models.Q(group__isnull=True)) |
+                    (models.Q(person__isnull=True) & models.Q(organization__isnull=True) & models.Q(group__isnull=False))
+                ),
+                name="email_exactly_one_party",
+            ),
+        ]
 
     def __str__(self):
         return self.email
@@ -864,6 +897,17 @@ class PartyURL(BaseModel):
         verbose_name = _('URL')
         verbose_name_plural = _('URLs')
         ordering = ['-is_primary', 'url_type', '-created_at']
+        constraints = [
+            # Exactly one party FK must be set
+            models.CheckConstraint(
+                condition=(
+                    (models.Q(person__isnull=False) & models.Q(organization__isnull=True) & models.Q(group__isnull=True)) |
+                    (models.Q(person__isnull=True) & models.Q(organization__isnull=False) & models.Q(group__isnull=True)) |
+                    (models.Q(person__isnull=True) & models.Q(organization__isnull=True) & models.Q(group__isnull=False))
+                ),
+                name="partyurl_exactly_one_party",
+            ),
+        ]
 
     def __str__(self):
         return f'{self.get_url_type_display()}: {self.url}'

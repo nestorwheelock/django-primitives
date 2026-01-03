@@ -4,7 +4,7 @@ import pytest
 from django.contrib.contenttypes.models import ContentType
 
 from django_encounters.models import Encounter, EncounterDefinition, EncounterTransition
-from tests.testapp.models import Subject
+from tests.testapp.models import Subject, UUIDSubject
 
 
 @pytest.fixture
@@ -24,6 +24,12 @@ def definition(db):
 def subject(db):
     """Create a test subject."""
     return Subject.objects.create(name="Test Subject")
+
+
+@pytest.fixture
+def uuid_subject(db):
+    """Create a test subject with UUID primary key."""
+    return UUIDSubject.objects.create(name="UUID Test Subject")
 
 
 @pytest.fixture
@@ -97,6 +103,63 @@ class TestEncounterCreation:
         assert encounter.created_at is not None
         assert encounter.updated_at is not None
         assert encounter.started_at is not None
+
+
+@pytest.mark.django_db
+class TestUUIDSubjectSupport:
+    """Tests for UUID subject support.
+
+    GenericFK should work with UUID primary keys, consistent with
+    all other django-primitives packages that use CharField for object_id.
+    """
+
+    def test_create_encounter_with_uuid_subject(self, definition, uuid_subject, user):
+        """Encounter can be created with a UUID-based subject.
+
+        This tests that subject_id is CharField (supports UUIDs), not
+        PositiveIntegerField (integers only).
+        """
+        encounter = Encounter.objects.create(
+            definition=definition,
+            subject_type=ContentType.objects.get_for_model(uuid_subject),
+            subject_id=str(uuid_subject.pk),
+            state=definition.initial_state,
+            created_by=user,
+        )
+
+        assert encounter.pk is not None
+        assert str(encounter.subject_id) == str(uuid_subject.pk)
+        assert encounter.subject == uuid_subject
+        assert encounter.state == "pending"
+
+    def test_filter_by_uuid_subject(self, definition, uuid_subject):
+        """Can filter encounters by UUID subject."""
+        Encounter.objects.create(
+            definition=definition,
+            subject_type=ContentType.objects.get_for_model(uuid_subject),
+            subject_id=str(uuid_subject.pk),
+            state="pending",
+        )
+
+        subject_ct = ContentType.objects.get_for_model(uuid_subject)
+        count = Encounter.objects.filter(
+            subject_type=subject_ct,
+            subject_id=str(uuid_subject.pk)
+        ).count()
+
+        assert count == 1
+
+    def test_uuid_subject_genericfk_resolution(self, definition, uuid_subject):
+        """GenericFK correctly resolves UUID subject."""
+        encounter = Encounter.objects.create(
+            definition=definition,
+            subject_type=ContentType.objects.get_for_model(uuid_subject),
+            subject_id=str(uuid_subject.pk),
+            state="pending",
+        )
+
+        # GenericFK should resolve to the actual object
+        assert encounter.subject.name == "UUID Test Subject"
 
 
 @pytest.mark.django_db

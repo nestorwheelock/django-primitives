@@ -629,6 +629,71 @@ class TestAgreementVersionModel:
 
 
 @pytest.mark.django_db
+class TestAgreementVersionImmutability:
+    """Test suite for AgreementVersion immutability."""
+
+    @pytest.fixture
+    def org(self):
+        return Organization.objects.create(name="Vendor Corp")
+
+    @pytest.fixture
+    def customer(self, org):
+        return Customer.objects.create(name="Customer Inc", org=org)
+
+    @pytest.fixture
+    def user(self):
+        return User.objects.create_user(username="testuser", password="testpass")
+
+    @pytest.fixture
+    def agreement(self, org, customer, user):
+        now = timezone.now()
+        return Agreement.objects.create(
+            party_a=org,
+            party_b=customer,
+            scope_type='service_contract',
+            terms={"value": 10000},
+            valid_from=now,
+            agreed_at=now,
+            agreed_by=user,
+        )
+
+    def test_version_is_immutable_after_creation(self, agreement, user):
+        """AgreementVersion cannot be modified after creation."""
+        from django_agreements.exceptions import ImmutableVersionError
+
+        version = AgreementVersion.objects.create(
+            agreement=agreement,
+            version=1,
+            terms={"value": 10000},
+            created_by=user,
+            reason="Initial",
+        )
+
+        # Attempt to modify should raise
+        version.terms = {"value": 20000}
+        with pytest.raises(ImmutableVersionError):
+            version.save()
+
+    def test_version_error_includes_id(self, agreement, user):
+        """ImmutableVersionError includes version ID."""
+        from django_agreements.exceptions import ImmutableVersionError
+
+        version = AgreementVersion.objects.create(
+            agreement=agreement,
+            version=1,
+            terms={"value": 10000},
+            created_by=user,
+            reason="Initial",
+        )
+
+        with pytest.raises(ImmutableVersionError) as exc_info:
+            version.reason = "Modified reason"
+            version.save()
+
+        assert str(version.pk) in str(exc_info.value)
+
+
+@pytest.mark.django_db
 class TestCreateAgreementService:
     """Test suite for create_agreement service."""
 

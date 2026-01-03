@@ -271,3 +271,191 @@ class TestServiceArea:
                 radius_km=Decimal('5.0'),
             )
             assert area.area_type == area_type
+
+
+@pytest.mark.django_db
+class TestPlaceCoordinateConstraints:
+    """Tests for Place coordinate validation constraints."""
+
+    def test_cannot_create_place_with_invalid_latitude_too_low(self):
+        """Place latitude must be >= -90."""
+        from django_geo.models import Place
+        from django.db import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            Place.objects.create(
+                name='Invalid Place',
+                place_type='poi',
+                city='Test City',
+                state='TS',
+                postal_code='12345',
+                latitude=Decimal('-91.0'),  # Invalid: below -90
+                longitude=Decimal('-99.0'),
+            )
+
+    def test_cannot_create_place_with_invalid_latitude_too_high(self):
+        """Place latitude must be <= 90."""
+        from django_geo.models import Place
+        from django.db import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            Place.objects.create(
+                name='Invalid Place',
+                place_type='poi',
+                city='Test City',
+                state='TS',
+                postal_code='12345',
+                latitude=Decimal('91.0'),  # Invalid: above 90
+                longitude=Decimal('-99.0'),
+            )
+
+    def test_cannot_create_place_with_invalid_longitude_too_low(self):
+        """Place longitude must be >= -180."""
+        from django_geo.models import Place
+        from django.db import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            Place.objects.create(
+                name='Invalid Place',
+                place_type='poi',
+                city='Test City',
+                state='TS',
+                postal_code='12345',
+                latitude=Decimal('19.0'),
+                longitude=Decimal('-181.0'),  # Invalid: below -180
+            )
+
+    def test_cannot_create_place_with_invalid_longitude_too_high(self):
+        """Place longitude must be <= 180."""
+        from django_geo.models import Place
+        from django.db import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            Place.objects.create(
+                name='Invalid Place',
+                place_type='poi',
+                city='Test City',
+                state='TS',
+                postal_code='12345',
+                latitude=Decimal('19.0'),
+                longitude=Decimal('181.0'),  # Invalid: above 180
+            )
+
+    def test_can_create_place_at_coordinate_boundaries(self):
+        """Place can be created at valid coordinate boundaries."""
+        from django_geo.models import Place
+
+        # North Pole
+        north_pole = Place.objects.create(
+            name='North Pole',
+            place_type='poi',
+            city='Arctic',
+            state='NA',
+            postal_code='00000',
+            latitude=Decimal('90.0'),
+            longitude=Decimal('0.0'),
+        )
+        assert north_pole.latitude == Decimal('90.0')
+
+        # South Pole
+        south_pole = Place.objects.create(
+            name='South Pole',
+            place_type='poi',
+            city='Antarctica',
+            state='NA',
+            postal_code='00000',
+            latitude=Decimal('-90.0'),
+            longitude=Decimal('0.0'),
+        )
+        assert south_pole.latitude == Decimal('-90.0')
+
+        # Date line
+        date_line = Place.objects.create(
+            name='Date Line',
+            place_type='poi',
+            city='Pacific',
+            state='NA',
+            postal_code='00000',
+            latitude=Decimal('0.0'),
+            longitude=Decimal('180.0'),
+        )
+        assert date_line.longitude == Decimal('180.0')
+
+
+@pytest.mark.django_db
+class TestServiceAreaConstraints:
+    """Tests for ServiceArea coordinate and radius constraints."""
+
+    def test_cannot_create_service_area_with_invalid_latitude(self):
+        """ServiceArea center latitude must be valid."""
+        from django_geo.models import ServiceArea
+        from django.db import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            ServiceArea.objects.create(
+                name='Invalid Zone',
+                code='invalid-lat',
+                area_type='delivery',
+                center_latitude=Decimal('91.0'),  # Invalid
+                center_longitude=Decimal('-99.0'),
+                radius_km=Decimal('5.0'),
+            )
+
+    def test_cannot_create_service_area_with_invalid_longitude(self):
+        """ServiceArea center longitude must be valid."""
+        from django_geo.models import ServiceArea
+        from django.db import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            ServiceArea.objects.create(
+                name='Invalid Zone',
+                code='invalid-lon',
+                area_type='delivery',
+                center_latitude=Decimal('19.0'),
+                center_longitude=Decimal('-181.0'),  # Invalid
+                radius_km=Decimal('5.0'),
+            )
+
+    def test_cannot_create_service_area_with_zero_radius(self):
+        """ServiceArea radius must be positive."""
+        from django_geo.models import ServiceArea
+        from django.db import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            ServiceArea.objects.create(
+                name='Zero Radius Zone',
+                code='zero-radius',
+                area_type='delivery',
+                center_latitude=Decimal('19.0'),
+                center_longitude=Decimal('-99.0'),
+                radius_km=Decimal('0.0'),  # Invalid: must be > 0
+            )
+
+    def test_cannot_create_service_area_with_negative_radius(self):
+        """ServiceArea radius cannot be negative."""
+        from django_geo.models import ServiceArea
+        from django.db import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            ServiceArea.objects.create(
+                name='Negative Radius Zone',
+                code='negative-radius',
+                area_type='delivery',
+                center_latitude=Decimal('19.0'),
+                center_longitude=Decimal('-99.0'),
+                radius_km=Decimal('-5.0'),  # Invalid: negative
+            )
+
+    def test_can_create_service_area_with_small_positive_radius(self):
+        """ServiceArea can have a very small positive radius."""
+        from django_geo.models import ServiceArea
+
+        area = ServiceArea.objects.create(
+            name='Tiny Zone',
+            code='tiny',
+            area_type='delivery',
+            center_latitude=Decimal('19.0'),
+            center_longitude=Decimal('-99.0'),
+            radius_km=Decimal('0.01'),  # 10 meters
+        )
+        assert area.radius_km == Decimal('0.01')

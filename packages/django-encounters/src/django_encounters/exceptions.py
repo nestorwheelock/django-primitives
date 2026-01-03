@@ -40,3 +40,14 @@ class ValidatorLoadError(EncounterError):
         self.path = path
         self.reason = reason
         super().__init__(f"Cannot load validator '{path}': {reason}")
+
+
+class ImmutableTransitionError(EncounterError):
+    """Raised when attempting to modify an immutable transition record."""
+
+    def __init__(self, transition_id):
+        self.transition_id = transition_id
+        super().__init__(
+            f"Cannot modify transition {transition_id} - transition records are immutable. "
+            "Create a new transition instead."
+        )

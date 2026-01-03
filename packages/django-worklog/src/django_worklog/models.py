@@ -75,6 +75,22 @@ class WorkSession(WorklogBaseModel):
             models.Index(fields=["context_content_type", "context_object_id"]),
             models.Index(fields=["effective_at"]),
         ]
+        constraints = [
+            # One active session per user (stopped_at IS NULL means active)
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(stopped_at__isnull=True) & models.Q(deleted_at__isnull=True),
+                name="unique_active_session_per_user",
+            ),
+            # Duration consistency: both NULL (active) or both NOT NULL (stopped)
+            models.CheckConstraint(
+                condition=(
+                    models.Q(stopped_at__isnull=True, duration_seconds__isnull=True) |
+                    models.Q(stopped_at__isnull=False, duration_seconds__isnull=False)
+                ),
+                name="worksession_duration_consistency",
+            ),
+        ]
 
     def __str__(self):
         status = "active" if self.stopped_at is None else "stopped"

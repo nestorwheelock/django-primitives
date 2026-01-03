@@ -18,6 +18,8 @@ from django.utils import timezone
 
 from django_basemodels import BaseModel, SoftDeleteManager
 
+from .exceptions import ImmutableVersionError
+
 
 class AgreementQuerySet(models.QuerySet):
     """Custom queryset for Agreement model."""
@@ -251,6 +253,12 @@ class AgreementVersion(BaseModel):
             ),
         ]
         ordering = ['-version']
+
+    def save(self, *args, **kwargs):
+        """Enforce immutability - versions are ledger records."""
+        if not self._state.adding:
+            raise ImmutableVersionError(self.pk)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Agreement {self.agreement_id} - v{self.version}"

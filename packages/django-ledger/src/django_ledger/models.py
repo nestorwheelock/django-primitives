@@ -237,6 +237,13 @@ class Entry(models.Model):
     class Meta:
         app_label = 'django_ledger'
         ordering = ['-effective_at', '-recorded_at']
+        constraints = [
+            # Amount must be positive - use entry_type for direction
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="entry_amount_positive",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         """Enforce immutability after transaction is posted."""

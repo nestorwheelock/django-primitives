@@ -138,6 +138,13 @@ class Role(BaseModel):
         verbose_name = _('role')
         verbose_name_plural = _('roles')
         ordering = ['-hierarchy_level', 'name']
+        constraints = [
+            # Hierarchy level must be in range 10-100
+            models.CheckConstraint(
+                condition=Q(hierarchy_level__gte=10) & Q(hierarchy_level__lte=100),
+                name="role_hierarchy_level_range",
+            ),
+        ]
 
     def __str__(self):
         return self.name

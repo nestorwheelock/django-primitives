@@ -37,6 +37,156 @@ class TestCatalogItem:
 
 
 @pytest.mark.django_db
+class TestBasketUniqueActiveConstraint:
+    """Tests for one active basket per encounter constraint.
+
+    The Basket model docstring says: "One active basket per encounter at a time"
+    This is enforced by a partial UniqueConstraint.
+    """
+
+    def test_cannot_create_two_draft_baskets_for_same_encounter(self, django_user_model):
+        """Cannot create two draft baskets for the same encounter."""
+        from django.db import IntegrityError
+        from tests.testapp.models import Encounter
+
+        user = django_user_model.objects.create_user(
+            username='constraintuser',
+            password='testpass'
+        )
+        encounter = Encounter.objects.create(patient_name='Constraint Test')
+
+        # First draft basket - OK
+        Basket.objects.create(
+            encounter=encounter,
+            created_by=user,
+            status='draft',
+        )
+
+        # Second draft basket - should fail
+        with pytest.raises(IntegrityError):
+            Basket.objects.create(
+                encounter=encounter,
+                created_by=user,
+                status='draft',
+            )
+
+    def test_can_create_draft_after_committing_previous(self, django_user_model):
+        """Can create new draft basket after committing the previous one."""
+        from tests.testapp.models import Encounter
+        from django.utils import timezone
+
+        user = django_user_model.objects.create_user(
+            username='commituser',
+            password='testpass'
+        )
+        encounter = Encounter.objects.create(patient_name='Commit Test')
+
+        # First basket - commit it
+        basket1 = Basket.objects.create(
+            encounter=encounter,
+            created_by=user,
+            status='draft',
+        )
+        basket1.status = 'committed'
+        basket1.committed_by = user
+        basket1.committed_at = timezone.now()
+        basket1.save()
+
+        # Second basket - should work since first is committed
+        basket2 = Basket.objects.create(
+            encounter=encounter,
+            created_by=user,
+            status='draft',
+        )
+
+        assert basket2.pk is not None
+        assert basket2.status == 'draft'
+
+    def test_can_create_draft_after_cancelling_previous(self, django_user_model):
+        """Can create new draft basket after cancelling the previous one."""
+        from tests.testapp.models import Encounter
+
+        user = django_user_model.objects.create_user(
+            username='canceluser',
+            password='testpass'
+        )
+        encounter = Encounter.objects.create(patient_name='Cancel Test')
+
+        # First basket - cancel it
+        basket1 = Basket.objects.create(
+            encounter=encounter,
+            created_by=user,
+            status='draft',
+        )
+        basket1.status = 'cancelled'
+        basket1.save()
+
+        # Second basket - should work since first is cancelled
+        basket2 = Basket.objects.create(
+            encounter=encounter,
+            created_by=user,
+            status='draft',
+        )
+
+        assert basket2.pk is not None
+        assert basket2.status == 'draft'
+
+    def test_can_create_draft_after_soft_deleting_previous(self, django_user_model):
+        """Can create new draft basket after soft-deleting the previous one."""
+        from tests.testapp.models import Encounter
+
+        user = django_user_model.objects.create_user(
+            username='softdeluser',
+            password='testpass'
+        )
+        encounter = Encounter.objects.create(patient_name='Soft Delete Test')
+
+        # First basket - soft delete it
+        basket1 = Basket.objects.create(
+            encounter=encounter,
+            created_by=user,
+            status='draft',
+        )
+        basket1.delete()  # BaseModel soft delete
+
+        # Second basket - should work since first is soft-deleted
+        basket2 = Basket.objects.create(
+            encounter=encounter,
+            created_by=user,
+            status='draft',
+        )
+
+        assert basket2.pk is not None
+        assert basket2.status == 'draft'
+
+    def test_different_encounters_can_have_draft_baskets(self, django_user_model):
+        """Different encounters can each have a draft basket."""
+        from tests.testapp.models import Encounter
+
+        user = django_user_model.objects.create_user(
+            username='multiencuser',
+            password='testpass'
+        )
+        encounter1 = Encounter.objects.create(patient_name='Patient 1')
+        encounter2 = Encounter.objects.create(patient_name='Patient 2')
+
+        # Both should work - different encounters
+        basket1 = Basket.objects.create(
+            encounter=encounter1,
+            created_by=user,
+            status='draft',
+        )
+        basket2 = Basket.objects.create(
+            encounter=encounter2,
+            created_by=user,
+            status='draft',
+        )
+
+        assert basket1.pk is not None
+        assert basket2.pk is not None
+
+
+@pytest.mark.django_db
 class TestBasket:
     """Tests for Basket model."""
 
@@ -174,16 +324,18 @@ class TestBasketTimeSemantics:
 
         now = timezone.now()
         past = now - datetime.timedelta(days=7)
-        mid = now - datetime.timedelta(days=3)
 
-        # Old basket
+        # Old basket - commit it so we can create another
         old_basket = Basket.objects.create(
             encounter=encounter,
             created_by=user,
+            status='committed',  # Committed, not draft
             effective_at=past,
+            committed_at=past,
+            committed_by=user,
         )
 
-        # New basket
+        # New basket - can be draft since old one is committed
         new_basket = Basket.objects.create(
             encounter=encounter,
             created_by=user,

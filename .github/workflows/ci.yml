@@ -7,7 +7,22 @@ on:
     branches: [main]
 
 jobs:
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Quality Gate
+        run: python scripts/ci_quality_gate.py
+
   test:
+    needs: quality-gate
     runs-on: ubuntu-latest
     strategy:
       matrix:

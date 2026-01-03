@@ -241,7 +241,12 @@ class ObjectTag(BaseModel):
             models.Index(fields=['target_content_type', 'target_id']),
             models.Index(fields=['tag']),
         ]
-        unique_together = ['target_content_type', 'target_id', 'tag']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['target_content_type', 'target_id', 'tag'],
+                name='objecttag_unique_per_target',
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         """Ensure target_id is always stored as string."""

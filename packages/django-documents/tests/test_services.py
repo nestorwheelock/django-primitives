@@ -222,6 +222,8 @@ class TestVerifyDocumentIntegrity:
 
     def test_verify_integrity_raises_for_invalid(self, invoice, user):
         """verify_document_integrity should raise ChecksumMismatchError for tampered document."""
+        from django_documents.models import Document
+
         content = b"Test content."
         file = SimpleUploadedFile("test.pdf", content, "application/pdf")
 
@@ -232,9 +234,10 @@ class TestVerifyDocumentIntegrity:
             uploaded_by=user,
         )
 
-        # Tamper with the checksum
-        doc.checksum = "invalid_checksum"
-        doc.save()
+        # Simulate tampering by changing checksum directly in database
+        # (bypasses model save() to simulate database-level corruption)
+        Document.objects.filter(pk=doc.pk).update(checksum="invalid_checksum")
+        doc.refresh_from_db()
 
         with pytest.raises(ChecksumMismatchError):
             verify_document_integrity(doc)

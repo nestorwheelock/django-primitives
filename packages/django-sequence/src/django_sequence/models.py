@@ -66,7 +66,12 @@ class Sequence(BaseModel):
 
     class Meta:
         app_label = 'django_sequence'
-        unique_together = ['scope', 'org_content_type', 'org_id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['scope', 'org_content_type', 'org_id'],
+                name='sequence_unique_per_scope_org',
+            ),
+        ]
         indexes = [
             models.Index(fields=['scope', 'org_content_type', 'org_id']),
         ]

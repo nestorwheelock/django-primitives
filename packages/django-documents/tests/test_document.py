@@ -327,3 +327,87 @@ class TestDocumentChecksum:
         )
 
         assert doc.verify_checksum() is False
+
+    def test_checksum_is_immutable_after_set(self, invoice):
+        """Once checksum is set, it cannot be changed."""
+        from django_documents.exceptions import ImmutableChecksumError
+
+        content = b"This is test content."
+        file = SimpleUploadedFile("test.pdf", content, "application/pdf")
+        doc = Document.objects.create(
+            target=invoice,
+            file=file,
+            filename="test.pdf",
+            content_type="application/pdf",
+            document_type="invoice_pdf",
+            checksum="original_checksum_value",
+        )
+
+        # Attempt to modify checksum should raise
+        doc.checksum = "new_checksum_value"
+        with pytest.raises(ImmutableChecksumError) as exc_info:
+            doc.save()
+
+        assert str(doc.pk) in str(exc_info.value)
+
+    def test_checksum_error_includes_document_id(self, invoice):
+        """ImmutableChecksumError should include document ID."""
+        from django_documents.exceptions import ImmutableChecksumError
+
+        content = b"This is test content."
+        file = SimpleUploadedFile("test.pdf", content, "application/pdf")
+        doc = Document.objects.create(
+            target=invoice,
+            file=file,
+            filename="test.pdf",
+            content_type="application/pdf",
+            document_type="invoice_pdf",
+            checksum="original_checksum",
+        )
+
+        with pytest.raises(ImmutableChecksumError) as exc_info:
+            doc.checksum = "modified_checksum"
+            doc.save()
+
+        assert exc_info.value.document_id == doc.pk
+
+    def test_can_update_document_without_changing_checksum(self, invoice):
+        """Other fields can be updated as long as checksum stays the same."""
+        content = b"This is test content."
+        file = SimpleUploadedFile("test.pdf", content, "application/pdf")
+        doc = Document.objects.create(
+            target=invoice,
+            file=file,
+            filename="test.pdf",
+            content_type="application/pdf",
+            document_type="invoice_pdf",
+            checksum="valid_checksum",
+        )
+
+        # Update description (should work)
+        doc.description = "Updated description"
+        doc.save()  # Should not raise
+
+        doc.refresh_from_db()
+        assert doc.description == "Updated description"
+        assert doc.checksum == "valid_checksum"
+
+    def test_can_set_checksum_on_document_without_checksum(self, invoice):
+        """Can set checksum if it was originally empty."""
+        content = b"This is test content."
+        file = SimpleUploadedFile("test.pdf", content, "application/pdf")
+        doc = Document.objects.create(
+            target=invoice,
+            file=file,
+            filename="test.pdf",
+            content_type="application/pdf",
+            document_type="invoice_pdf",
+            # No checksum set
+        )
+
+        # Setting checksum for first time should work
+        doc.checksum = "new_checksum_value"
+        doc.save()  # Should not raise
+
+        doc.refresh_from_db()
+        assert doc.checksum == "new_checksum_value"

@@ -116,6 +116,74 @@ class TestRoleModel:
 
 
 @pytest.mark.django_db
+class TestRoleHierarchyLevelConstraint:
+    """Tests for hierarchy_level range constraint (10-100).
+
+    The Role model docstring says: "Higher number = more authority (10-100)"
+    This is enforced by a CheckConstraint.
+    """
+
+    def test_cannot_create_role_with_level_below_10(self):
+        """Cannot create role with hierarchy_level below 10."""
+        from django.db import IntegrityError
+
+        group = Group.objects.create(name='Too Low')
+        with pytest.raises(IntegrityError):
+            Role.objects.create(
+                name='Too Low',
+                slug='too-low',
+                hierarchy_level=5,
+                group=group,
+            )
+
+    def test_cannot_create_role_with_level_above_100(self):
+        """Cannot create role with hierarchy_level above 100."""
+        from django.db import IntegrityError
+
+        group = Group.objects.create(name='Too High')
+        with pytest.raises(IntegrityError):
+            Role.objects.create(
+                name='Too High',
+                slug='too-high',
+                hierarchy_level=101,
+                group=group,
+            )
+
+    def test_can_create_role_at_minimum_level(self):
+        """Can create role at minimum hierarchy_level (10)."""
+        group = Group.objects.create(name='Min Level')
+        role = Role.objects.create(
+            name='Min Level',
+            slug='min-level',
+            hierarchy_level=10,
+            group=group,
+        )
+        assert role.hierarchy_level == 10
+
+    def test_can_create_role_at_maximum_level(self):
+        """Can create role at maximum hierarchy_level (100)."""
+        group = Group.objects.create(name='Max Level')
+        role = Role.objects.create(
+            name='Max Level',
+            slug='max-level',
+            hierarchy_level=100,
+            group=group,
+        )
+        assert role.hierarchy_level == 100
+
+    def test_can_create_role_at_mid_level(self):
+        """Can create role at valid mid-range hierarchy_level."""
+        group = Group.objects.create(name='Mid Level')
+        role = Role.objects.create(
+            name='Mid Level',
+            slug='mid-level',
+            hierarchy_level=50,
+            group=group,
+        )
+        assert role.hierarchy_level == 50
+
+
+@pytest.mark.django_db
 class TestUserRoleModel:
     """Tests for UserRole model."""
 

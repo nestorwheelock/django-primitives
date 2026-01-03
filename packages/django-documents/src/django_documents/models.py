@@ -9,6 +9,8 @@ from django.utils import timezone
 
 from django_basemodels import BaseModel
 
+from .exceptions import ImmutableChecksumError
+
 
 class DocumentQuerySet(models.QuerySet):
     """Custom queryset for Document model."""
@@ -151,7 +153,15 @@ class Document(BaseModel):
         ordering = ['-created_at']
 
     def save(self, *args, **kwargs):
-        """Ensure target_id is always stored as string."""
+        """Ensure target_id is string and enforce checksum immutability."""
+        # Enforce checksum immutability - once set, cannot be changed
+        if not self._state.adding:
+            # Get original checksum from database
+            original = Document.objects.filter(pk=self.pk).values_list('checksum', flat=True).first()
+            if original and original != self.checksum:
+                raise ImmutableChecksumError(self.pk)
+
+        # String coercion for GenericFK ID
         if self.target_id is not None:
             self.target_id = str(self.target_id)
         super().save(*args, **kwargs)
