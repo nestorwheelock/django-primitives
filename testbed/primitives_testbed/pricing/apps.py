@@ -1,0 +1,7 @@
+from django.apps import AppConfig
+
+
+class PricingConfig(AppConfig):
+    name = "primitives_testbed.pricing"
+    verbose_name = "Pricing"
+    default_auto_field = "django.db.models.BigAutoField"

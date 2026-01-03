@@ -58,6 +58,9 @@ INSTALLED_APPS = [
     "django_money",
     # Testbed app
     "primitives_testbed",
+    # Testbed modules (built on primitives)
+    "primitives_testbed.pricing",
+    "primitives_testbed.invoicing",
 ]
 
 MIDDLEWARE = [
