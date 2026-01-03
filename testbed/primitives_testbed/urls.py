@@ -12,4 +12,6 @@ urlpatterns = [
     path("clinic/", include("primitives_testbed.clinic.urls")),
     path("pricing/", include("primitives_testbed.pricing.urls")),
     path("invoicing/", include("primitives_testbed.invoicing.urls")),
+    # Staff portal
+    path("staff/diveops/", include("primitives_testbed.diveops.staff_urls")),
 ]

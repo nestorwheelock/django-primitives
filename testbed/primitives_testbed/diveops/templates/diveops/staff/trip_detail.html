@@ -1,0 +1,339 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block title %}{{ trip.dive_site.name }} - Trip Details{% endblock %}
+
+{% block extra_breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="w-5 h-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:trip-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            Trips
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="w-5 h-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-700">{{ trip.dive_site.name }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block header_actions %}
+{% if trip.status == 'scheduled' %}
+<a href="{% url 'diveops:book-diver' trip_pk=trip.pk %}"
+   class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+    {% icon 'plus' 'w-4 h-4 mr-2' %}
+    Book Diver
+</a>
+{% endif %}
+{% endblock %}
+
+{% block staff_content %}
+{# Trip Header #}
+<div class="mb-6">
+    <div class="flex justify-between items-start">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ trip.dive_site.name }}</h1>
+            <p class="text-gray-500 mt-1">{{ trip.dive_shop.name }}</p>
+        </div>
+        <div>
+            {% if trip.status == 'scheduled' %}
+                <span class="px-3 py-1 inline-flex text-sm font-semibold rounded-full bg-green-100 text-green-800">
+                    Scheduled
+                </span>
+            {% elif trip.status == 'boarding' %}
+                <span class="px-3 py-1 inline-flex text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                    Boarding
+                </span>
+            {% elif trip.status == 'in_progress' %}
+                <span class="px-3 py-1 inline-flex text-sm font-semibold rounded-full bg-blue-100 text-blue-800">
+                    In Progress
+                </span>
+            {% elif trip.status == 'completed' %}
+                <span class="px-3 py-1 inline-flex text-sm font-semibold rounded-full bg-gray-100 text-gray-800">
+                    Completed
+                </span>
+            {% elif trip.status == 'cancelled' %}
+                <span class="px-3 py-1 inline-flex text-sm font-semibold rounded-full bg-red-100 text-red-800">
+                    Cancelled
+                </span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# Trip Info Cards #}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+    {# Schedule Card #}
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <div class="flex items-center mb-4">
+            {% icon 'calendar' 'w-5 h-5 text-gray-400' %}
+            <h3 class="ml-2 text-lg font-medium text-gray-900">Schedule</h3>
+        </div>
+        <dl class="space-y-2">
+            <div>
+                <dt class="text-sm text-gray-500">Date</dt>
+                <dd class="text-sm font-medium text-gray-900">{{ trip.departure_time|date:"l, F j, Y" }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm text-gray-500">Departure</dt>
+                <dd class="text-sm font-medium text-gray-900">{{ trip.departure_time|time:"g:i A" }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm text-gray-500">Return</dt>
+                <dd class="text-sm font-medium text-gray-900">{{ trip.return_time|time:"g:i A" }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    {# Dive Site Card #}
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <div class="flex items-center mb-4">
+            {% icon 'anchor' 'w-5 h-5 text-gray-400' %}
+            <h3 class="ml-2 text-lg font-medium text-gray-900">Dive Site</h3>
+        </div>
+        <dl class="space-y-2">
+            <div>
+                <dt class="text-sm text-gray-500">Max Depth</dt>
+                <dd class="text-sm font-medium text-gray-900">{{ trip.dive_site.max_depth_meters }}m</dd>
+            </div>
+            <div>
+                <dt class="text-sm text-gray-500">Min Certification</dt>
+                <dd class="text-sm font-medium text-gray-900">{{ trip.dive_site.get_min_certification_level_display }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm text-gray-500">Difficulty</dt>
+                <dd class="text-sm font-medium text-gray-900">{{ trip.dive_site.get_difficulty_display }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    {# Capacity Card #}
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <div class="flex items-center mb-4">
+            {% icon 'users' 'w-5 h-5 text-gray-400' %}
+            <h3 class="ml-2 text-lg font-medium text-gray-900">Capacity</h3>
+        </div>
+        <dl class="space-y-2">
+            <div>
+                <dt class="text-sm text-gray-500">Max Divers</dt>
+                <dd class="text-sm font-medium text-gray-900">{{ trip.max_divers }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm text-gray-500">Confirmed</dt>
+                <dd class="text-sm font-medium text-gray-900">{{ bookings.count }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm text-gray-500">Spots Available</dt>
+                <dd class="text-sm font-medium {% if trip.spots_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                    {{ trip.spots_available }}
+                </dd>
+            </div>
+        </dl>
+    </div>
+</div>
+
+{# Bookings Section #}
+<div class="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-medium text-gray-900">Bookings</h3>
+    </div>
+
+    {% if bookings %}
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Diver
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Certification
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Booked
+                </th>
+                <th scope="col" class="relative px-6 py-3">
+                    <span class="sr-only">Actions</span>
+                </th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            {% for booking in bookings %}
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center">
+                            {% icon 'user' 'w-5 h-5 text-gray-400' %}
+                        </div>
+                        <div class="ml-4">
+                            <div class="text-sm font-medium text-gray-900">
+                                {{ booking.diver.person.first_name }} {{ booking.diver.person.last_name }}
+                            </div>
+                            <div class="text-sm text-gray-500">{{ booking.diver.person.email }}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">{{ booking.diver.get_certification_level_display }}</div>
+                    <div class="text-sm text-gray-500">{{ booking.diver.certification_agency }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    {% if booking.status == 'pending' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            Pending
+                        </span>
+                    {% elif booking.status == 'confirmed' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            Confirmed
+                        </span>
+                    {% elif booking.status == 'checked_in' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                            Checked In
+                        </span>
+                    {% elif booking.status == 'cancelled' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                            Cancelled
+                        </span>
+                    {% elif booking.status == 'no_show' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                            No Show
+                        </span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {{ booking.created_at|date:"M j, Y g:i A" }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    {% if booking.status == 'confirmed' and trip.status in 'scheduled,boarding' %}
+                    <form action="{% url 'diveops:check-in' pk=booking.pk %}" method="post" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="text-blue-600 hover:text-blue-900">
+                            Check In
+                        </button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="px-6 py-8 text-center text-gray-500">
+        No bookings yet.
+        {% if trip.status == 'scheduled' %}
+        <a href="{% url 'diveops:book-diver' trip_pk=trip.pk %}" class="text-blue-600 hover:text-blue-900">Book a diver</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{# Roster Section #}
+<div class="bg-white rounded-lg shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-medium text-gray-900">Trip Roster (Checked In)</h3>
+    </div>
+
+    {% if roster %}
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Diver
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Role
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Checked In
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Notes
+                </th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            {% for entry in roster %}
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                            {% if entry.role == 'DM' %}
+                                {% icon 'shield' 'w-5 h-5 text-blue-600' %}
+                            {% elif entry.role == 'INSTRUCTOR' %}
+                                {% icon 'star' 'w-5 h-5 text-yellow-600' %}
+                            {% else %}
+                                {% icon 'user' 'w-5 h-5 text-blue-600' %}
+                            {% endif %}
+                        </div>
+                        <div class="ml-4">
+                            <div class="text-sm font-medium text-gray-900">
+                                {{ entry.diver.person.first_name }} {{ entry.diver.person.last_name }}
+                            </div>
+                            <div class="text-sm text-gray-500">{{ entry.diver.get_certification_level_display }}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    {% if entry.role == 'DM' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                            Divemaster
+                        </span>
+                    {% elif entry.role == 'INSTRUCTOR' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            Instructor
+                        </span>
+                    {% else %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                            Diver
+                        </span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {{ entry.checked_in_at|date:"g:i A" }}
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">
+                    {{ entry.notes|default:"-" }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="px-6 py-8 text-center text-gray-500">
+        No divers checked in yet.
+    </div>
+    {% endif %}
+</div>
+
+{# Trip Actions #}
+{% if trip.status != 'completed' and trip.status != 'cancelled' %}
+<div class="mt-6 flex justify-end space-x-4">
+    {% if trip.status == 'scheduled' %}
+    <form action="{% url 'diveops:start-trip' pk=trip.pk %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
+            {% icon 'play' 'w-4 h-4 mr-2' %}
+            Start Boarding
+        </button>
+    </form>
+    {% elif trip.status == 'boarding' or trip.status == 'in_progress' %}
+    <form action="{% url 'diveops:complete-trip' pk=trip.pk %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+            {% icon 'check' 'w-4 h-4 mr-2' %}
+            Complete Trip
+        </button>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

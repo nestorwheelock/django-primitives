@@ -1,0 +1,120 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block title %}Upcoming Trips - Dive Operations{% endblock %}
+
+{% block extra_breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="w-5 h-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-700">Trips</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="mb-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold text-gray-900">Upcoming Dive Trips</h1>
+    </div>
+</div>
+
+{% if trips %}
+<div class="bg-white shadow-sm rounded-lg overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Dive Site
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date & Time
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Shop
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Bookings
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                </th>
+                <th scope="col" class="relative px-6 py-3">
+                    <span class="sr-only">Actions</span>
+                </th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            {% for trip in trips %}
+            <tr class="hover:bg-gray-50">
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                            {% icon 'anchor' 'w-5 h-5 text-blue-600' %}
+                        </div>
+                        <div class="ml-4">
+                            <div class="text-sm font-medium text-gray-900">{{ trip.dive_site.name }}</div>
+                            <div class="text-sm text-gray-500">{{ trip.dive_site.max_depth_meters }}m max depth</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">{{ trip.departure_time|date:"M j, Y" }}</div>
+                    <div class="text-sm text-gray-500">{{ trip.departure_time|time:"g:i A" }} - {{ trip.return_time|time:"g:i A" }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">{{ trip.dive_shop.name }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">
+                        {{ trip.confirmed_count|default:0 }} / {{ trip.max_divers }}
+                    </div>
+                    <div class="text-sm text-gray-500">
+                        {{ trip.spots_available }} spots available
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    {% if trip.status == 'scheduled' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            Scheduled
+                        </span>
+                    {% elif trip.status == 'boarding' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            Boarding
+                        </span>
+                    {% elif trip.status == 'in_progress' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                            In Progress
+                        </span>
+                    {% elif trip.status == 'completed' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                            Completed
+                        </span>
+                    {% elif trip.status == 'cancelled' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                            Cancelled
+                        </span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <a href="{% url 'diveops:trip-detail' pk=trip.pk %}" class="text-blue-600 hover:text-blue-900">
+                        View Details
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-12 bg-white rounded-lg shadow-sm">
+    <div class="text-gray-400 mb-4">
+        {% icon 'anchor' 'w-12 h-12 mx-auto' %}
+    </div>
+    <h3 class="text-lg font-medium text-gray-900 mb-2">No Upcoming Trips</h3>
+    <p class="text-gray-500">There are no scheduled dive trips at this time.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -56,6 +56,8 @@ INSTALLED_APPS = [
     "django_agreements",
     # Django Primitives - Value Objects
     "django_money",
+    # UI Framework
+    "django_portal_ui",
     # Testbed app
     "primitives_testbed",
     # Testbed modules (built on primitives)

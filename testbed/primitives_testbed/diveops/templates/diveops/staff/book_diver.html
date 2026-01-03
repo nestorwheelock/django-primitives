@@ -1,0 +1,55 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block title %}Book Diver - {{ trip.dive_site.name }}{% endblock %}
+
+{% block extra_breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="w-5 h-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:trip-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            Trips
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="w-5 h-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:trip-detail' pk=trip.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            {{ trip.dive_site.name }}
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="w-5 h-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-700">Book Diver</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">Book Diver</h1>
+    <p class="text-gray-500 mt-1">{{ trip.dive_site.name }} - {{ trip.departure_time|date:"M j, Y g:i A" }}</p>
+</div>
+
+<div class="bg-white rounded-lg shadow-sm p-6">
+    <div class="text-center py-8">
+        <div class="text-gray-400 mb-4">
+            {% icon 'users' 'w-12 h-12 mx-auto' %}
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">Coming in T-003</h3>
+        <p class="text-gray-500">The booking form will be implemented in the next task.</p>
+        <a href="{% url 'diveops:trip-detail' pk=trip.pk %}" class="mt-4 inline-block text-blue-600 hover:text-blue-900">
+            Back to Trip Details
+        </a>
+    </div>
+</div>
+{% endblock %}
