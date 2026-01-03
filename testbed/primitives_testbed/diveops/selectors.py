@@ -1,0 +1,249 @@
+"""Selectors for dive operations.
+
+Read-only queries optimized to avoid N+1 problems.
+All selectors use select_related and prefetch_related.
+"""
+
+from datetime import datetime
+from typing import Optional
+
+from django.db.models import Count, Prefetch, Q
+from django.utils import timezone
+
+from .models import Booking, DiverProfile, DiveSite, DiveTrip, TripRoster
+
+
+def list_upcoming_trips(
+    dive_shop=None,
+    dive_site=None,
+    min_spots: int = 0,
+    limit: int = 50,
+) -> list[DiveTrip]:
+    """List upcoming dive trips with optional filters.
+
+    Optimized query with related data prefetched.
+
+    Args:
+        dive_shop: Filter by dive shop (optional)
+        dive_site: Filter by dive site (optional)
+        min_spots: Minimum available spots (default 0 = all)
+        limit: Maximum results
+
+    Returns:
+        List of DiveTrip objects with related data
+    """
+    qs = (
+        DiveTrip.objects.filter(
+            departure_time__gt=timezone.now(),
+            status__in=["scheduled", "boarding"],
+        )
+        .select_related("dive_shop", "dive_site")
+        .prefetch_related(
+            Prefetch(
+                "bookings",
+                queryset=Booking.objects.filter(status__in=["confirmed", "checked_in"]),
+            )
+        )
+        .annotate(
+            confirmed_count=Count(
+                "bookings",
+                filter=Q(bookings__status__in=["confirmed", "checked_in"]),
+            )
+        )
+        .order_by("departure_time")
+    )
+
+    if dive_shop:
+        qs = qs.filter(dive_shop=dive_shop)
+
+    if dive_site:
+        qs = qs.filter(dive_site=dive_site)
+
+    trips = list(qs[:limit])
+
+    if min_spots > 0:
+        trips = [t for t in trips if t.spots_available >= min_spots]
+
+    return trips
+
+
+def get_trip_with_roster(trip_id) -> Optional[DiveTrip]:
+    """Get a trip with full roster data.
+
+    Optimized query for trip detail view.
+
+    Args:
+        trip_id: Trip UUID
+
+    Returns:
+        DiveTrip or None
+    """
+    return (
+        DiveTrip.objects.filter(pk=trip_id)
+        .select_related("dive_shop", "dive_site", "encounter")
+        .prefetch_related(
+            Prefetch(
+                "bookings",
+                queryset=Booking.objects.select_related("diver__person"),
+            ),
+            Prefetch(
+                "roster",
+                queryset=TripRoster.objects.select_related(
+                    "diver__person", "checked_in_by"
+                ),
+            ),
+        )
+        .first()
+    )
+
+
+def list_diver_bookings(
+    diver: DiverProfile,
+    status: Optional[str] = None,
+    include_past: bool = False,
+    limit: int = 50,
+) -> list[Booking]:
+    """List bookings for a diver.
+
+    Optimized query with trip and site data.
+
+    Args:
+        diver: The diver profile
+        status: Filter by status (optional)
+        include_past: Include past trips (default False)
+        limit: Maximum results
+
+    Returns:
+        List of Booking objects
+    """
+    qs = (
+        Booking.objects.filter(diver=diver)
+        .select_related("trip__dive_shop", "trip__dive_site")
+        .order_by("-trip__departure_time")
+    )
+
+    if status:
+        qs = qs.filter(status=status)
+
+    if not include_past:
+        qs = qs.filter(trip__departure_time__gt=timezone.now())
+
+    return list(qs[:limit])
+
+
+def get_diver_profile(person) -> Optional[DiverProfile]:
+    """Get diver profile for a person.
+
+    Args:
+        person: Person object or person ID
+
+    Returns:
+        DiverProfile or None
+    """
+    person_id = person.pk if hasattr(person, "pk") else person
+    return (
+        DiverProfile.objects.filter(person_id=person_id)
+        .select_related("person")
+        .first()
+    )
+
+
+def list_dive_sites(
+    is_active: bool = True,
+    max_certification: Optional[str] = None,
+    limit: int = 50,
+) -> list[DiveSite]:
+    """List dive sites with optional filters.
+
+    Args:
+        is_active: Filter by active status
+        max_certification: Maximum certification level required
+        limit: Maximum results
+
+    Returns:
+        List of DiveSite objects
+    """
+    qs = DiveSite.objects.filter(is_active=is_active).order_by("name")
+
+    if max_certification:
+        # Get sites that require this level or lower
+        level_hierarchy = DiverProfile.LEVEL_HIERARCHY
+        max_rank = level_hierarchy.get(max_certification, 0)
+        allowed_levels = [k for k, v in level_hierarchy.items() if v <= max_rank]
+        qs = qs.filter(min_certification_level__in=allowed_levels)
+
+    return list(qs[:limit])
+
+
+def list_shop_trips(
+    dive_shop,
+    status: Optional[str] = None,
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+    limit: int = 50,
+) -> list[DiveTrip]:
+    """List trips for a dive shop.
+
+    Optimized for shop management views.
+
+    Args:
+        dive_shop: The organization
+        status: Filter by status
+        from_date: Filter trips departing on or after
+        to_date: Filter trips departing before
+        limit: Maximum results
+
+    Returns:
+        List of DiveTrip objects
+    """
+    qs = (
+        DiveTrip.objects.filter(dive_shop=dive_shop)
+        .select_related("dive_site")
+        .prefetch_related(
+            Prefetch(
+                "bookings",
+                queryset=Booking.objects.select_related("diver__person").filter(
+                    status__in=["confirmed", "checked_in"]
+                ),
+            )
+        )
+        .annotate(
+            booking_count=Count(
+                "bookings",
+                filter=Q(bookings__status__in=["confirmed", "checked_in"]),
+            )
+        )
+        .order_by("-departure_time")
+    )
+
+    if status:
+        qs = qs.filter(status=status)
+
+    if from_date:
+        qs = qs.filter(departure_time__gte=from_date)
+
+    if to_date:
+        qs = qs.filter(departure_time__lt=to_date)
+
+    return list(qs[:limit])
+
+
+def get_booking(booking_id) -> Optional[Booking]:
+    """Get a booking with related data.
+
+    Args:
+        booking_id: Booking UUID
+
+    Returns:
+        Booking or None
+    """
+    return (
+        Booking.objects.filter(pk=booking_id)
+        .select_related(
+            "trip__dive_shop",
+            "trip__dive_site",
+            "diver__person",
+            "booked_by",
+        )
+        .first()
+    )

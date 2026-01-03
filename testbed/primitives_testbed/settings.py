@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "primitives_testbed.pricing",
     "primitives_testbed.invoicing",
     "primitives_testbed.checkin",
+    "primitives_testbed.diveops",
 ]
 
 MIDDLEWARE = [
