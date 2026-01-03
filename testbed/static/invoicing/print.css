@@ -1,0 +1,46 @@
+/* Invoice Print Stylesheet */
+/* Additional print-specific styles loaded by WeasyPrint */
+
+@page {
+    size: letter;
+    margin: 0.75in;
+
+    @bottom-center {
+        content: "Page " counter(page) " of " counter(pages);
+        font-size: 9pt;
+        color: #666;
+    }
+}
+
+/* Ensure colors print */
+* {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+}
+
+/* Prevent orphans/widows in text blocks */
+p {
+    orphans: 3;
+    widows: 3;
+}
+
+/* Keep table headers with first row */
+thead {
+    display: table-header-group;
+}
+
+/* Never break inside table rows */
+tr {
+    page-break-inside: avoid;
+}
+
+/* Keep totals section together */
+.totals {
+    page-break-inside: avoid;
+}
+
+/* Ensure long descriptions wrap properly */
+.description {
+    word-wrap: break-word;
+    hyphens: auto;
+}

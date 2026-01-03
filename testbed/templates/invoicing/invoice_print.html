@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice {{ invoice_number }}</title>
+    <style>
+        /* Reset and base */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 12pt;
+            line-height: 1.4;
+            color: #333;
+            background: white;
+        }
+
+        /* Invoice container */
+        .invoice {
+            max-width: 8.5in;
+            margin: 0 auto;
+            padding: 0.5in;
+        }
+
+        /* Header section */
+        .invoice-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #333;
+        }
+
+        .invoice-title {
+            font-size: 24pt;
+            font-weight: bold;
+            color: #1a1a1a;
+        }
+
+        .invoice-meta {
+            text-align: right;
+        }
+
+        .invoice-number {
+            font-size: 14pt;
+            font-weight: bold;
+        }
+
+        .invoice-date {
+            color: #666;
+            margin-top: 0.25rem;
+        }
+
+        .invoice-status {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 10pt;
+            margin-top: 0.5rem;
+        }
+
+        .status-issued { background: #dbeafe; color: #1e40af; }
+        .status-paid { background: #dcfce7; color: #166534; }
+        .status-voided { background: #fee2e2; color: #991b1b; }
+
+        /* Party details */
+        .parties {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+        }
+
+        .party {
+            width: 48%;
+        }
+
+        .party-label {
+            font-size: 10pt;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .party-name {
+            font-weight: 600;
+            font-size: 14pt;
+            margin-bottom: 0.25rem;
+        }
+
+        .party-address {
+            white-space: pre-line;
+            color: #555;
+        }
+
+        /* Line items table */
+        .line-items {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 2rem;
+        }
+
+        .line-items th {
+            background: #f5f5f5;
+            border-bottom: 2px solid #333;
+            padding: 0.75rem 0.5rem;
+            text-align: left;
+            font-size: 10pt;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .line-items th.align-right {
+            text-align: right;
+        }
+
+        .line-items td {
+            padding: 0.75rem 0.5rem;
+            border-bottom: 1px solid #ddd;
+            vertical-align: top;
+        }
+
+        .line-items td.align-right {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+
+        .line-items .description {
+            max-width: 300px;
+            word-wrap: break-word;
+        }
+
+        /* Totals section */
+        .totals {
+            width: 300px;
+            margin-left: auto;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .totals-row.total {
+            border-bottom: 2px solid #333;
+            border-top: 2px solid #333;
+            font-weight: bold;
+            font-size: 14pt;
+            margin-top: 0.5rem;
+            padding: 0.75rem 0;
+        }
+
+        .totals-label {
+            color: #666;
+        }
+
+        .totals-value {
+            font-family: 'Courier New', monospace;
+        }
+
+        /* References and notes */
+        .references {
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #ddd;
+            font-size: 10pt;
+            color: #666;
+        }
+
+        .notes {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .notes-label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+
+            .invoice {
+                padding: 0;
+                max-width: none;
+            }
+
+            /* Prevent page breaks inside rows */
+            .line-items tr {
+                page-break-inside: avoid;
+            }
+
+            /* Keep totals together */
+            .totals {
+                page-break-inside: avoid;
+            }
+
+            /* Hide any screen-only elements */
+            .no-print {
+                display: none !important;
+            }
+        }
+
+        /* WeasyPrint-specific page settings */
+        @page {
+            size: letter;
+            margin: 0.75in;
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice">
+        <!-- Header -->
+        <div class="invoice-header">
+            <div>
+                <div class="invoice-title">INVOICE</div>
+            </div>
+            <div class="invoice-meta">
+                <div class="invoice-number">{{ invoice_number }}</div>
+                <div class="invoice-date">
+                    {% if issued_at %}
+                        Issued: {{ issued_at|date:"F j, Y" }}
+                    {% endif %}
+                </div>
+                {% if due_at %}
+                    <div class="invoice-date">Due: {{ due_at|date:"F j, Y" }}</div>
+                {% endif %}
+                <div class="invoice-status status-{{ status }}">{{ status }}</div>
+            </div>
+        </div>
+
+        <!-- Parties -->
+        <div class="parties">
+            <div class="party">
+                <div class="party-label">From</div>
+                <div class="party-name">{{ issued_by_name }}</div>
+                {% if issued_by_address %}
+                    <div class="party-address">{{ issued_by_address }}</div>
+                {% endif %}
+            </div>
+            <div class="party">
+                <div class="party-label">Bill To</div>
+                <div class="party-name">{{ billed_to_name }}</div>
+                {% if billed_to_address %}
+                    <div class="party-address">{{ billed_to_address }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Line Items -->
+        <table class="line-items">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th class="align-right">Qty</th>
+                    <th class="align-right">Unit Price</th>
+                    <th class="align-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in line_items %}
+                <tr>
+                    <td class="description">{{ item.description }}</td>
+                    <td class="align-right">{{ item.quantity }}</td>
+                    <td class="align-right">{{ currency }} {{ item.unit_price_amount|floatformat:2 }}</td>
+                    <td class="align-right">{{ currency }} {{ item.line_total_amount|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #666;">No line items</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Totals -->
+        <div class="totals">
+            <div class="totals-row">
+                <span class="totals-label">Subtotal</span>
+                <span class="totals-value">{{ currency }} {{ subtotal.amount|floatformat:2 }}</span>
+            </div>
+            {% if tax.amount %}
+            <div class="totals-row">
+                <span class="totals-label">Tax</span>
+                <span class="totals-value">{{ currency }} {{ tax.amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            <div class="totals-row total">
+                <span class="totals-label">Total</span>
+                <span class="totals-value">{{ currency }} {{ total.amount|floatformat:2 }}</span>
+            </div>
+            {% if status == "paid" and paid_at %}
+            <div class="totals-row" style="color: green;">
+                <span class="totals-label">Paid</span>
+                <span>{{ paid_at|date:"F j, Y" }}</span>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- References -->
+        {% if agreement or encounter %}
+        <div class="references">
+            {% if agreement %}
+                <div>Agreement: {{ agreement }}</div>
+            {% endif %}
+            {% if encounter %}
+                <div>Encounter: {{ encounter.pk|truncatechars:8 }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Notes -->
+        {% if notes %}
+        <div class="notes">
+            <div class="notes-label">Notes</div>
+            <div>{{ notes }}</div>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

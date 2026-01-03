@@ -11,4 +11,5 @@ urlpatterns = [
     path("health/", views.health_check, name="health_check"),
     path("clinic/", include("primitives_testbed.clinic.urls")),
     path("pricing/", include("primitives_testbed.pricing.urls")),
+    path("invoicing/", include("primitives_testbed.invoicing.urls")),
 ]

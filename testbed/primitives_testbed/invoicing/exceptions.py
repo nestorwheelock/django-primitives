@@ -41,3 +41,15 @@ class LedgerIntegrationError(InvoicingError):
     """Failed to record ledger transaction."""
 
     pass
+
+
+class InvoiceNotPrintableError(InvoicingError):
+    """Invoice cannot be printed in current status."""
+
+    pass
+
+
+class InvoiceAccessDeniedError(InvoicingError):
+    """User does not have access to this invoice."""
+
+    pass

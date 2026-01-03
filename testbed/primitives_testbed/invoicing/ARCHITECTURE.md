@@ -145,13 +145,18 @@ Accounts are auto-created per organization via `get_or_create_account()`.
 
 ```
 invoicing/
-├── models.py          # Invoice, InvoiceLineItem with constraints
-├── services.py        # create_invoice_from_basket, issue_invoice, get_or_create_account
-├── context.py         # InvoiceContext, extract_invoice_context
-├── pricing.py         # PricedLine, PricedBasket, price_basket
-├── payments.py        # record_payment
-├── exceptions.py      # Error hierarchy
-├── admin.py           # Django admin configuration
+├── models.py           # Invoice, InvoiceLineItem with constraints
+├── services.py         # create_invoice_from_basket, issue_invoice, get_or_create_account
+├── context.py          # InvoiceContext, extract_invoice_context
+├── pricing.py          # PricedLine, PricedBasket, price_basket
+├── payments.py         # record_payment
+├── exceptions.py       # Error hierarchy
+├── selectors.py        # get_invoice_for_print() with prefetch optimization
+├── printing.py         # InvoicePrintService for HTML/PDF rendering
+├── document_storage.py # Optional PDF storage with checksums
+├── views.py            # HTTP views for print/PDF endpoints
+├── urls.py             # URL routing for invoicing module
+├── admin.py            # Django admin configuration
 └── migrations/
     ├── 0001_initial.py
     └── 0002_add_line_item_constraints.py
@@ -212,9 +217,72 @@ CHECK (total_amount >= 0)
 5. **No idempotency keys**: Duplicate submissions not prevented at API level
 6. **Admin has N+1 risk**: Needs `list_select_related` optimization
 
+## Printing System
+
+### Overview
+
+Invoice printing provides HTML preview and PDF download capabilities.
+Only finalized invoices (issued, paid, voided) can be printed.
+
+### Endpoints
+
+| URL Pattern | View | Purpose |
+|-------------|------|---------|
+| `/<uuid>/print/` | `invoice_print_html` | HTML print preview |
+| `/<uuid>/pdf/` | `invoice_download_pdf` | PDF download (attachment) |
+| `/<uuid>/pdf/view/` | `invoice_view_pdf` | PDF inline view |
+
+### Components
+
+| Component | Purpose |
+|-----------|---------|
+| `selectors.get_invoice_for_print()` | Optimized read-only query with prefetch |
+| `InvoicePrintData` | NamedTuple with invoice + formatted addresses |
+| `InvoicePrintService` | HTML and PDF rendering service |
+| `document_storage` | Optional PDF storage with checksums |
+
+### Hard Rules
+
+1. **Draft invoices cannot be printed** - returns 400 error
+2. **Deterministic output** - renders only from snapshotted prices
+3. **Org access required** - user must have access to invoice org
+4. **Stored PDFs are immutable** - once stored, cannot be regenerated
+
+### Printable Statuses
+
+```python
+PRINTABLE_STATUSES = {"issued", "paid", "voided"}
+```
+
+### Query Optimization
+
+`get_invoice_for_print()` uses 4 queries (no N+1):
+- `select_related`: billed_to, issued_by, encounter, agreement
+- `prefetch_related`: line_items, billed_to.addresses, issued_by.addresses
+
+### Optional PDF Storage
+
+Disabled by default. Enable with:
+
+```python
+# settings.py
+INVOICE_STORE_PDF = True
+```
+
+Storage is **append-only**: once a PDF is stored, it cannot be overwritten.
+Each stored PDF has a SHA-256 checksum for integrity verification.
+
+### Exception Types
+
+```
+InvoicingError (base)
+├── InvoiceNotPrintableError   # Draft status, cannot print
+└── InvoiceAccessDeniedError   # User lacks org access
+```
+
 ## Test Coverage
 
-22 tests covering:
+42+ tests covering:
 - Context extraction (4 tests)
 - Basket pricing (3 tests)
 - Invoice creation (4 tests)
@@ -222,3 +290,7 @@ CHECK (total_amount >= 0)
 - Payment flow (2 tests)
 - Line item constraints (3 tests)
 - Invoice number generation (2 tests)
+- Selector (6 tests)
+- Print service (4 tests)
+- Views (6 tests)
+- Document storage (4 tests)
