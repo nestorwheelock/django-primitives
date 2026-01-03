@@ -335,3 +335,116 @@ class TestComparisonMethods:
         positive = Money(Decimal("10.00"), "USD")
         result = abs(positive)
         assert result.amount == Decimal("10.00")
+
+
+class TestComparisonOperators:
+    """Test suite for Money comparison operators (<, <=, >, >=)."""
+
+    def test_lt_same_currency(self):
+        """Less than comparison should work with same currency."""
+        small = Money(Decimal("5.00"), "USD")
+        large = Money(Decimal("10.00"), "USD")
+
+        assert small < large
+        assert not large < small
+        assert not small < small  # Equal values
+
+    def test_le_same_currency(self):
+        """Less than or equal comparison should work with same currency."""
+        small = Money(Decimal("5.00"), "USD")
+        large = Money(Decimal("10.00"), "USD")
+        equal = Money(Decimal("5.00"), "USD")
+
+        assert small <= large
+        assert small <= equal
+        assert not large <= small
+
+    def test_gt_same_currency(self):
+        """Greater than comparison should work with same currency."""
+        small = Money(Decimal("5.00"), "USD")
+        large = Money(Decimal("10.00"), "USD")
+
+        assert large > small
+        assert not small > large
+        assert not small > small  # Equal values
+
+    def test_ge_same_currency(self):
+        """Greater than or equal comparison should work with same currency."""
+        small = Money(Decimal("5.00"), "USD")
+        large = Money(Decimal("10.00"), "USD")
+        equal = Money(Decimal("10.00"), "USD")
+
+        assert large >= small
+        assert large >= equal
+        assert not small >= large
+
+    def test_lt_different_currency_raises(self):
+        """Less than with different currencies should raise CurrencyMismatchError."""
+        import pytest
+        from django_money.exceptions import CurrencyMismatchError
+
+        usd = Money(Decimal("10.00"), "USD")
+        eur = Money(Decimal("10.00"), "EUR")
+
+        with pytest.raises(CurrencyMismatchError):
+            usd < eur
+
+    def test_le_different_currency_raises(self):
+        """Less than or equal with different currencies should raise."""
+        import pytest
+        from django_money.exceptions import CurrencyMismatchError
+
+        usd = Money(Decimal("10.00"), "USD")
+        eur = Money(Decimal("10.00"), "EUR")
+
+        with pytest.raises(CurrencyMismatchError):
+            usd <= eur
+
+    def test_gt_different_currency_raises(self):
+        """Greater than with different currencies should raise."""
+        import pytest
+        from django_money.exceptions import CurrencyMismatchError
+
+        usd = Money(Decimal("10.00"), "USD")
+        eur = Money(Decimal("10.00"), "EUR")
+
+        with pytest.raises(CurrencyMismatchError):
+            usd > eur
+
+    def test_ge_different_currency_raises(self):
+        """Greater than or equal with different currencies should raise."""
+        import pytest
+        from django_money.exceptions import CurrencyMismatchError
+
+        usd = Money(Decimal("10.00"), "USD")
+        eur = Money(Decimal("10.00"), "EUR")
+
+        with pytest.raises(CurrencyMismatchError):
+            usd >= eur
+
+    def test_sorting_list_of_money(self):
+        """Money objects should be sortable when same currency."""
+        prices = [
+            Money(Decimal("25.00"), "USD"),
+            Money(Decimal("10.00"), "USD"),
+            Money(Decimal("50.00"), "USD"),
+            Money(Decimal("5.00"), "USD"),
+        ]
+
+        sorted_prices = sorted(prices)
+
+        assert sorted_prices[0].amount == Decimal("5.00")
+        assert sorted_prices[1].amount == Decimal("10.00")
+        assert sorted_prices[2].amount == Decimal("25.00")
+        assert sorted_prices[3].amount == Decimal("50.00")
+
+    def test_min_max_with_money(self):
+        """min() and max() should work with Money objects."""
+        prices = [
+            Money(Decimal("25.00"), "USD"),
+            Money(Decimal("10.00"), "USD"),
+            Money(Decimal("50.00"), "USD"),
+        ]
+
+        assert min(prices).amount == Decimal("10.00")
+        assert max(prices).amount == Decimal("50.00")

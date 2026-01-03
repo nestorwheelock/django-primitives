@@ -101,3 +101,35 @@ class Money:
     def is_zero(self) -> bool:
         """Check if amount is exactly zero."""
         return self.amount == 0
+
+    def __lt__(self, other: 'Money') -> bool:
+        """Less than comparison with currency check."""
+        if self.currency != other.currency:
+            raise CurrencyMismatchError(
+                f"Cannot compare {self.currency} to {other.currency}"
+            )
+        return self.amount < other.amount
+
+    def __le__(self, other: 'Money') -> bool:
+        """Less than or equal comparison with currency check."""
+        if self.currency != other.currency:
+            raise CurrencyMismatchError(
+                f"Cannot compare {self.currency} to {other.currency}"
+            )
+        return self.amount <= other.amount
+
+    def __gt__(self, other: 'Money') -> bool:
+        """Greater than comparison with currency check."""
+        if self.currency != other.currency:
+            raise CurrencyMismatchError(
+                f"Cannot compare {self.currency} to {other.currency}"
+            )
+        return self.amount > other.amount
+
+    def __ge__(self, other: 'Money') -> bool:
+        """Greater than or equal comparison with currency check."""
+        if self.currency != other.currency:
+            raise CurrencyMismatchError(
+                f"Cannot compare {self.currency} to {other.currency}"
+            )
+        return self.amount >= other.amount

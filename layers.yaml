@@ -1,28 +1,51 @@
-# Import boundary enforcement for django-primitives monorepo
+# Django Primitives Layer Architecture
+# Import boundary enforcement - lower tiers may not import from higher tiers
 # Run: django-layers check --config layers.yaml --root .
 
 layers:
-  # Tier 1: Foundation (no dependencies on other primitives)
-  - name: tier1
+  # Tier 0: Foundation - No dependencies on other primitives
+  - name: foundation
     packages:
       - django-basemodels
+      - django-singleton
+      - django-modules
+      - django-layers
+      - django-sequence
+
+  # Tier 1: Identity - Depends on Foundation only
+  - name: identity
+    packages:
       - django-parties
       - django-rbac
+
+  # Tier 2: Infrastructure - Depends on Foundation + Identity
+  - name: infrastructure
+    packages:
+      - django-decisioning
       - django-audit-log
 
-  # Tier 2: Domain patterns (may depend on Tier 1)
-  - name: tier2
+  # Tier 3: Domain - Depends on lower tiers
+  - name: domain
     packages:
       - django-catalog
       - django-encounters
       - django-worklog
+      - django-geo
+      - django-ledger
 
-  # Tier 3: Infrastructure (may depend on Tier 1 and 2)
-  - name: tier3
+  # Tier 4: Content - Depends on Domain + lower
+  - name: content
     packages:
-      - django-modules
-      - django-singleton
-      - django-layers
+      - django-documents
+      - django-notes
+      - django-agreements
+
+  # Tier 5: Value Objects - Standalone, no Django models
+  - name: value-objects
+    packages:
+      - django-money
+
+# Total: 18 packages
 
 rules:
   default: same_or_lower  # Can import same layer or lower
