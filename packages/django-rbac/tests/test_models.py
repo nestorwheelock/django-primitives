@@ -478,9 +478,10 @@ class TestUserRoleEffectiveDating:
         # Active role (no end date)
         UserRole.objects.create(user=user, role=role1)
 
-        # Expired role (valid_to in the past)
+        # Expired role (valid_to in the past, valid_from before that)
         past = timezone.now() - datetime.timedelta(days=1)
-        UserRole.objects.create(user=user, role=role2, valid_to=past)
+        earlier = timezone.now() - datetime.timedelta(days=30)
+        UserRole.objects.create(user=user, role=role2, valid_from=earlier, valid_to=past)
 
         current_roles = UserRole.objects.current().filter(user=user)
         assert current_roles.count() == 1
@@ -530,7 +531,8 @@ class TestUserRoleEffectiveDating:
         role = Role.objects.create(name='Expired Test', slug='expired-test', group=group)
 
         past = timezone.now() - datetime.timedelta(days=1)
-        UserRole.objects.create(user=user, role=role, valid_to=past)
+        earlier = timezone.now() - datetime.timedelta(days=30)
+        UserRole.objects.create(user=user, role=role, valid_from=earlier, valid_to=past)
 
         current_roles = UserRole.objects.current().filter(user=user)
         assert current_roles.count() == 0
@@ -592,9 +594,10 @@ class TestUserRoleEffectiveDating:
         staff_role = Role.objects.create(name='Staff Current', slug='staff-current', hierarchy_level=20, group=group2)
 
         past = timezone.now() - datetime.timedelta(days=1)
+        earlier = timezone.now() - datetime.timedelta(days=30)
 
-        # Manager role expired yesterday
-        UserRole.objects.create(user=user, role=manager_role, valid_to=past)
+        # Manager role expired yesterday (was valid from 30 days ago)
+        UserRole.objects.create(user=user, role=manager_role, valid_from=earlier, valid_to=past)
 
         # Staff role is current
         UserRole.objects.create(user=user, role=staff_role)
