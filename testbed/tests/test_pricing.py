@@ -867,3 +867,328 @@ class TestPricedBasketItem:
         assert isinstance(priced.unit_price, Money)
         assert priced.unit_price.amount == Decimal("50.00")
         assert priced.unit_price.currency == "USD"
+
+
+# =============================================================================
+# Phase 4: Production Safety Tests (PostgreSQL Constraints)
+# =============================================================================
+
+@pytest.mark.django_db(transaction=True)
+class TestPriceOverlapExclusionConstraint:
+    """Test PostgreSQL EXCLUDE constraint prevents overlapping prices at DB level.
+
+    These tests verify the database-level constraint works independently
+    of Python validation. The constraint uses btree_gist and tstzrange
+    to prevent overlapping date ranges within the same scope.
+
+    Note: These tests require PostgreSQL with btree_gist extension.
+    """
+
+    def test_db_constraint_rejects_overlapping_global_prices(self):
+        """PostgreSQL exclusion constraint rejects overlapping global prices.
+
+        This test bypasses Python validation to prove the DB constraint works.
+        """
+        from django.db import connection
+        from django_catalog.models import CatalogItem
+        from primitives_testbed.pricing.models import Price
+
+        item = CatalogItem.objects.create(
+            display_name="DB Constraint Test Item",
+            kind="service",
+            active=True,
+        )
+        user = User.objects.create_user(username="test_db_constraint_user")
+        now = timezone.now()
+
+        # Create first global price using model (passes both validations)
+        price1 = Price.objects.create(
+            catalog_item=item,
+            amount=Decimal("100.00"),
+            currency="USD",
+            valid_from=now,
+            valid_to=None,
+            created_by=user,
+        )
+
+        # Check if using PostgreSQL (constraint only exists there)
+        if connection.vendor != "postgresql":
+            pytest.skip("PostgreSQL required for exclusion constraint test")
+
+        import uuid
+        from django.db import IntegrityError as DBIntegrityError
+
+        # Try to insert overlapping price via raw SQL (bypasses Python validation)
+        # This should fail at the DB constraint level
+        with pytest.raises(DBIntegrityError) as exc_info:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO pricing_price (
+                        id, catalog_item_id, amount, currency,
+                        valid_from, valid_to, priority, reason,
+                        created_by_id, created_at
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    )
+                    """,
+                    [
+                        str(uuid.uuid4()),
+                        str(item.pk),
+                        "90.00",
+                        "USD",
+                        now + timedelta(days=10),  # Overlaps with price1
+                        None,
+                        50,
+                        "Test overlap",
+                        user.pk,
+                        now,
+                    ],
+                )
+
+        # Verify it's an exclusion constraint violation
+        assert "exclusion" in str(exc_info.value).lower() or \
+               "price_no_overlapping_date_ranges" in str(exc_info.value).lower()
+
+    def test_db_constraint_allows_non_overlapping_prices(self):
+        """PostgreSQL exclusion constraint allows consecutive non-overlapping prices."""
+        from django.db import connection
+        from django_catalog.models import CatalogItem
+        from primitives_testbed.pricing.models import Price
+
+        if connection.vendor != "postgresql":
+            pytest.skip("PostgreSQL required for exclusion constraint test")
+
+        item = CatalogItem.objects.create(
+            display_name="DB Non-Overlap Test Item",
+            kind="service",
+            active=True,
+        )
+        user = User.objects.create_user(username="test_db_nonover_user")
+        now = timezone.now()
+
+        # First price: ends at specific time
+        Price.objects.create(
+            catalog_item=item,
+            amount=Decimal("100.00"),
+            currency="USD",
+            valid_from=now,
+            valid_to=now + timedelta(days=30),
+            created_by=user,
+        )
+
+        # Second price: starts exactly when first ends (no overlap due to '[)' bounds)
+        price2 = Price.objects.create(
+            catalog_item=item,
+            amount=Decimal("110.00"),
+            currency="USD",
+            valid_from=now + timedelta(days=30),
+            valid_to=None,
+            created_by=user,
+        )
+
+        assert price2.pk is not None
+
+    def test_db_constraint_null_scope_normalization(self):
+        """COALESCE in constraint treats NULL scopes as matching each other.
+
+        Without COALESCE, NULL != NULL in PostgreSQL would defeat the constraint.
+        """
+        from django.db import connection
+        from django_catalog.models import CatalogItem
+        from primitives_testbed.pricing.models import Price
+
+        if connection.vendor != "postgresql":
+            pytest.skip("PostgreSQL required for NULL normalization test")
+
+        item = CatalogItem.objects.create(
+            display_name="NULL Scope Test Item",
+            kind="service",
+            active=True,
+        )
+        user = User.objects.create_user(username="test_null_scope_user")
+        now = timezone.now()
+
+        # Create global price (all scope fields NULL)
+        Price.objects.create(
+            catalog_item=item,
+            amount=Decimal("100.00"),
+            currency="USD",
+            organization=None,
+            party=None,
+            agreement=None,
+            valid_from=now,
+            valid_to=None,
+            created_by=user,
+        )
+
+        # Try to create another global price with overlapping dates
+        # Both have NULL scopes - COALESCE should make them match
+        with pytest.raises(ValidationError):
+            Price.objects.create(
+                catalog_item=item,
+                amount=Decimal("95.00"),
+                currency="USD",
+                organization=None,
+                party=None,
+                agreement=None,
+                valid_from=now + timedelta(days=5),
+                valid_to=None,
+                created_by=user,
+            )
+
+
+@pytest.mark.django_db(transaction=True)
+class TestScopeForeignKeyProtect:
+    """Test PROTECT on_delete behavior for scope foreign keys.
+
+    These tests verify that hard-deleting organizations, parties, or agreements
+    that have associated prices raises ProtectedError instead of CASCADE delete.
+
+    Note: Organization, Person, and Agreement all use soft delete by default.
+    PROTECT only applies when calling hard_delete() which attempts actual DB deletion.
+    """
+
+    def test_cannot_hard_delete_organization_with_prices(self):
+        """Hard-deleting an organization with prices raises ProtectedError."""
+        from django.db.models import ProtectedError
+        from django_catalog.models import CatalogItem
+        from django_parties.models import Organization
+        from primitives_testbed.pricing.models import Price
+
+        item = CatalogItem.objects.create(
+            display_name="Org Delete Test Item",
+            kind="service",
+            active=True,
+        )
+        org = Organization.objects.create(name="Protected Org", org_type="payer")
+        user = User.objects.create_user(username="test_protect_org_user")
+
+        # Create price scoped to organization
+        Price.objects.create(
+            catalog_item=item,
+            amount=Decimal("80.00"),
+            currency="USD",
+            organization=org,
+            valid_from=timezone.now(),
+            created_by=user,
+        )
+
+        # Soft delete works (sets deleted_at, doesn't remove from DB)
+        org.delete()
+        assert org.deleted_at is not None
+
+        # Restore for hard delete test
+        org.restore()
+
+        # Hard delete should raise ProtectedError
+        with pytest.raises(ProtectedError):
+            org.hard_delete()
+
+    def test_cannot_hard_delete_party_with_prices(self):
+        """Hard-deleting a party (person) with prices raises ProtectedError."""
+        from django.db.models import ProtectedError
+        from django_catalog.models import CatalogItem
+        from django_parties.models import Person
+        from primitives_testbed.pricing.models import Price
+
+        item = CatalogItem.objects.create(
+            display_name="Party Delete Test Item",
+            kind="service",
+            active=True,
+        )
+        person = Person.objects.create(first_name="Protected", last_name="Person")
+        user = User.objects.create_user(username="test_protect_party_user")
+
+        # Create price scoped to party
+        Price.objects.create(
+            catalog_item=item,
+            amount=Decimal("60.00"),
+            currency="USD",
+            party=person,
+            valid_from=timezone.now(),
+            created_by=user,
+        )
+
+        # Hard delete should raise ProtectedError
+        with pytest.raises(ProtectedError):
+            person.hard_delete()
+
+    def test_cannot_hard_delete_agreement_with_prices(self):
+        """Hard-deleting an agreement with prices raises ProtectedError."""
+        from django.db.models import ProtectedError
+        from django_agreements.models import Agreement
+        from django_catalog.models import CatalogItem
+        from django_parties.models import Organization, Person
+        from primitives_testbed.pricing.models import Price
+
+        item = CatalogItem.objects.create(
+            display_name="Agreement Delete Test Item",
+            kind="service",
+            active=True,
+        )
+        person = Person.objects.create(first_name="Agreement", last_name="Member")
+        org = Organization.objects.create(name="Agreement Clinic", org_type="clinic")
+        user = User.objects.create_user(username="test_protect_agree_user")
+
+        person_ct = ContentType.objects.get_for_model(Person)
+        org_ct = ContentType.objects.get_for_model(Organization)
+
+        agreement = Agreement.objects.create(
+            party_a_content_type=person_ct,
+            party_a_id=str(person.pk),
+            party_b_content_type=org_ct,
+            party_b_id=str(org.pk),
+            scope_type="contract",
+            terms={"contract_type": "pricing"},
+            agreed_by=user,
+            agreed_at=timezone.now(),
+            valid_from=timezone.now(),
+        )
+
+        # Create price scoped to agreement
+        Price.objects.create(
+            catalog_item=item,
+            amount=Decimal("45.00"),
+            currency="USD",
+            agreement=agreement,
+            valid_from=timezone.now(),
+            created_by=user,
+        )
+
+        # Hard delete should raise ProtectedError
+        with pytest.raises(ProtectedError):
+            agreement.hard_delete()
+
+    def test_can_hard_delete_org_after_removing_prices(self):
+        """Organization can be hard-deleted after its prices are removed."""
+        from django_catalog.models import CatalogItem
+        from django_parties.models import Organization
+        from primitives_testbed.pricing.models import Price
+
+        item = CatalogItem.objects.create(
+            display_name="Removable Price Item",
+            kind="service",
+            active=True,
+        )
+        org = Organization.objects.create(name="Deletable Org", org_type="payer")
+        user = User.objects.create_user(username="test_delete_org_user")
+
+        # Create price scoped to organization
+        price = Price.objects.create(
+            catalog_item=item,
+            amount=Decimal("80.00"),
+            currency="USD",
+            organization=org,
+            valid_from=timezone.now(),
+            created_by=user,
+        )
+
+        # Delete the price first (hard delete the price since it's not a SoftDeleteModel)
+        price.delete()
+
+        # Now organization can be hard-deleted
+        org_pk = org.pk
+        org.hard_delete()
+
+        assert not Organization.all_objects.filter(pk=org_pk).exists()

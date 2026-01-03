@@ -15,7 +15,8 @@ from django_agreements.models import Agreement
 from django_agreements.services import create_agreement
 from django_catalog.models import CatalogItem
 
-from primitives_testbed.pricing.models import Price
+from primitives_testbed.pricing.exceptions import NoPriceFoundError
+from primitives_testbed.pricing.selectors import resolve_price
 
 
 # Required consent types for check-in
@@ -52,47 +53,27 @@ def get_current_pricelist(organization, *, party=None, as_of=None):
     pricelist = []
 
     for item in billable_items:
-        # Find the best current price for this item
-        # Priority: party > organization > global
-        price = _resolve_price(item, organization, party, as_of)
-
-        if price is not None:
+        # Use canonical price resolution from pricing module
+        # Resolution order: agreement > party > organization > global
+        try:
+            resolved = resolve_price(
+                item,
+                organization=organization,
+                party=party,
+                as_of=as_of,
+            )
             pricelist.append({
                 "catalog_item_id": str(item.pk),
                 "catalog_item_name": item.display_name,
-                "amount": str(price.amount),
-                "currency": price.currency,
-                "scope": price.scope_type,
+                "amount": str(resolved.unit_price.amount),
+                "currency": resolved.unit_price.currency,
+                "scope": resolved.scope_type,
             })
+        except NoPriceFoundError:
+            # Skip items without a price - they cannot be disclosed
+            pass
 
     return pricelist
-
-
-def _resolve_price(catalog_item, organization, party, as_of):
-    """Resolve the best price for a catalog item.
-
-    Resolution priority (highest to lowest):
-    1. Party-specific price
-    2. Organization-specific price
-    3. Global price
-    """
-    base_qs = Price.objects.filter(catalog_item=catalog_item).current(as_of=as_of)
-
-    # Try party-specific price first
-    if party:
-        party_price = base_qs.for_party(party).order_by("-priority").first()
-        if party_price:
-            return party_price
-
-    # Try organization-specific price
-    if organization:
-        org_price = base_qs.for_organization(organization).order_by("-priority").first()
-        if org_price:
-            return org_price
-
-    # Fall back to global price
-    global_price = base_qs.global_scope().order_by("-priority").first()
-    return global_price
 
 
 def snapshot_prices_for_disclosure(organization, *, party=None):

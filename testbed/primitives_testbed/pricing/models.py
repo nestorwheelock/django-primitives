@@ -1,6 +1,70 @@
 """Models for the pricing module.
 
 Provides Price and PricedBasketItem models for flexible, auditable pricing.
+
+## Production Safety Features
+
+This module implements several database-level safeguards to ensure data integrity:
+
+### 1. Overlap Prevention (PostgreSQL Exclusion Constraint)
+
+**Problem**: Without database enforcement, two concurrent transactions can create
+prices with overlapping date ranges for the same (catalog_item + scope), leading
+to ambiguous price resolution and data corruption.
+
+**Solution**: PostgreSQL exclusion constraint (migration 0002) that atomically
+rejects overlapping prices at the database level.
+
+```sql
+ALTER TABLE pricing_price
+ADD CONSTRAINT price_no_overlapping_date_ranges
+EXCLUDE USING GIST (
+    catalog_item_id WITH =,
+    COALESCE(organization_id, '00000000-...'::uuid) WITH =,
+    COALESCE(party_id, '00000000-...'::uuid) WITH =,
+    COALESCE(agreement_id, '00000000-...'::uuid) WITH =,
+    tstzrange(valid_from, valid_to, '[)') WITH &&
+);
+```
+
+**Key design decisions**:
+- Uses `btree_gist` extension for combining equality and range operators
+- Uses `COALESCE` to normalize NULL scopes to a sentinel UUID (because NULL != NULL
+  in PostgreSQL would defeat the constraint)
+- Uses `tstzrange` with `'[)'` bounds (inclusive start, exclusive end) for
+  standard temporal semantics
+- NULL `valid_to` is treated as infinity (open-ended range)
+
+**Why DB enforcement is required**:
+Python-level validation in `Price.clean()` is susceptible to race conditions.
+Two transactions can both pass validation simultaneously, then both insert,
+creating overlapping prices. Only a database constraint guarantees atomicity.
+
+### 2. PROTECT on Scope Foreign Keys
+
+**Problem**: CASCADE delete on organization/party/agreement FKs would silently
+delete price records when their scope entity is deleted, causing data loss in
+audit-sensitive pricing data.
+
+**Solution**: Changed `on_delete` from CASCADE to PROTECT (migration 0003).
+Attempting to delete an organization/party/agreement that has associated prices
+now raises `ProtectedError`.
+
+**Note**: Since Organization, Person, and Agreement use soft delete by default,
+PROTECT only triggers when calling `hard_delete()`. Soft delete (setting
+`deleted_at`) works normally and does not trigger PROTECT.
+
+### 3. Price Resolution Hierarchy
+
+Prices are resolved in this order (first match wins):
+1. Agreement-specific (agreement field is set)
+2. Party-specific (party field is set, agreement is NULL)
+3. Organization-specific (organization field is set, party/agreement NULL)
+4. Global (all scope fields NULL)
+
+Within each scope level, higher `priority` wins, then more recent `valid_from`.
+
+The canonical resolution function is `pricing.selectors.resolve_price()`.
 """
 
 import uuid
@@ -73,9 +137,11 @@ class Price(models.Model):
     currency = models.CharField(max_length=3, default="USD")
 
     # Optional scoping (more specific = higher priority)
+    # NOTE: PROTECT prevents accidental data loss when deleting scoped entities.
+    # Delete or reassign prices before deleting their organization/party/agreement.
     organization = models.ForeignKey(
         "django_parties.Organization",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="prices",
@@ -83,7 +149,7 @@ class Price(models.Model):
     )
     party = models.ForeignKey(
         "django_parties.Person",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="prices",
@@ -91,7 +157,7 @@ class Price(models.Model):
     )
     agreement = models.ForeignKey(
         "django_agreements.Agreement",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="prices",
