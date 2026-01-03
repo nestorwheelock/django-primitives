@@ -40,16 +40,24 @@
     <p class="text-gray-500 mt-1">{{ trip.dive_site.name }} - {{ trip.departure_time|date:"M j, Y g:i A" }}</p>
 </div>
 
+{% if eligibility_result and not eligibility_result.allowed %}
+{% include "portal_ui/components/forms/eligibility_alert.html" with result=eligibility_result %}
+{% endif %}
+
 <div class="bg-white rounded-lg shadow-sm p-6">
-    <div class="text-center py-8">
-        <div class="text-gray-400 mb-4">
-            {% icon 'users' 'w-12 h-12 mx-auto' %}
+    <form method="post">
+        {% csrf_token %}
+
+        {% include "portal_ui/components/forms/form_errors.html" with form=form %}
+
+        {% include "portal_ui/components/forms/field.html" with field=form.diver %}
+
+        <div class="flex justify-end space-x-3 mt-6">
+            <a href="{% url 'diveops:trip-detail' pk=trip.pk %}" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                Cancel
+            </a>
+            {% include "portal_ui/components/forms/button.html" with type="submit" text="Book Diver" variant="primary" %}
         </div>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">Coming in T-003</h3>
-        <p class="text-gray-500">The booking form will be implemented in the next task.</p>
-        <a href="{% url 'diveops:trip-detail' pk=trip.pk %}" class="mt-4 inline-block text-blue-600 hover:text-blue-900">
-            Back to Trip Details
-        </a>
-    </div>
+    </form>
 </div>
 {% endblock %}

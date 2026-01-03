@@ -60,26 +60,51 @@ class TripDetailView(StaffPortalMixin, DetailView):
 
 
 class BookDiverView(StaffPortalMixin, FormView):
-    """Book a diver on a trip (placeholder - see T-003)."""
+    """Book a diver on a trip."""
 
     template_name = "diveops/staff/book_diver.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.trip = get_object_or_404(DiveTrip, pk=kwargs["trip_pk"])
+        return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         return reverse("diveops:trip-detail", kwargs={"pk": self.kwargs["trip_pk"]})
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["trip"] = get_object_or_404(DiveTrip, pk=self.kwargs["trip_pk"])
+        context["trip"] = self.trip
         return context
 
     def get_form_class(self):
-        # Placeholder - will be implemented in T-003
-        from django import forms
+        from .forms import BookDiverForm
+        return BookDiverForm
 
-        class PlaceholderForm(forms.Form):
-            pass
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["trip"] = self.trip
+        return kwargs
 
-        return PlaceholderForm
+    def form_valid(self, form):
+        from .decisioning import can_diver_join_trip
+        from .services import book_trip
+
+        diver = form.cleaned_data["diver"]
+
+        # Check eligibility
+        result = can_diver_join_trip(diver, self.trip)
+        if not result.allowed:
+            # Add eligibility result to context and re-render
+            context = self.get_context_data(form=form)
+            context["eligibility_result"] = result
+            return self.render_to_response(context)
+
+        # Book the diver
+        book_trip(self.trip, diver, self.request.user)
+        messages.success(
+            self.request, f"{diver.person.first_name} has been booked on this trip."
+        )
+        return HttpResponseRedirect(self.get_success_url())
 
 
 class CheckInView(StaffPortalMixin, View):

@@ -248,3 +248,90 @@ class TestURLPatterns:
         """Trip detail URL can be reversed."""
         url = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
         assert str(dive_trip.pk) in url
+
+
+@pytest.mark.django_db
+class TestBookDiverView:
+    """Tests for BookDiverView."""
+
+    def test_book_diver_requires_authentication(self, anonymous_client, dive_trip):
+        """Anonymous users are redirected to login."""
+        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        response = anonymous_client.get(url)
+
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_book_diver_requires_staff(self, regular_client, dive_trip):
+        """Non-staff users are denied access."""
+        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        response = regular_client.get(url)
+
+        assert response.status_code in [302, 403]
+
+    def test_book_diver_accessible_by_staff(self, staff_client, dive_trip):
+        """Staff users can access book diver page."""
+        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert "trip" in response.context
+        assert "form" in response.context
+
+    def test_book_diver_shows_form(self, staff_client, dive_trip):
+        """Book diver page shows the booking form."""
+        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert b"diver" in response.content.lower()
+
+    def test_book_diver_creates_booking(self, staff_client, dive_trip, diver_profile, staff_user):
+        """POST creates a booking for the selected diver."""
+        from primitives_testbed.diveops.models import Booking
+
+        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        response = staff_client.post(url, {"diver": diver_profile.pk})
+
+        # Should redirect to trip detail on success
+        assert response.status_code == 302
+        assert str(dive_trip.pk) in response.url
+
+        # Booking should be created
+        assert Booking.objects.filter(trip=dive_trip, diver=diver_profile).exists()
+
+    def test_book_diver_shows_eligibility_error(
+        self, staff_client, deep_site, beginner_diver, dive_shop, staff_user
+    ):
+        """Book diver shows eligibility error for ineligible diver."""
+        from primitives_testbed.diveops.models import DiveTrip
+
+        # Create trip at deep site (requires AOW)
+        tomorrow = timezone.now() + timedelta(days=1)
+        trip = DiveTrip.objects.create(
+            dive_shop=dive_shop,
+            dive_site=deep_site,
+            departure_time=tomorrow,
+            return_time=tomorrow + timedelta(hours=4),
+            max_divers=8,
+            price_per_diver=Decimal("150.00"),
+            currency="USD",
+            created_by=staff_user,
+        )
+
+        url = reverse("diveops:book-diver", kwargs={"trip_pk": trip.pk})
+        response = staff_client.post(url, {"diver": beginner_diver.pk})
+
+        # Should stay on the form with error
+        assert response.status_code == 200
+        # Should show eligibility reasons
+        assert b"not eligible" in response.content.lower() or b"certification" in response.content.lower()
+
+    def test_book_diver_redirects_to_trip_detail(self, staff_client, dive_trip, diver_profile):
+        """Successful booking redirects to trip detail."""
+        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        response = staff_client.post(url, {"diver": diver_profile.pk})
+
+        expected_redirect = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        assert response.status_code == 302
+        assert expected_redirect in response.url
