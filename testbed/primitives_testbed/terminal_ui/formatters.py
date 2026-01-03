@@ -187,16 +187,20 @@ def format_agreements_table(agreements: list) -> Table:
     table = Table(title="Agreements")
     table.add_column("ID", style="dim")
     table.add_column("Scope Type", style="cyan")
-    table.add_column("Status", style="yellow")
+    table.add_column("Valid From", style="yellow")
+    table.add_column("Valid To", style="yellow")
     table.add_column("Created", style="dim")
 
     for agr in agreements:
         created = agr.created_at.strftime("%Y-%m-%d") if agr.created_at else "-"
+        valid_from = agr.valid_from.strftime("%Y-%m-%d") if agr.valid_from else "-"
+        valid_to = agr.valid_to.strftime("%Y-%m-%d") if agr.valid_to else "∞"
 
         table.add_row(
             short_uuid(agr.pk),
             agr.scope_type or "-",
-            agr.status or "-",
+            valid_from,
+            valid_to,
             created,
         )
 
