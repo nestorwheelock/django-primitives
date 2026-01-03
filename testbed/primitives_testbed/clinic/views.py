@@ -40,10 +40,13 @@ def patient_list(request):
     clinic = Organization.objects.filter(name="Springfield Family Clinic").first()
 
     # Get patients linked to clinic
-    patients = Person.objects.filter(
-        from_relationships__to_organization=clinic,
-        from_relationships__relationship_type="customer",
-    ).distinct()
+    if clinic:
+        patients = Person.objects.filter(
+            relationships_from__to_organization=clinic,
+            relationships_from__relationship_type="customer",
+        ).distinct()
+    else:
+        patients = Person.objects.none()
 
     context = {
         "patients": patients,
@@ -77,10 +80,13 @@ def api_patients(request):
     """API: List all patients."""
     clinic = Organization.objects.filter(name="Springfield Family Clinic").first()
 
-    patients = Person.objects.filter(
-        from_relationships__to_organization=clinic,
-        from_relationships__relationship_type="customer",
-    ).distinct()
+    if clinic:
+        patients = Person.objects.filter(
+            relationships_from__to_organization=clinic,
+            relationships_from__relationship_type="customer",
+        ).distinct()
+    else:
+        patients = Person.objects.none()
 
     data = [
         {

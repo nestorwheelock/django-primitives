@@ -34,9 +34,9 @@ User = get_user_model()
 # Visit Management
 # =============================================================================
 
-def get_clinic_definition() -> EncounterDefinition:
-    """Get the clinic_visit encounter definition."""
-    return EncounterDefinition.objects.get(key="clinic_visit")
+def get_clinic_definition() -> Optional[EncounterDefinition]:
+    """Get the clinic_visit encounter definition, or None if not seeded."""
+    return EncounterDefinition.objects.filter(key="clinic_visit").first()
 
 
 def create_clinic_visit(
@@ -60,8 +60,10 @@ def create_clinic_visit(
 def get_todays_visits(clinic: Optional[Organization] = None) -> QuerySet[Encounter]:
     """Get all clinic visits for today."""
     definition = get_clinic_definition()
+    if not definition:
+        return Encounter.objects.none()
+
     today = date.today()
-    tomorrow = today + timedelta(days=1)
 
     visits = Encounter.objects.filter(
         definition=definition,
@@ -74,6 +76,8 @@ def get_todays_visits(clinic: Optional[Organization] = None) -> QuerySet[Encount
 def get_visits_by_state(state: str) -> QuerySet[Encounter]:
     """Get all visits in a specific state."""
     definition = get_clinic_definition()
+    if not definition:
+        return Encounter.objects.none()
     return Encounter.objects.filter(
         definition=definition,
         state=state,
@@ -281,6 +285,9 @@ def get_status_board() -> dict[str, list[dict]]:
         "completed": [],
         "cancelled": [],
     }
+
+    if not definition:
+        return board
 
     visits = Encounter.objects.filter(
         definition=definition,

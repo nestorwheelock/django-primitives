@@ -427,3 +427,33 @@ class TestClinicFullWorkflow:
         failures = [(name, detail) for name, passed, detail in results if passed is False]
 
         assert len(failures) == 0, f"Verification failures: {failures}"
+
+
+# =============================================================================
+# View Error Handling Tests (Unseeded State)
+# =============================================================================
+
+@pytest.mark.django_db(transaction=True)
+class TestClinicViewsUnseeded:
+    """Test clinic views handle missing data gracefully (no seed_testbed run)."""
+
+    def test_dashboard_without_seed_returns_200(self, client):
+        """Dashboard should not crash when EncounterDefinition doesn't exist."""
+        response = client.get("/clinic/")
+        # Should return 200 with empty state, not 500
+        assert response.status_code == 200
+
+    def test_patient_list_without_seed_returns_200(self, client):
+        """Patient list should handle missing clinic organization."""
+        response = client.get("/clinic/patients/")
+        assert response.status_code == 200
+
+    def test_api_patients_without_seed_returns_200(self, client):
+        """API patients endpoint should handle missing data."""
+        response = client.get("/clinic/api/patients/")
+        assert response.status_code == 200
+
+    def test_api_visits_without_seed_returns_200(self, client):
+        """API visits endpoint should handle missing EncounterDefinition."""
+        response = client.get("/clinic/api/visits/")
+        assert response.status_code == 200
