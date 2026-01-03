@@ -321,6 +321,12 @@ class BasketItem(CatalogBaseModel):
         verbose_name = _('basket item')
         verbose_name_plural = _('basket items')
         ordering = ['created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name="basketitem_quantity_positive",
+            ),
+        ]
 
     def __str__(self):
         name = self.display_name_snapshot or self.catalog_item.display_name
@@ -508,6 +514,10 @@ class WorkItem(CatalogBaseModel):
                 fields=['basket_item', 'spawn_role'],
                 name='unique_workitem_per_basketitem_role',
             ),
+            models.CheckConstraint(
+                condition=models.Q(priority__gte=0) & models.Q(priority__lte=100),
+                name="workitem_priority_range",
+            ),
         ]
 
     def __str__(self):
@@ -566,6 +576,12 @@ class DispenseLog(CatalogBaseModel):
         verbose_name = _('dispense log')
         verbose_name_plural = _('dispense logs')
         ordering = ['-dispensed_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name="dispenselog_quantity_positive",
+            ),
+        ]
 
     def __str__(self):
         return f"Dispensed: {self.display_name} x{self.quantity} ({self.dispensed_at.date()})"

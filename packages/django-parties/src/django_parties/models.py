@@ -360,6 +360,25 @@ class PartyRelationship(BaseModel):
         verbose_name = _('party relationship')
         verbose_name_plural = _('party relationships')
         ordering = ['-created_at']
+        constraints = [
+            # Exactly one "from" party must be set
+            models.CheckConstraint(
+                condition=(
+                    (models.Q(from_person__isnull=False) & models.Q(from_organization__isnull=True)) |
+                    (models.Q(from_person__isnull=True) & models.Q(from_organization__isnull=False))
+                ),
+                name="partyrelationship_exactly_one_from",
+            ),
+            # Exactly one "to" party must be set
+            models.CheckConstraint(
+                condition=(
+                    (models.Q(to_person__isnull=False) & models.Q(to_organization__isnull=True) & models.Q(to_group__isnull=True)) |
+                    (models.Q(to_person__isnull=True) & models.Q(to_organization__isnull=False) & models.Q(to_group__isnull=True)) |
+                    (models.Q(to_person__isnull=True) & models.Q(to_organization__isnull=True) & models.Q(to_group__isnull=False))
+                ),
+                name="partyrelationship_exactly_one_to",
+            ),
+        ]
 
     def clean(self):
         """Validate relationship invariants (applies across all entry points)."""

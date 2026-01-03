@@ -233,6 +233,12 @@ class UserRole(BaseModel):
         verbose_name = _('user role')
         verbose_name_plural = _('user roles')
         ordering = ['-assigned_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(valid_to__isnull=True) | Q(valid_to__gt=models.F('valid_from')),
+                name="userrole_valid_to_after_valid_from",
+            ),
+        ]
 
     def __str__(self):
         return f'{self.user} - {self.role}'
