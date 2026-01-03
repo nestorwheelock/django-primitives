@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price Resolver - Pricing Module</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #059669; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 1.5rem; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1rem; margin-bottom: 1rem; }
+        .card h2 { font-size: 1rem; color: #666; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .btn { display: inline-block; padding: 0.5rem 1rem; background: #059669; color: white; text-decoration: none; border-radius: 4px; font-size: 0.9rem; border: none; cursor: pointer; }
+        .btn:hover { background: #047857; }
+        .btn.secondary { background: #6b7280; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #666; font-weight: 600; }
+        .form-group select { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; }
+        .nav-links { margin-top: 1rem; }
+        .nav-links a { color: #059669; text-decoration: none; margin-right: 1rem; }
+        .nav-links a:hover { text-decoration: underline; }
+        .result { padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+        .result.success { background: #d1fae5; border: 2px solid #059669; }
+        .result.error { background: #fee2e2; border: 2px solid #dc2626; }
+        .result-price { font-size: 2rem; font-weight: 700; color: #059669; }
+        .result-meta { margin-top: 0.5rem; color: #666; font-size: 0.875rem; }
+        .scope-badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+        .scope-global { background: #dbeafe; color: #1e40af; }
+        .scope-organization { background: #fef3c7; color: #92400e; }
+        .scope-party { background: #d1fae5; color: #065f46; }
+        .scope-agreement { background: #ede9fe; color: #5b21b6; }
+        .candidates { margin-top: 1rem; }
+        .candidates h3 { font-size: 0.875rem; color: #666; margin-bottom: 0.5rem; }
+        .candidate { padding: 0.5rem; background: #f9fafb; border-radius: 4px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+        .candidate.selected { background: #d1fae5; border-left: 3px solid #059669; }
+        .candidate-price { font-weight: 600; font-family: monospace; }
+        pre { background: #1f2937; color: #f9fafb; padding: 1rem; border-radius: 4px; overflow-x: auto; font-size: 0.875rem; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Price Resolver</h1>
+        <a href="{% url 'pricing:price_list' %}" class="btn secondary">Back to Price List</a>
+    </div>
+
+    <div class="container">
+        <div class="grid">
+            <div class="card">
+                <h2>Resolution Query</h2>
+                <form onsubmit="resolvePrice(event)">
+                    <div class="form-group">
+                        <label for="catalog_item_id">Catalog Item *</label>
+                        <select id="catalog_item_id" required>
+                            <option value="">Select item...</option>
+                            {% for item in catalog_items %}
+                            <option value="{{ item.pk }}">{{ item.display_name }} ({{ item.kind }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="organization_id">Organization (Payer)</label>
+                        <select id="organization_id">
+                            <option value="">No organization context</option>
+                            {% for org in organizations %}
+                            <option value="{{ org.pk }}">{{ org.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="party_id">Person (Individual)</label>
+                        <select id="party_id">
+                            <option value="">No individual context</option>
+                            {% for person in persons %}
+                            <option value="{{ person.pk }}">{{ person.first_name }} {{ person.last_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn">Resolve Price</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Resolution Result</h2>
+                <div id="result">
+                    <p style="color: #666;">Select a catalog item and click "Resolve Price" to see the result.</p>
+                </div>
+
+                <div id="candidates" class="candidates" style="display: none;">
+                    <h3>All Applicable Prices (in resolution order)</h3>
+                    <div id="candidates-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Debug: Full Explanation</h2>
+            <pre id="explanation">Select a catalog item to see the full explanation...</pre>
+        </div>
+
+        <div class="nav-links">
+            <a href="{% url 'index' %}">Back to Testbed Home</a>
+            <a href="{% url 'clinic:dashboard' %}">Clinic Dashboard</a>
+            <a href="{% url 'admin:index' %}">Django Admin</a>
+        </div>
+    </div>
+
+    <script>
+        function resolvePrice(event) {
+            event.preventDefault();
+
+            const catalogItemId = document.getElementById('catalog_item_id').value;
+            const organizationId = document.getElementById('organization_id').value;
+            const partyId = document.getElementById('party_id').value;
+
+            let url = `/pricing/api/explain/?catalog_item_id=${catalogItemId}`;
+            if (organizationId) url += `&organization_id=${organizationId}`;
+            if (partyId) url += `&party_id=${partyId}`;
+
+            fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                const resultDiv = document.getElementById('result');
+                const candidatesDiv = document.getElementById('candidates');
+                const candidatesListDiv = document.getElementById('candidates-list');
+                const explanationPre = document.getElementById('explanation');
+
+                if (data.selected_price) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <div class="result-price">${data.selected_price.unit_price.currency} ${parseFloat(data.selected_price.unit_price.amount).toFixed(2)}</div>
+                            <div class="result-meta">
+                                <span class="scope-badge scope-${data.selected_price.scope_type}">${data.selected_price.scope_type}</span>
+                                Priority: ${data.selected_price.priority}
+                            </div>
+                            <div class="result-meta">${data.explanation}</div>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            <strong>No price found</strong>
+                            <p>${data.explanation}</p>
+                        </div>
+                    `;
+                }
+
+                // Show candidates
+                if (data.candidates && data.candidates.length > 0) {
+                    candidatesDiv.style.display = 'block';
+                    candidatesListDiv.innerHTML = data.candidates.map((c, i) => `
+                        <div class="candidate ${i === 0 ? 'selected' : ''}">
+                            <div>
+                                <span class="scope-badge scope-${c.scope_type}">${c.scope_type}</span>
+                                Priority: ${c.priority}
+                            </div>
+                            <div class="candidate-price">${c.currency} ${parseFloat(c.amount).toFixed(2)}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    candidatesDiv.style.display = 'none';
+                }
+
+                // Show full explanation
+                explanationPre.textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(err => {
+                document.getElementById('result').innerHTML = `
+                    <div class="result error">
+                        <strong>Error</strong>
+                        <p>${err}</p>
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>

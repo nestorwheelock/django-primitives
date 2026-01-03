@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price List - Pricing Module</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #059669; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 1.5rem; }
+        .header-actions { display: flex; gap: 1rem; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 1rem; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1rem; margin-bottom: 1rem; }
+        .card h2 { font-size: 1rem; color: #666; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .btn { display: inline-block; padding: 0.5rem 1rem; background: #059669; color: white; text-decoration: none; border-radius: 4px; font-size: 0.9rem; border: none; cursor: pointer; }
+        .btn:hover { background: #047857; }
+        .btn.secondary { background: #6b7280; }
+        .btn.secondary:hover { background: #4b5563; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f9fafb; font-weight: 600; color: #666; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+        .scope-badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+        .scope-global { background: #dbeafe; color: #1e40af; }
+        .scope-organization { background: #fef3c7; color: #92400e; }
+        .scope-party { background: #d1fae5; color: #065f46; }
+        .scope-agreement { background: #ede9fe; color: #5b21b6; }
+        .amount { font-family: monospace; font-weight: 600; }
+        .nav-links { margin-top: 1rem; }
+        .nav-links a { color: #059669; text-decoration: none; margin-right: 1rem; }
+        .nav-links a:hover { text-decoration: underline; }
+        .filters { display: flex; gap: 1rem; margin-bottom: 1rem; }
+        .filters select { padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; }
+        .empty { text-align: center; color: #666; padding: 2rem; }
+        .form-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .form-group { flex: 1; min-width: 150px; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #666; }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; }
+        #create-form { display: none; }
+        #create-form.visible { display: block; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Pricing Module</h1>
+        <div class="header-actions">
+            <a href="{% url 'pricing:resolver' %}" class="btn secondary">Price Resolver</a>
+            <button class="btn" onclick="toggleCreateForm()">Add Price</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="card" id="create-form">
+            <h2>Create New Price</h2>
+            <form onsubmit="createPrice(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="catalog_item_id">Catalog Item *</label>
+                        <select id="catalog_item_id" required>
+                            <option value="">Select item...</option>
+                            {% for item in catalog_items %}
+                            <option value="{{ item.pk }}">{{ item.display_name }} ({{ item.kind }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="amount">Amount *</label>
+                        <input type="number" id="amount" step="0.01" min="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="currency">Currency</label>
+                        <select id="currency">
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                            <option value="GBP">GBP</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="organization_id">Organization (optional)</label>
+                        <select id="organization_id">
+                            <option value="">Global price (no org)</option>
+                            {% for org in organizations %}
+                            <option value="{{ org.pk }}">{{ org.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="priority">Priority</label>
+                        <input type="number" id="priority" value="50" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="reason">Reason</label>
+                        <input type="text" id="reason" placeholder="Why this price?">
+                    </div>
+                </div>
+                <button type="submit" class="btn">Create Price</button>
+                <button type="button" class="btn secondary" onclick="toggleCreateForm()">Cancel</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Prices ({{ total_count }} total)</h2>
+
+            {% if prices %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Catalog Item</th>
+                        <th>Amount</th>
+                        <th>Scope</th>
+                        <th>Priority</th>
+                        <th>Valid From</th>
+                        <th>Valid To</th>
+                        <th>Created By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for price in prices %}
+                    <tr>
+                        <td>{{ price.catalog_item.display_name }}</td>
+                        <td class="amount">{{ price.currency }} {{ price.amount }}</td>
+                        <td>
+                            <span class="scope-badge scope-{{ price.scope_type }}">{{ price.scope_type }}</span>
+                            {% if price.organization %}
+                                <small>{{ price.organization.name }}</small>
+                            {% elif price.party %}
+                                <small>{{ price.party.first_name }} {{ price.party.last_name }}</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ price.priority }}</td>
+                        <td>{{ price.valid_from|date:"M j, Y" }}</td>
+                        <td>{% if price.valid_to %}{{ price.valid_to|date:"M j, Y" }}{% else %}<em>indefinite</em>{% endif %}</td>
+                        <td>{{ price.created_by.username|default:"-" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty">
+                <p>No prices defined yet.</p>
+                <p style="margin-top: 0.5rem;">Click "Add Price" to create your first price rule.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="nav-links">
+            <a href="{% url 'index' %}">Back to Testbed Home</a>
+            <a href="{% url 'clinic:dashboard' %}">Clinic Dashboard</a>
+            <a href="{% url 'admin:index' %}">Django Admin</a>
+        </div>
+    </div>
+
+    <script>
+        function toggleCreateForm() {
+            document.getElementById('create-form').classList.toggle('visible');
+        }
+
+        function createPrice(event) {
+            event.preventDefault();
+
+            const data = {
+                catalog_item_id: document.getElementById('catalog_item_id').value,
+                amount: document.getElementById('amount').value,
+                currency: document.getElementById('currency').value,
+                organization_id: document.getElementById('organization_id').value || null,
+                priority: parseInt(document.getElementById('priority').value),
+                reason: document.getElementById('reason').value,
+            };
+
+            fetch('/pricing/api/prices/create/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    location.reload();
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+        }
+    </script>
+</body>
+</html>
