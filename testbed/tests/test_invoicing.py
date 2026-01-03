@@ -502,3 +502,174 @@ class TestPayment:
             )
 
         assert "exceeds invoice total" in str(exc_info.value)
+
+
+# =============================================================================
+# P0 Constraint Tests (Data Integrity)
+# =============================================================================
+
+
+@pytest.mark.django_db(transaction=True)
+class TestInvoiceLineItemConstraints:
+    """Tests for P0 data integrity constraints on InvoiceLineItem."""
+
+    def test_zero_quantity_rejected_by_db(
+        self, committed_basket, prices, clinic, patient, user
+    ):
+        """Line item with quantity=0 is rejected by DB constraint."""
+        from django.db import IntegrityError, transaction as db_transaction
+
+        invoice = create_invoice_from_basket(
+            committed_basket,
+            created_by=user,
+            issue_immediately=False,
+        )
+
+        # Try to create a line item with quantity=0
+        with pytest.raises(IntegrityError) as exc_info:
+            with db_transaction.atomic():
+                InvoiceLineItem.objects.create(
+                    invoice=invoice,
+                    priced_basket_item=invoice.line_items.first().priced_basket_item,
+                    description="Zero quantity test",
+                    quantity=0,
+                    unit_price_amount=Decimal("10.00"),
+                    line_total_amount=Decimal("0.00"),
+                    price_scope_type="global",
+                    price_rule_id=prices["aspirin"].pk,
+                )
+
+        assert "invoicelineitem_quantity_positive" in str(exc_info.value).lower()
+
+    def test_inconsistent_line_total_rejected_by_db(
+        self, committed_basket, prices, clinic, patient, user
+    ):
+        """Line total that doesn't match qty * unit_price is rejected."""
+        from django.db import IntegrityError, transaction as db_transaction
+
+        invoice = create_invoice_from_basket(
+            committed_basket,
+            created_by=user,
+            issue_immediately=False,
+        )
+
+        # Try to create a line item where total != qty * price
+        # quantity=2, unit_price=10.00, but line_total=50.00 (should be 20.00)
+        with pytest.raises(IntegrityError) as exc_info:
+            with db_transaction.atomic():
+                InvoiceLineItem.objects.create(
+                    invoice=invoice,
+                    priced_basket_item=invoice.line_items.first().priced_basket_item,
+                    description="Inconsistent total test",
+                    quantity=2,
+                    unit_price_amount=Decimal("10.0000"),
+                    line_total_amount=Decimal("50.0000"),  # Wrong! Should be 20.00
+                    price_scope_type="global",
+                    price_rule_id=prices["aspirin"].pk,
+                )
+
+        assert "invoicelineitem_total_equals_qty_times_price" in str(exc_info.value).lower()
+
+    def test_consistent_line_item_accepted(
+        self, committed_basket, prices, clinic, patient, user
+    ):
+        """Line item with correct qty * unit_price = total is accepted."""
+        invoice = create_invoice_from_basket(
+            committed_basket,
+            created_by=user,
+            issue_immediately=False,
+        )
+
+        # Get an existing priced basket item to link to
+        from primitives_testbed.pricing.models import PricedBasketItem
+
+        # Create a new basket item for this test
+        new_basket_item = BasketItem.objects.create(
+            basket=committed_basket,
+            catalog_item=invoice.line_items.first().priced_basket_item.basket_item.catalog_item,
+            quantity=3,
+            added_by=user,
+        )
+
+        priced_item = PricedBasketItem.objects.create(
+            basket_item=new_basket_item,
+            unit_price_amount=Decimal("15.0000"),
+            unit_price_currency="USD",
+            price_rule=prices["aspirin"],
+        )
+
+        # This should succeed: 3 * 15.00 = 45.00
+        line = InvoiceLineItem.objects.create(
+            invoice=invoice,
+            priced_basket_item=priced_item,
+            description="Consistent total test",
+            quantity=3,
+            unit_price_amount=Decimal("15.0000"),
+            line_total_amount=Decimal("45.0000"),  # Correct: 3 * 15 = 45
+            price_scope_type="global",
+            price_rule_id=prices["aspirin"].pk,
+        )
+
+        assert line.pk is not None
+
+
+@pytest.mark.django_db(transaction=True)
+class TestInvoiceNumberGeneration:
+    """Tests for atomic invoice number generation."""
+
+    def test_invoice_numbers_are_unique(
+        self, committed_basket, prices, clinic, patient, user, encounter_definition
+    ):
+        """Each invoice gets a unique number."""
+        # Create first invoice
+        invoice1 = create_invoice_from_basket(
+            committed_basket,
+            created_by=user,
+            issue_immediately=False,
+        )
+
+        # Create another encounter and basket for second invoice
+        person_ct = ContentType.objects.get_for_model(Person)
+        encounter2 = Encounter.objects.create(
+            definition=encounter_definition,
+            subject_type=person_ct,
+            subject_id=str(patient.pk),
+            state="checked_in",
+            created_by=user,
+        )
+        basket2 = Basket.objects.create(
+            encounter=encounter2,
+            status="committed",
+            created_by=user,
+        )
+        BasketItem.objects.create(
+            basket=basket2,
+            catalog_item=prices["aspirin"].catalog_item,
+            quantity=1,
+            added_by=user,
+        )
+
+        invoice2 = create_invoice_from_basket(
+            basket2,
+            created_by=user,
+            issue_immediately=False,
+        )
+
+        assert invoice1.invoice_number != invoice2.invoice_number
+
+    def test_invoice_number_format(
+        self, committed_basket, prices, clinic, patient, user
+    ):
+        """Invoice number follows INV-YYYY-NNNN format."""
+        import re
+
+        invoice = create_invoice_from_basket(
+            committed_basket,
+            created_by=user,
+            issue_immediately=False,
+        )
+
+        # Should match INV-YYYY-NNNN pattern
+        pattern = r"^INV-\d{4}-\d{4}$"
+        assert re.match(pattern, invoice.invoice_number), \
+            f"Invoice number {invoice.invoice_number} doesn't match expected pattern"

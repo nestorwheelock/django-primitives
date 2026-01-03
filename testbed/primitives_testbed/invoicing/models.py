@@ -231,6 +231,18 @@ class InvoiceLineItem(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [
+            # Quantity must be positive (> 0, not >= 0)
+            models.CheckConstraint(
+                condition=Q(quantity__gt=0),
+                name="invoicelineitem_quantity_positive",
+            ),
+            # Line total must equal quantity * unit_price (prevents drift)
+            models.CheckConstraint(
+                condition=Q(line_total_amount=models.F("quantity") * models.F("unit_price_amount")),
+                name="invoicelineitem_total_equals_qty_times_price",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.description} x{self.quantity} = {self.line_total}"

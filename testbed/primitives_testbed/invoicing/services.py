@@ -13,6 +13,7 @@ from django.utils import timezone
 from django_ledger.models import Account
 from django_ledger.services import record_transaction
 from django_money import Money
+from django_sequence.services import next_sequence
 
 from .context import InvoiceContext, extract_invoice_context
 from .exceptions import InvoiceStateError, LedgerIntegrationError
@@ -20,19 +21,27 @@ from .models import Invoice, InvoiceLineItem
 from .pricing import price_basket
 
 
-def generate_invoice_number() -> str:
-    """Generate a unique invoice number.
+def generate_invoice_number(organization) -> str:
+    """Generate a unique invoice number atomically.
 
-    Format: INV-YYYYMMDD-XXXX where XXXX is sequential within the day.
+    Uses django-sequence with select_for_update() to prevent race conditions
+    when multiple requests try to generate invoice numbers simultaneously.
+
+    Format: INV-YYYY-NNNN where NNNN is sequential per organization per year.
+
+    Args:
+        organization: The organization issuing the invoice (for scoping)
+
+    Returns:
+        Unique invoice number like "INV-2026-0001"
     """
-    today = timezone.now().strftime("%Y%m%d")
-
-    # Count existing invoices today and increment
-    today_count = Invoice.objects.filter(
-        invoice_number__startswith=f"INV-{today}-"
-    ).count()
-
-    return f"INV-{today}-{today_count + 1:04d}"
+    return next_sequence(
+        scope='invoice',
+        org=organization,
+        prefix='INV-',
+        pad_width=4,
+        include_year=True,
+    )
 
 
 @transaction.atomic
@@ -86,7 +95,7 @@ def create_invoice_from_basket(
         billed_to=context.patient,
         issued_by=context.organization,
         agreement=context.agreement,
-        invoice_number=generate_invoice_number(),
+        invoice_number=generate_invoice_number(context.organization),
         status="draft",
         currency=priced_basket.currency,
         subtotal_amount=subtotal.amount,
