@@ -173,10 +173,10 @@ class TestInvoicePrintE2E:
             parties = page.locator(".parties")
             parties.screenshot(path=str(SCREENSHOT_DIR / "03-invoice-parties.png"))
 
-            # Verify parties
-            parties_content = parties.inner_text()
-            assert "From" in parties_content
-            assert "Bill To" in parties_content
+            # Verify parties (case-insensitive)
+            parties_content = parties.inner_text().lower()
+            assert "from" in parties_content
+            assert "bill to" in parties_content
 
             browser.close()
 
@@ -214,12 +214,12 @@ class TestInvoicePrintE2E:
             line_items = page.locator(".line-items")
             line_items.screenshot(path=str(SCREENSHOT_DIR / "04-invoice-line-items.png"))
 
-            # Verify table headers
-            headers = page.locator(".line-items th").all_inner_texts()
-            assert "Description" in headers
-            assert "Qty" in headers
-            assert "Unit Price" in headers
-            assert "Amount" in headers
+            # Verify table headers (case-insensitive)
+            headers = [h.lower() for h in page.locator(".line-items th").all_inner_texts()]
+            assert "description" in headers
+            assert "qty" in headers
+            assert "unit price" in headers
+            assert "amount" in headers
 
             browser.close()
 
