@@ -108,39 +108,50 @@ class BookDiverView(StaffPortalMixin, FormView):
 
 
 class CheckInView(StaffPortalMixin, View):
-    """Check in a booking (POST only - placeholder for T-004)."""
+    """Check in a booking."""
 
     http_method_names = ["post"]
 
     def post(self, request, pk):
+        from .services import check_in
+
         booking = get_object_or_404(Booking, pk=pk)
-        messages.info(request, "Check-in functionality coming in T-004")
+        check_in(booking, request.user)
+        messages.success(
+            request, f"{booking.diver.person.first_name} has been checked in."
+        )
         return HttpResponseRedirect(
             reverse("diveops:trip-detail", kwargs={"pk": booking.trip.pk})
         )
 
 
 class StartTripView(StaffPortalMixin, View):
-    """Start a trip (POST only - placeholder for T-004)."""
+    """Start a trip."""
 
     http_method_names = ["post"]
 
     def post(self, request, pk):
+        from .services import start_trip
+
         trip = get_object_or_404(DiveTrip, pk=pk)
-        messages.info(request, "Start trip functionality coming in T-004")
+        start_trip(trip, request.user)
+        messages.success(request, "Trip has been started.")
         return HttpResponseRedirect(
             reverse("diveops:trip-detail", kwargs={"pk": trip.pk})
         )
 
 
 class CompleteTripView(StaffPortalMixin, View):
-    """Complete a trip (POST only - placeholder for T-004)."""
+    """Complete a trip."""
 
     http_method_names = ["post"]
 
     def post(self, request, pk):
+        from .services import complete_trip
+
         trip = get_object_or_404(DiveTrip, pk=pk)
-        messages.info(request, "Complete trip functionality coming in T-004")
+        complete_trip(trip, request.user)
+        messages.success(request, "Trip has been completed.")
         return HttpResponseRedirect(
             reverse("diveops:trip-detail", kwargs={"pk": trip.pk})
         )

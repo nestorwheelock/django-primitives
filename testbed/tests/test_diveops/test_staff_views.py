@@ -335,3 +335,230 @@ class TestBookDiverView:
         expected_redirect = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
         assert response.status_code == 302
         assert expected_redirect in response.url
+
+
+@pytest.mark.django_db
+class TestCheckInView:
+    """Tests for CheckInView."""
+
+    @pytest.fixture
+    def booking(self, dive_trip, diver_profile, user):
+        """Create a confirmed booking for testing."""
+        from primitives_testbed.diveops.models import Booking
+
+        return Booking.objects.create(
+            trip=dive_trip,
+            diver=diver_profile,
+            status="confirmed",
+            booked_by=user,
+        )
+
+    def test_check_in_requires_authentication(self, anonymous_client, booking):
+        """Anonymous users are redirected to login."""
+        url = reverse("diveops:check-in", kwargs={"pk": booking.pk})
+        response = anonymous_client.post(url)
+
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_check_in_requires_staff(self, regular_client, booking):
+        """Non-staff users are denied access."""
+        url = reverse("diveops:check-in", kwargs={"pk": booking.pk})
+        response = regular_client.post(url)
+
+        assert response.status_code in [302, 403]
+
+    def test_check_in_only_accepts_post(self, staff_client, booking):
+        """GET requests are not allowed."""
+        url = reverse("diveops:check-in", kwargs={"pk": booking.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 405  # Method not allowed
+
+    def test_check_in_creates_roster_entry(self, staff_client, booking):
+        """POST creates roster entry and updates booking status."""
+        from primitives_testbed.diveops.models import TripRoster
+
+        url = reverse("diveops:check-in", kwargs={"pk": booking.pk})
+        response = staff_client.post(url)
+
+        # Should redirect to trip detail
+        assert response.status_code == 302
+
+        # Roster entry should exist
+        assert TripRoster.objects.filter(booking=booking).exists()
+
+        # Booking status should be updated
+        booking.refresh_from_db()
+        assert booking.status == "checked_in"
+
+    def test_check_in_redirects_to_trip_detail(self, staff_client, booking):
+        """Successful check-in redirects to trip detail."""
+        url = reverse("diveops:check-in", kwargs={"pk": booking.pk})
+        response = staff_client.post(url)
+
+        expected_redirect = reverse("diveops:trip-detail", kwargs={"pk": booking.trip.pk})
+        assert response.status_code == 302
+        assert expected_redirect in response.url
+
+    def test_check_in_404_for_invalid_booking(self, staff_client):
+        """Check-in returns 404 for non-existent booking."""
+        import uuid
+
+        fake_id = uuid.uuid4()
+        url = reverse("diveops:check-in", kwargs={"pk": fake_id})
+        response = staff_client.post(url)
+
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestStartTripView:
+    """Tests for StartTripView."""
+
+    def test_start_trip_requires_authentication(self, anonymous_client, dive_trip):
+        """Anonymous users are redirected to login."""
+        url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        response = anonymous_client.post(url)
+
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_start_trip_requires_staff(self, regular_client, dive_trip):
+        """Non-staff users are denied access."""
+        url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        response = regular_client.post(url)
+
+        assert response.status_code in [302, 403]
+
+    def test_start_trip_only_accepts_post(self, staff_client, dive_trip):
+        """GET requests are not allowed."""
+        url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 405  # Method not allowed
+
+    def test_start_trip_transitions_to_in_progress(self, staff_client, dive_trip, diver_profile, user):
+        """POST transitions trip to in_progress state."""
+        from primitives_testbed.diveops.models import Booking, TripRoster
+        from primitives_testbed.diveops.services import check_in
+
+        # Create and check in a booking first
+        booking = Booking.objects.create(
+            trip=dive_trip,
+            diver=diver_profile,
+            status="confirmed",
+            booked_by=user,
+        )
+        check_in(booking, user)
+
+        # Start the trip
+        url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        response = staff_client.post(url)
+
+        # Should redirect
+        assert response.status_code == 302
+
+        # Trip state should be in_progress
+        dive_trip.refresh_from_db()
+        assert dive_trip.encounter.state == "in_progress"
+
+    def test_start_trip_redirects_to_trip_detail(self, staff_client, dive_trip, diver_profile, user):
+        """Successful start redirects to trip detail."""
+        from primitives_testbed.diveops.models import Booking
+        from primitives_testbed.diveops.services import check_in
+
+        booking = Booking.objects.create(
+            trip=dive_trip,
+            diver=diver_profile,
+            status="confirmed",
+            booked_by=user,
+        )
+        check_in(booking, user)
+
+        url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        response = staff_client.post(url)
+
+        expected_redirect = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        assert response.status_code == 302
+        assert expected_redirect in response.url
+
+
+@pytest.mark.django_db
+class TestCompleteTripView:
+    """Tests for CompleteTripView."""
+
+    def test_complete_trip_requires_authentication(self, anonymous_client, dive_trip):
+        """Anonymous users are redirected to login."""
+        url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        response = anonymous_client.post(url)
+
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_complete_trip_requires_staff(self, regular_client, dive_trip):
+        """Non-staff users are denied access."""
+        url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        response = regular_client.post(url)
+
+        assert response.status_code in [302, 403]
+
+    def test_complete_trip_only_accepts_post(self, staff_client, dive_trip):
+        """GET requests are not allowed."""
+        url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 405  # Method not allowed
+
+    def test_complete_trip_transitions_to_completed(self, staff_client, dive_trip, diver_profile, user):
+        """POST transitions trip to completed state and updates diver stats."""
+        from primitives_testbed.diveops.models import Booking
+        from primitives_testbed.diveops.services import check_in, start_trip
+
+        # Setup: create booking, check in, start trip
+        booking = Booking.objects.create(
+            trip=dive_trip,
+            diver=diver_profile,
+            status="confirmed",
+            booked_by=user,
+        )
+        check_in(booking, user)
+        start_trip(dive_trip, user)
+
+        initial_dives = diver_profile.total_dives
+
+        # Complete the trip
+        url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        response = staff_client.post(url)
+
+        # Should redirect
+        assert response.status_code == 302
+
+        # Trip state should be completed
+        dive_trip.refresh_from_db()
+        assert dive_trip.encounter.state == "completed"
+
+        # Diver's total dives should be incremented
+        diver_profile.refresh_from_db()
+        assert diver_profile.total_dives == initial_dives + 1
+
+    def test_complete_trip_redirects_to_trip_detail(self, staff_client, dive_trip, diver_profile, user):
+        """Successful completion redirects to trip detail."""
+        from primitives_testbed.diveops.models import Booking
+        from primitives_testbed.diveops.services import check_in, start_trip
+
+        booking = Booking.objects.create(
+            trip=dive_trip,
+            diver=diver_profile,
+            status="confirmed",
+            booked_by=user,
+        )
+        check_in(booking, user)
+        start_trip(dive_trip, user)
+
+        url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        response = staff_client.post(url)
+
+        expected_redirect = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        assert response.status_code == 302
+        assert expected_redirect in response.url
