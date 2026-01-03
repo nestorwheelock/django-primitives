@@ -1,0 +1,29 @@
+# Core dependencies
+Django>=4.2
+psycopg2-binary>=2.9
+python-dotenv>=1.0
+
+# Testing
+pytest>=7.0
+pytest-django>=4.5
+pytest-cov>=4.0
+
+# Django Primitives (editable installs)
+-e ../packages/django-basemodels
+-e ../packages/django-singleton
+-e ../packages/django-modules
+-e ../packages/django-layers
+-e ../packages/django-sequence
+-e ../packages/django-parties
+-e ../packages/django-rbac
+-e ../packages/django-decisioning
+-e ../packages/django-audit-log
+-e ../packages/django-catalog
+-e ../packages/django-encounters
+-e ../packages/django-worklog
+-e ../packages/django-geo
+-e ../packages/django-ledger
+-e ../packages/django-documents
+-e ../packages/django-notes
+-e ../packages/django-agreements
+-e ../packages/django-money

@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "primitives-testbed"
+version = "0.1.0"
+description = "Verification harness for django-primitives packages"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+
+dependencies = [
+    "Django>=4.2",
+    "psycopg2-binary>=2.9",
+    "python-dotenv>=1.0",
+    # Django Primitives (editable installs from monorepo)
+    "django-agreements @ file:///${PROJECT_ROOT}/../packages/django-agreements",
+    "django-audit-log @ file:///${PROJECT_ROOT}/../packages/django-audit-log",
+    "django-basemodels @ file:///${PROJECT_ROOT}/../packages/django-basemodels",
+    "django-catalog @ file:///${PROJECT_ROOT}/../packages/django-catalog",
+    "django-decisioning @ file:///${PROJECT_ROOT}/../packages/django-decisioning",
+    "django-documents @ file:///${PROJECT_ROOT}/../packages/django-documents",
+    "django-encounters @ file:///${PROJECT_ROOT}/../packages/django-encounters",
+    "django-geo @ file:///${PROJECT_ROOT}/../packages/django-geo",
+    "django-layers @ file:///${PROJECT_ROOT}/../packages/django-layers",
+    "django-ledger @ file:///${PROJECT_ROOT}/../packages/django-ledger",
+    "django-modules @ file:///${PROJECT_ROOT}/../packages/django-modules",
+    "django-money @ file:///${PROJECT_ROOT}/../packages/django-money",
+    "django-notes @ file:///${PROJECT_ROOT}/../packages/django-notes",
+    "django-parties @ file:///${PROJECT_ROOT}/../packages/django-parties",
+    "django-rbac @ file:///${PROJECT_ROOT}/../packages/django-rbac",
+    "django-sequence @ file:///${PROJECT_ROOT}/../packages/django-sequence",
+    "django-singleton @ file:///${PROJECT_ROOT}/../packages/django-singleton",
+    "django-worklog @ file:///${PROJECT_ROOT}/../packages/django-worklog",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-django>=4.5",
+    "pytest-cov>=4.0",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "primitives_testbed.settings"
+python_files = ["test_*.py"]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.hatch.build.targets.wheel]
+packages = ["primitives_testbed"]

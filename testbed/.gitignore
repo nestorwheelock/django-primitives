@@ -1,0 +1,15 @@
+# Environment
+.env
+
+# Test artifacts
+documents/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Database
+*.sqlite3
+db.sqlite3
