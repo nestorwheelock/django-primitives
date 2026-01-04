@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from django.db import models
 from django.utils import timezone
 
 
@@ -257,3 +258,287 @@ class TestEligibilityResult:
         assert isinstance(result.allowed, bool)
         assert isinstance(result.reasons, list)
         assert isinstance(result.required_actions, list)
+
+
+@pytest.mark.django_db
+class TestTripRequirementDecisioning:
+    """Tests for TripRequirement-based eligibility checks."""
+
+    @pytest.fixture
+    def aow_level(self):
+        """Create Advanced Open Water certification level."""
+        from primitives_testbed.diveops.models import CertificationLevel
+
+        return CertificationLevel.objects.create(
+            code="aow",
+            name="Advanced Open Water",
+            rank=3,
+        )
+
+    @pytest.fixture
+    def ow_level(self):
+        """Create Open Water certification level."""
+        from primitives_testbed.diveops.models import CertificationLevel
+
+        return CertificationLevel.objects.create(
+            code="ow",
+            name="Open Water",
+            rank=2,
+        )
+
+    @pytest.fixture
+    def padi_agency(self):
+        """Create PADI certification agency."""
+        from django_parties.models import Organization
+
+        return Organization.objects.create(
+            name="PADI",
+            org_type="other",
+        )
+
+    @pytest.fixture
+    def trip_with_aow_requirement(self, dive_trip, aow_level):
+        """Create trip with AOW certification requirement."""
+        from primitives_testbed.diveops.models import TripRequirement
+
+        TripRequirement.objects.create(
+            trip=dive_trip,
+            requirement_type="certification",
+            certification_level=aow_level,
+            is_mandatory=True,
+        )
+        return dive_trip
+
+    def test_diver_with_higher_cert_meets_requirement(
+        self, trip_with_aow_requirement, diver_profile, aow_level, ow_level, padi_agency
+    ):
+        """Diver with higher certification meets lower requirement."""
+        from primitives_testbed.diveops.decisioning import can_diver_join_trip_v2
+        from primitives_testbed.diveops.models import CertificationLevel, DiverCertification
+
+        # Create DM level (higher than AOW)
+        dm_level = CertificationLevel.objects.create(code="dm", name="Divemaster", rank=5)
+
+        # Give diver DM certification
+        DiverCertification.objects.create(
+            diver=diver_profile,
+            level=dm_level,
+            agency=padi_agency,
+            certification_number="DM123",
+            certified_on=date.today() - timedelta(days=365),
+        )
+
+        result = can_diver_join_trip_v2(
+            diver=diver_profile,
+            trip=trip_with_aow_requirement,
+            as_of=timezone.now(),
+        )
+
+        assert result.allowed is True
+
+    def test_diver_with_exact_cert_meets_requirement(
+        self, trip_with_aow_requirement, diver_profile, aow_level, padi_agency
+    ):
+        """Diver with exact certification meets requirement."""
+        from primitives_testbed.diveops.decisioning import can_diver_join_trip_v2
+        from primitives_testbed.diveops.models import DiverCertification
+
+        # Give diver AOW certification
+        DiverCertification.objects.create(
+            diver=diver_profile,
+            level=aow_level,
+            agency=padi_agency,
+            certification_number="AOW123",
+            certified_on=date.today() - timedelta(days=180),
+        )
+
+        result = can_diver_join_trip_v2(
+            diver=diver_profile,
+            trip=trip_with_aow_requirement,
+            as_of=timezone.now(),
+        )
+
+        assert result.allowed is True
+
+    def test_diver_with_lower_cert_fails_requirement(
+        self, trip_with_aow_requirement, diver_profile, ow_level, padi_agency
+    ):
+        """Diver with lower certification fails requirement."""
+        from primitives_testbed.diveops.decisioning import can_diver_join_trip_v2
+        from primitives_testbed.diveops.models import DiverCertification
+
+        # Give diver only OW certification (lower than required AOW)
+        DiverCertification.objects.create(
+            diver=diver_profile,
+            level=ow_level,
+            agency=padi_agency,
+            certification_number="OW123",
+            certified_on=date.today() - timedelta(days=365),
+        )
+
+        result = can_diver_join_trip_v2(
+            diver=diver_profile,
+            trip=trip_with_aow_requirement,
+            as_of=timezone.now(),
+        )
+
+        assert result.allowed is False
+        assert any("certification" in r.lower() for r in result.reasons)
+
+    def test_diver_with_no_certifications_fails_requirement(
+        self, trip_with_aow_requirement, diver_profile
+    ):
+        """Diver with no certifications fails requirement."""
+        from primitives_testbed.diveops.decisioning import can_diver_join_trip_v2
+
+        result = can_diver_join_trip_v2(
+            diver=diver_profile,
+            trip=trip_with_aow_requirement,
+            as_of=timezone.now(),
+        )
+
+        assert result.allowed is False
+        assert any("certification" in r.lower() for r in result.reasons)
+
+    def test_expired_certification_not_counted(
+        self, trip_with_aow_requirement, diver_profile, aow_level, padi_agency
+    ):
+        """Expired certification is not counted for requirements."""
+        from primitives_testbed.diveops.decisioning import can_diver_join_trip_v2
+        from primitives_testbed.diveops.models import DiverCertification
+
+        # Give diver expired AOW certification
+        DiverCertification.objects.create(
+            diver=diver_profile,
+            level=aow_level,
+            agency=padi_agency,
+            certification_number="AOW123",
+            certified_on=date.today() - timedelta(days=730),
+            expires_on=date.today() - timedelta(days=30),  # Expired
+        )
+
+        result = can_diver_join_trip_v2(
+            diver=diver_profile,
+            trip=trip_with_aow_requirement,
+            as_of=timezone.now(),
+        )
+
+        assert result.allowed is False
+        assert any("certification" in r.lower() for r in result.reasons)
+
+    def test_required_actions_include_level_details(
+        self, trip_with_aow_requirement, diver_profile, ow_level, padi_agency
+    ):
+        """Required actions include specific certification level details."""
+        from primitives_testbed.diveops.decisioning import can_diver_join_trip_v2
+        from primitives_testbed.diveops.models import DiverCertification
+
+        # Give diver only OW certification
+        DiverCertification.objects.create(
+            diver=diver_profile,
+            level=ow_level,
+            agency=padi_agency,
+            certification_number="OW123",
+            certified_on=date.today() - timedelta(days=365),
+        )
+
+        result = can_diver_join_trip_v2(
+            diver=diver_profile,
+            trip=trip_with_aow_requirement,
+            as_of=timezone.now(),
+        )
+
+        assert result.allowed is False
+        # Required actions should mention the specific level needed
+        assert any("advanced open water" in action.lower() for action in result.required_actions)
+
+    def test_experience_requirement_checked(self, dive_trip, diver_profile, padi_agency, aow_level):
+        """Experience requirement is checked."""
+        from primitives_testbed.diveops.decisioning import can_diver_join_trip_v2
+        from primitives_testbed.diveops.models import DiverCertification, TripRequirement
+
+        # Add experience requirement
+        TripRequirement.objects.create(
+            trip=dive_trip,
+            requirement_type="experience",
+            min_dives=50,
+            is_mandatory=True,
+        )
+
+        # Give diver certification but not enough dives
+        DiverCertification.objects.create(
+            diver=diver_profile,
+            level=aow_level,
+            agency=padi_agency,
+            certification_number="AOW123",
+            certified_on=date.today() - timedelta(days=180),
+        )
+
+        # Diver has only default dives (from fixture)
+        result = can_diver_join_trip_v2(
+            diver=diver_profile,
+            trip=dive_trip,
+            as_of=timezone.now(),
+        )
+
+        # Should fail if diver has fewer than 50 dives
+        if diver_profile.total_dives < 50:
+            assert result.allowed is False
+            assert any("experience" in r.lower() or "dives" in r.lower() for r in result.reasons)
+
+    def test_trip_without_requirements_allows_any_certified_diver(
+        self, dive_trip, diver_profile, ow_level, padi_agency
+    ):
+        """Trip without TripRequirements allows any certified diver."""
+        from primitives_testbed.diveops.decisioning import can_diver_join_trip_v2
+        from primitives_testbed.diveops.models import DiverCertification
+
+        # Give diver basic OW certification
+        DiverCertification.objects.create(
+            diver=diver_profile,
+            level=ow_level,
+            agency=padi_agency,
+            certification_number="OW123",
+            certified_on=date.today() - timedelta(days=365),
+        )
+
+        result = can_diver_join_trip_v2(
+            diver=diver_profile,
+            trip=dive_trip,
+            as_of=timezone.now(),
+        )
+
+        assert result.allowed is True
+
+    def test_optional_requirements_dont_block(
+        self, dive_trip, diver_profile, aow_level, ow_level, padi_agency
+    ):
+        """Optional (non-mandatory) requirements don't block eligibility."""
+        from primitives_testbed.diveops.decisioning import can_diver_join_trip_v2
+        from primitives_testbed.diveops.models import DiverCertification, TripRequirement
+
+        # Add optional AOW requirement
+        TripRequirement.objects.create(
+            trip=dive_trip,
+            requirement_type="certification",
+            certification_level=aow_level,
+            is_mandatory=False,  # Optional
+        )
+
+        # Give diver only OW certification
+        DiverCertification.objects.create(
+            diver=diver_profile,
+            level=ow_level,
+            agency=padi_agency,
+            certification_number="OW123",
+            certified_on=date.today() - timedelta(days=365),
+        )
+
+        result = can_diver_join_trip_v2(
+            diver=diver_profile,
+            trip=dive_trip,
+            as_of=timezone.now(),
+        )
+
+        # Should be allowed since requirement is optional
+        assert result.allowed is True

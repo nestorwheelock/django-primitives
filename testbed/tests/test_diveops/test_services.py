@@ -7,6 +7,28 @@ import pytest
 from django.utils import timezone
 
 
+def _create_trip_price(trip, user):
+    """Helper to create a price for a trip's catalog item."""
+    from django_catalog.models import CatalogItem
+    from primitives_testbed.pricing.models import Price
+
+    # Get or create the catalog item for this trip
+    catalog_item, _ = CatalogItem.objects.get_or_create(
+        display_name=f"Dive Trip - {trip.dive_site.name}",
+        defaults={"kind": "service", "is_billable": True, "active": True},
+    )
+
+    # Create a price for this catalog item
+    return Price.objects.create(
+        catalog_item=catalog_item,
+        amount=trip.price_per_diver,
+        currency=trip.currency,
+        valid_from=timezone.now() - timedelta(days=30),
+        priority=50,
+        created_by=user,
+    )
+
+
 @pytest.mark.django_db
 class TestBookTrip:
     """Tests for book_trip service."""
@@ -30,6 +52,9 @@ class TestBookTrip:
         """book_trip creates a basket when create_invoice=True."""
         from primitives_testbed.diveops.services import book_trip
 
+        # Create price for the trip (required by billing adapter)
+        _create_trip_price(dive_trip, user)
+
         booking = book_trip(
             trip=dive_trip,
             diver=diver_profile,
@@ -44,6 +69,9 @@ class TestBookTrip:
     def test_book_trip_creates_invoice_when_requested(self, dive_trip, diver_profile, user):
         """book_trip creates an invoice when create_invoice=True."""
         from primitives_testbed.diveops.services import book_trip
+
+        # Create price for the trip (required by billing adapter)
+        _create_trip_price(dive_trip, user)
 
         booking = book_trip(
             trip=dive_trip,
@@ -102,7 +130,7 @@ class TestBookTrip:
 
         # Mock basket creation to fail
         mocker.patch(
-            "primitives_testbed.diveops.services._create_booking_basket",
+            "primitives_testbed.diveops.integrations.create_trip_basket",
             side_effect=Exception("Simulated error"),
         )
 

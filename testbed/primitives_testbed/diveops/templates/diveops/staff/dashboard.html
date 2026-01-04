@@ -1,0 +1,151 @@
+{% extends "portal_ui/base_staff.html" %}
+{% load portal_ui_tags %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">Dive Operations Dashboard</h1>
+        <p class="text-gray-600">Overview of trips, divers, and bookings</p>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Upcoming Trips -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-2 rounded-lg bg-blue-100">
+                    {% icon "anchor" "w-6 h-6 text-blue-600" %}
+                </div>
+                <div class="ml-4">
+                    <p class="text-2xl font-bold text-gray-900">{{ upcoming_trips_count }}</p>
+                    <p class="text-sm text-gray-500">Upcoming Trips</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Divers -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-2 rounded-lg bg-green-100">
+                    {% icon "users" "w-6 h-6 text-green-600" %}
+                </div>
+                <div class="ml-4">
+                    <p class="text-2xl font-bold text-gray-900">{{ diver_count }}</p>
+                    <p class="text-sm text-gray-500">Registered Divers</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Today's Trips -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-2 rounded-lg bg-yellow-100">
+                    {% icon "calendar" "w-6 h-6 text-yellow-600" %}
+                </div>
+                <div class="ml-4">
+                    <p class="text-2xl font-bold text-gray-900">{{ todays_trips|length }}</p>
+                    <p class="text-sm text-gray-500">Today's Trips</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Bookings -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-2 rounded-lg bg-purple-100">
+                    {% icon "clock" "w-6 h-6 text-purple-600" %}
+                </div>
+                <div class="ml-4">
+                    <p class="text-2xl font-bold text-gray-900">{{ pending_bookings_count }}</p>
+                    <p class="text-sm text-gray-500">Pending Bookings</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Upcoming Trips Card -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-medium text-gray-900">Upcoming Trips</h3>
+                <a href="{% url 'diveops:trip-list' %}" class="text-sm text-blue-600 hover:text-blue-700">View all</a>
+            </div>
+            <div class="p-4">
+                {% if upcoming_trips %}
+                <div class="space-y-3">
+                    {% for trip in upcoming_trips %}
+                    <a href="{% url 'diveops:trip-detail' pk=trip.pk %}" class="block p-3 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50 transition-colors">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-medium text-gray-900">{{ trip.dive_site.name }}</p>
+                                <p class="text-sm text-gray-500">{{ trip.departure_time|date:"M j, Y g:i A" }}</p>
+                            </div>
+                            <div class="text-right">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if trip.status == 'scheduled' %}bg-blue-100 text-blue-800{% elif trip.status == 'boarding' %}bg-yellow-100 text-yellow-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ trip.status|title }}
+                                </span>
+                                <p class="text-sm text-gray-500 mt-1">{{ trip.spots_available }} spots</p>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-gray-500 text-center py-4">No upcoming trips scheduled</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Today's Schedule Card -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Today's Schedule</h3>
+            </div>
+            <div class="p-4">
+                {% if todays_trips %}
+                <div class="space-y-3">
+                    {% for trip in todays_trips %}
+                    <a href="{% url 'diveops:trip-detail' pk=trip.pk %}" class="block p-3 rounded-lg border border-gray-100 hover:border-green-200 hover:bg-green-50 transition-colors">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-medium text-gray-900">{{ trip.dive_site.name }}</p>
+                                <p class="text-sm text-gray-500">{{ trip.departure_time|time:"g:i A" }}</p>
+                            </div>
+                            <div>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if trip.status == 'scheduled' %}bg-blue-100 text-blue-800{% elif trip.status == 'boarding' %}bg-yellow-100 text-yellow-800{% elif trip.status == 'departed' %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ trip.status|title }}
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-gray-500 text-center py-4">No trips scheduled for today</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
+        <div class="flex flex-wrap gap-3">
+            <a href="{% url 'diveops:trip-list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "anchor" "w-4 h-4 mr-2" %}
+                View All Trips
+            </a>
+            <a href="{% url 'diveops:diver-list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "users" "w-4 h-4 mr-2" %}
+                View All Divers
+            </a>
+            <a href="{% url 'diveops:diver-create' %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "user-plus" "w-4 h-4 mr-2" %}
+                Add New Diver
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

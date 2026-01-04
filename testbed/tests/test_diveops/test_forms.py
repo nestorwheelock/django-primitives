@@ -1,6 +1,6 @@
 """Tests for diveops forms."""
 
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -8,6 +8,146 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 User = get_user_model()
+
+
+@pytest.mark.django_db
+class TestDiverForm:
+    """Tests for DiverForm (creates Person + DiverProfile)."""
+
+    def test_form_has_person_fields(self):
+        """DiverForm has first_name, last_name, email fields."""
+        from primitives_testbed.diveops.forms import DiverForm
+
+        form = DiverForm()
+        assert "first_name" in form.fields
+        assert "last_name" in form.fields
+        assert "email" in form.fields
+
+    def test_form_has_certification_fields(self):
+        """DiverForm has certification fields."""
+        from primitives_testbed.diveops.forms import DiverForm
+
+        form = DiverForm()
+        assert "certification_level" in form.fields
+        assert "certification_agency" in form.fields
+        assert "certification_number" in form.fields
+        assert "certification_date" in form.fields
+
+    def test_form_has_experience_fields(self):
+        """DiverForm has experience and medical fields."""
+        from primitives_testbed.diveops.forms import DiverForm
+
+        form = DiverForm()
+        assert "total_dives" in form.fields
+        assert "medical_clearance_date" in form.fields
+        assert "medical_clearance_valid_until" in form.fields
+
+    def test_form_valid_with_required_fields(self):
+        """DiverForm is valid with all required fields."""
+        from primitives_testbed.diveops.forms import DiverForm
+
+        form = DiverForm(data={
+            "first_name": "Alice",
+            "last_name": "Diver",
+            "email": "alice@example.com",
+            "certification_level": "ow",
+            "certification_agency": "PADI",
+            "certification_number": "12345",
+            "certification_date": date.today() - timedelta(days=30),
+            "total_dives": 10,
+        })
+        assert form.is_valid(), form.errors
+
+    def test_form_creates_person_and_profile(self):
+        """DiverForm.save() creates both Person and DiverProfile."""
+        from django_parties.models import Person
+        from primitives_testbed.diveops.forms import DiverForm
+        from primitives_testbed.diveops.models import DiverProfile
+
+        form = DiverForm(data={
+            "first_name": "Bob",
+            "last_name": "Swimmer",
+            "email": "bob@example.com",
+            "certification_level": "aow",
+            "certification_agency": "SSI",
+            "certification_number": "98765",
+            "certification_date": date.today() - timedelta(days=180),
+            "total_dives": 25,
+        })
+        assert form.is_valid(), form.errors
+
+        diver = form.save()
+
+        assert isinstance(diver, DiverProfile)
+        assert diver.pk is not None
+        assert diver.person.first_name == "Bob"
+        assert diver.person.last_name == "Swimmer"
+        assert diver.person.email == "bob@example.com"
+        assert diver.certification_level == "aow"
+        assert diver.certification_agency == "SSI"
+        assert diver.total_dives == 25
+
+    def test_form_email_must_be_unique(self):
+        """DiverForm rejects duplicate email for new diver."""
+        from django_parties.models import Person
+        from primitives_testbed.diveops.forms import DiverForm
+
+        # Create existing person
+        Person.objects.create(
+            first_name="Existing",
+            last_name="Person",
+            email="existing@example.com",
+        )
+
+        form = DiverForm(data={
+            "first_name": "New",
+            "last_name": "Person",
+            "email": "existing@example.com",  # Duplicate
+            "certification_level": "ow",
+            "certification_agency": "PADI",
+            "certification_number": "11111",
+            "certification_date": date.today(),
+            "total_dives": 0,
+        })
+        assert not form.is_valid()
+        assert "email" in form.errors
+
+    def test_form_edit_existing_diver(self, diver_profile):
+        """DiverForm can edit an existing diver."""
+        from primitives_testbed.diveops.forms import DiverForm
+
+        form = DiverForm(instance=diver_profile, data={
+            "first_name": "John",
+            "last_name": "Diver",
+            "email": "john@example.com",
+            "certification_level": "rescue",  # Upgraded
+            "certification_agency": "PADI",
+            "certification_number": "12345",
+            "certification_date": diver_profile.certification_date,
+            "total_dives": 75,  # More dives
+        })
+        assert form.is_valid(), form.errors
+
+        diver = form.save()
+        assert diver.pk == diver_profile.pk
+        assert diver.certification_level == "rescue"
+        assert diver.total_dives == 75
+
+    def test_form_edit_allows_same_email(self, diver_profile):
+        """Editing diver can keep the same email."""
+        from primitives_testbed.diveops.forms import DiverForm
+
+        form = DiverForm(instance=diver_profile, data={
+            "first_name": "John",
+            "last_name": "Diver",
+            "email": "john@example.com",  # Same email
+            "certification_level": "aow",
+            "certification_agency": "PADI",
+            "certification_number": "12345",
+            "certification_date": diver_profile.certification_date,
+            "total_dives": 55,
+        })
+        assert form.is_valid(), form.errors
 
 
 @pytest.mark.django_db

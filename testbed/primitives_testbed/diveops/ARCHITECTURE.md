@@ -1,6 +1,7 @@
 # Architecture: diveops
 
-**Status:** Alpha / v0.2.0
+**Status:** Alpha / v0.3.0
+**Updated:** 2026-01-03
 
 ## Design Intent
 
@@ -12,18 +13,161 @@ This module demonstrates how to build a domain-specific application as a thin la
 - **Temporal**: Eligibility decisions can be evaluated at any point in time
 - **Adapter Pattern**: Uses `integrations.py` to centralize primitive imports
 
-## Primitive Mapping
+---
 
-| Primitive | Diveops Usage |
-|-----------|---------------|
-| `django-parties` | `DiverProfile.person` → Person, `DiveTrip.dive_shop` → Organization |
-| `django-geo` | `DiveSite.place` → Place (optional) |
-| `django-encounters` | `DiveTrip.encounter` → Encounter for trip workflow tracking |
-| `django-catalog` | `Booking.basket` → Basket for booking commerce |
-| `django-agreements` | `Booking.waiver_agreement` → Agreement for liability waivers |
-| `django-invoicing` | `Booking.invoice` → Invoice for payment tracking |
-| `django-ledger` | Invoice → Transaction for double-entry accounting |
-| `django-sequence` | Invoice number generation |
+## Wiring Map: Real Imports + Real Boundaries
+
+### Primitive → Diveops FK Relationships
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PRIMITIVE LAYER                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  django_parties          django_geo        django_encounters                │
+│  ┌──────────────┐       ┌─────────┐       ┌────────────────────┐           │
+│  │ Person       │       │ Place   │       │ Encounter          │           │
+│  │ Organization │       └────┬────┘       │ EncounterDefinition│           │
+│  └──────┬───────┘            │            └──────────┬─────────┘           │
+│         │                    │                       │                      │
+├─────────┼────────────────────┼───────────────────────┼──────────────────────┤
+│         │                    │                       │                      │
+│         ▼                    ▼                       ▼                      │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                        DIVEOPS LAYER                                │   │
+│  ├─────────────────────────────────────────────────────────────────────┤   │
+│  │                                                                     │   │
+│  │  DiverProfile.person ─────────────────────► Person                  │   │
+│  │  DiverCertification.agency ───────────────► Organization            │   │
+│  │  DiveTrip.dive_shop ──────────────────────► Organization            │   │
+│  │  DiveSite.place ──────────────────────────► Place                   │   │
+│  │  DiveTrip.encounter ──────────────────────► Encounter               │   │
+│  │                                                                     │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  django_catalog           django_agreements      primitives_testbed        │
+│  ┌─────────────┐         ┌──────────────┐       ┌─────────────────┐        │
+│  │ Basket      │         │ Agreement    │       │ Invoice         │        │
+│  │ BasketItem  │         └──────┬───────┘       │ InvoiceLineItem │        │
+│  │ CatalogItem │                │               │ Price           │        │
+│  └──────┬──────┘                │               └────────┬────────┘        │
+│         │                       │                        │                  │
+│         ▼                       ▼                        ▼                  │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                        BOOKING LAYER                                │   │
+│  ├─────────────────────────────────────────────────────────────────────┤   │
+│  │                                                                     │   │
+│  │  Booking.basket ──────────────────────────► Basket                  │   │
+│  │  Booking.waiver_agreement ────────────────► Agreement               │   │
+│  │  Booking.invoice ─────────────────────────► Invoice                 │   │
+│  │                                                                     │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Actual Import Paths (from integrations.py)
+
+```python
+# Identity primitives
+from django_parties.models import Organization, Person
+
+# Location primitives
+from django_geo.models import Place
+
+# Workflow primitives
+from django_encounters.models import Encounter, EncounterDefinition
+
+# Commerce primitives
+from django_catalog.models import Basket, BasketItem, CatalogItem
+
+# Legal primitives
+from django_agreements.models import Agreement
+
+# Sequence generation
+from django_sequence.services import next_sequence
+
+# Invoicing (testbed module built on primitives)
+from primitives_testbed.invoicing.models import Invoice, InvoiceLineItem
+```
+
+### Primitive Mapping (Detailed)
+
+| Primitive Package | Model | Diveops FK | Usage |
+|-------------------|-------|------------|-------|
+| `django_parties` | `Person` | `DiverProfile.person` | Diver identity (name, email) |
+| `django_parties` | `Organization` | `DiveTrip.dive_shop` | Dive shop running the trip |
+| `django_parties` | `Organization` | `DiverCertification.agency` | Certifying agency (PADI, SSI) |
+| `django_geo` | `Place` | `DiveSite.place` | Physical location (optional) |
+| `django_encounters` | `Encounter` | `DiveTrip.encounter` | Trip workflow state machine |
+| `django_catalog` | `Basket` | `Booking.basket` | Commerce cart for booking |
+| `django_agreements` | `Agreement` | `Booking.waiver_agreement` | Liability waiver |
+| `primitives_testbed.invoicing` | `Invoice` | `Booking.invoice` | Payment tracking |
+
+---
+
+## Postgres-Only Features (Confirmed)
+
+Diveops uses these Postgres-specific features:
+
+| Feature | Location | Purpose |
+|---------|----------|---------|
+| `UniqueConstraint` with `condition` | `Booking`, `TripRoster`, `DiverCertification` | Partial unique indexes (soft delete aware) |
+| `CheckConstraint` with `Q()` | `DiverProfile`, `DiveSite`, `DiveTrip`, `DiverCertification` | Data integrity rules |
+| `CheckConstraint` with `F()` | `DiveTrip`, `DiverCertification` | Cross-field validation |
+| Deferrable constraints | Not used yet | Could use for complex transactions |
+
+### Constraint Examples
+
+```python
+# Partial unique - only active bookings count
+UniqueConstraint(
+    fields=["trip", "diver"],
+    condition=Q(status__in=["pending", "confirmed", "checked_in"]),
+    name="diveops_booking_one_active_per_trip"
+)
+
+# Check with F() - expiration must be after certification
+CheckConstraint(
+    check=Q(expires_on__isnull=True) | Q(expires_on__gt=F("certified_on")),
+    name="expires_after_certified"
+)
+```
+
+---
+
+## Adapter Points (Integration Status)
+
+### Implemented ✅
+
+| Integration | Status | Location |
+|-------------|--------|----------|
+| Person/Organization FKs | ✅ Complete | `models.py` |
+| Place FK (optional) | ✅ Complete | `DiveSite.place` |
+| Encounter FK (optional) | ✅ Complete | `DiveTrip.encounter` |
+| Certification normalization | ✅ Complete | `CertificationLevel`, `DiverCertification`, `TripRequirement` |
+| Decisioning with requirements | ✅ Complete | `can_diver_join_trip_v2()` |
+| Basket creation | ✅ Complete | `integrations.create_trip_basket()` |
+| Price resolution | ✅ Complete | `integrations.resolve_trip_price()` |
+| Invoice creation | ✅ Complete | `integrations.create_booking_invoice()` |
+
+### TODO: Future Phases 🔧
+
+| Integration | Status | Required Work |
+|-------------|--------|---------------|
+| Waiver workflow | 🔧 FK only | Full Agreement lifecycle |
+| Tax calculation | 🔧 Not started | Add tax support to invoice |
+| Agreement pricing | 🔧 Not started | Pass diver's agreements to price resolution |
+
+### Future Considerations
+
+| Integration | Primitive | Use Case |
+|-------------|-----------|----------|
+| Document attachment | `django_documents` | Certification proof, medical forms |
+| Audit logging | `django_audit_log` | Verification actions, booking changes |
+| Work sessions | `django_worklog` | Staff time tracking on trips |
 
 ## Domain Models
 

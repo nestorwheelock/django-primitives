@@ -4,8 +4,6 @@ Business logic for booking, check-in, and trip completion.
 All write operations are atomic transactions.
 """
 
-from typing import Optional
-
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone
@@ -18,7 +16,26 @@ from .exceptions import (
     TripCapacityError,
     TripStateError,
 )
+from .integrations import (
+    CatalogItem,
+    create_booking_invoice,
+    create_trip_basket,
+    price_basket_item,
+)
 from .models import Booking, DiverProfile, DiveTrip, TripRoster
+
+
+def _get_or_create_trip_catalog_item(trip: DiveTrip) -> CatalogItem:
+    """Get or create a CatalogItem for a dive trip."""
+    item, _ = CatalogItem.objects.get_or_create(
+        display_name=f"Dive Trip - {trip.dive_site.name}",
+        defaults={
+            "kind": "service",
+            "is_billable": True,
+            "active": True,
+        },
+    )
+    return item
 
 
 @transaction.atomic
@@ -32,13 +49,13 @@ def book_trip(
 ) -> Booking:
     """Book a diver on a trip.
 
-    Creates a booking and optionally a basket/invoice.
+    Creates a booking and optionally a basket/invoice using the pricing module.
 
     Args:
         trip: The trip to book
         diver: The diver profile
         booked_by: User making the booking
-        create_invoice: If True, create basket and invoice
+        create_invoice: If True, create basket and invoice via billing adapter
         skip_eligibility_check: If True, skip eligibility validation
 
     Returns:
@@ -69,130 +86,38 @@ def book_trip(
         booked_by=booked_by,
     )
 
-    # Create basket if requested
+    # Create basket and invoice via billing adapter
     if create_invoice:
-        basket = _create_booking_basket(booking, booked_by)
+        catalog_item = _get_or_create_trip_catalog_item(trip)
+
+        # Create basket with trip item
+        basket = create_trip_basket(
+            trip=trip,
+            diver=diver,
+            catalog_item=catalog_item,
+            created_by=booked_by,
+        )
         booking.basket = basket
 
-        # Create invoice
-        invoice = _create_booking_invoice(booking, basket, booked_by)
+        # Price all basket items via pricing module
+        for item in basket.items.all():
+            price_basket_item(
+                basket_item=item,
+                trip=trip,
+                diver=diver,
+            )
+
+        # Create invoice from priced basket
+        invoice = create_booking_invoice(
+            basket=basket,
+            trip=trip,
+            diver=diver,
+            created_by=booked_by,
+        )
         booking.invoice = invoice
         booking.save()
 
     return booking
-
-
-def _create_booking_basket(booking: Booking, created_by) -> "Basket":
-    """Create a basket for a booking.
-
-    Internal helper - creates a basket with the trip as an item.
-    """
-    from django_catalog.models import Basket, BasketItem, CatalogItem
-
-    # Get or create a catalog item for dive trips
-    trip_item, _ = CatalogItem.objects.get_or_create(
-        display_name=f"Dive Trip - {booking.trip.dive_site.name}",
-        defaults={
-            "kind": "service",
-            "is_billable": True,
-            "active": True,
-        },
-    )
-
-    # Create an encounter for the basket (if needed)
-    from django_encounters.models import Encounter, EncounterDefinition
-
-    # Get or create dive trip encounter definition
-    definition, _ = EncounterDefinition.objects.get_or_create(
-        key="dive_booking",
-        defaults={
-            "name": "Dive Booking",
-            "states": ["draft", "confirmed", "completed", "cancelled"],
-            "transitions": {
-                "draft": ["confirmed", "cancelled"],
-                "confirmed": ["completed", "cancelled"],
-                "completed": [],
-                "cancelled": [],
-            },
-            "initial_state": "draft",
-            "terminal_states": ["completed", "cancelled"],
-        },
-    )
-
-    # Create encounter for the booking
-    diver_ct = ContentType.objects.get_for_model(booking.diver)
-    encounter = Encounter.objects.create(
-        definition=definition,
-        subject_type=diver_ct,
-        subject_id=str(booking.diver.pk),
-        state="draft",
-    )
-
-    # Create basket
-    basket = Basket.objects.create(
-        encounter=encounter,
-        status="draft",
-        created_by=created_by,
-    )
-
-    # Add trip as basket item
-    BasketItem.objects.create(
-        basket=basket,
-        catalog_item=trip_item,
-        quantity=1,
-        added_by=created_by,
-    )
-
-    return basket
-
-
-def _create_booking_invoice(booking: Booking, basket, created_by) -> "Invoice":
-    """Create an invoice for a booking.
-
-    Internal helper - prices basket and creates invoice.
-    """
-    from decimal import Decimal
-
-    from primitives_testbed.invoicing.models import Invoice, InvoiceLineItem
-    from django_sequence.services import next_sequence
-
-    trip = booking.trip
-
-    # Commit the basket first
-    basket.status = "committed"
-    basket.committed_by = created_by
-    basket.committed_at = timezone.now()
-    basket.save()
-
-    # Generate invoice number
-    invoice_number = next_sequence(
-        scope="invoice",
-        org=trip.dive_shop,
-        prefix="INV-",
-        pad_width=4,
-        include_year=True,
-    )
-
-    # Create invoice
-    invoice = Invoice.objects.create(
-        basket=basket,
-        encounter=basket.encounter,
-        billed_to=booking.diver.person,
-        issued_by=trip.dive_shop,
-        invoice_number=invoice_number,
-        status="issued",
-        currency=trip.currency,
-        subtotal_amount=trip.price_per_diver,
-        tax_amount=Decimal("0"),
-        total_amount=trip.price_per_diver,
-        created_by=created_by,
-        issued_at=timezone.now(),
-    )
-
-    # We can't create line items without PricedBasketItem in this simplified flow
-    # In a real implementation, we'd use the pricing module
-
-    return invoice
 
 
 @transaction.atomic

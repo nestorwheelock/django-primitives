@@ -1,6 +1,9 @@
 """Models for dive operations.
 
 This module provides domain models for a diving operation built on django-primitives:
+- CertificationLevel: Reference data for certification levels
+- DiverCertification: Diver's certification records (normalized)
+- TripRequirement: Requirements for joining a trip
 - DiverProfile: Extends Person with diving-specific data
 - DiveSite: Location with diving metadata (depth, difficulty, certification required)
 - DiveTrip: Scheduled dive trip connecting shop, site, and divers
@@ -12,12 +15,243 @@ import uuid
 from datetime import date, datetime, timedelta
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.utils import timezone
 
 # Configurable waiver validity period (default 365 days, None = never expires)
 DIVEOPS_WAIVER_VALIDITY_DAYS = getattr(settings, "DIVEOPS_WAIVER_VALIDITY_DAYS", 365)
+
+
+class SoftDeleteManager(models.Manager):
+    """Manager that excludes soft-deleted records by default."""
+
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+
+class CertificationLevel(models.Model):
+    """Reference data for certification levels.
+
+    Normalized replacement for CERTIFICATION_LEVELS choices.
+    The rank field enables comparison: level.rank >= required.rank
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    code = models.CharField(
+        max_length=20,
+        unique=True,
+        help_text="Short code like 'ow', 'aow', 'dm'",
+    )
+    name = models.CharField(
+        max_length=100,
+        help_text="Full name like 'Open Water Diver'",
+    )
+    rank = models.PositiveIntegerField(
+        help_text="Numeric rank for comparison (higher = more advanced)",
+    )
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    # Soft delete support
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(rank__gt=0),
+                name="diveops_cert_level_rank_gt_zero",
+            ),
+        ]
+        ordering = ["rank"]
+
+    def __str__(self):
+        return self.name
+
+    def delete(self, using=None, keep_parents=False):
+        """Soft delete the certification level."""
+        self.deleted_at = timezone.now()
+        self.save(update_fields=["deleted_at"])
+
+
+class DiverCertification(models.Model):
+    """A diver's certification record.
+
+    Normalized join table allowing multiple certifications per diver.
+    Links to CertificationLevel and Organization (agency).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    diver = models.ForeignKey(
+        "DiverProfile",
+        on_delete=models.CASCADE,
+        related_name="certifications",
+    )
+    level = models.ForeignKey(
+        CertificationLevel,
+        on_delete=models.PROTECT,
+        related_name="diver_certifications",
+    )
+    agency = models.ForeignKey(
+        "django_parties.Organization",
+        on_delete=models.PROTECT,
+        related_name="diver_certifications",
+        help_text="Certification agency (PADI, SSI, NAUI, etc.)",
+    )
+
+    certification_number = models.CharField(max_length=100)
+    certified_on = models.DateField()
+    expires_on = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Leave blank if certification never expires",
+    )
+
+    # Verification tracking
+    is_verified = models.BooleanField(default=False)
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="certifications_verified",
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    # Soft delete support
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
+
+    class Meta:
+        constraints = [
+            # Only one certification per diver+level+agency (among active records)
+            models.UniqueConstraint(
+                fields=["diver", "level", "agency"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_active_certification",
+            ),
+            # Expiration must be after certification date
+            models.CheckConstraint(
+                condition=Q(expires_on__isnull=True) | Q(expires_on__gt=F("certified_on")),
+                name="diveops_cert_expires_after_certified",
+            ),
+        ]
+        ordering = ["-level__rank", "-certified_on"]
+
+    def __str__(self):
+        return f"{self.diver} - {self.level.name} ({self.agency.name})"
+
+    @property
+    def is_current(self) -> bool:
+        """Check if certification is not expired."""
+        if self.expires_on is None:
+            return True
+        return self.expires_on > date.today()
+
+    def delete(self, using=None, keep_parents=False):
+        """Soft delete the certification."""
+        self.deleted_at = timezone.now()
+        self.save(update_fields=["deleted_at"])
+
+
+class TripRequirement(models.Model):
+    """Requirements for joining a trip.
+
+    Supports multiple requirement types (certification, medical, gear, experience).
+    Replaces DiveSite.min_certification_level with trip-level requirements.
+    """
+
+    REQUIREMENT_TYPES = [
+        ("certification", "Certification Level"),
+        ("medical", "Medical Clearance"),
+        ("gear", "Equipment/Gear"),
+        ("experience", "Dive Experience"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    trip = models.ForeignKey(
+        "DiveTrip",
+        on_delete=models.CASCADE,
+        related_name="requirements",
+    )
+    requirement_type = models.CharField(
+        max_length=20,
+        choices=REQUIREMENT_TYPES,
+    )
+
+    # For certification requirements
+    certification_level = models.ForeignKey(
+        CertificationLevel,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="trip_requirements",
+    )
+
+    # For experience requirements
+    min_dives = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Minimum number of logged dives",
+    )
+
+    description = models.TextField(blank=True)
+    is_mandatory = models.BooleanField(default=True)
+
+    # Soft delete support
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = SoftDeleteManager()
+    all_objects = models.Manager()
+
+    class Meta:
+        constraints = [
+            # Only one requirement of each type per trip (among active records)
+            models.UniqueConstraint(
+                fields=["trip", "requirement_type"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_requirement_type_per_trip",
+            ),
+        ]
+        ordering = ["requirement_type"]
+
+    def __str__(self):
+        if self.certification_level:
+            return f"{self.trip}: {self.certification_level.name} required"
+        return f"{self.trip}: {self.get_requirement_type_display()}"
+
+    def clean(self):
+        """Validate that certification requirements have a certification_level."""
+        if self.requirement_type == "certification" and not self.certification_level:
+            raise ValidationError({
+                "certification_level": "Certification level is required for certification requirements."
+            })
+
+    def delete(self, using=None, keep_parents=False):
+        """Soft delete the requirement."""
+        self.deleted_at = timezone.now()
+        self.save(update_fields=["deleted_at"])
 
 
 class DiverProfile(models.Model):

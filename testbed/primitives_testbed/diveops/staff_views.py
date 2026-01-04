@@ -5,12 +5,120 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
-from django.views.generic import DetailView, FormView, ListView, View
+from django.views.generic import CreateView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 
 from django_portal_ui.mixins import StaffPortalMixin
 
+from .forms import DiverForm
 from .models import Booking, DiverProfile, DiveTrip, TripRoster
 from .selectors import get_trip_with_roster, list_upcoming_trips
+
+
+class DashboardView(StaffPortalMixin, TemplateView):
+    """Staff dashboard for diveops."""
+
+    template_name = "diveops/staff/dashboard.html"
+
+    def get_context_data(self, **kwargs):
+        """Add dashboard stats to context."""
+        context = super().get_context_data(**kwargs)
+
+        # Upcoming trips
+        upcoming_trips = list_upcoming_trips(limit=5)
+        context["upcoming_trips"] = upcoming_trips
+        context["upcoming_trips_count"] = DiveTrip.objects.filter(
+            departure_time__gt=timezone.now(),
+            status__in=["scheduled", "boarding"],
+        ).count()
+
+        # Active divers
+        context["diver_count"] = DiverProfile.objects.count()
+
+        # Today's trips
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timezone.timedelta(days=1)
+        context["todays_trips"] = DiveTrip.objects.filter(
+            departure_time__gte=today_start,
+            departure_time__lt=today_end,
+        ).select_related("dive_site").order_by("departure_time")
+
+        # Pending bookings
+        context["pending_bookings_count"] = Booking.objects.filter(
+            status="pending"
+        ).count()
+
+        return context
+
+
+class DiverListView(StaffPortalMixin, ListView):
+    """List all divers for staff."""
+
+    model = DiverProfile
+    template_name = "diveops/staff/diver_list.html"
+    context_object_name = "divers"
+
+    def get_queryset(self):
+        """Return divers with person data."""
+        return DiverProfile.objects.select_related("person").order_by(
+            "person__last_name", "person__first_name"
+        )
+
+
+class CreateDiverView(StaffPortalMixin, FormView):
+    """Create a new diver."""
+
+    template_name = "diveops/staff/diver_form.html"
+    form_class = DiverForm
+    success_url = reverse_lazy("diveops:diver-list")
+
+    def form_valid(self, form):
+        diver = form.save()
+        messages.success(
+            self.request,
+            f"Diver {diver.person.first_name} {diver.person.last_name} has been created.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = True
+        context["page_title"] = "Add Diver"
+        return context
+
+
+class EditDiverView(StaffPortalMixin, FormView):
+    """Edit an existing diver."""
+
+    template_name = "diveops/staff/diver_form.html"
+    form_class = DiverForm
+    success_url = reverse_lazy("diveops:diver-list")
+
+    def dispatch(self, request, *args, **kwargs):
+        self.diver = get_object_or_404(
+            DiverProfile.objects.select_related("person"),
+            pk=kwargs["pk"],
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["instance"] = self.diver
+        return kwargs
+
+    def form_valid(self, form):
+        diver = form.save()
+        messages.success(
+            self.request,
+            f"Diver {diver.person.first_name} {diver.person.last_name} has been updated.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = False
+        context["page_title"] = "Edit Diver"
+        context["diver"] = self.diver
+        return context
 
 
 class TripListView(StaffPortalMixin, ListView):

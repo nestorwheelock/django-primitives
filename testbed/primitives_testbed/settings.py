@@ -90,6 +90,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "django_portal_ui.context_processors.portal_ui",
             ],
         },
     },
@@ -177,4 +178,23 @@ LOGGING = {
             "propagate": False,
         },
     },
+}
+
+# Portal UI configuration
+PORTAL_UI = {
+    "SITE_NAME": "Primitives Testbed",
+    "STAFF_NAV": [
+        {
+            "section": "Dive Operations",
+            "label": "Trips",
+            "url": "diveops:trip-list",
+            "icon": "anchor",
+        },
+        {
+            "section": "Dive Operations",
+            "label": "Divers",
+            "url": "diveops:diver-list",
+            "icon": "users",
+        },
+    ],
 }

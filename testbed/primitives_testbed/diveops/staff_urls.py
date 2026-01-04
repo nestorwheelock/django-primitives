@@ -7,6 +7,12 @@ from . import staff_views
 app_name = "diveops"
 
 urlpatterns = [
+    # Dashboard
+    path("", staff_views.DashboardView.as_view(), name="dashboard"),
+    # Diver management
+    path("divers/", staff_views.DiverListView.as_view(), name="diver-list"),
+    path("divers/add/", staff_views.CreateDiverView.as_view(), name="diver-create"),
+    path("divers/<uuid:pk>/edit/", staff_views.EditDiverView.as_view(), name="diver-edit"),
     # Trip management
     path("trips/", staff_views.TripListView.as_view(), name="trip-list"),
     path("trips/<uuid:pk>/", staff_views.TripDetailView.as_view(), name="trip-detail"),

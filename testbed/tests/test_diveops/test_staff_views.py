@@ -693,3 +693,212 @@ class TestFullBookingWorkflow:
 
         complete_trip = reverse("diveops:complete-trip", kwargs={"pk": fake_pk})
         assert "/diveops/" in complete_trip
+
+
+@pytest.mark.django_db
+class TestDiverListView:
+    """Tests for DiverListView."""
+
+    def test_diver_list_requires_authentication(self, anonymous_client):
+        """Anonymous users are redirected to login."""
+        url = reverse("diveops:diver-list")
+        response = anonymous_client.get(url)
+
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_diver_list_requires_staff(self, regular_client):
+        """Non-staff users are denied access."""
+        url = reverse("diveops:diver-list")
+        response = regular_client.get(url)
+
+        assert response.status_code in [302, 403]
+
+    def test_diver_list_accessible_by_staff(self, staff_client):
+        """Staff users can access diver list."""
+        url = reverse("diveops:diver-list")
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+
+    def test_diver_list_shows_divers(self, staff_client, diver_profile):
+        """Diver list shows existing divers."""
+        url = reverse("diveops:diver-list")
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert diver_profile.person.first_name.encode() in response.content
+
+    def test_diver_list_has_add_diver_link(self, staff_client):
+        """Diver list has link to add new diver."""
+        url = reverse("diveops:diver-list")
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert b"Add Diver" in response.content or b"add-diver" in response.content.lower()
+
+
+@pytest.mark.django_db
+class TestCreateDiverView:
+    """Tests for CreateDiverView."""
+
+    def test_create_diver_requires_authentication(self, anonymous_client):
+        """Anonymous users are redirected to login."""
+        url = reverse("diveops:diver-create")
+        response = anonymous_client.get(url)
+
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_create_diver_requires_staff(self, regular_client):
+        """Non-staff users are denied access."""
+        url = reverse("diveops:diver-create")
+        response = regular_client.get(url)
+
+        assert response.status_code in [302, 403]
+
+    def test_create_diver_accessible_by_staff(self, staff_client):
+        """Staff users can access create diver form."""
+        url = reverse("diveops:diver-create")
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+
+    def test_create_diver_shows_form(self, staff_client):
+        """Create diver page shows the form fields."""
+        url = reverse("diveops:diver-create")
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert b"first_name" in response.content
+        assert b"certification_level" in response.content
+
+    def test_create_diver_creates_diver(self, staff_client):
+        """POST creates a new diver with person."""
+        from datetime import date, timedelta
+        from primitives_testbed.diveops.models import DiverProfile
+
+        url = reverse("diveops:diver-create")
+        response = staff_client.post(url, {
+            "first_name": "New",
+            "last_name": "Diver",
+            "email": "newdiver@example.com",
+            "certification_level": "ow",
+            "certification_agency": "PADI",
+            "certification_number": "NEW123",
+            "certification_date": (date.today() - timedelta(days=30)).isoformat(),
+            "total_dives": 5,
+        })
+
+        # Should redirect on success
+        assert response.status_code == 302
+
+        # Diver should exist
+        diver = DiverProfile.objects.get(person__email="newdiver@example.com")
+        assert diver.person.first_name == "New"
+        assert diver.certification_level == "ow"
+        assert diver.total_dives == 5
+
+    def test_create_diver_redirects_to_list(self, staff_client):
+        """Successful creation redirects to diver list."""
+        from datetime import date, timedelta
+
+        url = reverse("diveops:diver-create")
+        response = staff_client.post(url, {
+            "first_name": "Another",
+            "last_name": "Diver",
+            "email": "another@example.com",
+            "certification_level": "aow",
+            "certification_agency": "SSI",
+            "certification_number": "SSI999",
+            "certification_date": (date.today() - timedelta(days=90)).isoformat(),
+            "total_dives": 20,
+        })
+
+        assert response.status_code == 302
+        assert reverse("diveops:diver-list") in response.url
+
+
+@pytest.mark.django_db
+class TestEditDiverView:
+    """Tests for EditDiverView."""
+
+    def test_edit_diver_requires_authentication(self, anonymous_client, diver_profile):
+        """Anonymous users are redirected to login."""
+        url = reverse("diveops:diver-edit", kwargs={"pk": diver_profile.pk})
+        response = anonymous_client.get(url)
+
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_edit_diver_requires_staff(self, regular_client, diver_profile):
+        """Non-staff users are denied access."""
+        url = reverse("diveops:diver-edit", kwargs={"pk": diver_profile.pk})
+        response = regular_client.get(url)
+
+        assert response.status_code in [302, 403]
+
+    def test_edit_diver_accessible_by_staff(self, staff_client, diver_profile):
+        """Staff users can access edit diver form."""
+        url = reverse("diveops:diver-edit", kwargs={"pk": diver_profile.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+
+    def test_edit_diver_shows_existing_data(self, staff_client, diver_profile):
+        """Edit form is pre-populated with existing diver data."""
+        url = reverse("diveops:diver-edit", kwargs={"pk": diver_profile.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert diver_profile.person.first_name.encode() in response.content
+        assert diver_profile.certification_agency.encode() in response.content
+
+    def test_edit_diver_updates_diver(self, staff_client, diver_profile):
+        """POST updates the existing diver."""
+        url = reverse("diveops:diver-edit", kwargs={"pk": diver_profile.pk})
+        response = staff_client.post(url, {
+            "first_name": diver_profile.person.first_name,
+            "last_name": diver_profile.person.last_name,
+            "email": diver_profile.person.email,
+            "certification_level": "rescue",  # Upgraded
+            "certification_agency": "PADI",
+            "certification_number": diver_profile.certification_number,
+            "certification_date": diver_profile.certification_date.isoformat(),
+            "total_dives": 100,  # More experience
+        })
+
+        # Should redirect on success
+        assert response.status_code == 302
+
+        # Diver should be updated
+        diver_profile.refresh_from_db()
+        assert diver_profile.certification_level == "rescue"
+        assert diver_profile.total_dives == 100
+
+    def test_edit_diver_redirects_to_list(self, staff_client, diver_profile):
+        """Successful edit redirects to diver list."""
+        url = reverse("diveops:diver-edit", kwargs={"pk": diver_profile.pk})
+        response = staff_client.post(url, {
+            "first_name": diver_profile.person.first_name,
+            "last_name": diver_profile.person.last_name,
+            "email": diver_profile.person.email,
+            "certification_level": diver_profile.certification_level,
+            "certification_agency": diver_profile.certification_agency,
+            "certification_number": diver_profile.certification_number,
+            "certification_date": diver_profile.certification_date.isoformat(),
+            "total_dives": diver_profile.total_dives,
+        })
+
+        assert response.status_code == 302
+        assert reverse("diveops:diver-list") in response.url
+
+    def test_edit_diver_404_for_invalid_pk(self, staff_client):
+        """Edit returns 404 for non-existent diver."""
+        import uuid
+
+        fake_pk = uuid.uuid4()
+        url = reverse("diveops:diver-edit", kwargs={"pk": fake_pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 404

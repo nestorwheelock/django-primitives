@@ -10,7 +10,16 @@ from typing import Optional
 from django.db.models import Count, Prefetch, Q
 from django.utils import timezone
 
-from .models import Booking, DiverProfile, DiveSite, DiveTrip, TripRoster
+from .models import (
+    Booking,
+    CertificationLevel,
+    DiverCertification,
+    DiverProfile,
+    DiveSite,
+    DiveTrip,
+    TripRequirement,
+    TripRoster,
+)
 
 
 def list_upcoming_trips(
@@ -245,5 +254,94 @@ def get_booking(booking_id) -> Optional[Booking]:
             "diver__person",
             "booked_by",
         )
+        .first()
+    )
+
+
+# Certification-related selectors
+
+def get_diver_with_certifications(diver_id) -> Optional[DiverProfile]:
+    """Get a diver with all certifications prefetched.
+
+    Optimized query to avoid N+1 when accessing certifications.
+
+    Args:
+        diver_id: Diver UUID
+
+    Returns:
+        DiverProfile with certifications or None
+    """
+    return (
+        DiverProfile.objects.filter(pk=diver_id)
+        .select_related("person")
+        .prefetch_related(
+            Prefetch(
+                "certifications",
+                queryset=DiverCertification.objects.select_related(
+                    "level", "agency"
+                ).order_by("-level__rank", "-certified_on"),
+            )
+        )
+        .first()
+    )
+
+
+def get_trip_with_requirements(trip_id) -> Optional[DiveTrip]:
+    """Get a trip with all requirements prefetched.
+
+    Optimized query to avoid N+1 when checking requirements.
+
+    Args:
+        trip_id: Trip UUID
+
+    Returns:
+        DiveTrip with requirements or None
+    """
+    return (
+        DiveTrip.objects.filter(pk=trip_id)
+        .select_related("dive_shop", "dive_site")
+        .prefetch_related(
+            Prefetch(
+                "requirements",
+                queryset=TripRequirement.objects.select_related(
+                    "certification_level"
+                ).order_by("requirement_type"),
+            )
+        )
+        .first()
+    )
+
+
+def list_certification_levels(active_only: bool = True) -> list[CertificationLevel]:
+    """List all certification levels ordered by rank.
+
+    Args:
+        active_only: Only return active levels (default True)
+
+    Returns:
+        List of CertificationLevel objects
+    """
+    qs = CertificationLevel.objects.order_by("rank")
+    if active_only:
+        qs = qs.filter(is_active=True)
+    return list(qs)
+
+
+def get_diver_highest_certification(diver: DiverProfile) -> Optional[DiverCertification]:
+    """Get the diver's highest current (non-expired) certification.
+
+    Args:
+        diver: DiverProfile
+
+    Returns:
+        DiverCertification with highest rank or None
+    """
+    from datetime import date
+
+    return (
+        diver.certifications
+        .filter(Q(expires_on__isnull=True) | Q(expires_on__gt=date.today()))
+        .select_related("level", "agency")
+        .order_by("-level__rank")
         .first()
     )
