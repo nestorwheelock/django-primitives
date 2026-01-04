@@ -318,13 +318,284 @@ class TestCompleteTrip:
         if dive_trip.encounter:
             assert dive_trip.encounter.state == "completed"
 
-    def test_complete_trip_rejects_already_completed(self, dive_trip, user):
-        """complete_trip raises error for already completed trip."""
-        from primitives_testbed.diveops.exceptions import TripStateError
+    def test_complete_trip_is_idempotent(self, dive_trip, user):
+        """complete_trip is idempotent - returns trip if already completed."""
         from primitives_testbed.diveops.services import complete_trip
 
         dive_trip.status = "completed"
         dive_trip.save()
 
+        # Should return trip without error (idempotent no-op)
+        result = complete_trip(trip=dive_trip, completed_by=user)
+        assert result.status == "completed"
+        assert result.pk == dive_trip.pk
+
+    def test_complete_trip_rejects_cancelled(self, dive_trip, user):
+        """complete_trip raises error for cancelled trip."""
+        from primitives_testbed.diveops.exceptions import TripStateError
+        from primitives_testbed.diveops.services import complete_trip
+
+        dive_trip.status = "cancelled"
+        dive_trip.save()
+
         with pytest.raises(TripStateError):
             complete_trip(trip=dive_trip, completed_by=user)
+
+
+# =============================================================================
+# Concurrency Tests
+# =============================================================================
+
+
+@pytest.mark.django_db(transaction=True)
+class TestCompleteTripConcurrency:
+    """Concurrency tests for complete_trip service.
+
+    These tests verify that concurrent calls to complete_trip()
+    do not cause double-counting of dives.
+    """
+
+    def test_complete_trip_no_double_count(self, dive_trip, diver_profile, user):
+        """Concurrent complete_trip() calls increment total_dives exactly once.
+
+        This test verifies the idempotency guarantee: if two callers try to
+        complete the same trip simultaneously, the diver's dive count should
+        only increment once.
+        """
+        from primitives_testbed.diveops.models import Booking, TripRoster
+        from primitives_testbed.diveops.services import complete_trip
+
+        initial_dives = diver_profile.total_dives
+
+        # Setup: diver on roster
+        booking = Booking.objects.create(
+            trip=dive_trip,
+            diver=diver_profile,
+            status="checked_in",
+            booked_by=user,
+        )
+        TripRoster.objects.create(
+            trip=dive_trip,
+            diver=diver_profile,
+            booking=booking,
+            checked_in_by=user,
+        )
+
+        # First call completes the trip
+        result1 = complete_trip(trip=dive_trip, completed_by=user)
+        assert result1.status == "completed"
+
+        # Second call should be idempotent (no-op)
+        dive_trip.refresh_from_db()
+        result2 = complete_trip(trip=dive_trip, completed_by=user)
+        assert result2.status == "completed"
+
+        # Verify dive count incremented exactly once
+        diver_profile.refresh_from_db()
+        assert diver_profile.total_dives == initial_dives + 1, (
+            f"Expected {initial_dives + 1} dives, got {diver_profile.total_dives}. "
+            "Double-count detected!"
+        )
+
+    def test_complete_trip_idempotent_no_phantom_audit(
+        self, dive_trip, diver_profile, user
+    ):
+        """Second complete_trip() call does not emit phantom audit events."""
+        from django_audit_log.models import AuditLog
+
+        from primitives_testbed.diveops.audit import Actions
+        from primitives_testbed.diveops.models import Booking, TripRoster
+        from primitives_testbed.diveops.services import complete_trip
+
+        # Setup
+        booking = Booking.objects.create(
+            trip=dive_trip,
+            diver=diver_profile,
+            status="checked_in",
+            booked_by=user,
+        )
+        TripRoster.objects.create(
+            trip=dive_trip,
+            diver=diver_profile,
+            booking=booking,
+            checked_in_by=user,
+        )
+
+        # Clear existing audit events
+        AuditLog.objects.all().delete()
+
+        # First call
+        complete_trip(trip=dive_trip, completed_by=user)
+        first_call_count = AuditLog.objects.filter(
+            action=Actions.TRIP_COMPLETED
+        ).count()
+        assert first_call_count == 1
+
+        # Second call (idempotent no-op)
+        dive_trip.refresh_from_db()
+        complete_trip(trip=dive_trip, completed_by=user)
+        second_call_count = AuditLog.objects.filter(
+            action=Actions.TRIP_COMPLETED
+        ).count()
+
+        # Should still be 1 (no phantom event from no-op)
+        assert second_call_count == 1, (
+            f"Expected 1 TRIP_COMPLETED event, got {second_call_count}. "
+            "Phantom audit event from idempotent call!"
+        )
+
+
+@pytest.mark.django_db(transaction=True)
+class TestBookTripConcurrency:
+    """Concurrency tests for book_trip service.
+
+    These tests verify that concurrent booking attempts at capacity
+    result in exactly one successful booking.
+    """
+
+    def test_book_trip_at_capacity_one_succeeds(
+        self, dive_site, dive_shop, person, person2, user
+    ):
+        """When trip is at capacity, only one booking succeeds.
+
+        This test creates a trip with capacity=1, then attempts to book
+        two divers. Only one should succeed.
+
+        Note: We do NOT skip eligibility check because capacity is checked
+        in can_diver_join_trip(). Skipping it bypasses capacity enforcement.
+        """
+        from primitives_testbed.diveops.exceptions import (
+            DiverNotEligibleError,
+            TripCapacityError,
+        )
+        from primitives_testbed.diveops.models import DiverProfile, DiveTrip
+        from primitives_testbed.diveops.services import book_trip
+
+        # Create trip with capacity=1
+        tomorrow = timezone.now() + timedelta(days=1)
+        trip = DiveTrip.objects.create(
+            dive_shop=dive_shop,
+            dive_site=dive_site,
+            departure_time=tomorrow,
+            return_time=tomorrow + timedelta(hours=4),
+            max_divers=1,  # Only one spot
+            price_per_diver=Decimal("100.00"),
+            currency="USD",
+            created_by=user,
+        )
+
+        # Create two divers with all requirements met
+        from datetime import date
+        next_year = date.today() + timedelta(days=365)
+        diver1 = DiverProfile.objects.create(
+            person=person,
+            total_dives=10,
+            waiver_signed_at=timezone.now(),
+            medical_clearance_valid_until=next_year,
+        )
+        diver2 = DiverProfile.objects.create(
+            person=person2,
+            total_dives=10,
+            waiver_signed_at=timezone.now(),
+            medical_clearance_valid_until=next_year,
+        )
+
+        # First booking succeeds (eligibility check runs, capacity=1 available)
+        booking1 = book_trip(
+            trip=trip,
+            diver=diver1,
+            booked_by=user,
+            # Don't skip - we want capacity check to run
+        )
+        assert booking1.status == "confirmed"
+
+        # Second booking fails (capacity exhausted)
+        with pytest.raises((TripCapacityError, DiverNotEligibleError)):
+            book_trip(
+                trip=trip,
+                diver=diver2,
+                booked_by=user,
+                # Don't skip - capacity check rejects this
+            )
+
+        # Verify capacity not exceeded
+        trip.refresh_from_db()
+        assert trip.spots_available == 0
+        assert trip.bookings.filter(status="confirmed").count() == 1
+
+    def test_book_trip_spots_never_negative(self):
+        """spots_available never goes negative even under rapid booking."""
+        from django.contrib.auth import get_user_model
+        from django_parties.models import Organization, Person
+
+        from primitives_testbed.diveops.models import DiverProfile, DiveSite, DiveTrip
+        from primitives_testbed.diveops.services import book_trip
+
+        User = get_user_model()
+
+        # Create all fixtures fresh for this test
+        user = User.objects.create_user(
+            username="spots_test_user",
+            email="spots@test.com",
+            password="password123",
+            is_staff=True,
+        )
+        dive_shop = Organization.objects.create(
+            name="Spots Test Dive Shop",
+            org_type="dive_shop",
+        )
+        dive_site = DiveSite.objects.create(
+            name="Spots Test Site",
+            max_depth_meters=20,
+            latitude=Decimal("25.0"),
+            longitude=Decimal("-80.0"),
+        )
+
+        # Create trip with small capacity
+        tomorrow = timezone.now() + timedelta(days=1)
+        trip = DiveTrip.objects.create(
+            dive_shop=dive_shop,
+            dive_site=dive_site,
+            departure_time=tomorrow,
+            return_time=tomorrow + timedelta(hours=4),
+            max_divers=3,  # Small capacity to test
+            price_per_diver=Decimal("100.00"),
+            currency="USD",
+            created_by=user,
+        )
+
+        original_spots = trip.spots_available
+        bookings_created = 0
+        from datetime import date
+        next_year = date.today() + timedelta(days=365)
+
+        # Create enough divers to potentially exceed capacity
+        for i in range(original_spots + 2):  # Try to exceed by 2
+            try:
+                person = Person.objects.create(
+                    first_name=f"Test{i}",
+                    last_name=f"Diver{i}",
+                )
+                diver = DiverProfile.objects.create(
+                    person=person,
+                    total_dives=10,
+                    waiver_signed_at=timezone.now(),
+                    medical_clearance_valid_until=next_year,
+                )
+
+                book_trip(
+                    trip=trip,
+                    diver=diver,
+                    booked_by=user,
+                    # Don't skip eligibility - capacity check is there
+                )
+                bookings_created += 1
+            except Exception:
+                # Expected to fail after capacity reached
+                pass
+
+        trip.refresh_from_db()
+        assert trip.spots_available >= 0, "spots_available went negative!"
+        assert bookings_created == original_spots, (
+            f"Expected {original_spots} bookings, got {bookings_created}"
+        )

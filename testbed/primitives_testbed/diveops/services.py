@@ -245,40 +245,52 @@ def complete_trip(trip: DiveTrip, completed_by) -> DiveTrip:
     """Complete a trip.
 
     Updates trip status and increments dive counts for all checked-in divers.
+    Idempotent: returns existing completed trip without error.
 
     Args:
         trip: The trip to complete
         completed_by: User completing the trip
 
     Returns:
-        Updated trip
+        Updated trip (or existing if already completed)
 
     Raises:
-        TripStateError: If trip cannot be completed
+        TripStateError: If trip is cancelled
     """
-    if trip.status in ["completed", "cancelled"]:
-        raise TripStateError(f"Cannot complete trip in status={trip.status}")
+    # Lock trip to prevent concurrent completion
+    trip = DiveTrip.objects.select_for_update().get(pk=trip.pk)
 
-    # Track roster entries that were completed
+    # Idempotency: already completed is a no-op
+    if trip.status == "completed":
+        return trip
+
+    if trip.status == "cancelled":
+        raise TripStateError("Cannot complete a cancelled trip")
+
+    # Lock and fetch roster entries that need completion
+    # select_for_update prevents concurrent increment
+    roster_entries = list(
+        trip.roster.select_for_update().filter(dive_completed=False)
+    )
+
+    # Track completed entries for audit logging
     completed_roster_entries = []
 
-    # Update all roster entries and increment dive counts
-    for roster_entry in trip.roster.all():
-        if not roster_entry.dive_completed:
-            roster_entry.dive_completed = True
-            roster_entry.save()
+    for roster_entry in roster_entries:
+        roster_entry.dive_completed = True
+        roster_entry.save(update_fields=["dive_completed", "updated_at"])
 
-            # Increment diver's total dives
-            diver = roster_entry.diver
-            diver.total_dives += 1
-            diver.save()
+        # Lock diver before increment to prevent race
+        diver = DiverProfile.objects.select_for_update().get(pk=roster_entry.diver_id)
+        diver.total_dives += 1
+        diver.save(update_fields=["total_dives", "updated_at"])
 
-            completed_roster_entries.append(roster_entry)
+        completed_roster_entries.append(roster_entry)
 
     # Update trip status
     trip.status = "completed"
     trip.completed_at = timezone.now()
-    trip.save()
+    trip.save(update_fields=["status", "completed_at", "updated_at"])
 
     # Update encounter if exists
     if trip.encounter:
@@ -286,7 +298,7 @@ def complete_trip(trip: DiveTrip, completed_by) -> DiveTrip:
         trip.encounter.ended_at = timezone.now()
         trip.encounter.save()
 
-    # Emit audit events AFTER successful transaction
+    # Emit audit events AFTER successful updates
     # First, emit DIVER_COMPLETED_TRIP for each roster entry
     for roster_entry in completed_roster_entries:
         log_roster_event(
