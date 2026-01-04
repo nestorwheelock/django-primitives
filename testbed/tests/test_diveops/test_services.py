@@ -173,6 +173,28 @@ class TestBookTrip:
         # Verify no booking was created (rollback)
         assert Booking.objects.count() == initial_count
 
+    def test_book_trip_rejects_duplicate_booking(self, dive_trip, diver_profile, user):
+        """book_trip raises BookingError for duplicate active booking."""
+        from primitives_testbed.diveops.exceptions import BookingError
+        from primitives_testbed.diveops.services import book_trip
+
+        # First booking succeeds
+        book_trip(
+            trip=dive_trip,
+            diver=diver_profile,
+            booked_by=user,
+            skip_eligibility_check=True,
+        )
+
+        # Second booking for same diver on same trip fails with domain error
+        with pytest.raises(BookingError, match="already has an active booking"):
+            book_trip(
+                trip=dive_trip,
+                diver=diver_profile,
+                booked_by=user,
+                skip_eligibility_check=True,
+            )
+
 
 @pytest.mark.django_db
 class TestCheckIn:
@@ -258,6 +280,37 @@ class TestCheckIn:
         booking.refresh_from_db()
 
         assert booking.status == "checked_in"
+
+    def test_check_in_rejects_duplicate_roster(self, dive_trip, diver_profile, user):
+        """check_in raises CheckInError for duplicate roster entry.
+
+        This tests the edge case where a roster entry already exists
+        (perhaps from a previous check-in that was interrupted before
+        updating booking status).
+        """
+        from primitives_testbed.diveops.exceptions import CheckInError
+        from primitives_testbed.diveops.models import Booking, TripRoster
+        from primitives_testbed.diveops.services import check_in
+
+        # Create booking
+        booking = Booking.objects.create(
+            trip=dive_trip,
+            diver=diver_profile,
+            status="confirmed",
+            booked_by=user,
+        )
+
+        # Directly create roster entry (simulating partial check-in or race)
+        TripRoster.objects.create(
+            trip=dive_trip,
+            diver=diver_profile,
+            booking=booking,
+            checked_in_by=user,
+        )
+
+        # Attempting check_in again should fail with domain error, not raw IntegrityError
+        with pytest.raises(CheckInError, match="already has a roster entry"):
+            check_in(booking=booking, checked_in_by=user)
 
 
 @pytest.mark.django_db

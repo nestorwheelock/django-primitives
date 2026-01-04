@@ -5,7 +5,7 @@ All write operations are atomic transactions.
 """
 
 from django.contrib.contenttypes.models import ContentType
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .audit import (
@@ -33,6 +33,16 @@ from .integrations import (
     price_basket_item,
 )
 from .models import Booking, CertificationLevel, DiverCertification, DiverProfile, DiveTrip, TripRoster
+
+
+def _get_constraint_name(exc: IntegrityError) -> str | None:
+    """Extract PostgreSQL constraint name from IntegrityError.
+
+    Returns constraint name if available, None otherwise.
+    """
+    if exc.__cause__ and hasattr(exc.__cause__, "diag"):
+        return exc.__cause__.diag.constraint_name
+    return None
 
 
 def _get_or_create_trip_catalog_item(trip: DiveTrip) -> CatalogItem:
@@ -89,12 +99,21 @@ def book_trip(
             raise DiverNotEligibleError("; ".join(result.reasons))
 
     # Create booking
-    booking = Booking.objects.create(
-        trip=trip,
-        diver=diver,
-        status="confirmed",
-        booked_by=booked_by,
-    )
+    try:
+        booking = Booking.objects.create(
+            trip=trip,
+            diver=diver,
+            status="confirmed",
+            booked_by=booked_by,
+        )
+    except IntegrityError as e:
+        constraint = _get_constraint_name(e)
+        if constraint == "diveops_booking_one_active_per_trip":
+            raise BookingError(
+                f"Diver {diver} already has an active booking for this trip"
+            ) from e
+        # Re-raise unknown IntegrityErrors
+        raise
 
     # Create basket and invoice via billing adapter
     if create_invoice:
@@ -171,12 +190,25 @@ def check_in(
         raise CheckInError("Waiver agreement must be signed before check-in")
 
     # Create roster entry
-    roster = TripRoster.objects.create(
-        trip=booking.trip,
-        diver=booking.diver,
-        booking=booking,
-        checked_in_by=checked_in_by,
-    )
+    try:
+        roster = TripRoster.objects.create(
+            trip=booking.trip,
+            diver=booking.diver,
+            booking=booking,
+            checked_in_by=checked_in_by,
+        )
+    except IntegrityError as e:
+        constraint = _get_constraint_name(e)
+        if constraint == "diveops_roster_one_per_trip":
+            raise CheckInError(
+                f"Diver {booking.diver} is already on the roster for this trip"
+            ) from e
+        if constraint == "diveops_triproster_booking_id_key":
+            raise CheckInError(
+                "This booking already has a roster entry"
+            ) from e
+        # Re-raise unknown IntegrityErrors
+        raise
 
     # Update booking status
     booking.status = "checked_in"
