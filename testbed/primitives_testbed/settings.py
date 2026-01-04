@@ -192,7 +192,7 @@ PORTAL_UI = {
         {
             "section": "Dive Operations",
             "label": "Trips",
-            "url": "diveops:trip-list",
+            "url": "diveops:excursion-list",
             "icon": "anchor",
         },
         {

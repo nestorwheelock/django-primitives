@@ -7,22 +7,22 @@ import pytest
 from django.utils import timezone
 
 
-def _create_trip_price(trip, user):
-    """Helper to create a price for a trip's catalog item."""
+def _create_excursion_price(excursion, user):
+    """Helper to create a price for an excursion's catalog item."""
     from django_catalog.models import CatalogItem
     from primitives_testbed.pricing.models import Price
 
-    # Get or create the catalog item for this trip
+    # Get or create the catalog item for this excursion
     catalog_item, _ = CatalogItem.objects.get_or_create(
-        display_name=f"Dive Trip - {trip.dive_site.name}",
+        display_name=f"Dive Excursion - {excursion.dive_site.name}",
         defaults={"kind": "service", "is_billable": True, "active": True},
     )
 
     # Create a price for this catalog item
     return Price.objects.create(
         catalog_item=catalog_item,
-        amount=trip.price_per_diver,
-        currency=trip.currency,
+        amount=excursion.price_per_diver,
+        currency=excursion.currency,
         valid_from=timezone.now() - timedelta(days=30),
         priority=50,
         created_by=user,
@@ -30,33 +30,33 @@ def _create_trip_price(trip, user):
 
 
 @pytest.mark.django_db
-class TestBookTrip:
-    """Tests for book_trip service."""
+class TestBookExcursion:
+    """Tests for book_excursion service."""
 
-    def test_book_trip_creates_booking(self, dive_trip, diver_profile, user):
-        """book_trip creates a booking for an eligible diver."""
-        from primitives_testbed.diveops.services import book_trip
+    def test_book_excursion_creates_booking(self, dive_trip, diver_profile, user):
+        """book_excursion creates a booking for an eligible diver."""
+        from primitives_testbed.diveops.services import book_excursion
 
-        booking = book_trip(
-            trip=dive_trip,
+        booking = book_excursion(
+            excursion=dive_trip,
             diver=diver_profile,
             booked_by=user,
         )
 
         assert booking.pk is not None
-        assert booking.trip == dive_trip
+        assert booking.excursion == dive_trip
         assert booking.diver == diver_profile
         assert booking.status == "confirmed"
 
-    def test_book_trip_creates_basket(self, dive_trip, diver_profile, user):
-        """book_trip creates a basket when create_invoice=True."""
-        from primitives_testbed.diveops.services import book_trip
+    def test_book_excursion_creates_basket(self, dive_trip, diver_profile, user):
+        """book_excursion creates a basket when create_invoice=True."""
+        from primitives_testbed.diveops.services import book_excursion
 
-        # Create price for the trip (required by billing adapter)
-        _create_trip_price(dive_trip, user)
+        # Create price for the excursion (required by billing adapter)
+        _create_excursion_price(dive_trip, user)
 
-        booking = book_trip(
-            trip=dive_trip,
+        booking = book_excursion(
+            excursion=dive_trip,
             diver=diver_profile,
             booked_by=user,
             create_invoice=True,
@@ -66,15 +66,15 @@ class TestBookTrip:
         # Basket is committed when invoice is created
         assert booking.basket.status == "committed"
 
-    def test_book_trip_creates_invoice_when_requested(self, dive_trip, diver_profile, user):
-        """book_trip creates an invoice when create_invoice=True."""
-        from primitives_testbed.diveops.services import book_trip
+    def test_book_excursion_creates_invoice_when_requested(self, dive_trip, diver_profile, user):
+        """book_excursion creates an invoice when create_invoice=True."""
+        from primitives_testbed.diveops.services import book_excursion
 
-        # Create price for the trip (required by billing adapter)
-        _create_trip_price(dive_trip, user)
+        # Create price for the excursion (required by billing adapter)
+        _create_excursion_price(dive_trip, user)
 
-        booking = book_trip(
-            trip=dive_trip,
+        booking = book_excursion(
+            excursion=dive_trip,
             diver=diver_profile,
             booked_by=user,
             create_invoice=True,
@@ -83,17 +83,17 @@ class TestBookTrip:
         assert booking.invoice is not None
         assert booking.invoice.total_amount == Decimal("100.00")
 
-    def test_book_trip_rejects_ineligible_diver(self, dive_site, dive_shop, person2, padi_agency, user):
-        """book_trip raises error if diver is not eligible."""
+    def test_book_excursion_rejects_ineligible_diver(self, dive_site, dive_shop, person2, padi_agency, user):
+        """book_excursion raises error if diver is not eligible."""
         from primitives_testbed.diveops.exceptions import DiverNotEligibleError
         from primitives_testbed.diveops.models import (
             CertificationLevel,
             DiverCertification,
             DiverProfile,
-            DiveTrip,
-            TripRequirement,
+            Excursion,
+            ExcursionRequirement,
         )
-        from primitives_testbed.diveops.services import book_trip
+        from primitives_testbed.diveops.services import book_excursion
 
         # Create AOW and OW certification levels
         aow_level = CertificationLevel.objects.create(
@@ -103,9 +103,9 @@ class TestBookTrip:
             agency=padi_agency, code="ow", name="Open Water", rank=2
         )
 
-        # Create trip with AOW requirement
+        # Create excursion with AOW requirement
         tomorrow = timezone.now() + timedelta(days=1)
-        trip = DiveTrip.objects.create(
+        excursion = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=tomorrow,
@@ -115,8 +115,8 @@ class TestBookTrip:
             currency="USD",
             created_by=user,
         )
-        TripRequirement.objects.create(
-            trip=trip, requirement_type="certification", certification_level=aow_level, is_mandatory=True
+        ExcursionRequirement.objects.create(
+            excursion=excursion, requirement_type="certification", certification_level=aow_level, is_mandatory=True
         )
 
         # Create diver with only OW certification (not enough)
@@ -131,40 +131,40 @@ class TestBookTrip:
         )
 
         with pytest.raises(DiverNotEligibleError):
-            book_trip(
-                trip=trip,
+            book_excursion(
+                excursion=excursion,
                 diver=diver,
                 booked_by=user,
             )
 
-    def test_book_trip_rejects_full_trip(self, full_trip, beginner_diver, user):
-        """book_trip raises error if trip is at capacity."""
+    def test_book_excursion_rejects_full_excursion(self, full_excursion, beginner_diver, user):
+        """book_excursion raises error if excursion is at capacity."""
         from primitives_testbed.diveops.exceptions import TripCapacityError
-        from primitives_testbed.diveops.services import book_trip
+        from primitives_testbed.diveops.services import book_excursion
 
         with pytest.raises(TripCapacityError):
-            book_trip(
-                trip=full_trip,
+            book_excursion(
+                excursion=full_excursion,
                 diver=beginner_diver,
                 booked_by=user,
             )
 
-    def test_book_trip_is_atomic(self, dive_trip, diver_profile, user, mocker):
-        """book_trip rolls back on error (atomic transaction)."""
+    def test_book_excursion_is_atomic(self, dive_trip, diver_profile, user, mocker):
+        """book_excursion rolls back on error (atomic transaction)."""
         from primitives_testbed.diveops.models import Booking
-        from primitives_testbed.diveops.services import book_trip
+        from primitives_testbed.diveops.services import book_excursion
 
         initial_count = Booking.objects.count()
 
         # Mock basket creation to fail
         mocker.patch(
-            "primitives_testbed.diveops.integrations.create_trip_basket",
+            "primitives_testbed.diveops.integrations.create_excursion_basket",
             side_effect=Exception("Simulated error"),
         )
 
         with pytest.raises(Exception):
-            book_trip(
-                trip=dive_trip,
+            book_excursion(
+                excursion=dive_trip,
                 diver=diver_profile,
                 booked_by=user,
                 create_invoice=True,  # Required to trigger basket creation
@@ -173,23 +173,23 @@ class TestBookTrip:
         # Verify no booking was created (rollback)
         assert Booking.objects.count() == initial_count
 
-    def test_book_trip_rejects_duplicate_booking(self, dive_trip, diver_profile, user):
-        """book_trip raises BookingError for duplicate active booking."""
+    def test_book_excursion_rejects_duplicate_booking(self, dive_trip, diver_profile, user):
+        """book_excursion raises BookingError for duplicate active booking."""
         from primitives_testbed.diveops.exceptions import BookingError
-        from primitives_testbed.diveops.services import book_trip
+        from primitives_testbed.diveops.services import book_excursion
 
         # First booking succeeds
-        book_trip(
-            trip=dive_trip,
+        book_excursion(
+            excursion=dive_trip,
             diver=diver_profile,
             booked_by=user,
             skip_eligibility_check=True,
         )
 
-        # Second booking for same diver on same trip fails with domain error
+        # Second booking for same diver on same excursion fails with domain error
         with pytest.raises(BookingError, match="already has an active booking"):
-            book_trip(
-                trip=dive_trip,
+            book_excursion(
+                excursion=dive_trip,
                 diver=diver_profile,
                 booked_by=user,
                 skip_eligibility_check=True,
@@ -201,12 +201,12 @@ class TestCheckIn:
     """Tests for check_in service."""
 
     def test_check_in_creates_roster_entry(self, dive_trip, diver_profile, user):
-        """check_in creates a TripRoster entry."""
+        """check_in creates an ExcursionRoster entry."""
         from primitives_testbed.diveops.models import Booking
         from primitives_testbed.diveops.services import check_in
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
@@ -218,7 +218,7 @@ class TestCheckIn:
         )
 
         assert roster.pk is not None
-        assert roster.trip == dive_trip
+        assert roster.excursion == dive_trip
         assert roster.diver == diver_profile
         assert roster.checked_in_at is not None
 
@@ -229,7 +229,7 @@ class TestCheckIn:
         from primitives_testbed.diveops.services import check_in
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
@@ -252,7 +252,7 @@ class TestCheckIn:
         from primitives_testbed.diveops.services import check_in
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="cancelled",
             booked_by=user,
@@ -270,7 +270,7 @@ class TestCheckIn:
         from primitives_testbed.diveops.services import check_in
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
@@ -289,20 +289,20 @@ class TestCheckIn:
         updating booking status).
         """
         from primitives_testbed.diveops.exceptions import CheckInError
-        from primitives_testbed.diveops.models import Booking, TripRoster
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
         from primitives_testbed.diveops.services import check_in
 
         # Create booking
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
 
         # Directly create roster entry (simulating partial check-in or race)
-        TripRoster.objects.create(
-            trip=dive_trip,
+        ExcursionRoster.objects.create(
+            excursion=dive_trip,
             diver=diver_profile,
             booking=booking,
             checked_in_by=user,
@@ -314,85 +314,85 @@ class TestCheckIn:
 
 
 @pytest.mark.django_db
-class TestCompleteTrip:
-    """Tests for complete_trip service."""
+class TestCompleteExcursion:
+    """Tests for complete_excursion service."""
 
-    def test_complete_trip_updates_status(self, dive_trip, user):
-        """complete_trip updates trip status to 'completed'."""
-        from primitives_testbed.diveops.services import complete_trip
+    def test_complete_excursion_updates_status(self, dive_trip, user):
+        """complete_excursion updates excursion status to 'completed'."""
+        from primitives_testbed.diveops.services import complete_excursion
 
-        result = complete_trip(
-            trip=dive_trip,
+        result = complete_excursion(
+            excursion=dive_trip,
             completed_by=user,
         )
 
         assert result.status == "completed"
         assert result.completed_at is not None
 
-    def test_complete_trip_updates_diver_stats(self, dive_trip, diver_profile, user):
-        """complete_trip increments divers' total_dives count."""
-        from primitives_testbed.diveops.models import Booking, TripRoster
-        from primitives_testbed.diveops.services import complete_trip
+    def test_complete_excursion_updates_diver_stats(self, dive_trip, diver_profile, user):
+        """complete_excursion increments divers' total_dives count."""
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
+        from primitives_testbed.diveops.services import complete_excursion
 
         initial_dives = diver_profile.total_dives
 
         # Create booking and check in
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="checked_in",
             booked_by=user,
         )
-        TripRoster.objects.create(
-            trip=dive_trip,
+        ExcursionRoster.objects.create(
+            excursion=dive_trip,
             diver=diver_profile,
             booking=booking,
             checked_in_by=user,
         )
 
-        complete_trip(trip=dive_trip, completed_by=user)
+        complete_excursion(excursion=dive_trip, completed_by=user)
         diver_profile.refresh_from_db()
 
         assert diver_profile.total_dives == initial_dives + 1
 
-    def test_complete_trip_creates_encounter_transition(self, dive_trip, user, encounter_definition):
-        """complete_trip records an encounter transition."""
+    def test_complete_excursion_creates_encounter_transition(self, dive_trip, user, encounter_definition):
+        """complete_excursion records an encounter transition."""
         from django_encounters.models import Encounter
 
-        from primitives_testbed.diveops.services import complete_trip, start_trip
+        from primitives_testbed.diveops.services import complete_excursion, start_excursion
 
-        # Start the trip first to create encounter
-        start_trip(trip=dive_trip, started_by=user)
+        # Start the excursion first to create encounter
+        start_excursion(excursion=dive_trip, started_by=user)
         dive_trip.refresh_from_db()
 
-        complete_trip(trip=dive_trip, completed_by=user)
+        complete_excursion(excursion=dive_trip, completed_by=user)
 
         # Check encounter was transitioned
         if dive_trip.encounter:
             assert dive_trip.encounter.state == "completed"
 
-    def test_complete_trip_is_idempotent(self, dive_trip, user):
-        """complete_trip is idempotent - returns trip if already completed."""
-        from primitives_testbed.diveops.services import complete_trip
+    def test_complete_excursion_is_idempotent(self, dive_trip, user):
+        """complete_excursion is idempotent - returns excursion if already completed."""
+        from primitives_testbed.diveops.services import complete_excursion
 
         dive_trip.status = "completed"
         dive_trip.save()
 
-        # Should return trip without error (idempotent no-op)
-        result = complete_trip(trip=dive_trip, completed_by=user)
+        # Should return excursion without error (idempotent no-op)
+        result = complete_excursion(excursion=dive_trip, completed_by=user)
         assert result.status == "completed"
         assert result.pk == dive_trip.pk
 
-    def test_complete_trip_rejects_cancelled(self, dive_trip, user):
-        """complete_trip raises error for cancelled trip."""
+    def test_complete_excursion_rejects_cancelled(self, dive_trip, user):
+        """complete_excursion raises error for cancelled excursion."""
         from primitives_testbed.diveops.exceptions import TripStateError
-        from primitives_testbed.diveops.services import complete_trip
+        from primitives_testbed.diveops.services import complete_excursion
 
         dive_trip.status = "cancelled"
         dive_trip.save()
 
         with pytest.raises(TripStateError):
-            complete_trip(trip=dive_trip, completed_by=user)
+            complete_excursion(excursion=dive_trip, completed_by=user)
 
 
 # =============================================================================
@@ -401,46 +401,46 @@ class TestCompleteTrip:
 
 
 @pytest.mark.django_db(transaction=True)
-class TestCompleteTripConcurrency:
-    """Concurrency tests for complete_trip service.
+class TestCompleteExcursionConcurrency:
+    """Concurrency tests for complete_excursion service.
 
-    These tests verify that concurrent calls to complete_trip()
+    These tests verify that concurrent calls to complete_excursion()
     do not cause double-counting of dives.
     """
 
-    def test_complete_trip_no_double_count(self, dive_trip, diver_profile, user):
-        """Concurrent complete_trip() calls increment total_dives exactly once.
+    def test_complete_excursion_no_double_count(self, dive_trip, diver_profile, user):
+        """Concurrent complete_excursion() calls increment total_dives exactly once.
 
         This test verifies the idempotency guarantee: if two callers try to
-        complete the same trip simultaneously, the diver's dive count should
+        complete the same excursion simultaneously, the diver's dive count should
         only increment once.
         """
-        from primitives_testbed.diveops.models import Booking, TripRoster
-        from primitives_testbed.diveops.services import complete_trip
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
+        from primitives_testbed.diveops.services import complete_excursion
 
         initial_dives = diver_profile.total_dives
 
         # Setup: diver on roster
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="checked_in",
             booked_by=user,
         )
-        TripRoster.objects.create(
-            trip=dive_trip,
+        ExcursionRoster.objects.create(
+            excursion=dive_trip,
             diver=diver_profile,
             booking=booking,
             checked_in_by=user,
         )
 
-        # First call completes the trip
-        result1 = complete_trip(trip=dive_trip, completed_by=user)
+        # First call completes the excursion
+        result1 = complete_excursion(excursion=dive_trip, completed_by=user)
         assert result1.status == "completed"
 
         # Second call should be idempotent (no-op)
         dive_trip.refresh_from_db()
-        result2 = complete_trip(trip=dive_trip, completed_by=user)
+        result2 = complete_excursion(excursion=dive_trip, completed_by=user)
         assert result2.status == "completed"
 
         # Verify dive count incremented exactly once
@@ -450,25 +450,25 @@ class TestCompleteTripConcurrency:
             "Double-count detected!"
         )
 
-    def test_complete_trip_idempotent_no_phantom_audit(
+    def test_complete_excursion_idempotent_no_phantom_audit(
         self, dive_trip, diver_profile, user
     ):
-        """Second complete_trip() call does not emit phantom audit events."""
+        """Second complete_excursion() call does not emit phantom audit events."""
         from django_audit_log.models import AuditLog
 
         from primitives_testbed.diveops.audit import Actions
-        from primitives_testbed.diveops.models import Booking, TripRoster
-        from primitives_testbed.diveops.services import complete_trip
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
+        from primitives_testbed.diveops.services import complete_excursion
 
         # Setup
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="checked_in",
             booked_by=user,
         )
-        TripRoster.objects.create(
-            trip=dive_trip,
+        ExcursionRoster.objects.create(
+            excursion=dive_trip,
             diver=diver_profile,
             booking=booking,
             checked_in_by=user,
@@ -478,7 +478,7 @@ class TestCompleteTripConcurrency:
         AuditLog.objects.all().delete()
 
         # First call
-        complete_trip(trip=dive_trip, completed_by=user)
+        complete_excursion(excursion=dive_trip, completed_by=user)
         first_call_count = AuditLog.objects.filter(
             action=Actions.TRIP_COMPLETED
         ).count()
@@ -486,7 +486,7 @@ class TestCompleteTripConcurrency:
 
         # Second call (idempotent no-op)
         dive_trip.refresh_from_db()
-        complete_trip(trip=dive_trip, completed_by=user)
+        complete_excursion(excursion=dive_trip, completed_by=user)
         second_call_count = AuditLog.objects.filter(
             action=Actions.TRIP_COMPLETED
         ).count()
@@ -499,34 +499,34 @@ class TestCompleteTripConcurrency:
 
 
 @pytest.mark.django_db(transaction=True)
-class TestBookTripConcurrency:
-    """Concurrency tests for book_trip service.
+class TestBookExcursionConcurrency:
+    """Concurrency tests for book_excursion service.
 
     These tests verify that concurrent booking attempts at capacity
     result in exactly one successful booking.
     """
 
-    def test_book_trip_at_capacity_one_succeeds(
+    def test_book_excursion_at_capacity_one_succeeds(
         self, dive_site, dive_shop, person, person2, user
     ):
-        """When trip is at capacity, only one booking succeeds.
+        """When excursion is at capacity, only one booking succeeds.
 
-        This test creates a trip with capacity=1, then attempts to book
+        This test creates an excursion with capacity=1, then attempts to book
         two divers. Only one should succeed.
 
         Note: We do NOT skip eligibility check because capacity is checked
-        in can_diver_join_trip(). Skipping it bypasses capacity enforcement.
+        in can_diver_join_excursion(). Skipping it bypasses capacity enforcement.
         """
         from primitives_testbed.diveops.exceptions import (
             DiverNotEligibleError,
             TripCapacityError,
         )
-        from primitives_testbed.diveops.models import DiverProfile, DiveTrip
-        from primitives_testbed.diveops.services import book_trip
+        from primitives_testbed.diveops.models import DiverProfile, Excursion
+        from primitives_testbed.diveops.services import book_excursion
 
-        # Create trip with capacity=1
+        # Create excursion with capacity=1
         tomorrow = timezone.now() + timedelta(days=1)
-        trip = DiveTrip.objects.create(
+        excursion = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=tomorrow,
@@ -554,8 +554,8 @@ class TestBookTripConcurrency:
         )
 
         # First booking succeeds (eligibility check runs, capacity=1 available)
-        booking1 = book_trip(
-            trip=trip,
+        booking1 = book_excursion(
+            excursion=excursion,
             diver=diver1,
             booked_by=user,
             # Don't skip - we want capacity check to run
@@ -564,25 +564,25 @@ class TestBookTripConcurrency:
 
         # Second booking fails (capacity exhausted)
         with pytest.raises((TripCapacityError, DiverNotEligibleError)):
-            book_trip(
-                trip=trip,
+            book_excursion(
+                excursion=excursion,
                 diver=diver2,
                 booked_by=user,
                 # Don't skip - capacity check rejects this
             )
 
         # Verify capacity not exceeded
-        trip.refresh_from_db()
-        assert trip.spots_available == 0
-        assert trip.bookings.filter(status="confirmed").count() == 1
+        excursion.refresh_from_db()
+        assert excursion.spots_available == 0
+        assert excursion.bookings.filter(status="confirmed").count() == 1
 
-    def test_book_trip_spots_never_negative(self):
+    def test_book_excursion_spots_never_negative(self):
         """spots_available never goes negative even under rapid booking."""
         from django.contrib.auth import get_user_model
         from django_parties.models import Organization, Person
 
-        from primitives_testbed.diveops.models import DiverProfile, DiveSite, DiveTrip
-        from primitives_testbed.diveops.services import book_trip
+        from primitives_testbed.diveops.models import DiverProfile, DiveSite, Excursion
+        from primitives_testbed.diveops.services import book_excursion
 
         User = get_user_model()
 
@@ -610,9 +610,9 @@ class TestBookTripConcurrency:
             max_depth_meters=20,
         )
 
-        # Create trip with small capacity
+        # Create excursion with small capacity
         tomorrow = timezone.now() + timedelta(days=1)
-        trip = DiveTrip.objects.create(
+        excursion = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=tomorrow,
@@ -623,7 +623,7 @@ class TestBookTripConcurrency:
             created_by=user,
         )
 
-        original_spots = trip.spots_available
+        original_spots = excursion.spots_available
         bookings_created = 0
         from datetime import date
         next_year = date.today() + timedelta(days=365)
@@ -642,8 +642,8 @@ class TestBookTripConcurrency:
                     medical_clearance_valid_until=next_year,
                 )
 
-                book_trip(
-                    trip=trip,
+                book_excursion(
+                    excursion=excursion,
                     diver=diver,
                     booked_by=user,
                     # Don't skip eligibility - capacity check is there
@@ -653,8 +653,8 @@ class TestBookTripConcurrency:
                 # Expected to fail after capacity reached
                 pass
 
-        trip.refresh_from_db()
-        assert trip.spots_available >= 0, "spots_available went negative!"
+        excursion.refresh_from_db()
+        assert excursion.spots_available >= 0, "spots_available went negative!"
         assert bookings_created == original_spots, (
             f"Expected {original_spots} bookings, got {bookings_created}"
         )

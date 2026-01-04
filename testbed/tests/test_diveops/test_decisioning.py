@@ -18,7 +18,7 @@ class TestCanDiverJoinTrip:
 
         result = can_diver_join_trip(
             diver=diver_profile,
-            trip=dive_trip,
+            excursion=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -34,7 +34,7 @@ class TestCanDiverJoinTrip:
             DiverCertification,
             DiverProfile,
             DiveTrip,
-            TripRequirement,
+            ExcursionRequirement,
         )
 
         # Create AOW and OW certification levels
@@ -57,8 +57,8 @@ class TestCanDiverJoinTrip:
             currency="USD",
             created_by=user,
         )
-        TripRequirement.objects.create(
-            trip=trip, requirement_type="certification", certification_level=aow_level, is_mandatory=True
+        ExcursionRequirement.objects.create(
+            excursion=trip, requirement_type="certification", certification_level=aow_level, is_mandatory=True
         )
 
         # Create diver with only OW certification
@@ -101,7 +101,7 @@ class TestCanDiverJoinTrip:
 
         result = can_diver_join_trip(
             diver=diver,
-            trip=dive_trip,
+            excursion=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -127,7 +127,7 @@ class TestCanDiverJoinTrip:
 
         result = can_diver_join_trip(
             diver=diver,
-            trip=dive_trip,
+            excursion=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -156,7 +156,7 @@ class TestCanDiverJoinTrip:
 
         result = can_diver_join_trip(
             diver=diver_profile,
-            trip=dive_trip,
+            excursion=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -197,7 +197,7 @@ class TestCanDiverJoinTrip:
             DiverCertification,
             DiverProfile,
             DiveTrip,
-            TripRequirement,
+            ExcursionRequirement,
         )
 
         # Create AOW and OW certification levels
@@ -233,8 +233,8 @@ class TestCanDiverJoinTrip:
             created_by=user,
         )
         # Add AOW requirement to trip
-        TripRequirement.objects.create(
-            trip=trip, requirement_type="certification", certification_level=aow_level, is_mandatory=True
+        ExcursionRequirement.objects.create(
+            excursion=trip, requirement_type="certification", certification_level=aow_level, is_mandatory=True
         )
 
         result = can_diver_join_trip(
@@ -268,14 +268,14 @@ class TestCanDiverJoinTrip:
         # Check eligibility today (should be allowed)
         result_today = can_diver_join_trip(
             diver=diver,
-            trip=dive_trip,
+            excursion=dive_trip,
             as_of=timezone.now(),
         )
 
         # Check eligibility in 2 days (should not be allowed)
         result_future = can_diver_join_trip(
             diver=diver,
-            trip=dive_trip,
+            excursion=dive_trip,
             as_of=timezone.now() + timedelta(days=2),
         )
 
@@ -293,7 +293,7 @@ class TestEligibilityResult:
 
         result = can_diver_join_trip(
             diver=diver_profile,
-            trip=dive_trip,
+            excursion=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -309,8 +309,8 @@ class TestEligibilityResult:
 
 
 @pytest.mark.django_db
-class TestTripRequirementDecisioning:
-    """Tests for TripRequirement-based eligibility checks."""
+class TestExcursionRequirementDecisioning:
+    """Tests for ExcursionRequirement-based eligibility checks."""
 
     @pytest.fixture
     def padi_agency(self):
@@ -349,10 +349,10 @@ class TestTripRequirementDecisioning:
     @pytest.fixture
     def trip_with_aow_requirement(self, dive_trip, aow_level):
         """Create trip with AOW certification requirement."""
-        from primitives_testbed.diveops.models import TripRequirement
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
-        TripRequirement.objects.create(
-            trip=dive_trip,
+        ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="certification",
             certification_level=aow_level,
             is_mandatory=True,
@@ -502,11 +502,11 @@ class TestTripRequirementDecisioning:
     def test_experience_requirement_checked(self, dive_trip, diver_profile, padi_agency, aow_level):
         """Experience requirement is checked."""
         from primitives_testbed.diveops.decisioning import can_diver_join_trip
-        from primitives_testbed.diveops.models import DiverCertification, TripRequirement
+        from primitives_testbed.diveops.models import DiverCertification, ExcursionRequirement
 
         # Add experience requirement
-        TripRequirement.objects.create(
-            trip=dive_trip,
+        ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="experience",
             min_dives=50,
             is_mandatory=True,
@@ -523,7 +523,7 @@ class TestTripRequirementDecisioning:
         # Diver has only default dives (from fixture)
         result = can_diver_join_trip(
             diver=diver_profile,
-            trip=dive_trip,
+            excursion=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -535,7 +535,7 @@ class TestTripRequirementDecisioning:
     def test_trip_without_requirements_allows_any_certified_diver(
         self, dive_trip, diver_profile, ow_level, padi_agency
     ):
-        """Trip without TripRequirements allows any certified diver."""
+        """Trip without ExcursionRequirements allows any certified diver."""
         from primitives_testbed.diveops.decisioning import can_diver_join_trip
         from primitives_testbed.diveops.models import DiverCertification
 
@@ -549,7 +549,7 @@ class TestTripRequirementDecisioning:
 
         result = can_diver_join_trip(
             diver=diver_profile,
-            trip=dive_trip,
+            excursion=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -560,11 +560,11 @@ class TestTripRequirementDecisioning:
     ):
         """Optional (non-mandatory) requirements don't block eligibility."""
         from primitives_testbed.diveops.decisioning import can_diver_join_trip
-        from primitives_testbed.diveops.models import DiverCertification, TripRequirement
+        from primitives_testbed.diveops.models import DiverCertification, ExcursionRequirement
 
         # Add optional AOW requirement
-        TripRequirement.objects.create(
-            trip=dive_trip,
+        ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="certification",
             certification_level=aow_level,
             is_mandatory=False,  # Optional
@@ -580,7 +580,7 @@ class TestTripRequirementDecisioning:
 
         result = can_diver_join_trip(
             diver=diver_profile,
-            trip=dive_trip,
+            excursion=dive_trip,
             as_of=timezone.now(),
         )
 

@@ -41,11 +41,11 @@ class TestBaseModelInheritance:
         )
 
     def test_trip_requirement_inherits_basemodel(self):
-        """TripRequirement must inherit from BaseModel."""
-        from primitives_testbed.diveops.models import TripRequirement
+        """ExcursionRequirement must inherit from BaseModel."""
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
-        assert issubclass(TripRequirement, BaseModel), (
-            "TripRequirement must inherit from django_basemodels.BaseModel"
+        assert issubclass(ExcursionRequirement, BaseModel), (
+            "ExcursionRequirement must inherit from django_basemodels.BaseModel"
         )
 
     def test_diver_profile_inherits_basemodel(self):
@@ -81,11 +81,11 @@ class TestBaseModelInheritance:
         )
 
     def test_trip_roster_inherits_basemodel(self):
-        """TripRoster must inherit from BaseModel."""
-        from primitives_testbed.diveops.models import TripRoster
+        """ExcursionRoster must inherit from BaseModel."""
+        from primitives_testbed.diveops.models import ExcursionRoster
 
-        assert issubclass(TripRoster, BaseModel), (
-            "TripRoster must inherit from django_basemodels.BaseModel"
+        assert issubclass(ExcursionRoster, BaseModel), (
+            "ExcursionRoster must inherit from django_basemodels.BaseModel"
         )
 
 
@@ -185,11 +185,11 @@ class TestSoftDeleteBehavior:
         assert deleted.is_deleted is True
 
     def test_trip_requirement_soft_delete(self, dive_trip):
-        """TripRequirement.delete() sets deleted_at."""
-        from primitives_testbed.diveops.models import TripRequirement
+        """ExcursionRequirement.delete() sets deleted_at."""
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
-        req = TripRequirement.objects.create(
-            trip=dive_trip,
+        req = ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="gear",
             description="Test gear requirement",
         )
@@ -197,8 +197,8 @@ class TestSoftDeleteBehavior:
 
         req.delete()
 
-        assert TripRequirement.objects.filter(pk=pk).count() == 0
-        deleted = TripRequirement.all_objects.get(pk=pk)
+        assert ExcursionRequirement.objects.filter(pk=pk).count() == 0
+        deleted = ExcursionRequirement.all_objects.get(pk=pk)
         assert deleted.is_deleted is True
 
 
@@ -258,23 +258,23 @@ class TestUUIDAndTimestamps:
         from primitives_testbed.diveops.models import Booking
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             booked_by=user,
         )
         assert isinstance(booking.pk, uuid.UUID)
 
     def test_trip_roster_has_uuid_pk(self, dive_trip, diver_profile, user):
-        """TripRoster.id is a UUID."""
-        from primitives_testbed.diveops.models import Booking, TripRoster
+        """ExcursionRoster.id is a UUID."""
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             booked_by=user,
         )
-        roster = TripRoster.objects.create(
-            trip=dive_trip,
+        roster = ExcursionRoster.objects.create(
+            excursion=dive_trip,
             diver=diver_profile,
             booking=booking,
             checked_in_by=user,

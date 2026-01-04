@@ -7,7 +7,7 @@
         <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
         </svg>
-        <a href="{% url 'diveops:trip-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Trips</a>
+        <a href="{% url 'diveops:excursion-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Trips</a>
     </div>
 </li>
 <li>
@@ -15,7 +15,7 @@
         <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
         </svg>
-        <span class="ml-2 text-sm font-medium text-gray-500">{{ trip.dive_site.name }}</span>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ excursion.dive_site.name }}</span>
     </div>
 </li>
 {% endblock %}
@@ -25,11 +25,11 @@
     <!-- Page Header -->
     <div class="flex items-start justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">{{ trip.dive_site.name }}</h1>
-            <p class="text-gray-600">{{ trip.departure_time|date:"l, F j, Y" }} at {{ trip.departure_time|time:"g:i A" }}</p>
+            <h1 class="text-2xl font-bold text-gray-900">{{ excursion.dive_site.name }}</h1>
+            <p class="text-gray-600">{{ excursion.departure_time|date:"l, F j, Y" }} at {{ excursion.departure_time|time:"g:i A" }}</p>
         </div>
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {% if trip.status == 'scheduled' %}bg-blue-100 text-blue-800{% elif trip.status == 'boarding' %}bg-yellow-100 text-yellow-800{% elif trip.status == 'departed' %}bg-green-100 text-green-800{% elif trip.status == 'completed' %}bg-gray-100 text-gray-800{% else %}bg-red-100 text-red-800{% endif %}">
-            {{ trip.status|title }}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {% if excursion.status == 'scheduled' %}bg-blue-100 text-blue-800{% elif excursion.status == 'boarding' %}bg-yellow-100 text-yellow-800{% elif excursion.status == 'departed' %}bg-green-100 text-green-800{% elif excursion.status == 'completed' %}bg-gray-100 text-gray-800{% else %}bg-red-100 text-red-800{% endif %}">
+            {{ excursion.status|title }}
         </span>
     </div>
 
@@ -41,7 +41,7 @@
                     {% icon "users" "w-6 h-6 text-blue-600" %}
                 </div>
                 <div class="ml-4">
-                    <p class="text-2xl font-bold text-gray-900">{{ trip.spots_available }}</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ excursion.spots_available }}</p>
                     <p class="text-sm text-gray-500">Spots Available</p>
                 </div>
             </div>
@@ -72,15 +72,15 @@
 
     <!-- Action Buttons -->
     <div class="flex flex-wrap gap-3">
-        {% if trip.status == 'scheduled' or trip.status == 'boarding' %}
-        <a href="{% url 'diveops:book-diver' trip_pk=trip.pk %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+        {% if excursion.status == 'scheduled' or excursion.status == 'boarding' %}
+        <a href="{% url 'diveops:book-diver' excursion_pk=excursion.pk %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
             {% icon "user-plus" "w-4 h-4 mr-2" %}
             Book Diver
         </a>
         {% endif %}
 
-        {% if trip.status == 'scheduled' %}
-        <form method="post" action="{% url 'diveops:start-trip' pk=trip.pk %}" class="inline">
+        {% if excursion.status == 'scheduled' %}
+        <form method="post" action="{% url 'diveops:start-excursion' pk=excursion.pk %}" class="inline">
             {% csrf_token %}
             <button type="submit" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                 {% icon "play" "w-4 h-4 mr-2" %}
@@ -89,8 +89,8 @@
         </form>
         {% endif %}
 
-        {% if trip.status == 'departed' %}
-        <form method="post" action="{% url 'diveops:complete-trip' pk=trip.pk %}" class="inline">
+        {% if excursion.status == 'departed' %}
+        <form method="post" action="{% url 'diveops:complete-excursion' pk=excursion.pk %}" class="inline">
             {% csrf_token %}
             <button type="submit" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                 {% icon "check" "w-4 h-4 mr-2" %}
@@ -137,7 +137,7 @@
                         {{ booking.created_at|date:"M j, Y g:i A" }}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        {% if booking.status == 'confirmed' and trip.status in 'scheduled,boarding' %}
+                        {% if booking.status == 'confirmed' and excursion.status in 'scheduled,boarding' %}
                         <form method="post" action="{% url 'diveops:check-in' pk=booking.pk %}" class="inline">
                             {% csrf_token %}
                             <button type="submit" class="text-blue-600 hover:text-blue-900">Check In</button>
@@ -150,7 +150,7 @@
                 {% empty %}
                 <tr>
                     <td colspan="4" class="px-6 py-12 text-center text-gray-500">
-                        No bookings yet. <a href="{% url 'diveops:book-diver' trip_pk=trip.pk %}" class="text-blue-600 hover:text-blue-900">Book a diver</a>.
+                        No bookings yet. <a href="{% url 'diveops:book-diver' excursion_pk=excursion.pk %}" class="text-blue-600 hover:text-blue-900">Book a diver</a>.
                     </td>
                 </tr>
                 {% endfor %}

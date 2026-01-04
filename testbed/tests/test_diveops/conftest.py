@@ -318,12 +318,31 @@ def encounter_definition(db):
 
 @pytest.fixture
 def dive_trip(db, dive_shop, dive_site, encounter_definition, user):
-    """Create a dive trip."""
-    from primitives_testbed.diveops.models import DiveTrip
+    """Create a dive excursion (legacy fixture name for compatibility)."""
+    from primitives_testbed.diveops.models import Excursion
 
     tomorrow = timezone.now() + timedelta(days=1)
 
-    return DiveTrip.objects.create(
+    return Excursion.objects.create(
+        dive_shop=dive_shop,
+        dive_site=dive_site,
+        departure_time=tomorrow,
+        return_time=tomorrow + timedelta(hours=4),
+        max_divers=8,
+        price_per_diver=Decimal("100.00"),
+        currency="USD",
+        created_by=user,
+    )
+
+
+@pytest.fixture
+def excursion(db, dive_shop, dive_site, encounter_definition, user):
+    """Create a dive excursion."""
+    from primitives_testbed.diveops.models import Excursion
+
+    tomorrow = timezone.now() + timedelta(days=1)
+
+    return Excursion.objects.create(
         dive_shop=dive_shop,
         dive_site=dive_site,
         departure_time=tomorrow,
@@ -337,12 +356,12 @@ def dive_trip(db, dive_shop, dive_site, encounter_definition, user):
 
 @pytest.fixture
 def full_trip(db, dive_shop, shallow_site, encounter_definition, user, diver_profile):
-    """Create a fully booked dive trip."""
-    from primitives_testbed.diveops.models import DiveTrip, Booking
+    """Create a fully booked dive excursion (legacy fixture name)."""
+    from primitives_testbed.diveops.models import Excursion, Booking
 
     tomorrow = timezone.now() + timedelta(days=1)
 
-    trip = DiveTrip.objects.create(
+    excursion = Excursion.objects.create(
         dive_shop=dive_shop,
         dive_site=shallow_site,
         departure_time=tomorrow,
@@ -355,10 +374,39 @@ def full_trip(db, dive_shop, shallow_site, encounter_definition, user, diver_pro
 
     # Book the only spot
     Booking.objects.create(
-        trip=trip,
+        excursion=excursion,
         diver=diver_profile,
         status="confirmed",
         booked_by=user,
     )
 
-    return trip
+    return excursion
+
+
+@pytest.fixture
+def full_excursion(db, dive_shop, shallow_site, encounter_definition, user, diver_profile):
+    """Create a fully booked dive excursion."""
+    from primitives_testbed.diveops.models import Excursion, Booking
+
+    tomorrow = timezone.now() + timedelta(days=1)
+
+    excursion = Excursion.objects.create(
+        dive_shop=dive_shop,
+        dive_site=shallow_site,
+        departure_time=tomorrow,
+        return_time=tomorrow + timedelta(hours=4),
+        max_divers=1,  # Only 1 spot
+        price_per_diver=Decimal("75.00"),
+        currency="USD",
+        created_by=user,
+    )
+
+    # Book the only spot
+    Booking.objects.create(
+        excursion=excursion,
+        diver=diver_profile,
+        status="confirmed",
+        booked_by=user,
+    )
+
+    return excursion

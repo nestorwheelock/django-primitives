@@ -70,13 +70,13 @@
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                 <h3 class="text-lg font-medium text-gray-900">Upcoming Trips</h3>
-                <a href="{% url 'diveops:trip-list' %}" class="text-sm text-blue-600 hover:text-blue-700">View all</a>
+                <a href="{% url 'diveops:excursion-list' %}" class="text-sm text-blue-600 hover:text-blue-700">View all</a>
             </div>
             <div class="p-4">
                 {% if upcoming_trips %}
                 <div class="space-y-3">
                     {% for trip in upcoming_trips %}
-                    <a href="{% url 'diveops:trip-detail' pk=trip.pk %}" class="block p-3 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50 transition-colors">
+                    <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}" class="block p-3 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50 transition-colors">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="font-medium text-gray-900">{{ trip.dive_site.name }}</p>
@@ -107,7 +107,7 @@
                 {% if todays_trips %}
                 <div class="space-y-3">
                     {% for trip in todays_trips %}
-                    <a href="{% url 'diveops:trip-detail' pk=trip.pk %}" class="block p-3 rounded-lg border border-gray-100 hover:border-green-200 hover:bg-green-50 transition-colors">
+                    <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}" class="block p-3 rounded-lg border border-gray-100 hover:border-green-200 hover:bg-green-50 transition-colors">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="font-medium text-gray-900">{{ trip.dive_site.name }}</p>
@@ -133,7 +133,7 @@
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <h3 class="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
         <div class="flex flex-wrap gap-3">
-            <a href="{% url 'diveops:trip-list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+            <a href="{% url 'diveops:excursion-list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                 {% icon "anchor" "w-4 h-4 mr-2" %}
                 View All Trips
             </a>

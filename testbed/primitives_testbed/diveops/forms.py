@@ -264,24 +264,24 @@ class DiverForm(forms.Form):
 
 
 class BookDiverForm(forms.Form):
-    """Form to book a diver on a trip.
+    """Form to book a diver on an excursion.
 
-    Displays available divers (those not already booked on this trip).
+    Displays available divers (those not already booked on this excursion).
     """
 
     diver = forms.ModelChoiceField(
         queryset=DiverProfile.objects.none(),
         label="Select Diver",
-        help_text="Choose a diver to book on this trip.",
+        help_text="Choose a diver to book on this excursion.",
     )
 
-    def __init__(self, *args, trip: DiveTrip, **kwargs):
+    def __init__(self, *args, excursion: Excursion, **kwargs):
         super().__init__(*args, **kwargs)
-        self.trip = trip
+        self.excursion = excursion
 
-        # Get divers already booked on this trip (excluding cancelled)
+        # Get divers already booked on this excursion (excluding cancelled)
         booked_diver_ids = Booking.objects.filter(
-            trip=trip,
+            excursion=excursion,
             status__in=["pending", "confirmed", "checked_in"],
         ).values_list("diver_id", flat=True)
 

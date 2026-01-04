@@ -8,7 +8,7 @@ from django.db import models
 from primitives_testbed.diveops.models import (
     CertificationLevel,
     DiverCertification,
-    TripRequirement,
+    ExcursionRequirement,
 )
 
 
@@ -92,14 +92,14 @@ class TestGetTripWithRequirements:
             agency=padi_agency, code="aow", name="Advanced Open Water", rank=3
         )
 
-        TripRequirement.objects.create(
-            trip=dive_trip,
+        ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="certification",
             certification_level=aow,
             is_mandatory=True,
         )
-        TripRequirement.objects.create(
-            trip=dive_trip,
+        ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="experience",
             min_dives=50,
             is_mandatory=True,

@@ -380,8 +380,8 @@ class TestDiverCertification:
 
 
 @pytest.mark.django_db
-class TestTripRequirement:
-    """Tests for TripRequirement model."""
+class TestExcursionRequirement:
+    """Tests for ExcursionRequirement model."""
 
     @pytest.fixture
     def certification_level(self, padi_agency):
@@ -395,11 +395,11 @@ class TestTripRequirement:
         )
 
     def test_create_certification_requirement(self, dive_trip, certification_level):
-        """TripRequirement for certification can be created."""
-        from primitives_testbed.diveops.models import TripRequirement
+        """ExcursionRequirement for certification can be created."""
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
-        req = TripRequirement.objects.create(
-            trip=dive_trip,
+        req = ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="certification",
             certification_level=certification_level,
             description="Minimum AOW certification required",
@@ -412,11 +412,11 @@ class TestTripRequirement:
         assert req.is_mandatory is True
 
     def test_create_medical_requirement(self, dive_trip):
-        """TripRequirement for medical can be created."""
-        from primitives_testbed.diveops.models import TripRequirement
+        """ExcursionRequirement for medical can be created."""
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
-        req = TripRequirement.objects.create(
-            trip=dive_trip,
+        req = ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="medical",
             description="Valid medical clearance required",
             is_mandatory=True,
@@ -427,11 +427,11 @@ class TestTripRequirement:
         assert req.certification_level is None
 
     def test_create_gear_requirement(self, dive_trip):
-        """TripRequirement for gear can be created."""
-        from primitives_testbed.diveops.models import TripRequirement
+        """ExcursionRequirement for gear can be created."""
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
-        req = TripRequirement.objects.create(
-            trip=dive_trip,
+        req = ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="gear",
             description="Dive computer required",
             is_mandatory=False,
@@ -442,11 +442,11 @@ class TestTripRequirement:
         assert req.is_mandatory is False
 
     def test_create_experience_requirement(self, dive_trip):
-        """TripRequirement for experience can be created."""
-        from primitives_testbed.diveops.models import TripRequirement
+        """ExcursionRequirement for experience can be created."""
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
-        req = TripRequirement.objects.create(
-            trip=dive_trip,
+        req = ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="experience",
             description="Minimum 50 logged dives",
             is_mandatory=True,
@@ -459,25 +459,25 @@ class TestTripRequirement:
 
     def test_trip_can_have_multiple_requirements(self, dive_trip, certification_level):
         """A trip can have multiple requirements."""
-        from primitives_testbed.diveops.models import TripRequirement
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
-        TripRequirement.objects.create(
-            trip=dive_trip,
+        ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="certification",
             certification_level=certification_level,
             description="AOW required",
             is_mandatory=True,
         )
 
-        TripRequirement.objects.create(
-            trip=dive_trip,
+        ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="medical",
             description="Medical clearance required",
             is_mandatory=True,
         )
 
-        TripRequirement.objects.create(
-            trip=dive_trip,
+        ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="experience",
             description="20 dives minimum",
             is_mandatory=False,
@@ -488,10 +488,10 @@ class TestTripRequirement:
 
     def test_unique_requirement_type_per_trip_constraint(self, dive_trip, certification_level):
         """Only one requirement of each type per trip (for certification, medical)."""
-        from primitives_testbed.diveops.models import TripRequirement
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
-        TripRequirement.objects.create(
-            trip=dive_trip,
+        ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="certification",
             certification_level=certification_level,
             description="AOW required",
@@ -499,8 +499,8 @@ class TestTripRequirement:
         )
 
         with pytest.raises(IntegrityError):
-            TripRequirement.objects.create(
-                trip=dive_trip,
+            ExcursionRequirement.objects.create(
+                excursion=dive_trip,
                 requirement_type="certification",  # Duplicate type
                 certification_level=certification_level,
                 description="Another cert requirement",
@@ -509,17 +509,17 @@ class TestTripRequirement:
 
     def test_mandatory_requirements_queryset(self, dive_trip, certification_level):
         """Can filter for mandatory requirements only."""
-        from primitives_testbed.diveops.models import TripRequirement
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
-        TripRequirement.objects.create(
-            trip=dive_trip,
+        ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="certification",
             certification_level=certification_level,
             is_mandatory=True,
         )
 
-        TripRequirement.objects.create(
-            trip=dive_trip,
+        ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="gear",
             description="Nice to have",
             is_mandatory=False,
@@ -530,11 +530,11 @@ class TestTripRequirement:
         assert mandatory.first().requirement_type == "certification"
 
     def test_str_representation(self, dive_trip, certification_level):
-        """TripRequirement string shows trip and level name."""
-        from primitives_testbed.diveops.models import TripRequirement
+        """ExcursionRequirement string shows trip and level name."""
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
-        req = TripRequirement.objects.create(
-            trip=dive_trip,
+        req = ExcursionRequirement.objects.create(
+            excursion=dive_trip,
             requirement_type="certification",
             certification_level=certification_level,
             is_mandatory=True,
@@ -546,11 +546,11 @@ class TestTripRequirement:
 
     def test_certification_level_required_for_cert_type(self, dive_trip):
         """Certification requirement should have certification_level set."""
-        from primitives_testbed.diveops.models import TripRequirement
+        from primitives_testbed.diveops.models import ExcursionRequirement
 
         # This tests the model validation, not a DB constraint
-        req = TripRequirement(
-            trip=dive_trip,
+        req = ExcursionRequirement(
+            excursion=dive_trip,
             requirement_type="certification",
             certification_level=None,  # Missing!
             is_mandatory=True,

@@ -226,7 +226,7 @@ class TestDiveTrip:
         from primitives_testbed.diveops.models import Booking
 
         Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
@@ -244,7 +244,7 @@ class TestBooking:
         from primitives_testbed.diveops.models import Booking
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
@@ -258,7 +258,7 @@ class TestBooking:
         from primitives_testbed.diveops.models import Booking
 
         Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
@@ -266,7 +266,7 @@ class TestBooking:
 
         with pytest.raises(IntegrityError):
             Booking.objects.create(
-                trip=dive_trip,
+                excursion=dive_trip,
                 diver=diver_profile,
                 status="confirmed",
                 booked_by=user,
@@ -274,22 +274,22 @@ class TestBooking:
 
 
 @pytest.mark.django_db
-class TestTripRoster:
-    """Tests for TripRoster model."""
+class TestExcursionRoster:
+    """Tests for ExcursionRoster model."""
 
     def test_create_roster_entry(self, dive_trip, diver_profile, user):
-        """TripRoster entry can be created."""
-        from primitives_testbed.diveops.models import Booking, TripRoster
+        """ExcursionRoster entry can be created."""
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
 
-        roster = TripRoster.objects.create(
-            trip=dive_trip,
+        roster = ExcursionRoster.objects.create(
+            excursion=dive_trip,
             diver=diver_profile,
             booking=booking,
             checked_in_by=user,
@@ -300,43 +300,43 @@ class TestTripRoster:
 
     def test_unique_roster_per_diver_trip_constraint(self, dive_trip, diver_profile, user):
         """A diver can only appear once on a trip roster (DB constraint)."""
-        from primitives_testbed.diveops.models import Booking, TripRoster
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
 
-        TripRoster.objects.create(
-            trip=dive_trip,
+        ExcursionRoster.objects.create(
+            excursion=dive_trip,
             diver=diver_profile,
             booking=booking,
             checked_in_by=user,
         )
 
         with pytest.raises(IntegrityError):
-            TripRoster.objects.create(
-                trip=dive_trip,
+            ExcursionRoster.objects.create(
+                excursion=dive_trip,
                 diver=diver_profile,
                 booking=booking,
                 checked_in_by=user,
             )
 
     def test_roster_role_default(self, dive_trip, diver_profile, user):
-        """TripRoster role defaults to DIVER."""
-        from primitives_testbed.diveops.models import Booking, TripRoster
+        """ExcursionRoster role defaults to DIVER."""
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
 
-        roster = TripRoster.objects.create(
-            trip=dive_trip,
+        roster = ExcursionRoster.objects.create(
+            excursion=dive_trip,
             diver=diver_profile,
             booking=booking,
             checked_in_by=user,
@@ -345,18 +345,18 @@ class TestTripRoster:
         assert roster.role == "DIVER"
 
     def test_roster_role_divemaster(self, dive_trip, diver_profile, user):
-        """TripRoster can have DM role."""
-        from primitives_testbed.diveops.models import Booking, TripRoster
+        """ExcursionRoster can have DM role."""
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
 
-        roster = TripRoster.objects.create(
-            trip=dive_trip,
+        roster = ExcursionRoster.objects.create(
+            excursion=dive_trip,
             diver=diver_profile,
             booking=booking,
             checked_in_by=user,
@@ -366,18 +366,18 @@ class TestTripRoster:
         assert roster.role == "DM"
 
     def test_roster_role_instructor(self, dive_trip, diver_profile, user):
-        """TripRoster can have INSTRUCTOR role."""
-        from primitives_testbed.diveops.models import Booking, TripRoster
+        """ExcursionRoster can have INSTRUCTOR role."""
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
 
-        roster = TripRoster.objects.create(
-            trip=dive_trip,
+        roster = ExcursionRoster.objects.create(
+            excursion=dive_trip,
             diver=diver_profile,
             booking=booking,
             checked_in_by=user,
@@ -397,7 +397,7 @@ class TestBookingRebooking:
 
         # First booking
         booking1 = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
@@ -409,7 +409,7 @@ class TestBookingRebooking:
 
         # Rebook should succeed
         booking2 = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
@@ -423,7 +423,7 @@ class TestBookingRebooking:
         from primitives_testbed.diveops.models import Booking
 
         Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
@@ -431,7 +431,7 @@ class TestBookingRebooking:
 
         with pytest.raises(IntegrityError):
             Booking.objects.create(
-                trip=dive_trip,
+                excursion=dive_trip,
                 diver=diver_profile,
                 status="pending",
                 booked_by=user,

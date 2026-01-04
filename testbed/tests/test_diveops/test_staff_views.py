@@ -57,39 +57,39 @@ def anonymous_client():
 
 
 @pytest.mark.django_db
-class TestTripListView:
-    """Tests for TripListView."""
+class TestExcursionListView:
+    """Tests for ExcursionListView."""
 
-    def test_trip_list_requires_authentication(self, anonymous_client):
+    def test_excursion_list_requires_authentication(self, anonymous_client):
         """Anonymous users are redirected to login."""
-        url = reverse("diveops:trip-list")
+        url = reverse("diveops:excursion-list")
         response = anonymous_client.get(url)
 
         assert response.status_code == 302
         assert "/login/" in response.url or "/accounts/login/" in response.url
 
-    def test_trip_list_requires_staff(self, regular_client):
+    def test_excursion_list_requires_staff(self, regular_client):
         """Non-staff users are denied access."""
-        url = reverse("diveops:trip-list")
+        url = reverse("diveops:excursion-list")
         response = regular_client.get(url)
 
         # Should either redirect or return 403
         assert response.status_code in [302, 403]
 
-    def test_trip_list_accessible_by_staff(self, staff_client, dive_trip):
-        """Staff users can access trip list."""
-        url = reverse("diveops:trip-list")
+    def test_excursion_list_accessible_by_staff(self, staff_client, dive_trip):
+        """Staff users can access excursion list."""
+        url = reverse("diveops:excursion-list")
         response = staff_client.get(url)
 
         assert response.status_code == 200
-        assert "trips" in response.context
+        assert "excursions" in response.context
 
-    def test_trip_list_shows_upcoming_trips(self, staff_client, dive_trip, dive_shop, dive_site, user):
-        """Trip list shows only upcoming trips."""
-        from primitives_testbed.diveops.models import DiveTrip
+    def test_excursion_list_shows_upcoming_excursions(self, staff_client, dive_trip, dive_shop, dive_site, user):
+        """Excursion list shows only upcoming excursions."""
+        from primitives_testbed.diveops.models import Excursion
 
-        # Create a past trip
-        past_trip = DiveTrip.objects.create(
+        # Create a past excursion
+        past_excursion = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=timezone.now() - timedelta(days=1),
@@ -99,137 +99,137 @@ class TestTripListView:
             created_by=user,
         )
 
-        url = reverse("diveops:trip-list")
+        url = reverse("diveops:excursion-list")
         response = staff_client.get(url)
 
         assert response.status_code == 200
-        trips = response.context["trips"]
-        # Should include future trip, not past trip
-        trip_ids = [t.id for t in trips]
-        assert dive_trip.id in trip_ids
-        assert past_trip.id not in trip_ids
+        excursions = response.context["excursions"]
+        # Should include future excursion, not past excursion
+        excursion_ids = [e.id for e in excursions]
+        assert dive_trip.id in excursion_ids
+        assert past_excursion.id not in excursion_ids
 
-    def test_trip_list_shows_booking_counts(self, staff_client, dive_trip, diver_profile, user):
-        """Trip list shows number of bookings per trip."""
+    def test_excursion_list_shows_booking_counts(self, staff_client, dive_trip, diver_profile, user):
+        """Excursion list shows number of bookings per excursion."""
         from primitives_testbed.diveops.models import Booking
 
         Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
 
-        url = reverse("diveops:trip-list")
+        url = reverse("diveops:excursion-list")
         response = staff_client.get(url)
 
         assert response.status_code == 200
         # The template should show booking counts
         assert b"1" in response.content or "1 booking" in str(response.content)
 
-    def test_trip_list_extends_staff_base(self, staff_client, dive_trip):
-        """Trip list template extends base_staff.html."""
-        url = reverse("diveops:trip-list")
+    def test_excursion_list_extends_staff_base(self, staff_client, dive_trip):
+        """Excursion list template extends base_staff.html."""
+        url = reverse("diveops:excursion-list")
         response = staff_client.get(url)
 
         # Should use staff base template
         assert response.status_code == 200
         # Template should be in the chain
         template_names = [t.name for t in response.templates]
-        assert "diveops/staff/trip_list.html" in template_names
+        assert "diveops/staff/excursion_list.html" in template_names
 
 
 @pytest.mark.django_db
-class TestTripDetailView:
-    """Tests for TripDetailView."""
+class TestExcursionDetailView:
+    """Tests for ExcursionDetailView."""
 
-    def test_trip_detail_requires_authentication(self, anonymous_client, dive_trip):
+    def test_excursion_detail_requires_authentication(self, anonymous_client, dive_trip):
         """Anonymous users are redirected to login."""
-        url = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         response = anonymous_client.get(url)
 
         assert response.status_code == 302
         assert "/login/" in response.url or "/accounts/login/" in response.url
 
-    def test_trip_detail_requires_staff(self, regular_client, dive_trip):
+    def test_excursion_detail_requires_staff(self, regular_client, dive_trip):
         """Non-staff users are denied access."""
-        url = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         response = regular_client.get(url)
 
         assert response.status_code in [302, 403]
 
-    def test_trip_detail_accessible_by_staff(self, staff_client, dive_trip):
-        """Staff users can access trip detail."""
-        url = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+    def test_excursion_detail_accessible_by_staff(self, staff_client, dive_trip):
+        """Staff users can access excursion detail."""
+        url = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         response = staff_client.get(url)
 
         assert response.status_code == 200
-        assert "trip" in response.context
+        assert "excursion" in response.context
 
-    def test_trip_detail_shows_trip_info(self, staff_client, dive_trip):
-        """Trip detail shows trip information."""
-        url = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+    def test_excursion_detail_shows_excursion_info(self, staff_client, dive_trip):
+        """Excursion detail shows excursion information."""
+        url = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         response = staff_client.get(url)
 
         assert response.status_code == 200
         assert dive_trip.dive_site.name.encode() in response.content
 
-    def test_trip_detail_shows_roster(self, staff_client, dive_trip, diver_profile, user):
-        """Trip detail shows roster of checked-in divers."""
-        from primitives_testbed.diveops.models import Booking, TripRoster
+    def test_excursion_detail_shows_roster(self, staff_client, dive_trip, diver_profile, user):
+        """Excursion detail shows roster of checked-in divers."""
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="checked_in",
             booked_by=user,
         )
-        TripRoster.objects.create(
-            trip=dive_trip,
+        ExcursionRoster.objects.create(
+            excursion=dive_trip,
             diver=diver_profile,
             booking=booking,
             checked_in_by=user,
         )
 
-        url = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         response = staff_client.get(url)
 
         assert response.status_code == 200
         # Should show diver name in roster
         assert diver_profile.person.first_name.encode() in response.content
 
-    def test_trip_detail_shows_bookings(self, staff_client, dive_trip, diver_profile, user):
-        """Trip detail shows all bookings."""
+    def test_excursion_detail_shows_bookings(self, staff_client, dive_trip, diver_profile, user):
+        """Excursion detail shows all bookings."""
         from primitives_testbed.diveops.models import Booking
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
 
-        url = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         response = staff_client.get(url)
 
         assert response.status_code == 200
         assert "bookings" in response.context or b"booking" in response.content.lower()
 
-    def test_trip_detail_shows_spots_available(self, staff_client, dive_trip):
-        """Trip detail shows available spots."""
-        url = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+    def test_excursion_detail_shows_spots_available(self, staff_client, dive_trip):
+        """Excursion detail shows available spots."""
+        url = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         response = staff_client.get(url)
 
         assert response.status_code == 200
         # Max divers is 8, no bookings, so 8 spots available
         assert b"8" in response.content or "spots" in str(response.content).lower()
 
-    def test_trip_detail_404_for_invalid_id(self, staff_client):
-        """Trip detail returns 404 for non-existent trip."""
+    def test_excursion_detail_404_for_invalid_id(self, staff_client):
+        """Excursion detail returns 404 for non-existent excursion."""
         import uuid
 
         fake_id = uuid.uuid4()
-        url = reverse("diveops:trip-detail", kwargs={"pk": fake_id})
+        url = reverse("diveops:excursion-detail", kwargs={"pk": fake_id})
         response = staff_client.get(url)
 
         assert response.status_code == 404
@@ -239,14 +239,14 @@ class TestTripDetailView:
 class TestURLPatterns:
     """Tests for diveops staff URL patterns."""
 
-    def test_trip_list_url_resolves(self):
-        """Trip list URL can be reversed."""
-        url = reverse("diveops:trip-list")
-        assert url == "/staff/diveops/trips/" or "/trips/" in url
+    def test_excursion_list_url_resolves(self):
+        """Excursion list URL can be reversed."""
+        url = reverse("diveops:excursion-list")
+        assert url == "/staff/diveops/excursions/" or "/excursions/" in url
 
-    def test_trip_detail_url_resolves(self, dive_trip):
-        """Trip detail URL can be reversed."""
-        url = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+    def test_excursion_detail_url_resolves(self, dive_trip):
+        """Excursion detail URL can be reversed."""
+        url = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         assert str(dive_trip.pk) in url
 
 
@@ -256,7 +256,7 @@ class TestBookDiverView:
 
     def test_book_diver_requires_authentication(self, anonymous_client, dive_trip):
         """Anonymous users are redirected to login."""
-        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        url = reverse("diveops:book-diver", kwargs={"excursion_pk": dive_trip.pk})
         response = anonymous_client.get(url)
 
         assert response.status_code == 302
@@ -264,23 +264,23 @@ class TestBookDiverView:
 
     def test_book_diver_requires_staff(self, regular_client, dive_trip):
         """Non-staff users are denied access."""
-        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        url = reverse("diveops:book-diver", kwargs={"excursion_pk": dive_trip.pk})
         response = regular_client.get(url)
 
         assert response.status_code in [302, 403]
 
     def test_book_diver_accessible_by_staff(self, staff_client, dive_trip):
         """Staff users can access book diver page."""
-        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        url = reverse("diveops:book-diver", kwargs={"excursion_pk": dive_trip.pk})
         response = staff_client.get(url)
 
         assert response.status_code == 200
-        assert "trip" in response.context
+        assert "excursion" in response.context
         assert "form" in response.context
 
     def test_book_diver_shows_form(self, staff_client, dive_trip):
         """Book diver page shows the booking form."""
-        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        url = reverse("diveops:book-diver", kwargs={"excursion_pk": dive_trip.pk})
         response = staff_client.get(url)
 
         assert response.status_code == 200
@@ -290,15 +290,15 @@ class TestBookDiverView:
         """POST creates a booking for the selected diver."""
         from primitives_testbed.diveops.models import Booking
 
-        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        url = reverse("diveops:book-diver", kwargs={"excursion_pk": dive_trip.pk})
         response = staff_client.post(url, {"diver": diver_profile.pk})
 
-        # Should redirect to trip detail on success
+        # Should redirect to excursion detail on success
         assert response.status_code == 302
         assert str(dive_trip.pk) in response.url
 
         # Booking should be created
-        assert Booking.objects.filter(trip=dive_trip, diver=diver_profile).exists()
+        assert Booking.objects.filter(excursion=dive_trip, diver=diver_profile).exists()
 
     def test_book_diver_shows_eligibility_error(
         self, staff_client, dive_site, dive_shop, staff_user, person2, padi_agency
@@ -308,8 +308,8 @@ class TestBookDiverView:
             CertificationLevel,
             DiverCertification,
             DiverProfile,
-            DiveTrip,
-            TripRequirement,
+            Excursion,
+            ExcursionRequirement,
         )
 
         # Create AOW and OW certification levels
@@ -320,9 +320,9 @@ class TestBookDiverView:
             agency=padi_agency, code="ow", name="Open Water", rank=2
         )
 
-        # Create trip with AOW requirement
+        # Create excursion with AOW requirement
         tomorrow = timezone.now() + timedelta(days=1)
-        trip = DiveTrip.objects.create(
+        excursion = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=tomorrow,
@@ -332,8 +332,8 @@ class TestBookDiverView:
             currency="USD",
             created_by=staff_user,
         )
-        TripRequirement.objects.create(
-            trip=trip, requirement_type="certification", certification_level=aow_level, is_mandatory=True
+        ExcursionRequirement.objects.create(
+            excursion=excursion, requirement_type="certification", certification_level=aow_level, is_mandatory=True
         )
 
         # Create diver with only OW certification (not enough)
@@ -347,7 +347,7 @@ class TestBookDiverView:
             diver=diver, level=ow_level, card_number="12345", issued_on=date.today() - timedelta(days=30)
         )
 
-        url = reverse("diveops:book-diver", kwargs={"trip_pk": trip.pk})
+        url = reverse("diveops:book-diver", kwargs={"excursion_pk": excursion.pk})
         response = staff_client.post(url, {"diver": diver.pk})
 
         # Should stay on the form with error
@@ -355,12 +355,12 @@ class TestBookDiverView:
         # Should show eligibility reasons
         assert b"not eligible" in response.content.lower() or b"certification" in response.content.lower()
 
-    def test_book_diver_redirects_to_trip_detail(self, staff_client, dive_trip, diver_profile):
-        """Successful booking redirects to trip detail."""
-        url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+    def test_book_diver_redirects_to_excursion_detail(self, staff_client, dive_trip, diver_profile):
+        """Successful booking redirects to excursion detail."""
+        url = reverse("diveops:book-diver", kwargs={"excursion_pk": dive_trip.pk})
         response = staff_client.post(url, {"diver": diver_profile.pk})
 
-        expected_redirect = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        expected_redirect = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         assert response.status_code == 302
         assert expected_redirect in response.url
 
@@ -375,7 +375,7 @@ class TestCheckInView:
         from primitives_testbed.diveops.models import Booking
 
         return Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
@@ -405,27 +405,27 @@ class TestCheckInView:
 
     def test_check_in_creates_roster_entry(self, staff_client, booking):
         """POST creates roster entry and updates booking status."""
-        from primitives_testbed.diveops.models import TripRoster
+        from primitives_testbed.diveops.models import ExcursionRoster
 
         url = reverse("diveops:check-in", kwargs={"pk": booking.pk})
         response = staff_client.post(url)
 
-        # Should redirect to trip detail
+        # Should redirect to excursion detail
         assert response.status_code == 302
 
         # Roster entry should exist
-        assert TripRoster.objects.filter(booking=booking).exists()
+        assert ExcursionRoster.objects.filter(booking=booking).exists()
 
         # Booking status should be updated
         booking.refresh_from_db()
         assert booking.status == "checked_in"
 
-    def test_check_in_redirects_to_trip_detail(self, staff_client, booking):
-        """Successful check-in redirects to trip detail."""
+    def test_check_in_redirects_to_excursion_detail(self, staff_client, booking):
+        """Successful check-in redirects to excursion detail."""
         url = reverse("diveops:check-in", kwargs={"pk": booking.pk})
         response = staff_client.post(url)
 
-        expected_redirect = reverse("diveops:trip-detail", kwargs={"pk": booking.trip.pk})
+        expected_redirect = reverse("diveops:excursion-detail", kwargs={"pk": booking.excursion.pk})
         assert response.status_code == 302
         assert expected_redirect in response.url
 
@@ -441,128 +441,128 @@ class TestCheckInView:
 
 
 @pytest.mark.django_db
-class TestStartTripView:
-    """Tests for StartTripView."""
+class TestStartExcursionView:
+    """Tests for StartExcursionView."""
 
-    def test_start_trip_requires_authentication(self, anonymous_client, dive_trip):
+    def test_start_excursion_requires_authentication(self, anonymous_client, dive_trip):
         """Anonymous users are redirected to login."""
-        url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:start-excursion", kwargs={"pk": dive_trip.pk})
         response = anonymous_client.post(url)
 
         assert response.status_code == 302
         assert "/login/" in response.url or "/accounts/login/" in response.url
 
-    def test_start_trip_requires_staff(self, regular_client, dive_trip):
+    def test_start_excursion_requires_staff(self, regular_client, dive_trip):
         """Non-staff users are denied access."""
-        url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:start-excursion", kwargs={"pk": dive_trip.pk})
         response = regular_client.post(url)
 
         assert response.status_code in [302, 403]
 
-    def test_start_trip_only_accepts_post(self, staff_client, dive_trip):
+    def test_start_excursion_only_accepts_post(self, staff_client, dive_trip):
         """GET requests are not allowed."""
-        url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:start-excursion", kwargs={"pk": dive_trip.pk})
         response = staff_client.get(url)
 
         assert response.status_code == 405  # Method not allowed
 
-    def test_start_trip_transitions_to_in_progress(self, staff_client, dive_trip, diver_profile, user):
-        """POST transitions trip to in_progress state."""
-        from primitives_testbed.diveops.models import Booking, TripRoster
+    def test_start_excursion_transitions_to_in_progress(self, staff_client, dive_trip, diver_profile, user):
+        """POST transitions excursion to in_progress state."""
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
         from primitives_testbed.diveops.services import check_in
 
         # Create and check in a booking first
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
         check_in(booking, user)
 
-        # Start the trip
-        url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        # Start the excursion
+        url = reverse("diveops:start-excursion", kwargs={"pk": dive_trip.pk})
         response = staff_client.post(url)
 
         # Should redirect
         assert response.status_code == 302
 
-        # Trip state should be in_progress
+        # Excursion state should be in_progress
         dive_trip.refresh_from_db()
         assert dive_trip.encounter.state == "in_progress"
 
-    def test_start_trip_redirects_to_trip_detail(self, staff_client, dive_trip, diver_profile, user):
-        """Successful start redirects to trip detail."""
+    def test_start_excursion_redirects_to_excursion_detail(self, staff_client, dive_trip, diver_profile, user):
+        """Successful start redirects to excursion detail."""
         from primitives_testbed.diveops.models import Booking
         from primitives_testbed.diveops.services import check_in
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
         check_in(booking, user)
 
-        url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:start-excursion", kwargs={"pk": dive_trip.pk})
         response = staff_client.post(url)
 
-        expected_redirect = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        expected_redirect = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         assert response.status_code == 302
         assert expected_redirect in response.url
 
 
 @pytest.mark.django_db
-class TestCompleteTripView:
-    """Tests for CompleteTripView."""
+class TestCompleteExcursionView:
+    """Tests for CompleteExcursionView."""
 
-    def test_complete_trip_requires_authentication(self, anonymous_client, dive_trip):
+    def test_complete_excursion_requires_authentication(self, anonymous_client, dive_trip):
         """Anonymous users are redirected to login."""
-        url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:complete-excursion", kwargs={"pk": dive_trip.pk})
         response = anonymous_client.post(url)
 
         assert response.status_code == 302
         assert "/login/" in response.url or "/accounts/login/" in response.url
 
-    def test_complete_trip_requires_staff(self, regular_client, dive_trip):
+    def test_complete_excursion_requires_staff(self, regular_client, dive_trip):
         """Non-staff users are denied access."""
-        url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:complete-excursion", kwargs={"pk": dive_trip.pk})
         response = regular_client.post(url)
 
         assert response.status_code in [302, 403]
 
-    def test_complete_trip_only_accepts_post(self, staff_client, dive_trip):
+    def test_complete_excursion_only_accepts_post(self, staff_client, dive_trip):
         """GET requests are not allowed."""
-        url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:complete-excursion", kwargs={"pk": dive_trip.pk})
         response = staff_client.get(url)
 
         assert response.status_code == 405  # Method not allowed
 
-    def test_complete_trip_transitions_to_completed(self, staff_client, dive_trip, diver_profile, user):
-        """POST transitions trip to completed state and updates diver stats."""
+    def test_complete_excursion_transitions_to_completed(self, staff_client, dive_trip, diver_profile, user):
+        """POST transitions excursion to completed state and updates diver stats."""
         from primitives_testbed.diveops.models import Booking
-        from primitives_testbed.diveops.services import check_in, start_trip
+        from primitives_testbed.diveops.services import check_in, start_excursion
 
-        # Setup: create booking, check in, start trip
+        # Setup: create booking, check in, start excursion
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
         check_in(booking, user)
-        start_trip(dive_trip, user)
+        start_excursion(dive_trip, user)
 
         initial_dives = diver_profile.total_dives
 
-        # Complete the trip
-        url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        # Complete the excursion
+        url = reverse("diveops:complete-excursion", kwargs={"pk": dive_trip.pk})
         response = staff_client.post(url)
 
         # Should redirect
         assert response.status_code == 302
 
-        # Trip state should be completed
+        # Excursion state should be completed
         dive_trip.refresh_from_db()
         assert dive_trip.encounter.state == "completed"
 
@@ -570,24 +570,24 @@ class TestCompleteTripView:
         diver_profile.refresh_from_db()
         assert diver_profile.total_dives == initial_dives + 1
 
-    def test_complete_trip_redirects_to_trip_detail(self, staff_client, dive_trip, diver_profile, user):
-        """Successful completion redirects to trip detail."""
+    def test_complete_excursion_redirects_to_excursion_detail(self, staff_client, dive_trip, diver_profile, user):
+        """Successful completion redirects to excursion detail."""
         from primitives_testbed.diveops.models import Booking
-        from primitives_testbed.diveops.services import check_in, start_trip
+        from primitives_testbed.diveops.services import check_in, start_excursion
 
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
         check_in(booking, user)
-        start_trip(dive_trip, user)
+        start_excursion(dive_trip, user)
 
-        url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        url = reverse("diveops:complete-excursion", kwargs={"pk": dive_trip.pk})
         response = staff_client.post(url)
 
-        expected_redirect = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        expected_redirect = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         assert response.status_code == 302
         assert expected_redirect in response.url
 
@@ -596,35 +596,35 @@ class TestCompleteTripView:
 class TestFullBookingWorkflow:
     """End-to-end integration tests for the full booking workflow."""
 
-    def test_full_workflow_trip_to_completion(
+    def test_full_workflow_excursion_to_completion(
         self, staff_client, dive_trip, diver_profile, beginner_diver, staff_user
     ):
         """Test complete workflow: list → detail → book → check-in → start → complete."""
-        from primitives_testbed.diveops.models import Booking, TripRoster
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
 
-        # Step 1: View trip list
-        list_url = reverse("diveops:trip-list")
+        # Step 1: View excursion list
+        list_url = reverse("diveops:excursion-list")
         response = staff_client.get(list_url)
         assert response.status_code == 200
         assert dive_trip.dive_site.name.encode() in response.content
 
-        # Step 2: View trip detail
-        detail_url = reverse("diveops:trip-detail", kwargs={"pk": dive_trip.pk})
+        # Step 2: View excursion detail
+        detail_url = reverse("diveops:excursion-detail", kwargs={"pk": dive_trip.pk})
         response = staff_client.get(detail_url)
         assert response.status_code == 200
         assert b"Book Diver" in response.content  # Should show booking link
 
         # Step 3: Book first diver via form
-        book_url = reverse("diveops:book-diver", kwargs={"trip_pk": dive_trip.pk})
+        book_url = reverse("diveops:book-diver", kwargs={"excursion_pk": dive_trip.pk})
         response = staff_client.post(book_url, {"diver": diver_profile.pk})
         assert response.status_code == 302
-        booking1 = Booking.objects.get(trip=dive_trip, diver=diver_profile)
+        booking1 = Booking.objects.get(excursion=dive_trip, diver=diver_profile)
         assert booking1.status == "confirmed"
 
         # Step 4: Book second diver
         response = staff_client.post(book_url, {"diver": beginner_diver.pk})
         assert response.status_code == 302
-        booking2 = Booking.objects.get(trip=dive_trip, diver=beginner_diver)
+        booking2 = Booking.objects.get(excursion=dive_trip, diver=beginner_diver)
         assert booking2.status == "confirmed"
 
         # Step 5: Check in first diver
@@ -633,7 +633,7 @@ class TestFullBookingWorkflow:
         assert response.status_code == 302
         booking1.refresh_from_db()
         assert booking1.status == "checked_in"
-        assert TripRoster.objects.filter(booking=booking1).exists()
+        assert ExcursionRoster.objects.filter(booking=booking1).exists()
 
         # Step 6: Check in second diver
         checkin_url = reverse("diveops:check-in", kwargs={"pk": booking2.pk})
@@ -643,20 +643,20 @@ class TestFullBookingWorkflow:
         assert booking2.status == "checked_in"
 
         # Verify roster has 2 entries
-        assert TripRoster.objects.filter(trip=dive_trip).count() == 2
+        assert ExcursionRoster.objects.filter(excursion=dive_trip).count() == 2
 
-        # Step 7: Start the trip
-        start_url = reverse("diveops:start-trip", kwargs={"pk": dive_trip.pk})
+        # Step 7: Start the excursion
+        start_url = reverse("diveops:start-excursion", kwargs={"pk": dive_trip.pk})
         response = staff_client.post(start_url)
         assert response.status_code == 302
         dive_trip.refresh_from_db()
         assert dive_trip.encounter.state == "in_progress"
 
-        # Step 8: Complete the trip
+        # Step 8: Complete the excursion
         initial_dives1 = diver_profile.total_dives
         initial_dives2 = beginner_diver.total_dives
 
-        complete_url = reverse("diveops:complete-trip", kwargs={"pk": dive_trip.pk})
+        complete_url = reverse("diveops:complete-excursion", kwargs={"pk": dive_trip.pk})
         response = staff_client.post(complete_url)
         assert response.status_code == 302
 
@@ -677,8 +677,8 @@ class TestFullBookingWorkflow:
             CertificationLevel,
             DiverCertification,
             DiverProfile,
-            DiveTrip,
-            TripRequirement,
+            Excursion,
+            ExcursionRequirement,
         )
 
         # Create AOW and OW certification levels
@@ -689,9 +689,9 @@ class TestFullBookingWorkflow:
             agency=padi_agency, code="ow", name="Open Water", rank=2
         )
 
-        # Create trip with AOW requirement
+        # Create excursion with AOW requirement
         tomorrow = timezone.now() + timedelta(days=1)
-        deep_trip = DiveTrip.objects.create(
+        deep_excursion = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=tomorrow,
@@ -701,8 +701,8 @@ class TestFullBookingWorkflow:
             currency="USD",
             created_by=staff_user,
         )
-        TripRequirement.objects.create(
-            trip=deep_trip, requirement_type="certification", certification_level=aow_level, is_mandatory=True
+        ExcursionRequirement.objects.create(
+            excursion=deep_excursion, requirement_type="certification", certification_level=aow_level, is_mandatory=True
         )
 
         # Create diver with only OW certification (not enough)
@@ -717,7 +717,7 @@ class TestFullBookingWorkflow:
         )
 
         # Try to book diver (only OW cert) on deep dive
-        book_url = reverse("diveops:book-diver", kwargs={"trip_pk": deep_trip.pk})
+        book_url = reverse("diveops:book-diver", kwargs={"excursion_pk": deep_excursion.pk})
         response = staff_client.post(book_url, {"diver": diver.pk})
 
         # Should not redirect - should show error
@@ -731,24 +731,24 @@ class TestFullBookingWorkflow:
         fake_pk = uuid.uuid4()
 
         # All URLs should resolve under diveops namespace
-        trip_list = reverse("diveops:trip-list")
-        assert "/diveops/" in trip_list
+        excursion_list = reverse("diveops:excursion-list")
+        assert "/diveops/" in excursion_list
 
-        trip_detail = reverse("diveops:trip-detail", kwargs={"pk": fake_pk})
-        assert "/diveops/" in trip_detail
-        assert str(fake_pk) in trip_detail
+        excursion_detail = reverse("diveops:excursion-detail", kwargs={"pk": fake_pk})
+        assert "/diveops/" in excursion_detail
+        assert str(fake_pk) in excursion_detail
 
-        book_diver = reverse("diveops:book-diver", kwargs={"trip_pk": fake_pk})
+        book_diver = reverse("diveops:book-diver", kwargs={"excursion_pk": fake_pk})
         assert "/diveops/" in book_diver
 
         check_in = reverse("diveops:check-in", kwargs={"pk": fake_pk})
         assert "/diveops/" in check_in
 
-        start_trip = reverse("diveops:start-trip", kwargs={"pk": fake_pk})
-        assert "/diveops/" in start_trip
+        start_excursion = reverse("diveops:start-excursion", kwargs={"pk": fake_pk})
+        assert "/diveops/" in start_excursion
 
-        complete_trip = reverse("diveops:complete-trip", kwargs={"pk": fake_pk})
-        assert "/diveops/" in complete_trip
+        complete_excursion = reverse("diveops:complete-excursion", kwargs={"pk": fake_pk})
+        assert "/diveops/" in complete_excursion
 
 
 @pytest.mark.django_db
@@ -1008,14 +1008,14 @@ class TestDashboardView:
         response = staff_client.get(url)
         assert response.status_code == 200
 
-    def test_dashboard_shows_upcoming_trips(self, staff_client, dive_trip):
-        """Dashboard displays upcoming trips."""
+    def test_dashboard_shows_upcoming_excursions(self, staff_client, dive_trip):
+        """Dashboard displays upcoming excursions."""
         url = reverse("diveops:dashboard")
         response = staff_client.get(url)
 
         assert response.status_code == 200
-        assert "upcoming_trips" in response.context
-        assert "upcoming_trips_count" in response.context
+        assert "upcoming_excursions" in response.context
+        assert "upcoming_excursions_count" in response.context
 
     def test_dashboard_shows_diver_count(self, staff_client, diver_profile):
         """Dashboard displays diver count."""
@@ -1026,13 +1026,13 @@ class TestDashboardView:
         assert "diver_count" in response.context
         assert response.context["diver_count"] >= 1
 
-    def test_dashboard_shows_todays_trips(self, staff_client):
-        """Dashboard displays today's trips context."""
+    def test_dashboard_shows_todays_excursions(self, staff_client):
+        """Dashboard displays today's excursions context."""
         url = reverse("diveops:dashboard")
         response = staff_client.get(url)
 
         assert response.status_code == 200
-        assert "todays_trips" in response.context
+        assert "todays_excursions" in response.context
 
     def test_dashboard_shows_pending_bookings(self, staff_client):
         """Dashboard displays pending bookings count."""

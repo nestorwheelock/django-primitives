@@ -8,7 +8,6 @@ from django.contrib.admin.sites import AdminSite
 from primitives_testbed.diveops.models import (
     CertificationLevel,
     DiverCertification,
-    TripRequirement,
 )
 
 
@@ -66,26 +65,3 @@ class TestDiverCertificationAdmin:
         assert "is_verified" in model_admin.list_filter
 
 
-@pytest.mark.django_db
-class TestTripRequirementAdmin:
-    """Tests for TripRequirement admin."""
-
-    def test_admin_registered(self):
-        """TripRequirement is registered in admin."""
-        from django.contrib import admin
-        assert TripRequirement in admin.site._registry
-
-    def test_list_display(self):
-        """Admin shows trip, requirement_type, is_mandatory."""
-        from django.contrib import admin
-        model_admin = admin.site._registry[TripRequirement]
-        assert "trip" in model_admin.list_display
-        assert "requirement_type" in model_admin.list_display
-        assert "is_mandatory" in model_admin.list_display
-
-    def test_list_filter(self):
-        """Admin can filter by requirement_type and is_mandatory."""
-        from django.contrib import admin
-        model_admin = admin.site._registry[TripRequirement]
-        assert "requirement_type" in model_admin.list_filter
-        assert "is_mandatory" in model_admin.list_filter

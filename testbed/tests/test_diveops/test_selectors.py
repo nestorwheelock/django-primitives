@@ -217,7 +217,7 @@ class TestListUpcomingTrips:
     def test_filters_by_min_spots(self, dive_trip, diver, dive_shop, dive_site, staff_user):
         """Can filter by minimum available spots."""
         Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver,
             booked_by=staff_user,
             status="confirmed",
@@ -253,7 +253,7 @@ class TestListDiverBookings:
     def test_returns_diver_bookings(self, dive_trip, diver, staff_user):
         """Returns bookings for a diver."""
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver,
             booked_by=staff_user,
             status="confirmed",
@@ -265,7 +265,7 @@ class TestListDiverBookings:
     def test_filters_by_status(self, dive_trip, diver, staff_user):
         """Can filter by status."""
         Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver,
             booked_by=staff_user,
             status="confirmed",
@@ -289,7 +289,7 @@ class TestListDiverBookings:
             created_by=staff_user,
         )
         Booking.objects.create(
-            trip=past_trip,
+            excursion=past_trip,
             diver=diver,
             booked_by=staff_user,
             status="checked_in",
@@ -310,7 +310,7 @@ class TestListDiverBookings:
             created_by=staff_user,
         )
         Booking.objects.create(
-            trip=past_trip,
+            excursion=past_trip,
             diver=diver,
             booked_by=staff_user,
             status="checked_in",
@@ -507,7 +507,7 @@ class TestGetBooking:
     def test_returns_booking_with_related_data(self, dive_trip, diver, staff_user):
         """Returns booking with related data prefetched."""
         booking = Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver,
             booked_by=staff_user,
             status="confirmed",

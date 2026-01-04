@@ -37,7 +37,7 @@ Usage:
         action=Actions.BOOKING_CREATED,
         target=booking,
         actor=request.user,
-        data={"trip_id": str(trip.pk), "diver_id": str(diver.pk)},
+        data={"excursion_id": str(excursion.pk), "diver_id": str(diver.pk)},
     )
 """
 
@@ -173,7 +173,7 @@ def log_event(
             target=booking,
             actor=request.user,
             data={
-                "trip_id": str(trip.pk),
+                "excursion_id": str(excursion.pk),
                 "diver_id": str(diver.pk),
                 "price": "100.00",
             },
@@ -266,19 +266,19 @@ def log_certification_event(
     )
 
 
-def log_trip_event(
+def log_excursion_event(
     action: str,
-    trip,
+    excursion,
     actor=None,
     data: dict | None = None,
     changes: dict | None = None,
     request=None,
 ):
-    """Log an audit event for a trip operation.
+    """Log an audit event for an excursion operation.
 
     Args:
         action: One of Actions.TRIP_* constants
-        trip: DiveTrip instance
+        excursion: Excursion instance
         actor: Django User who performed the action
         data: Optional additional context
         changes: Optional field changes
@@ -287,11 +287,11 @@ def log_trip_event(
     Returns:
         AuditLog instance
     """
-    metadata = _build_trip_metadata(trip, data)
+    metadata = _build_excursion_metadata(excursion, data)
 
     return audit_log(
         action=action,
-        obj=trip,
+        obj=excursion,
         actor=actor,
         changes=changes or {},
         metadata=metadata,
@@ -365,7 +365,7 @@ def log_roster_event(
 def log_eligibility_event(
     action: str,
     diver,
-    trip,
+    excursion,
     actor=None,
     data: dict | None = None,
     request=None,
@@ -375,7 +375,7 @@ def log_eligibility_event(
     Args:
         action: One of Actions.ELIGIBILITY_* constants
         diver: DiverProfile being checked
-        trip: DiveTrip being checked against
+        excursion: Excursion being checked against
         actor: Django User who performed the action
         data: Optional additional context (e.g., reasons, override justification)
         request: Optional HTTP request
@@ -386,7 +386,7 @@ def log_eligibility_event(
     metadata = {
         "diver_id": str(diver.pk),
         "diver_party_id": str(diver.person_id) if diver.person_id else None,
-        "trip_id": str(trip.pk),
+        "excursion_id": str(excursion.pk),
     }
 
     if data:
@@ -424,7 +424,7 @@ def log_trip_requirement_event(
         AuditLog instance
     """
     metadata = {
-        "trip_id": str(requirement.trip_id),
+        "excursion_id": str(requirement.excursion_id),
         "requirement_type": requirement.requirement_type,
     }
 
@@ -525,27 +525,27 @@ def _build_certification_metadata(certification, extra_data: dict | None = None)
     return metadata
 
 
-def _build_trip_metadata(trip, extra_data: dict | None = None) -> dict:
-    """Build consistent metadata for trip audit events."""
+def _build_excursion_metadata(excursion, extra_data: dict | None = None) -> dict:
+    """Build consistent metadata for excursion audit events."""
     metadata = {
-        "trip_id": str(trip.pk),
+        "excursion_id": str(excursion.pk),
     }
 
-    if trip.dive_site_id:
-        metadata["dive_site_id"] = str(trip.dive_site_id)
-        if trip.dive_site:
-            metadata["dive_site_name"] = trip.dive_site.name
+    if excursion.dive_site_id:
+        metadata["dive_site_id"] = str(excursion.dive_site_id)
+        if excursion.dive_site:
+            metadata["dive_site_name"] = excursion.dive_site.name
 
-    if trip.dive_shop_id:
-        metadata["dive_shop_id"] = str(trip.dive_shop_id)
-        if trip.dive_shop:
-            metadata["dive_shop_name"] = trip.dive_shop.name
+    if excursion.dive_shop_id:
+        metadata["dive_shop_id"] = str(excursion.dive_shop_id)
+        if excursion.dive_shop:
+            metadata["dive_shop_name"] = excursion.dive_shop.name
 
-    if trip.departure_time:
-        metadata["departure_time"] = trip.departure_time.isoformat()
+    if excursion.departure_time:
+        metadata["departure_time"] = excursion.departure_time.isoformat()
 
-    if trip.encounter_id:
-        metadata["encounter_id"] = str(trip.encounter_id)
+    if excursion.encounter_id:
+        metadata["encounter_id"] = str(excursion.encounter_id)
 
     if extra_data:
         metadata.update(extra_data)
@@ -559,8 +559,8 @@ def _build_booking_metadata(booking, extra_data: dict | None = None) -> dict:
         "booking_id": str(booking.pk),
     }
 
-    if booking.trip_id:
-        metadata["trip_id"] = str(booking.trip_id)
+    if booking.excursion_id:
+        metadata["excursion_id"] = str(booking.excursion_id)
 
     if booking.diver_id:
         metadata["diver_id"] = str(booking.diver_id)
@@ -587,8 +587,8 @@ def _build_roster_metadata(roster, extra_data: dict | None = None) -> dict:
         "roster_id": str(roster.pk),
     }
 
-    if roster.trip_id:
-        metadata["trip_id"] = str(roster.trip_id)
+    if roster.excursion_id:
+        metadata["excursion_id"] = str(roster.excursion_id)
 
     if roster.diver_id:
         metadata["diver_id"] = str(roster.diver_id)

@@ -15,7 +15,7 @@ from .audit import (
     log_diver_event,
     log_roster_event,
     log_site_event,
-    log_trip_event,
+    log_excursion_event,
 )
 from .decisioning import can_diver_join_trip
 from .exceptions import (
@@ -162,7 +162,7 @@ def book_excursion(
 
         # Create basket with excursion item
         basket = create_trip_basket(
-            trip=excursion,
+            excursion=excursion,
             diver=diver,
             catalog_item=catalog_item,
             created_by=booked_by,
@@ -173,14 +173,14 @@ def book_excursion(
         for item in basket.items.all():
             price_basket_item(
                 basket_item=item,
-                trip=excursion,
+                excursion=excursion,
                 diver=diver,
             )
 
         # Create invoice from priced basket
         invoice = create_booking_invoice(
             basket=basket,
-            trip=excursion,
+            excursion=excursion,
             diver=diver,
             created_by=booked_by,
         )
@@ -311,9 +311,9 @@ def start_excursion(excursion: Excursion, started_by) -> Excursion:
     excursion.save()
 
     # Emit audit event AFTER successful transaction
-    log_trip_event(
+    log_excursion_event(
         action=Actions.TRIP_STARTED,
-        trip=excursion,
+        excursion=excursion,
         actor=started_by,
     )
 
@@ -392,9 +392,9 @@ def complete_excursion(excursion: Excursion, completed_by) -> Excursion:
         )
 
     # Then emit TRIP_COMPLETED for the excursion
-    log_trip_event(
+    log_excursion_event(
         action=Actions.TRIP_COMPLETED,
-        trip=excursion,
+        excursion=excursion,
         actor=completed_by,
     )
 

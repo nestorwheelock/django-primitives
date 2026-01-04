@@ -10,8 +10,8 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Tem
 from django_portal_ui.mixins import StaffPortalMixin
 
 from .forms import DiverCertificationForm, DiverForm, DiveSiteForm
-from .models import Booking, CertificationLevel, DiverCertification, DiverProfile, DiveSite, DiveTrip
-from .selectors import get_diver_with_certifications, get_trip_with_roster, list_upcoming_trips
+from .models import Booking, CertificationLevel, DiverCertification, DiverProfile, DiveSite, Excursion
+from .selectors import get_diver_with_certifications, get_excursion_with_roster, list_upcoming_excursions
 
 
 class DashboardView(StaffPortalMixin, TemplateView):
@@ -23,10 +23,10 @@ class DashboardView(StaffPortalMixin, TemplateView):
         """Add dashboard stats to context."""
         context = super().get_context_data(**kwargs)
 
-        # Upcoming trips
-        upcoming_trips = list_upcoming_trips(limit=5)
-        context["upcoming_trips"] = upcoming_trips
-        context["upcoming_trips_count"] = DiveTrip.objects.filter(
+        # Upcoming excursions
+        upcoming_excursions = list_upcoming_excursions(limit=5)
+        context["upcoming_excursions"] = upcoming_excursions
+        context["upcoming_excursions_count"] = Excursion.objects.filter(
             departure_time__gt=timezone.now(),
             status__in=["scheduled", "boarding"],
         ).count()
@@ -34,10 +34,10 @@ class DashboardView(StaffPortalMixin, TemplateView):
         # Active divers
         context["diver_count"] = DiverProfile.objects.count()
 
-        # Today's trips
+        # Today's excursions
         today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = today_start + timezone.timedelta(days=1)
-        context["todays_trips"] = DiveTrip.objects.filter(
+        context["todays_excursions"] = Excursion.objects.filter(
             departure_time__gte=today_start,
             departure_time__lt=today_end,
         ).select_related("dive_site").order_by("departure_time")
@@ -130,67 +130,72 @@ class EditDiverView(StaffPortalMixin, FormView):
         return context
 
 
-class TripListView(StaffPortalMixin, ListView):
-    """List upcoming dive trips for staff."""
+class ExcursionListView(StaffPortalMixin, ListView):
+    """List upcoming dive excursions for staff."""
 
-    model = DiveTrip
-    template_name = "diveops/staff/trip_list.html"
-    context_object_name = "trips"
+    model = Excursion
+    template_name = "diveops/staff/excursion_list.html"
+    context_object_name = "excursions"
 
     def get_queryset(self):
-        """Return upcoming trips with booking counts."""
-        return list_upcoming_trips()
+        """Return upcoming excursions with booking counts."""
+        return list_upcoming_excursions()
 
 
-class TripDetailView(StaffPortalMixin, DetailView):
-    """View trip details with roster and bookings."""
+class ExcursionDetailView(StaffPortalMixin, DetailView):
+    """View excursion details with roster and bookings."""
 
-    model = DiveTrip
-    template_name = "diveops/staff/trip_detail.html"
-    context_object_name = "trip"
+    model = Excursion
+    template_name = "diveops/staff/excursion_detail.html"
+    context_object_name = "excursion"
 
     def get_object(self, queryset=None):
-        """Get trip with prefetched related data."""
+        """Get excursion with prefetched related data."""
         pk = self.kwargs.get("pk")
-        trip = get_trip_with_roster(pk)
-        if trip is None:
+        excursion = get_excursion_with_roster(pk)
+        if excursion is None:
             from django.http import Http404
-            raise Http404("Trip not found")
-        return trip
+            raise Http404("Excursion not found")
+        return excursion
 
     def get_context_data(self, **kwargs):
         """Add bookings and roster to context."""
         context = super().get_context_data(**kwargs)
-        trip = self.object
+        excursion = self.object
 
-        # Get bookings for this trip
-        context["bookings"] = trip.bookings.select_related(
+        # Get bookings for this excursion
+        context["bookings"] = excursion.bookings.select_related(
             "diver__person"
         ).order_by("-created_at")
 
         # Get roster entries
-        context["roster"] = trip.roster.select_related(
+        context["roster"] = excursion.roster.select_related(
             "diver__person", "booking"
         ).order_by("checked_in_at")
+
+        # Get dives
+        context["dives"] = excursion.dives.select_related(
+            "dive_site"
+        ).order_by("sequence")
 
         return context
 
 
 class BookDiverView(StaffPortalMixin, FormView):
-    """Book a diver on a trip."""
+    """Book a diver on an excursion."""
 
     template_name = "diveops/staff/book_diver.html"
 
     def dispatch(self, request, *args, **kwargs):
-        self.trip = get_object_or_404(DiveTrip, pk=kwargs["trip_pk"])
+        self.excursion = get_object_or_404(Excursion, pk=kwargs["excursion_pk"])
         return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
-        return reverse("diveops:trip-detail", kwargs={"pk": self.kwargs["trip_pk"]})
+        return reverse("diveops:excursion-detail", kwargs={"pk": self.kwargs["excursion_pk"]})
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["trip"] = self.trip
+        context["excursion"] = self.excursion
         return context
 
     def get_form_class(self):
@@ -199,17 +204,17 @@ class BookDiverView(StaffPortalMixin, FormView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["trip"] = self.trip
+        kwargs["excursion"] = self.excursion
         return kwargs
 
     def form_valid(self, form):
         from .decisioning import can_diver_join_trip
-        from .services import book_trip
+        from .services import book_excursion
 
         diver = form.cleaned_data["diver"]
 
         # Check eligibility
-        result = can_diver_join_trip(diver, self.trip)
+        result = can_diver_join_trip(diver, self.excursion)
         if not result.allowed:
             # Add eligibility result to context and re-render
             context = self.get_context_data(form=form)
@@ -217,9 +222,9 @@ class BookDiverView(StaffPortalMixin, FormView):
             return self.render_to_response(context)
 
         # Book the diver
-        book_trip(self.trip, diver, self.request.user)
+        book_excursion(self.excursion, diver, self.request.user)
         messages.success(
-            self.request, f"{diver.person.first_name} has been booked on this trip."
+            self.request, f"{diver.person.first_name} has been booked on this excursion."
         )
         return HttpResponseRedirect(self.get_success_url())
 
@@ -238,39 +243,39 @@ class CheckInView(StaffPortalMixin, View):
             request, f"{booking.diver.person.first_name} has been checked in."
         )
         return HttpResponseRedirect(
-            reverse("diveops:trip-detail", kwargs={"pk": booking.trip.pk})
+            reverse("diveops:excursion-detail", kwargs={"pk": booking.excursion.pk})
         )
 
 
-class StartTripView(StaffPortalMixin, View):
-    """Start a trip."""
+class StartExcursionView(StaffPortalMixin, View):
+    """Start an excursion."""
 
     http_method_names = ["post"]
 
     def post(self, request, pk):
-        from .services import start_trip
+        from .services import start_excursion
 
-        trip = get_object_or_404(DiveTrip, pk=pk)
-        start_trip(trip, request.user)
-        messages.success(request, "Trip has been started.")
+        excursion = get_object_or_404(Excursion, pk=pk)
+        start_excursion(excursion, request.user)
+        messages.success(request, "Excursion has been started.")
         return HttpResponseRedirect(
-            reverse("diveops:trip-detail", kwargs={"pk": trip.pk})
+            reverse("diveops:excursion-detail", kwargs={"pk": excursion.pk})
         )
 
 
-class CompleteTripView(StaffPortalMixin, View):
-    """Complete a trip."""
+class CompleteExcursionView(StaffPortalMixin, View):
+    """Complete an excursion."""
 
     http_method_names = ["post"]
 
     def post(self, request, pk):
-        from .services import complete_trip
+        from .services import complete_excursion
 
-        trip = get_object_or_404(DiveTrip, pk=pk)
-        complete_trip(trip, request.user)
-        messages.success(request, "Trip has been completed.")
+        excursion = get_object_or_404(Excursion, pk=pk)
+        complete_excursion(excursion, request.user)
+        messages.success(request, "Excursion has been completed.")
         return HttpResponseRedirect(
-            reverse("diveops:trip-detail", kwargs={"pk": trip.pk})
+            reverse("diveops:excursion-detail", kwargs={"pk": excursion.pk})
         )
 
 

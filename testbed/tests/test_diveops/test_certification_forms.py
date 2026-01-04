@@ -173,8 +173,8 @@ class TestDiverCertificationForm:
 
 
 @pytest.mark.django_db
-class TestTripRequirementForm:
-    """Tests for TripRequirementForm."""
+class TestExcursionRequirementForm:
+    """Tests for ExcursionRequirementForm."""
 
     @pytest.fixture
     def padi_agency(self):
@@ -195,16 +195,16 @@ class TestTripRequirementForm:
         )
 
     def test_form_exists(self):
-        """TripRequirementForm can be imported."""
-        from primitives_testbed.diveops.forms import TripRequirementForm
-        assert TripRequirementForm is not None
+        """ExcursionRequirementForm can be imported."""
+        from primitives_testbed.diveops.forms import ExcursionRequirementForm
+        assert ExcursionRequirementForm is not None
 
     def test_form_valid_certification_requirement(self, dive_trip, certification_level):
         """Form accepts valid certification requirement."""
-        from primitives_testbed.diveops.forms import TripRequirementForm
+        from primitives_testbed.diveops.forms import ExcursionRequirementForm
 
-        form = TripRequirementForm(data={
-            "trip": dive_trip.pk,
+        form = ExcursionRequirementForm(data={
+            "excursion": dive_trip.pk,
             "requirement_type": "certification",
             "certification_level": certification_level.pk,
             "is_mandatory": True,
@@ -216,10 +216,10 @@ class TestTripRequirementForm:
 
     def test_form_valid_experience_requirement(self, dive_trip):
         """Form accepts valid experience requirement."""
-        from primitives_testbed.diveops.forms import TripRequirementForm
+        from primitives_testbed.diveops.forms import ExcursionRequirementForm
 
-        form = TripRequirementForm(data={
-            "trip": dive_trip.pk,
+        form = ExcursionRequirementForm(data={
+            "excursion": dive_trip.pk,
             "requirement_type": "experience",
             "min_dives": 50,
             "is_mandatory": True,
@@ -229,10 +229,10 @@ class TestTripRequirementForm:
 
     def test_form_validates_cert_level_for_cert_type(self, dive_trip):
         """Form requires certification_level when type is certification."""
-        from primitives_testbed.diveops.forms import TripRequirementForm
+        from primitives_testbed.diveops.forms import ExcursionRequirementForm
 
-        form = TripRequirementForm(data={
-            "trip": dive_trip.pk,
+        form = ExcursionRequirementForm(data={
+            "excursion": dive_trip.pk,
             "requirement_type": "certification",
             # Missing certification_level
             "is_mandatory": True,

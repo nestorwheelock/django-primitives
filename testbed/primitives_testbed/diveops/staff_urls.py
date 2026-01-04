@@ -19,14 +19,14 @@ urlpatterns = [
     path("certifications/<uuid:pk>/edit/", staff_views.EditCertificationView.as_view(), name="certification-edit"),
     path("certifications/<uuid:pk>/delete/", staff_views.DeleteCertificationView.as_view(), name="certification-delete"),
     path("certifications/<uuid:pk>/verify/", staff_views.VerifyCertificationView.as_view(), name="certification-verify"),
-    # Trip management
-    path("trips/", staff_views.TripListView.as_view(), name="trip-list"),
-    path("trips/<uuid:pk>/", staff_views.TripDetailView.as_view(), name="trip-detail"),
-    path("trips/<uuid:trip_pk>/book/", staff_views.BookDiverView.as_view(), name="book-diver"),
+    # Excursion management
+    path("excursions/", staff_views.ExcursionListView.as_view(), name="excursion-list"),
+    path("excursions/<uuid:pk>/", staff_views.ExcursionDetailView.as_view(), name="excursion-detail"),
+    path("excursions/<uuid:excursion_pk>/book/", staff_views.BookDiverView.as_view(), name="book-diver"),
     # Actions (POST only)
     path("bookings/<uuid:pk>/check-in/", staff_views.CheckInView.as_view(), name="check-in"),
-    path("trips/<uuid:pk>/start/", staff_views.StartTripView.as_view(), name="start-trip"),
-    path("trips/<uuid:pk>/complete/", staff_views.CompleteTripView.as_view(), name="complete-trip"),
+    path("excursions/<uuid:pk>/start/", staff_views.StartExcursionView.as_view(), name="start-excursion"),
+    path("excursions/<uuid:pk>/complete/", staff_views.CompleteExcursionView.as_view(), name="complete-excursion"),
     # Dive Site management
     path("sites/", staff_views.DiveSiteListView.as_view(), name="staff-site-list"),
     path("sites/add/", staff_views.DiveSiteCreateView.as_view(), name="staff-site-create"),
