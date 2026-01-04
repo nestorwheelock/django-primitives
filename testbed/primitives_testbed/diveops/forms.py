@@ -168,41 +168,38 @@ class DiverForm(forms.Form):
     def save(self, actor=None):
         """Save Person, DiverProfile, and optionally DiverCertification.
 
+        Delegates to service layer for all writes. Services handle audit events.
+
         Args:
-            actor: User performing the action (for audit logging)
+            actor: User performing the action (passed to services)
 
         Returns:
             DiverProfile instance
         """
-        from .audit import Actions, log_certification_event
+        from .services import add_certification, create_diver, update_diver
 
         data = self.cleaned_data
 
         if self.instance:
-            # Update existing diver
-            person = self.instance.person
-            person.first_name = data["first_name"]
-            person.last_name = data["last_name"]
-            person.email = data["email"]
-            person.save()
-
-            self.instance.total_dives = data["total_dives"]
-            self.instance.medical_clearance_date = data.get("medical_clearance_date")
-            self.instance.medical_clearance_valid_until = data.get("medical_clearance_valid_until")
-            self.instance.save()
-
-            diver = self.instance
-        else:
-            # Create new diver
-            person = Person.objects.create(
+            # Update existing diver via service
+            diver = update_diver(
+                diver=self.instance,
+                updated_by=actor,
                 first_name=data["first_name"],
                 last_name=data["last_name"],
                 email=data["email"],
-            )
-
-            diver = DiverProfile.objects.create(
-                person=person,
                 total_dives=data["total_dives"],
+                medical_clearance_date=data.get("medical_clearance_date"),
+                medical_clearance_valid_until=data.get("medical_clearance_valid_until"),
+            )
+        else:
+            # Create new diver via service
+            diver = create_diver(
+                first_name=data["first_name"],
+                last_name=data["last_name"],
+                email=data["email"],
+                total_dives=data["total_dives"],
+                created_by=actor,
                 medical_clearance_date=data.get("medical_clearance_date"),
                 medical_clearance_valid_until=data.get("medical_clearance_valid_until"),
             )
@@ -242,10 +239,11 @@ class DiverForm(forms.Form):
                     doc.save()
                     proof_document = doc
 
-                # Create certification
-                certification = DiverCertification.objects.create(
+                # Add certification via service (handles audit)
+                certification = add_certification(
                     diver=diver,
                     level=cert_level,
+                    added_by=actor,
                     card_number=data.get("card_number", ""),
                     issued_on=data.get("issued_on"),
                     expires_on=data.get("expires_on"),
@@ -256,13 +254,6 @@ class DiverForm(forms.Form):
                 if proof_document:
                     proof_document.target_id = str(certification.pk)
                     proof_document.save()
-
-                # Log audit event
-                log_certification_event(
-                    action=Actions.CERTIFICATION_ADDED,
-                    certification=certification,
-                    actor=actor,
-                )
 
         return diver
 
@@ -354,43 +345,26 @@ class DiverCertificationForm(forms.ModelForm):
     def save(self, commit=True, actor=None):
         """Save certification and create proof document if file uploaded.
 
+        Delegates to service layer for all writes. Services handle audit events.
+
         Args:
             commit: If True, save to database
-            actor: User performing the action (for audit logging)
+            actor: User performing the action (passed to services)
 
         Returns:
             DiverCertification instance
         """
-        from .audit import Actions, log_certification_event
+        from .services import add_certification, update_certification
 
         # Use _state.adding to detect new records (pk may be set for UUID fields)
         is_new = self.instance._state.adding
 
-        # Track changes for updates
-        changes = {}
-        if not is_new:
-            # Compare old values with new values
-            old_instance = DiverCertification.objects.get(pk=self.instance.pk)
-            for field in ["card_number", "issued_on", "expires_on"]:
-                old_val = getattr(old_instance, field)
-                new_val = self.cleaned_data.get(field)
-                if old_val != new_val:
-                    changes[field] = {
-                        "old": str(old_val) if old_val else None,
-                        "new": str(new_val) if new_val else None,
-                    }
-
-        instance = super().save(commit=False)
-
-        # Handle proof document upload
+        # Handle proof document upload first
+        proof_document = None
         proof_file = self.cleaned_data.get("proof_file")
         if proof_file:
-            from django_documents.models import Document
             from django.contrib.contenttypes.models import ContentType
-
-            # Track proof document change
-            if not is_new and instance.proof_document:
-                changes["proof_document"] = {"old": str(instance.proof_document_id), "new": "new_upload"}
+            from django_documents.models import Document
 
             # Get content type for DiverCertification (needed before save due to NOT NULL constraint)
             content_type = ContentType.objects.get_for_model(DiverCertification)
@@ -402,39 +376,53 @@ class DiverCertificationForm(forms.ModelForm):
                 content_type=proof_file.content_type or "application/octet-stream",
                 file_size=proof_file.size,
                 document_type="certification_proof",
-                description=f"Certification proof for {instance.level.name if instance.level else 'certification'}",
+                description=f"Certification proof for {self.cleaned_data.get('level').name if self.cleaned_data.get('level') else 'certification'}",
                 target_content_type=content_type,
                 target_id="pending",  # Placeholder, will update after certification is saved
             )
             # Compute checksum
             doc.checksum = doc.compute_checksum()
             doc.save()
-
-            instance.proof_document = doc
+            proof_document = doc
 
         if commit:
-            instance.save()
-            # Update document target_id now that we have the certification pk
-            if instance.proof_document and not instance.proof_document.target_id:
-                instance.proof_document.target_id = str(instance.pk)
-                instance.proof_document.save()
-
-            # Emit audit event
             if is_new:
-                log_certification_event(
-                    action=Actions.CERTIFICATION_ADDED,
-                    certification=instance,
-                    actor=actor,
+                # Create new certification via service (handles audit)
+                instance = add_certification(
+                    diver=self.cleaned_data["diver"],
+                    level=self.cleaned_data["level"],
+                    added_by=actor,
+                    card_number=self.cleaned_data.get("card_number", ""),
+                    issued_on=self.cleaned_data.get("issued_on"),
+                    expires_on=self.cleaned_data.get("expires_on"),
+                    proof_document=proof_document,
                 )
-            elif changes:
-                log_certification_event(
-                    action=Actions.CERTIFICATION_UPDATED,
-                    certification=instance,
-                    actor=actor,
-                    changes=changes,
+            else:
+                # Refresh from database to get original values
+                # (ModelForm mutates instance during validation)
+                original = DiverCertification.objects.get(pk=self.instance.pk)
+                # Update existing certification via service (handles audit)
+                instance = update_certification(
+                    certification=original,
+                    updated_by=actor,
+                    card_number=self.cleaned_data.get("card_number"),
+                    issued_on=self.cleaned_data.get("issued_on"),
+                    expires_on=self.cleaned_data.get("expires_on"),
+                    proof_document=proof_document,
                 )
 
-        return instance
+            # Update document target_id now that we have the certification pk
+            if proof_document:
+                proof_document.target_id = str(instance.pk)
+                proof_document.save()
+
+            return instance
+        else:
+            # If not committing, just update the instance without saving
+            instance = super().save(commit=False)
+            if proof_document:
+                instance.proof_document = proof_document
+            return instance
 
 
 class TripRequirementForm(forms.ModelForm):

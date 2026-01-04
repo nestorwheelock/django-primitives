@@ -12,6 +12,7 @@ from .audit import (
     Actions,
     log_booking_event,
     log_certification_event,
+    log_diver_event,
     log_roster_event,
     log_trip_event,
 )
@@ -20,6 +21,7 @@ from .exceptions import (
     BookingError,
     CertificationError,
     CheckInError,
+    DiverError,
     DiverNotEligibleError,
     TripCapacityError,
     TripStateError,
@@ -568,3 +570,147 @@ def unverify_certification(
     )
 
     return certification
+
+
+# =============================================================================
+# Diver Services
+# =============================================================================
+
+
+@transaction.atomic
+def create_diver(
+    first_name: str,
+    last_name: str,
+    email: str,
+    total_dives: int,
+    created_by,
+    *,
+    medical_clearance_date=None,
+    medical_clearance_valid_until=None,
+) -> DiverProfile:
+    """Create a new diver with Person and DiverProfile.
+
+    Args:
+        first_name: Diver's first name
+        last_name: Diver's last name
+        email: Diver's email address
+        total_dives: Number of logged dives
+        created_by: User creating the diver
+        medical_clearance_date: Optional medical clearance date
+        medical_clearance_valid_until: Optional medical clearance expiry
+
+    Returns:
+        Created DiverProfile
+
+    Raises:
+        DiverError: If diver creation fails
+    """
+    from django_parties.models import Person
+
+    # Create Person record
+    person = Person.objects.create(
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+    )
+
+    # Create DiverProfile
+    diver = DiverProfile.objects.create(
+        person=person,
+        total_dives=total_dives,
+        medical_clearance_date=medical_clearance_date,
+        medical_clearance_valid_until=medical_clearance_valid_until,
+    )
+
+    # Emit audit event
+    log_diver_event(
+        action=Actions.DIVER_CREATED,
+        diver=diver,
+        actor=created_by,
+    )
+
+    return diver
+
+
+@transaction.atomic
+def update_diver(
+    diver: DiverProfile,
+    updated_by,
+    *,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    email: str | None = None,
+    total_dives: int | None = None,
+    medical_clearance_date=None,
+    medical_clearance_valid_until=None,
+) -> DiverProfile:
+    """Update an existing diver's Person and DiverProfile.
+
+    Args:
+        diver: DiverProfile to update
+        updated_by: User making the update
+        first_name: New first name (None = no change)
+        last_name: New last name (None = no change)
+        email: New email (None = no change)
+        total_dives: New dive count (None = no change)
+        medical_clearance_date: New clearance date (None = no change)
+        medical_clearance_valid_until: New clearance expiry (None = no change)
+
+    Returns:
+        Updated DiverProfile
+
+    Raises:
+        DiverError: If diver is deleted or update fails
+    """
+    if diver.deleted_at is not None:
+        raise DiverError("Cannot update a deleted diver")
+
+    # Track changes for audit log
+    changes = {}
+    person = diver.person
+
+    # Update Person fields
+    if first_name is not None and first_name != person.first_name:
+        changes["first_name"] = {"old": person.first_name, "new": first_name}
+        person.first_name = first_name
+
+    if last_name is not None and last_name != person.last_name:
+        changes["last_name"] = {"old": person.last_name, "new": last_name}
+        person.last_name = last_name
+
+    if email is not None and email != person.email:
+        changes["email"] = {"old": person.email, "new": email}
+        person.email = email
+
+    # Update DiverProfile fields
+    if total_dives is not None and total_dives != diver.total_dives:
+        changes["total_dives"] = {"old": diver.total_dives, "new": total_dives}
+        diver.total_dives = total_dives
+
+    if medical_clearance_date is not None and medical_clearance_date != diver.medical_clearance_date:
+        changes["medical_clearance_date"] = {
+            "old": str(diver.medical_clearance_date) if diver.medical_clearance_date else None,
+            "new": str(medical_clearance_date) if medical_clearance_date else None,
+        }
+        diver.medical_clearance_date = medical_clearance_date
+
+    if medical_clearance_valid_until is not None and medical_clearance_valid_until != diver.medical_clearance_valid_until:
+        changes["medical_clearance_valid_until"] = {
+            "old": str(diver.medical_clearance_valid_until) if diver.medical_clearance_valid_until else None,
+            "new": str(medical_clearance_valid_until) if medical_clearance_valid_until else None,
+        }
+        diver.medical_clearance_valid_until = medical_clearance_valid_until
+
+    # Save if changes were made
+    if changes:
+        person.save()
+        diver.save()
+
+        log_diver_event(
+            action=Actions.DIVER_UPDATED,
+            diver=diver,
+            actor=updated_by,
+            changes=changes,
+        )
+
+    return diver

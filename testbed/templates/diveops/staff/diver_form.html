@@ -107,10 +107,16 @@
                     <!-- Certification Agency -->
                     <div>
                         <label for="id_certification_agency" class="block text-sm font-medium text-gray-700">Agency <span class="text-red-500">*</span></label>
-                        <input type="text" name="certification_agency" id="id_certification_agency" value="{{ form.certification_agency.value|default:'' }}"
-                               placeholder="e.g., PADI, SSI, NAUI"
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                        <p class="mt-1 text-xs text-gray-500">e.g., PADI, SSI, NAUI, SDI</p>
+                        <select name="certification_agency" id="id_certification_agency"
+                                class="mt-1 block w-full px-3 py-2 border {% if form.certification_agency.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Select an agency...</option>
+                            {% for agency in form.fields.certification_agency.queryset %}
+                            <option value="{{ agency.pk }}" {% if form.certification_agency.value|stringformat:'s' == agency.pk|stringformat:'s' %}selected{% endif %}>{{ agency.name }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.certification_agency.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.certification_agency.errors.0 }}</p>
+                        {% endif %}
                     </div>
 
                     <!-- Certification Number -->

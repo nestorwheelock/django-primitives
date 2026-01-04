@@ -234,11 +234,18 @@ class TestAuditAdapterActions:
 
 @pytest.mark.django_db
 class TestFormAuditLogging:
-    """Tests for audit logging through DiverCertificationForm (staff portal path)."""
+    """Tests for audit logging through DiverCertificationForm (staff portal path).
+
+    Forms now delegate to services which handle audit. These tests verify that
+    audit events are created, using behavior-based assertions.
+    """
 
     def test_form_save_logs_add_event(self, diver, padi_open_water, staff_user):
         """DiverCertificationForm.save() logs audit event when creating certification."""
+        from django_audit_log.models import AuditLog
         from primitives_testbed.diveops.forms import DiverCertificationForm
+
+        initial_count = AuditLog.objects.count()
 
         form_data = {
             "diver": diver.pk,
@@ -249,19 +256,17 @@ class TestFormAuditLogging:
         }
         form = DiverCertificationForm(data=form_data)
         assert form.is_valid(), form.errors
+        cert = form.save(actor=staff_user)
 
-        with patch(AUDIT_LOG_PATCH) as mock_log:
-            cert = form.save(actor=staff_user)
-
-            mock_log.assert_called_once()
-            call_kwargs = mock_log.call_args.kwargs
-
-            assert call_kwargs["action"] == Actions.CERTIFICATION_ADDED
-            assert call_kwargs["obj"] == cert
-            assert call_kwargs["actor"] == staff_user
+        # Verify audit log was created via service
+        assert AuditLog.objects.count() == initial_count + 1
+        log = AuditLog.objects.order_by("-created_at").first()
+        assert log.action == Actions.CERTIFICATION_ADDED
+        assert log.actor_user_id == staff_user.pk
 
     def test_form_save_logs_update_event_with_changes(self, diver, padi_open_water, staff_user):
         """DiverCertificationForm.save() logs audit event when updating certification."""
+        from django_audit_log.models import AuditLog
         from primitives_testbed.diveops.forms import DiverCertificationForm
 
         # Create existing certification
@@ -271,6 +276,8 @@ class TestFormAuditLogging:
             card_number="OLD_NUMBER",
             issued_on=date(2024, 1, 1),
         )
+
+        initial_count = AuditLog.objects.count()
 
         # Update via form
         form_data = {
@@ -282,21 +289,19 @@ class TestFormAuditLogging:
         }
         form = DiverCertificationForm(data=form_data, instance=cert)
         assert form.is_valid(), form.errors
+        updated_cert = form.save(actor=staff_user)
 
-        with patch(AUDIT_LOG_PATCH) as mock_log:
-            updated_cert = form.save(actor=staff_user)
-
-            mock_log.assert_called_once()
-            call_kwargs = mock_log.call_args.kwargs
-
-            assert call_kwargs["action"] == Actions.CERTIFICATION_UPDATED
-            assert call_kwargs["obj"] == updated_cert
-            assert call_kwargs["actor"] == staff_user
-            assert call_kwargs["changes"]["card_number"]["old"] == "OLD_NUMBER"
-            assert call_kwargs["changes"]["card_number"]["new"] == "NEW_NUMBER"
+        # Verify audit log was created via service
+        assert AuditLog.objects.count() == initial_count + 1
+        log = AuditLog.objects.order_by("-created_at").first()
+        assert log.action == Actions.CERTIFICATION_UPDATED
+        assert log.actor_user_id == staff_user.pk
+        # Changes are stored in metadata
+        assert "card_number" in str(log.changes)
 
     def test_form_save_no_audit_when_no_changes(self, diver, padi_open_water, staff_user):
         """DiverCertificationForm.save() does not log when no changes made."""
+        from django_audit_log.models import AuditLog
         from primitives_testbed.diveops.forms import DiverCertificationForm
 
         # Create existing certification
@@ -306,6 +311,8 @@ class TestFormAuditLogging:
             card_number="SAME",
             issued_on=date(2024, 1, 1),
         )
+
+        initial_count = AuditLog.objects.count()
 
         # Submit same data
         form_data = {
@@ -317,11 +324,10 @@ class TestFormAuditLogging:
         }
         form = DiverCertificationForm(data=form_data, instance=cert)
         assert form.is_valid(), form.errors
+        form.save(actor=staff_user)
 
-        with patch(AUDIT_LOG_PATCH) as mock_log:
-            form.save(actor=staff_user)
-
-            mock_log.assert_not_called()
+        # No audit log should be created (no changes)
+        assert AuditLog.objects.count() == initial_count
 
     def test_form_save_without_actor(self, diver, padi_open_water):
         """DiverCertificationForm.save() works but actor is None in audit."""

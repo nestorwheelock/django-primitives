@@ -1,6 +1,6 @@
 """Tests for diveops staff views."""
 
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -301,16 +301,30 @@ class TestBookDiverView:
         assert Booking.objects.filter(trip=dive_trip, diver=diver_profile).exists()
 
     def test_book_diver_shows_eligibility_error(
-        self, staff_client, deep_site, beginner_diver, dive_shop, staff_user
+        self, staff_client, dive_site, dive_shop, staff_user, person2, padi_agency
     ):
         """Book diver shows eligibility error for ineligible diver."""
-        from primitives_testbed.diveops.models import DiveTrip
+        from primitives_testbed.diveops.models import (
+            CertificationLevel,
+            DiverCertification,
+            DiverProfile,
+            DiveTrip,
+            TripRequirement,
+        )
 
-        # Create trip at deep site (requires AOW)
+        # Create AOW and OW certification levels
+        aow_level = CertificationLevel.objects.create(
+            agency=padi_agency, code="aow", name="Advanced Open Water", rank=3
+        )
+        ow_level = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow", name="Open Water", rank=2
+        )
+
+        # Create trip with AOW requirement
         tomorrow = timezone.now() + timedelta(days=1)
         trip = DiveTrip.objects.create(
             dive_shop=dive_shop,
-            dive_site=deep_site,
+            dive_site=dive_site,
             departure_time=tomorrow,
             return_time=tomorrow + timedelta(hours=4),
             max_divers=8,
@@ -318,9 +332,23 @@ class TestBookDiverView:
             currency="USD",
             created_by=staff_user,
         )
+        TripRequirement.objects.create(
+            trip=trip, requirement_type="certification", certification_level=aow_level, is_mandatory=True
+        )
+
+        # Create diver with only OW certification (not enough)
+        diver = DiverProfile.objects.create(
+            person=person2,
+            total_dives=10,
+            medical_clearance_date=date.today(),
+            medical_clearance_valid_until=date.today() + timedelta(days=365),
+        )
+        DiverCertification.objects.create(
+            diver=diver, level=ow_level, card_number="12345", issued_on=date.today() - timedelta(days=30)
+        )
 
         url = reverse("diveops:book-diver", kwargs={"trip_pk": trip.pk})
-        response = staff_client.post(url, {"diver": beginner_diver.pk})
+        response = staff_client.post(url, {"diver": diver.pk})
 
         # Should stay on the form with error
         assert response.status_code == 200
@@ -642,16 +670,30 @@ class TestFullBookingWorkflow:
         assert beginner_diver.total_dives == initial_dives2 + 1
 
     def test_workflow_shows_eligibility_error_for_ineligible_diver(
-        self, staff_client, deep_site, beginner_diver, dive_shop, staff_user
+        self, staff_client, dive_site, dive_shop, staff_user, person2, padi_agency
     ):
         """Test that booking workflow properly blocks ineligible divers."""
-        from primitives_testbed.diveops.models import DiveTrip
+        from primitives_testbed.diveops.models import (
+            CertificationLevel,
+            DiverCertification,
+            DiverProfile,
+            DiveTrip,
+            TripRequirement,
+        )
 
-        # Create trip at deep site (requires AOW cert)
+        # Create AOW and OW certification levels
+        aow_level = CertificationLevel.objects.create(
+            agency=padi_agency, code="aow", name="Advanced Open Water", rank=3
+        )
+        ow_level = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow", name="Open Water", rank=2
+        )
+
+        # Create trip with AOW requirement
         tomorrow = timezone.now() + timedelta(days=1)
         deep_trip = DiveTrip.objects.create(
             dive_shop=dive_shop,
-            dive_site=deep_site,
+            dive_site=dive_site,
             departure_time=tomorrow,
             return_time=tomorrow + timedelta(hours=4),
             max_divers=8,
@@ -659,10 +701,24 @@ class TestFullBookingWorkflow:
             currency="USD",
             created_by=staff_user,
         )
+        TripRequirement.objects.create(
+            trip=deep_trip, requirement_type="certification", certification_level=aow_level, is_mandatory=True
+        )
 
-        # Try to book beginner diver (only OW cert) on deep dive
+        # Create diver with only OW certification (not enough)
+        diver = DiverProfile.objects.create(
+            person=person2,
+            total_dives=10,
+            medical_clearance_date=date.today(),
+            medical_clearance_valid_until=date.today() + timedelta(days=365),
+        )
+        DiverCertification.objects.create(
+            diver=diver, level=ow_level, card_number="12345", issued_on=date.today() - timedelta(days=30)
+        )
+
+        # Try to book diver (only OW cert) on deep dive
         book_url = reverse("diveops:book-diver", kwargs={"trip_pk": deep_trip.pk})
-        response = staff_client.post(book_url, {"diver": beginner_diver.pk})
+        response = staff_client.post(book_url, {"diver": diver.pk})
 
         # Should not redirect - should show error
         assert response.status_code == 200

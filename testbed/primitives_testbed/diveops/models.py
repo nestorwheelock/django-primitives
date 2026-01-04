@@ -11,7 +11,6 @@ This module provides domain models for a diving operation built on django-primit
 - TripRoster: Check-in record for actual participants
 """
 
-import uuid
 from datetime import date, datetime, timedelta
 
 from django.conf import settings
@@ -20,27 +19,23 @@ from django.db import models
 from django.db.models import Count, F, Q
 from django.utils import timezone
 
+from django_basemodels import BaseModel
+
 # Configurable waiver validity period (default 365 days, None = never expires)
 DIVEOPS_WAIVER_VALIDITY_DAYS = getattr(settings, "DIVEOPS_WAIVER_VALIDITY_DAYS", 365)
 
 
-class SoftDeleteManager(models.Manager):
-    """Manager that excludes soft-deleted records by default."""
-
-    def get_queryset(self):
-        return super().get_queryset().filter(deleted_at__isnull=True)
-
-
-class CertificationLevel(models.Model):
+class CertificationLevel(BaseModel):
     """Reference data for certification levels, scoped by agency.
 
     Each certification agency (PADI, SSI, NAUI, etc.) defines their own levels.
     The rank field enables comparison within and across agencies.
 
     Example: PADI OW (rank=2) and SSI OW (rank=2) are equivalent.
-    """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
 
     # Agency that defines this level
     agency = models.ForeignKey(
@@ -68,16 +63,6 @@ class CertificationLevel(models.Model):
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
 
-    # Soft delete support
-    deleted_at = models.DateTimeField(null=True, blank=True)
-
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    objects = SoftDeleteManager()
-    all_objects = models.Manager()
-
     class Meta:
         constraints = [
             # Unique code per agency (among active records)
@@ -102,13 +87,8 @@ class CertificationLevel(models.Model):
     def __str__(self):
         return f"{self.name} ({self.agency.name})"
 
-    def delete(self, using=None, keep_parents=False):
-        """Soft delete the certification level."""
-        self.deleted_at = timezone.now()
-        self.save(update_fields=["deleted_at"])
 
-
-class DiverCertification(models.Model):
+class DiverCertification(BaseModel):
     """A diver's certification record.
 
     Normalized join table allowing multiple certifications per diver.
@@ -118,9 +98,10 @@ class DiverCertification(models.Model):
 
     Proof documents (certification card photos/PDFs) are attached via
     django_documents.Document with GenericFK to this model.
-    """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
 
     diver = models.ForeignKey(
         "DiverProfile",
@@ -174,16 +155,6 @@ class DiverCertification(models.Model):
     )
     verified_at = models.DateTimeField(null=True, blank=True)
 
-    # Soft delete support
-    deleted_at = models.DateTimeField(null=True, blank=True)
-
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    objects = SoftDeleteManager()
-    all_objects = models.Manager()
-
     class Meta:
         constraints = [
             # Only one certification per diver+level (among active records)
@@ -216,17 +187,15 @@ class DiverCertification(models.Model):
             return True
         return self.expires_on > date.today()
 
-    def delete(self, using=None, keep_parents=False):
-        """Soft delete the certification."""
-        self.deleted_at = timezone.now()
-        self.save(update_fields=["deleted_at"])
 
-
-class TripRequirement(models.Model):
+class TripRequirement(BaseModel):
     """Requirements for joining a trip.
 
     Supports multiple requirement types (certification, medical, gear, experience).
     Replaces DiveSite.min_certification_level with trip-level requirements.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
     """
 
     REQUIREMENT_TYPES = [
@@ -235,8 +204,6 @@ class TripRequirement(models.Model):
         ("gear", "Equipment/Gear"),
         ("experience", "Dive Experience"),
     ]
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     trip = models.ForeignKey(
         "DiveTrip",
@@ -267,16 +234,6 @@ class TripRequirement(models.Model):
     description = models.TextField(blank=True)
     is_mandatory = models.BooleanField(default=True)
 
-    # Soft delete support
-    deleted_at = models.DateTimeField(null=True, blank=True)
-
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    objects = SoftDeleteManager()
-    all_objects = models.Manager()
-
     class Meta:
         constraints = [
             # Only one requirement of each type per trip (among active records)
@@ -300,17 +257,15 @@ class TripRequirement(models.Model):
                 "certification_level": "Certification level is required for certification requirements."
             })
 
-    def delete(self, using=None, keep_parents=False):
-        """Soft delete the requirement."""
-        self.deleted_at = timezone.now()
-        self.save(update_fields=["deleted_at"])
 
-
-class DiverProfile(models.Model):
+class DiverProfile(BaseModel):
     """Diver-specific profile extending a Person.
 
     Stores certification, experience, and medical clearance data.
     One profile per person (enforced by DB constraint).
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
     """
 
     CERTIFICATION_LEVELS = [
@@ -331,8 +286,6 @@ class DiverProfile(models.Model):
         "dm": 5,
         "instructor": 6,
     }
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Link to Person from django-parties
     person = models.OneToOneField(
@@ -379,10 +332,6 @@ class DiverProfile(models.Model):
 
     # Waiver tracking
     waiver_signed_at = models.DateTimeField(null=True, blank=True)
-
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
@@ -442,10 +391,13 @@ class DiverProfile(models.Model):
         return as_of <= expiration_date
 
 
-class DiveSite(models.Model):
+class DiveSite(BaseModel):
     """A dive site location with diving-specific metadata.
 
     Stores coordinates, depth limits, and certification requirements.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
     """
 
     DIFFICULTY_CHOICES = [
@@ -454,8 +406,6 @@ class DiveSite(models.Model):
         ("advanced", "Advanced"),
         ("expert", "Expert"),
     ]
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Basic info
     name = models.CharField(max_length=200)
@@ -490,10 +440,6 @@ class DiveSite(models.Model):
     # Status
     is_active = models.BooleanField(default=True)
 
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
     class Meta:
         constraints = [
             models.CheckConstraint(
@@ -519,11 +465,14 @@ class DiveSite(models.Model):
         return f"{self.name} ({self.max_depth_meters}m)"
 
 
-class DiveTrip(models.Model):
+class DiveTrip(BaseModel):
     """A scheduled dive trip.
 
     Links a dive shop, dive site, and manages bookings.
     Can optionally link to django-encounters for workflow tracking.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
     """
 
     STATUS_CHOICES = [
@@ -533,8 +482,6 @@ class DiveTrip(models.Model):
         ("completed", "Completed"),
         ("cancelled", "Cancelled"),
     ]
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Relationships
     dive_shop = models.ForeignKey(
@@ -576,14 +523,12 @@ class DiveTrip(models.Model):
     )
     completed_at = models.DateTimeField(null=True, blank=True)
 
-    # Audit
+    # Audit (created_by is application-specific, not from BaseModel)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="dive_trips_created",
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
@@ -624,11 +569,14 @@ class DiveTrip(models.Model):
         return self.spots_available == 0
 
 
-class Booking(models.Model):
+class Booking(BaseModel):
     """A diver's reservation for a trip.
 
     Links diver to trip and tracks booking status.
     Can link to basket/invoice for payment tracking.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
     """
 
     STATUS_CHOICES = [
@@ -638,8 +586,6 @@ class Booking(models.Model):
         ("cancelled", "Cancelled"),
         ("no_show", "No Show"),
     ]
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Core relationship
     trip = models.ForeignKey(
@@ -685,14 +631,13 @@ class Booking(models.Model):
         related_name="dive_bookings",
     )
 
-    # Audit
+    # Audit (booked_by is application-specific, not from BaseModel)
     booked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="dive_bookings_made",
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # Domain-specific: when this booking was cancelled (distinct from soft delete)
     cancelled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -715,11 +660,14 @@ class Booking(models.Model):
         return f"{self.diver.person} - {self.trip}"
 
 
-class TripRoster(models.Model):
+class TripRoster(BaseModel):
     """Check-in record for a diver on a trip.
 
     Created when diver checks in, records actual participants.
     Tracks role (diver, divemaster, instructor) on the trip.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
     """
 
     ROSTER_ROLES = [
@@ -727,8 +675,6 @@ class TripRoster(models.Model):
         ("DM", "Divemaster"),
         ("INSTRUCTOR", "Instructor"),
     ]
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Core relationship
     trip = models.ForeignKey(

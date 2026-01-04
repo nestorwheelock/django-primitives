@@ -1,6 +1,6 @@
 """Tests for diveops services."""
 
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -83,17 +83,31 @@ class TestBookTrip:
         assert booking.invoice is not None
         assert booking.invoice.total_amount == Decimal("100.00")
 
-    def test_book_trip_rejects_ineligible_diver(self, deep_site, beginner_diver, dive_shop, user):
+    def test_book_trip_rejects_ineligible_diver(self, dive_site, dive_shop, person2, padi_agency, user):
         """book_trip raises error if diver is not eligible."""
         from primitives_testbed.diveops.exceptions import DiverNotEligibleError
-        from primitives_testbed.diveops.models import DiveTrip
+        from primitives_testbed.diveops.models import (
+            CertificationLevel,
+            DiverCertification,
+            DiverProfile,
+            DiveTrip,
+            TripRequirement,
+        )
         from primitives_testbed.diveops.services import book_trip
 
-        # Create trip at deep site (requires AOW)
+        # Create AOW and OW certification levels
+        aow_level = CertificationLevel.objects.create(
+            agency=padi_agency, code="aow", name="Advanced Open Water", rank=3
+        )
+        ow_level = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow", name="Open Water", rank=2
+        )
+
+        # Create trip with AOW requirement
         tomorrow = timezone.now() + timedelta(days=1)
         trip = DiveTrip.objects.create(
             dive_shop=dive_shop,
-            dive_site=deep_site,
+            dive_site=dive_site,
             departure_time=tomorrow,
             return_time=tomorrow + timedelta(hours=4),
             max_divers=8,
@@ -101,11 +115,25 @@ class TestBookTrip:
             currency="USD",
             created_by=user,
         )
+        TripRequirement.objects.create(
+            trip=trip, requirement_type="certification", certification_level=aow_level, is_mandatory=True
+        )
+
+        # Create diver with only OW certification (not enough)
+        diver = DiverProfile.objects.create(
+            person=person2,
+            total_dives=10,
+            medical_clearance_date=date.today(),
+            medical_clearance_valid_until=date.today() + timedelta(days=365),
+        )
+        DiverCertification.objects.create(
+            diver=diver, level=ow_level, card_number="12345", issued_on=date.today() - timedelta(days=30)
+        )
 
         with pytest.raises(DiverNotEligibleError):
             book_trip(
                 trip=trip,
-                diver=beginner_diver,
+                diver=diver,
                 booked_by=user,
             )
 

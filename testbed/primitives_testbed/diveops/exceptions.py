@@ -31,3 +31,7 @@ class DiverNotEligibleError(BookingError):
 
 class CertificationError(DiveOpsError):
     """Error related to diver certification operations."""
+
+
+class DiverError(DiveOpsError):
+    """Error related to diver operations."""
