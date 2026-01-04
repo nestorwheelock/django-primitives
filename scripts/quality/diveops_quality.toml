@@ -1,0 +1,44 @@
+# DiveOps Quality Gate Configuration
+# All thresholds are FAIL thresholds (below = fail)
+
+[thresholds]
+coverage_percent = 95
+max_complexity = 10  # McCabe complexity per function
+max_maintainability_index = 20  # Radon MI (A=100-20, B=19-10, C=9-0)
+
+[gates]
+# Gate weights for scoring (must sum to 100)
+tests = 30
+coverage = 25
+static = 15
+security = 15
+maintainability = 10
+concurrency = 5
+
+[paths]
+# Paths relative to testbed/
+source = "primitives_testbed/diveops"
+tests = "tests/test_diveops"
+
+[security.forbidden_patterns]
+# Patterns that should never appear in production code
+raw_sql = "cursor\\.execute\\("
+shell_injection = "subprocess\\..*shell=True"
+pickle_load = "pickle\\.load"
+eval_exec = "\\b(eval|exec)\\s*\\("
+ai_attribution = "(Generated with Claude|Co-Authored-By: Claude|Built with Claude)"
+
+[security.required_patterns]
+# Patterns that MUST appear in services with writes
+atomic_decorator = "@transaction\\.atomic|transaction\\.atomic\\("
+select_for_update = "select_for_update\\(\\)"
+
+[concurrency.required_tests]
+# Test patterns that must exist for concurrency coverage
+race_condition = "test_.*concurrent|test_.*race|test_.*parallel"
+double_submit = "test_.*double|test_.*duplicate|test_.*idempoten"
+
+[static.ignore]
+# Files/patterns to skip in static analysis
+migrations = "migrations/"
+tests = "tests/"

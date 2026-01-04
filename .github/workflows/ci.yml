@@ -92,3 +92,74 @@ jobs:
 
       - name: Run BaseModel check
         run: python scripts/check_basemodel.py
+
+  diveops-quality-gate:
+    name: DiveOps Quality Gate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pytest pytest-django pytest-cov
+          pip install ruff bandit radon
+          pip install psycopg2-binary
+
+      - name: Install all packages (editable)
+        run: |
+          for pkg in packages/*/; do
+            pip install -e "$pkg"
+          done
+
+      - name: Install testbed
+        working-directory: testbed
+        run: pip install -e .
+
+      - name: Run migrations
+        working-directory: testbed
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        run: python manage.py migrate --no-input
+
+      - name: Run DiveOps Quality Gate
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        run: |
+          python scripts/quality/diveops_quality_gate.py \
+            --output diveops-scorecard.json
+
+      - name: Upload Scorecard Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diveops-scorecard
+          path: diveops-scorecard.json
+          retention-days: 30

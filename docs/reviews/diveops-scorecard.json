@@ -1,0 +1,101 @@
+{
+  "timestamp": "2026-01-04T13:53:52.861570+00:00",
+  "commit_sha": "5fe69467",
+  "branch": "main",
+  "overall_score": 95.05,
+  "overall_passed": false,
+  "gates": [
+    {
+      "name": "tests",
+      "passed": true,
+      "score": 100.0,
+      "weight": 30,
+      "weighted_score": 30.0,
+      "details": {
+        "passed": 348,
+        "failed": 0,
+        "errors": 0,
+        "total": 348
+      },
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "name": "coverage",
+      "passed": false,
+      "score": 90.65,
+      "weight": 25,
+      "weighted_score": 22.66,
+      "details": {
+        "coverage_percent": 86.12,
+        "threshold": 95,
+        "uncovered_lines": 176
+      },
+      "violations": [
+        "Coverage 86.1% below threshold 95%"
+      ],
+      "violation_count": 1
+    },
+    {
+      "name": "static",
+      "passed": true,
+      "score": 100,
+      "weight": 15,
+      "weighted_score": 15.0,
+      "details": {
+        "errors": 0,
+        "warnings": 0,
+        "total": 0
+      },
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "name": "security",
+      "passed": true,
+      "score": 100,
+      "weight": 15,
+      "weighted_score": 15.0,
+      "details": {
+        "high_severity": 0,
+        "medium_severity": 0
+      },
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "name": "maintainability",
+      "passed": false,
+      "score": 98.84,
+      "weight": 10,
+      "weighted_score": 9.88,
+      "details": {
+        "max_complexity_found": 19,
+        "threshold": 10,
+        "high_complexity_functions": 2,
+        "total_functions": 172
+      },
+      "violations": [
+        "update_diver has complexity 19 (max: 10) in services.py",
+        "update_certification has complexity 15 (max: 10) in services.py"
+      ],
+      "violation_count": 2
+    },
+    {
+      "name": "concurrency",
+      "passed": false,
+      "score": 50.0,
+      "weight": 5,
+      "weighted_score": 2.5,
+      "details": {
+        "patterns_found": 1,
+        "patterns_required": 2,
+        "test_functions_scanned": 348
+      },
+      "violations": [
+        "Missing concurrency test pattern: race_condition (test_.*concurrent|test_.*race|test_.*parallel)"
+      ],
+      "violation_count": 1
+    }
+  ]
+}
