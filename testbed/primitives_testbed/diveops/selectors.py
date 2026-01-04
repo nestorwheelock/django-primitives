@@ -347,3 +347,58 @@ def get_diver_highest_certification(diver: DiverProfile) -> Optional[DiverCertif
         .order_by("-level__rank")
         .first()
     )
+
+
+# =============================================================================
+# Audit Selectors (read-only)
+# =============================================================================
+
+
+def diver_audit_feed(diver: DiverProfile, limit: int = 100) -> list:
+    """Get all audit events related to a diver.
+
+    Returns audit events where diver_id appears in metadata.
+    Events are ordered newest first.
+
+    Args:
+        diver: DiverProfile
+        limit: Maximum number of events to return (default 100)
+
+    Returns:
+        List of AuditLog entries related to this diver
+    """
+    from django_audit_log.models import AuditLog
+
+    diver_id_str = str(diver.pk)
+
+    # Query by metadata JSON contains diver_id
+    return list(
+        AuditLog.objects.filter(
+            metadata__diver_id=diver_id_str
+        ).order_by("-created_at")[:limit]
+    )
+
+
+def trip_audit_feed(trip: DiveTrip, limit: int = 100) -> list:
+    """Get all audit events related to a trip.
+
+    Returns audit events where trip_id appears in metadata.
+    Events are ordered newest first.
+
+    Args:
+        trip: DiveTrip
+        limit: Maximum number of events to return (default 100)
+
+    Returns:
+        List of AuditLog entries related to this trip
+    """
+    from django_audit_log.models import AuditLog
+
+    trip_id_str = str(trip.pk)
+
+    # Query by metadata JSON contains trip_id
+    return list(
+        AuditLog.objects.filter(
+            metadata__trip_id=trip_id_str
+        ).order_by("-created_at")[:limit]
+    )

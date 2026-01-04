@@ -8,7 +8,13 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone
 
-from .audit import Actions, log_certification_event
+from .audit import (
+    Actions,
+    log_booking_event,
+    log_certification_event,
+    log_roster_event,
+    log_trip_event,
+)
 from .decisioning import can_diver_join_trip
 from .exceptions import (
     BookingError,
@@ -119,6 +125,13 @@ def book_trip(
         booking.invoice = invoice
         booking.save()
 
+    # Emit audit event AFTER successful transaction
+    log_booking_event(
+        action=Actions.BOOKING_CREATED,
+        booking=booking,
+        actor=booked_by,
+    )
+
     return booking
 
 
@@ -167,6 +180,13 @@ def check_in(
     booking.status = "checked_in"
     booking.save()
 
+    # Emit audit event AFTER successful transaction
+    log_roster_event(
+        action=Actions.DIVER_CHECKED_IN,
+        roster=roster,
+        actor=checked_in_by,
+    )
+
     return roster
 
 
@@ -208,6 +228,13 @@ def start_trip(trip: DiveTrip, started_by) -> DiveTrip:
     trip.status = "in_progress"
     trip.save()
 
+    # Emit audit event AFTER successful transaction
+    log_trip_event(
+        action=Actions.TRIP_STARTED,
+        trip=trip,
+        actor=started_by,
+    )
+
     return trip
 
 
@@ -230,6 +257,9 @@ def complete_trip(trip: DiveTrip, completed_by) -> DiveTrip:
     if trip.status in ["completed", "cancelled"]:
         raise TripStateError(f"Cannot complete trip in status={trip.status}")
 
+    # Track roster entries that were completed
+    completed_roster_entries = []
+
     # Update all roster entries and increment dive counts
     for roster_entry in trip.roster.all():
         if not roster_entry.dive_completed:
@@ -241,6 +271,8 @@ def complete_trip(trip: DiveTrip, completed_by) -> DiveTrip:
             diver.total_dives += 1
             diver.save()
 
+            completed_roster_entries.append(roster_entry)
+
     # Update trip status
     trip.status = "completed"
     trip.completed_at = timezone.now()
@@ -251,6 +283,22 @@ def complete_trip(trip: DiveTrip, completed_by) -> DiveTrip:
         trip.encounter.state = "completed"
         trip.encounter.ended_at = timezone.now()
         trip.encounter.save()
+
+    # Emit audit events AFTER successful transaction
+    # First, emit DIVER_COMPLETED_TRIP for each roster entry
+    for roster_entry in completed_roster_entries:
+        log_roster_event(
+            action=Actions.DIVER_COMPLETED_TRIP,
+            roster=roster_entry,
+            actor=completed_by,
+        )
+
+    # Then emit TRIP_COMPLETED for the trip
+    log_trip_event(
+        action=Actions.TRIP_COMPLETED,
+        trip=trip,
+        actor=completed_by,
+    )
 
     return trip
 
@@ -278,6 +326,13 @@ def cancel_booking(booking: Booking, cancelled_by) -> Booking:
     booking.status = "cancelled"
     booking.cancelled_at = timezone.now()
     booking.save()
+
+    # Emit audit event AFTER successful transaction
+    log_booking_event(
+        action=Actions.BOOKING_CANCELLED,
+        booking=booking,
+        actor=cancelled_by,
+    )
 
     return booking
 
