@@ -27,3 +27,7 @@ class TripCapacityError(BookingError):
 
 class DiverNotEligibleError(BookingError):
     """Diver is not eligible for this trip."""
+
+
+class CertificationError(DiveOpsError):
+    """Error related to diver certification operations."""

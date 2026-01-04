@@ -22,11 +22,12 @@ class TestCertificationLevelAdmin:
         assert CertificationLevel in admin.site._registry
 
     def test_list_display(self):
-        """Admin shows code, name, rank, is_active."""
+        """Admin shows code, name, agency, rank, is_active."""
         from django.contrib import admin
         model_admin = admin.site._registry[CertificationLevel]
         assert "code" in model_admin.list_display
         assert "name" in model_admin.list_display
+        assert "agency" in model_admin.list_display  # Agency FK
         assert "rank" in model_admin.list_display
         assert "is_active" in model_admin.list_display
 
@@ -48,19 +49,20 @@ class TestDiverCertificationAdmin:
         assert DiverCertification in admin.site._registry
 
     def test_list_display(self):
-        """Admin shows diver, level, agency, is_verified."""
+        """Admin shows diver, level, get_agency, is_verified."""
         from django.contrib import admin
         model_admin = admin.site._registry[DiverCertification]
         assert "diver" in model_admin.list_display
         assert "level" in model_admin.list_display
-        assert "agency" in model_admin.list_display
+        assert "get_agency" in model_admin.list_display  # Agency derived from level.agency
         assert "is_verified" in model_admin.list_display
 
     def test_list_filter(self):
-        """Admin can filter by level and is_verified."""
+        """Admin can filter by level__agency and is_verified."""
         from django.contrib import admin
         model_admin = admin.site._registry[DiverCertification]
-        assert "level" in model_admin.list_filter
+        # Filter by agency (derived from level.agency) instead of level directly
+        assert "level__agency" in model_admin.list_filter
         assert "is_verified" in model_admin.list_filter
 
 

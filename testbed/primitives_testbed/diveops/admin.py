@@ -18,10 +18,11 @@ from .models import (
 class CertificationLevelAdmin(admin.ModelAdmin):
     """Admin for CertificationLevel model."""
 
-    list_display = ["code", "name", "rank", "is_active", "created_at"]
-    list_filter = ["is_active"]
-    search_fields = ["code", "name"]
-    ordering = ["rank"]
+    list_display = ["code", "name", "agency", "rank", "max_depth_m", "is_active", "created_at"]
+    list_filter = ["is_active", "agency"]
+    search_fields = ["code", "name", "agency__name"]
+    ordering = ["agency", "rank"]
+    autocomplete_fields = ["agency"]
     readonly_fields = ["id", "created_at", "updated_at"]
 
 
@@ -32,21 +33,32 @@ class DiverCertificationAdmin(admin.ModelAdmin):
     list_display = [
         "diver",
         "level",
-        "agency",
-        "certification_number",
-        "certified_on",
+        "get_agency",
+        "card_number",
+        "issued_on",
         "expires_on",
         "is_verified",
+        "has_proof",
     ]
-    list_filter = ["level", "is_verified", "agency"]
+    list_filter = ["level__agency", "is_verified"]
     search_fields = [
         "diver__person__first_name",
         "diver__person__last_name",
-        "certification_number",
+        "card_number",
+        "level__agency__name",
     ]
-    raw_id_fields = ["diver", "agency", "verified_by"]
+    raw_id_fields = ["diver", "verified_by", "proof_document"]
+    autocomplete_fields = ["level"]
     readonly_fields = ["id", "created_at", "updated_at"]
-    date_hierarchy = "certified_on"
+    date_hierarchy = "issued_on"
+
+    @admin.display(description="Agency")
+    def get_agency(self, obj):
+        return obj.level.agency.name if obj.level else "-"
+
+    @admin.display(boolean=True, description="Proof")
+    def has_proof(self, obj):
+        return obj.proof_document is not None
 
 
 @admin.register(TripRequirement)
@@ -80,6 +92,7 @@ class DiverProfileAdmin(admin.ModelAdmin):
     list_filter = ["certification_level", "certification_agency"]
     search_fields = ["person__first_name", "person__last_name", "person__email"]
     raw_id_fields = ["person"]
+    autocomplete_fields = ["certification_agency"]  # Search for certification agencies
     readonly_fields = ["id", "created_at", "updated_at"]
 
 

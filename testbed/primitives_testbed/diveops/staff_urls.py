@@ -12,7 +12,13 @@ urlpatterns = [
     # Diver management
     path("divers/", staff_views.DiverListView.as_view(), name="diver-list"),
     path("divers/add/", staff_views.CreateDiverView.as_view(), name="diver-create"),
+    path("divers/<uuid:pk>/", staff_views.DiverDetailView.as_view(), name="diver-detail"),
     path("divers/<uuid:pk>/edit/", staff_views.EditDiverView.as_view(), name="diver-edit"),
+    # Certification management
+    path("divers/<uuid:diver_pk>/certifications/add/", staff_views.AddCertificationView.as_view(), name="certification-add"),
+    path("certifications/<uuid:pk>/edit/", staff_views.EditCertificationView.as_view(), name="certification-edit"),
+    path("certifications/<uuid:pk>/delete/", staff_views.DeleteCertificationView.as_view(), name="certification-delete"),
+    path("certifications/<uuid:pk>/verify/", staff_views.VerifyCertificationView.as_view(), name="certification-verify"),
     # Trip management
     path("trips/", staff_views.TripListView.as_view(), name="trip-list"),
     path("trips/<uuid:pk>/", staff_views.TripDetailView.as_view(), name="trip-detail"),

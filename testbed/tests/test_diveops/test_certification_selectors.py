@@ -17,24 +17,27 @@ class TestGetDiverWithCertifications:
     """Tests for get_diver_with_certifications selector."""
 
     @pytest.fixture
-    def setup_certifications(self, diver_profile):
+    def setup_certifications(self, diver_profile, padi_agency):
         """Set up test certification data."""
-        from django_parties.models import Organization
-
-        padi = Organization.objects.create(name="PADI", org_type="other")
-        ow = CertificationLevel.objects.create(code="ow", name="Open Water", rank=2)
-        aow = CertificationLevel.objects.create(code="aow", name="Advanced Open Water", rank=3)
-
-        DiverCertification.objects.create(
-            diver=diver_profile, level=ow, agency=padi,
-            certification_number="OW1", certified_on=date.today() - timedelta(days=365)
+        # CertificationLevel now requires agency
+        ow = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow", name="Open Water", rank=2
         )
-        DiverCertification.objects.create(
-            diver=diver_profile, level=aow, agency=padi,
-            certification_number="AOW1", certified_on=date.today() - timedelta(days=180)
+        aow = CertificationLevel.objects.create(
+            agency=padi_agency, code="aow", name="Advanced Open Water", rank=3
         )
 
-        return {"padi": padi, "ow": ow, "aow": aow}
+        # DiverCertification no longer has agency field (derived from level.agency)
+        DiverCertification.objects.create(
+            diver=diver_profile, level=ow,
+            card_number="OW1", issued_on=date.today() - timedelta(days=365)
+        )
+        DiverCertification.objects.create(
+            diver=diver_profile, level=aow,
+            card_number="AOW1", issued_on=date.today() - timedelta(days=180)
+        )
+
+        return {"padi": padi_agency, "ow": ow, "aow": aow}
 
     def test_returns_diver_with_certifications(self, diver_profile, setup_certifications):
         """Selector returns diver with certifications prefetched."""
@@ -66,7 +69,7 @@ class TestGetDiverWithCertifications:
             diver = get_diver_with_certifications(diver_profile.pk)
             for cert in diver.certifications.all():
                 _ = cert.level.name
-                _ = cert.agency.name
+                _ = cert.agency.name  # agency is property that accesses level.agency
 
     def test_returns_none_for_invalid_id(self):
         """Selector returns None for invalid diver ID."""
@@ -82,9 +85,12 @@ class TestGetTripWithRequirements:
     """Tests for get_trip_with_requirements selector."""
 
     @pytest.fixture
-    def setup_requirements(self, dive_trip):
+    def setup_requirements(self, dive_trip, padi_agency):
         """Set up test requirement data."""
-        aow = CertificationLevel.objects.create(code="aow", name="Advanced Open Water", rank=3)
+        # CertificationLevel now requires agency
+        aow = CertificationLevel.objects.create(
+            agency=padi_agency, code="aow", name="Advanced Open Water", rank=3
+        )
 
         TripRequirement.objects.create(
             trip=dive_trip,
@@ -147,11 +153,18 @@ class TestListCertificationLevels:
     """Tests for list_certification_levels selector."""
 
     @pytest.fixture
-    def setup_levels(self):
+    def setup_levels(self, padi_agency):
         """Set up test certification levels."""
-        ow = CertificationLevel.objects.create(code="ow", name="Open Water", rank=2)
-        aow = CertificationLevel.objects.create(code="aow", name="Advanced Open Water", rank=3)
-        dm = CertificationLevel.objects.create(code="dm", name="Divemaster", rank=5, is_active=False)
+        # CertificationLevel now requires agency
+        ow = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow", name="Open Water", rank=2
+        )
+        aow = CertificationLevel.objects.create(
+            agency=padi_agency, code="aow", name="Advanced Open Water", rank=3
+        )
+        dm = CertificationLevel.objects.create(
+            agency=padi_agency, code="dm", name="Divemaster", rank=5, is_active=False
+        )
 
         return {"ow": ow, "aow": aow, "dm": dm}
 
@@ -188,25 +201,30 @@ class TestGetDiverHighestCertification:
     """Tests for get_diver_highest_certification selector."""
 
     @pytest.fixture
-    def setup_multiple_certs(self, diver_profile):
+    def setup_multiple_certs(self, diver_profile, padi_agency):
         """Set up diver with multiple certifications."""
-        from django_parties.models import Organization
-
-        padi = Organization.objects.create(name="PADI", org_type="other")
-        ow = CertificationLevel.objects.create(code="ow", name="Open Water", rank=2)
-        aow = CertificationLevel.objects.create(code="aow", name="Advanced Open Water", rank=3)
-        dm = CertificationLevel.objects.create(code="dm", name="Divemaster", rank=5)
-
-        DiverCertification.objects.create(
-            diver=diver_profile, level=ow, agency=padi,
-            certification_number="OW1", certified_on=date.today() - timedelta(days=365)
+        # CertificationLevel now requires agency
+        ow = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow", name="Open Water", rank=2
         )
-        DiverCertification.objects.create(
-            diver=diver_profile, level=aow, agency=padi,
-            certification_number="AOW1", certified_on=date.today() - timedelta(days=180)
+        aow = CertificationLevel.objects.create(
+            agency=padi_agency, code="aow", name="Advanced Open Water", rank=3
+        )
+        dm = CertificationLevel.objects.create(
+            agency=padi_agency, code="dm", name="Divemaster", rank=5
         )
 
-        return {"padi": padi, "ow": ow, "aow": aow, "dm": dm}
+        # DiverCertification no longer has agency field
+        DiverCertification.objects.create(
+            diver=diver_profile, level=ow,
+            card_number="OW1", issued_on=date.today() - timedelta(days=365)
+        )
+        DiverCertification.objects.create(
+            diver=diver_profile, level=aow,
+            card_number="AOW1", issued_on=date.today() - timedelta(days=180)
+        )
+
+        return {"padi": padi_agency, "ow": ow, "aow": aow, "dm": dm}
 
     def test_returns_highest_certification(self, diver_profile, setup_multiple_certs):
         """Selector returns highest (by rank) certification."""
@@ -220,16 +238,14 @@ class TestGetDiverHighestCertification:
     def test_excludes_expired_certifications(self, diver_profile, setup_multiple_certs):
         """Selector excludes expired certifications."""
         from primitives_testbed.diveops.selectors import get_diver_highest_certification
-        from django_parties.models import Organization
 
-        padi = setup_multiple_certs["padi"]
         dm = setup_multiple_certs["dm"]
 
         # Add expired DM certification
         DiverCertification.objects.create(
-            diver=diver_profile, level=dm, agency=padi,
-            certification_number="DM1",
-            certified_on=date.today() - timedelta(days=730),
+            diver=diver_profile, level=dm,
+            card_number="DM1",
+            issued_on=date.today() - timedelta(days=730),
             expires_on=date.today() - timedelta(days=30),  # Expired
         )
 
@@ -238,7 +254,7 @@ class TestGetDiverHighestCertification:
         # Should still be AOW, not expired DM
         assert highest.level.code == "aow"
 
-    def test_returns_none_for_no_certifications(self, person2):
+    def test_returns_none_for_no_certifications(self, person2, padi_agency):
         """Selector returns None when diver has no certifications."""
         from primitives_testbed.diveops.selectors import get_diver_highest_certification
         from primitives_testbed.diveops.models import DiverProfile
@@ -246,7 +262,7 @@ class TestGetDiverHighestCertification:
         diver = DiverProfile.objects.create(
             person=person2,
             certification_level="ow",
-            certification_agency="PADI",
+            certification_agency=padi_agency,
             certification_date=date.today(),
             total_dives=0,
         )

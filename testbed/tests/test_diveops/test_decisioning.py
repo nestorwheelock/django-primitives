@@ -53,7 +53,7 @@ class TestCanDiverJoinTrip:
         assert any("certification" in reason.lower() for reason in result.reasons)
         assert any("aow" in action.lower() or "advanced" in action.lower() for action in result.required_actions)
 
-    def test_expired_medical_returns_reasons(self, dive_trip, person2):
+    def test_expired_medical_returns_reasons(self, dive_trip, person2, padi_agency):
         """Diver with expired medical clearance returns allowed=False."""
         from primitives_testbed.diveops.decisioning import can_diver_join_trip
         from primitives_testbed.diveops.models import DiverProfile
@@ -62,7 +62,7 @@ class TestCanDiverJoinTrip:
         diver = DiverProfile.objects.create(
             person=person2,
             certification_level="aow",
-            certification_agency="PADI",
+            certification_agency=padi_agency,
             certification_number="12345",
             certification_date=date.today() - timedelta(days=365),
             total_dives=50,
@@ -80,7 +80,7 @@ class TestCanDiverJoinTrip:
         assert any("medical" in reason.lower() for reason in result.reasons)
         assert any("medical" in action.lower() for action in result.required_actions)
 
-    def test_no_medical_on_file_returns_reasons(self, dive_trip, person2):
+    def test_no_medical_on_file_returns_reasons(self, dive_trip, person2, padi_agency):
         """Diver with no medical clearance returns allowed=False."""
         from primitives_testbed.diveops.decisioning import can_diver_join_trip
         from primitives_testbed.diveops.models import DiverProfile
@@ -89,7 +89,7 @@ class TestCanDiverJoinTrip:
         diver = DiverProfile.objects.create(
             person=person2,
             certification_level="aow",
-            certification_agency="PADI",
+            certification_agency=padi_agency,
             certification_number="12345",
             certification_date=date.today() - timedelta(days=365),
             total_dives=50,
@@ -160,7 +160,7 @@ class TestCanDiverJoinTrip:
         assert result.allowed is False
         assert any("past" in reason.lower() or "departed" in reason.lower() for reason in result.reasons)
 
-    def test_multiple_failures_returns_all_reasons(self, deep_site, dive_shop, person2, user):
+    def test_multiple_failures_returns_all_reasons(self, deep_site, dive_shop, person2, user, padi_agency):
         """Multiple eligibility failures return all reasons."""
         from primitives_testbed.diveops.decisioning import can_diver_join_trip
         from primitives_testbed.diveops.models import DiverProfile, DiveTrip
@@ -169,7 +169,7 @@ class TestCanDiverJoinTrip:
         diver = DiverProfile.objects.create(
             person=person2,
             certification_level="ow",  # Not advanced enough
-            certification_agency="PADI",
+            certification_agency=padi_agency,
             certification_number="12345",
             certification_date=date.today() - timedelta(days=30),
             total_dives=4,
@@ -199,7 +199,7 @@ class TestCanDiverJoinTrip:
         # Should have at least 2 reasons (certification + medical)
         assert len(result.reasons) >= 2
 
-    def test_as_of_parameter_evaluates_at_point_in_time(self, dive_trip, person2):
+    def test_as_of_parameter_evaluates_at_point_in_time(self, dive_trip, person2, padi_agency):
         """as_of parameter evaluates eligibility at that point in time."""
         from primitives_testbed.diveops.decisioning import can_diver_join_trip
         from primitives_testbed.diveops.models import DiverProfile
@@ -209,7 +209,7 @@ class TestCanDiverJoinTrip:
         diver = DiverProfile.objects.create(
             person=person2,
             certification_level="aow",
-            certification_agency="PADI",
+            certification_agency=padi_agency,
             certification_number="12345",
             certification_date=date.today() - timedelta(days=365),
             total_dives=50,
@@ -265,28 +265,6 @@ class TestTripRequirementDecisioning:
     """Tests for TripRequirement-based eligibility checks."""
 
     @pytest.fixture
-    def aow_level(self):
-        """Create Advanced Open Water certification level."""
-        from primitives_testbed.diveops.models import CertificationLevel
-
-        return CertificationLevel.objects.create(
-            code="aow",
-            name="Advanced Open Water",
-            rank=3,
-        )
-
-    @pytest.fixture
-    def ow_level(self):
-        """Create Open Water certification level."""
-        from primitives_testbed.diveops.models import CertificationLevel
-
-        return CertificationLevel.objects.create(
-            code="ow",
-            name="Open Water",
-            rank=2,
-        )
-
-    @pytest.fixture
     def padi_agency(self):
         """Create PADI certification agency."""
         from django_parties.models import Organization
@@ -294,6 +272,30 @@ class TestTripRequirementDecisioning:
         return Organization.objects.create(
             name="PADI",
             org_type="other",
+        )
+
+    @pytest.fixture
+    def aow_level(self, padi_agency):
+        """Create Advanced Open Water certification level."""
+        from primitives_testbed.diveops.models import CertificationLevel
+
+        return CertificationLevel.objects.create(
+            agency=padi_agency,
+            code="aow",
+            name="Advanced Open Water",
+            rank=3,
+        )
+
+    @pytest.fixture
+    def ow_level(self, padi_agency):
+        """Create Open Water certification level."""
+        from primitives_testbed.diveops.models import CertificationLevel
+
+        return CertificationLevel.objects.create(
+            agency=padi_agency,
+            code="ow",
+            name="Open Water",
+            rank=2,
         )
 
     @pytest.fixture
@@ -316,16 +318,17 @@ class TestTripRequirementDecisioning:
         from primitives_testbed.diveops.decisioning import can_diver_join_trip_v2
         from primitives_testbed.diveops.models import CertificationLevel, DiverCertification
 
-        # Create DM level (higher than AOW)
-        dm_level = CertificationLevel.objects.create(code="dm", name="Divemaster", rank=5)
+        # Create DM level (higher than AOW) - now requires agency
+        dm_level = CertificationLevel.objects.create(
+            agency=padi_agency, code="dm", name="Divemaster", rank=5
+        )
 
-        # Give diver DM certification
+        # Give diver DM certification - agency derived from level.agency
         DiverCertification.objects.create(
             diver=diver_profile,
             level=dm_level,
-            agency=padi_agency,
-            certification_number="DM123",
-            certified_on=date.today() - timedelta(days=365),
+            card_number="DM123",
+            issued_on=date.today() - timedelta(days=365),
         )
 
         result = can_diver_join_trip_v2(
@@ -343,13 +346,12 @@ class TestTripRequirementDecisioning:
         from primitives_testbed.diveops.decisioning import can_diver_join_trip_v2
         from primitives_testbed.diveops.models import DiverCertification
 
-        # Give diver AOW certification
+        # Give diver AOW certification - agency derived from level.agency
         DiverCertification.objects.create(
             diver=diver_profile,
             level=aow_level,
-            agency=padi_agency,
-            certification_number="AOW123",
-            certified_on=date.today() - timedelta(days=180),
+            card_number="AOW123",
+            issued_on=date.today() - timedelta(days=180),
         )
 
         result = can_diver_join_trip_v2(
@@ -371,9 +373,8 @@ class TestTripRequirementDecisioning:
         DiverCertification.objects.create(
             diver=diver_profile,
             level=ow_level,
-            agency=padi_agency,
-            certification_number="OW123",
-            certified_on=date.today() - timedelta(days=365),
+            card_number="OW123",
+            issued_on=date.today() - timedelta(days=365),
         )
 
         result = can_diver_join_trip_v2(
@@ -411,9 +412,8 @@ class TestTripRequirementDecisioning:
         DiverCertification.objects.create(
             diver=diver_profile,
             level=aow_level,
-            agency=padi_agency,
-            certification_number="AOW123",
-            certified_on=date.today() - timedelta(days=730),
+            card_number="AOW123",
+            issued_on=date.today() - timedelta(days=730),
             expires_on=date.today() - timedelta(days=30),  # Expired
         )
 
@@ -437,9 +437,8 @@ class TestTripRequirementDecisioning:
         DiverCertification.objects.create(
             diver=diver_profile,
             level=ow_level,
-            agency=padi_agency,
-            certification_number="OW123",
-            certified_on=date.today() - timedelta(days=365),
+            card_number="OW123",
+            issued_on=date.today() - timedelta(days=365),
         )
 
         result = can_diver_join_trip_v2(
@@ -469,9 +468,8 @@ class TestTripRequirementDecisioning:
         DiverCertification.objects.create(
             diver=diver_profile,
             level=aow_level,
-            agency=padi_agency,
-            certification_number="AOW123",
-            certified_on=date.today() - timedelta(days=180),
+            card_number="AOW123",
+            issued_on=date.today() - timedelta(days=180),
         )
 
         # Diver has only default dives (from fixture)
@@ -497,9 +495,8 @@ class TestTripRequirementDecisioning:
         DiverCertification.objects.create(
             diver=diver_profile,
             level=ow_level,
-            agency=padi_agency,
-            certification_number="OW123",
-            certified_on=date.today() - timedelta(days=365),
+            card_number="OW123",
+            issued_on=date.today() - timedelta(days=365),
         )
 
         result = can_diver_join_trip_v2(
@@ -529,9 +526,8 @@ class TestTripRequirementDecisioning:
         DiverCertification.objects.create(
             diver=diver_profile,
             level=ow_level,
-            agency=padi_agency,
-            certification_number="OW123",
-            certified_on=date.today() - timedelta(days=365),
+            card_number="OW123",
+            issued_on=date.today() - timedelta(days=365),
         )
 
         result = can_diver_join_trip_v2(

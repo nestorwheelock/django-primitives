@@ -33,6 +33,12 @@ from django_catalog.models import Basket, BasketItem, CatalogItem
 # Legal primitives
 from django_agreements.models import Agreement
 
+# Document primitives
+from django_documents.models import Document
+
+# Audit logging
+from django_audit_log.models import AuditLog
+
 # Sequence generation
 from django_sequence.services import next_sequence
 
@@ -59,6 +65,10 @@ __all__ = [
     "CatalogItem",
     # Legal
     "Agreement",
+    # Documents
+    "Document",
+    # Audit
+    "AuditLog",
     # Sequence
     "next_sequence",
     # Invoicing

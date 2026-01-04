@@ -277,9 +277,11 @@ def get_diver_with_certifications(diver_id) -> Optional[DiverProfile]:
         .prefetch_related(
             Prefetch(
                 "certifications",
-                queryset=DiverCertification.objects.select_related(
-                    "level", "agency"
-                ).order_by("-level__rank", "-certified_on"),
+                queryset=DiverCertification.objects.filter(
+                    deleted_at__isnull=True
+                ).select_related(
+                    "level", "level__agency", "proof_document"
+                ).order_by("-level__rank", "-issued_on"),
             )
         )
         .first()
@@ -341,7 +343,7 @@ def get_diver_highest_certification(diver: DiverProfile) -> Optional[DiverCertif
     return (
         diver.certifications
         .filter(Q(expires_on__isnull=True) | Q(expires_on__gt=date.today()))
-        .select_related("level", "agency")
+        .select_related("level", "level__agency")
         .order_by("-level__rank")
         .first()
     )

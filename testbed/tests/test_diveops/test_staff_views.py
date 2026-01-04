@@ -773,20 +773,19 @@ class TestCreateDiverView:
         assert b"first_name" in response.content
         assert b"certification_level" in response.content
 
-    def test_create_diver_creates_diver(self, staff_client):
-        """POST creates a new diver with person."""
+    def test_create_diver_creates_diver(self, staff_client, padi_open_water):
+        """POST creates a new diver with person and certification."""
         from datetime import date, timedelta
-        from primitives_testbed.diveops.models import DiverProfile
+        from primitives_testbed.diveops.models import DiverCertification, DiverProfile
 
         url = reverse("diveops:diver-create")
         response = staff_client.post(url, {
             "first_name": "New",
             "last_name": "Diver",
             "email": "newdiver@example.com",
-            "certification_level": "ow",
-            "certification_agency": "PADI",
-            "certification_number": "NEW123",
-            "certification_date": (date.today() - timedelta(days=30)).isoformat(),
+            "certification_level": str(padi_open_water.pk),
+            "card_number": "NEW123",
+            "issued_on": (date.today() - timedelta(days=30)).isoformat(),
             "total_dives": 5,
         })
 
@@ -796,10 +795,14 @@ class TestCreateDiverView:
         # Diver should exist
         diver = DiverProfile.objects.get(person__email="newdiver@example.com")
         assert diver.person.first_name == "New"
-        assert diver.certification_level == "ow"
         assert diver.total_dives == 5
 
-    def test_create_diver_redirects_to_list(self, staff_client):
+        # Certification should be created
+        cert = DiverCertification.objects.get(diver=diver)
+        assert cert.level == padi_open_water
+        assert cert.card_number == "NEW123"
+
+    def test_create_diver_redirects_to_list(self, staff_client, ssi_open_water):
         """Successful creation redirects to diver list."""
         from datetime import date, timedelta
 
@@ -808,10 +811,9 @@ class TestCreateDiverView:
             "first_name": "Another",
             "last_name": "Diver",
             "email": "another@example.com",
-            "certification_level": "aow",
-            "certification_agency": "SSI",
-            "certification_number": "SSI999",
-            "certification_date": (date.today() - timedelta(days=90)).isoformat(),
+            "certification_level": str(ssi_open_water.pk),
+            "card_number": "SSI999",
+            "issued_on": (date.today() - timedelta(days=90)).isoformat(),
             "total_dives": 20,
         })
 
@@ -852,7 +854,6 @@ class TestEditDiverView:
 
         assert response.status_code == 200
         assert diver_profile.person.first_name.encode() in response.content
-        assert diver_profile.certification_agency.encode() in response.content
 
     def test_edit_diver_updates_diver(self, staff_client, diver_profile):
         """POST updates the existing diver."""
@@ -861,10 +862,6 @@ class TestEditDiverView:
             "first_name": diver_profile.person.first_name,
             "last_name": diver_profile.person.last_name,
             "email": diver_profile.person.email,
-            "certification_level": "rescue",  # Upgraded
-            "certification_agency": "PADI",
-            "certification_number": diver_profile.certification_number,
-            "certification_date": diver_profile.certification_date.isoformat(),
             "total_dives": 100,  # More experience
         })
 
@@ -873,7 +870,6 @@ class TestEditDiverView:
 
         # Diver should be updated
         diver_profile.refresh_from_db()
-        assert diver_profile.certification_level == "rescue"
         assert diver_profile.total_dives == 100
 
     def test_edit_diver_redirects_to_list(self, staff_client, diver_profile):
@@ -883,10 +879,6 @@ class TestEditDiverView:
             "first_name": diver_profile.person.first_name,
             "last_name": diver_profile.person.last_name,
             "email": diver_profile.person.email,
-            "certification_level": diver_profile.certification_level,
-            "certification_agency": diver_profile.certification_agency,
-            "certification_number": diver_profile.certification_number,
-            "certification_date": diver_profile.certification_date.isoformat(),
             "total_dives": diver_profile.total_dives,
         })
 
@@ -902,3 +894,42 @@ class TestEditDiverView:
         response = staff_client.get(url)
 
         assert response.status_code == 404
+
+    def test_edit_diver_shows_certifications_list(self, staff_client, diver_profile, padi_open_water):
+        """Edit diver page shows list of diver's certifications."""
+        from primitives_testbed.diveops.models import DiverCertification
+
+        # Add a certification to the diver
+        cert = DiverCertification.objects.create(
+            diver=diver_profile,
+            level=padi_open_water,
+            card_number="TEST123",
+        )
+
+        url = reverse("diveops:diver-edit", kwargs={"pk": diver_profile.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        # Should show the certification in the list
+        assert b"TEST123" in response.content
+        assert padi_open_water.name.encode() in response.content
+
+    def test_edit_diver_has_add_certification_button(self, staff_client, diver_profile):
+        """Edit diver page has a button to add a new certification."""
+        url = reverse("diveops:diver-edit", kwargs={"pk": diver_profile.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        # Should have link to add certification
+        add_cert_url = reverse("diveops:certification-add", kwargs={"diver_pk": diver_profile.pk})
+        assert add_cert_url.encode() in response.content
+
+    def test_edit_diver_no_inline_certification_form(self, staff_client, diver_profile):
+        """Edit diver page does NOT have inline certification form fields."""
+        url = reverse("diveops:diver-edit", kwargs={"pk": diver_profile.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        # Should NOT have certification_level dropdown (the inline form)
+        assert b'name="certification_level"' not in response.content
+        assert b'name="certification_agency"' not in response.content

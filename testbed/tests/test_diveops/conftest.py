@@ -66,6 +66,90 @@ def dive_shop(db):
 
 
 @pytest.fixture
+def padi_agency(db):
+    """Create PADI certification agency."""
+    from django_parties.models import Organization
+
+    agency, _ = Organization.objects.get_or_create(
+        name="PADI",
+        defaults={
+            "legal_name": "Professional Association of Diving Instructors",
+            "org_type": "certification_agency",
+        }
+    )
+    return agency
+
+
+@pytest.fixture
+def ssi_agency(db):
+    """Create SSI certification agency."""
+    from django_parties.models import Organization
+
+    agency, _ = Organization.objects.get_or_create(
+        name="SSI",
+        defaults={
+            "legal_name": "Scuba Schools International",
+            "org_type": "certification_agency",
+        }
+    )
+    return agency
+
+
+@pytest.fixture
+def padi_open_water(db, padi_agency):
+    """Create PADI Open Water certification level."""
+    from primitives_testbed.diveops.models import CertificationLevel
+
+    level, _ = CertificationLevel.objects.get_or_create(
+        agency=padi_agency,
+        code="OWD",
+        defaults={
+            "name": "Open Water Diver",
+            "rank": 1,
+            "max_depth_m": 18,
+            "is_active": True,
+        }
+    )
+    return level
+
+
+@pytest.fixture
+def padi_advanced(db, padi_agency):
+    """Create PADI Advanced Open Water certification level."""
+    from primitives_testbed.diveops.models import CertificationLevel
+
+    level, _ = CertificationLevel.objects.get_or_create(
+        agency=padi_agency,
+        code="AOWD",
+        defaults={
+            "name": "Advanced Open Water Diver",
+            "rank": 2,
+            "max_depth_m": 30,
+            "is_active": True,
+        }
+    )
+    return level
+
+
+@pytest.fixture
+def ssi_open_water(db, ssi_agency):
+    """Create SSI Open Water certification level."""
+    from primitives_testbed.diveops.models import CertificationLevel
+
+    level, _ = CertificationLevel.objects.get_or_create(
+        agency=ssi_agency,
+        code="OWD",
+        defaults={
+            "name": "Open Water Diver",
+            "rank": 1,
+            "max_depth_m": 18,
+            "is_active": True,
+        }
+    )
+    return level
+
+
+@pytest.fixture
 def dive_site(db):
     """Create a dive site."""
     from primitives_testbed.diveops.models import DiveSite
@@ -114,14 +198,14 @@ def deep_site(db):
 
 
 @pytest.fixture
-def diver_profile(db, person):
+def diver_profile(db, person, padi_agency):
     """Create a certified diver profile."""
     from primitives_testbed.diveops.models import DiverProfile
 
     return DiverProfile.objects.create(
         person=person,
         certification_level="aow",
-        certification_agency="PADI",
+        certification_agency=padi_agency,
         certification_number="12345",
         certification_date=date.today() - timedelta(days=365),
         total_dives=50,
@@ -131,14 +215,14 @@ def diver_profile(db, person):
 
 
 @pytest.fixture
-def beginner_diver(db, person2):
+def beginner_diver(db, person2, padi_agency):
     """Create a beginner diver profile (Open Water only)."""
     from primitives_testbed.diveops.models import DiverProfile
 
     return DiverProfile.objects.create(
         person=person2,
         certification_level="ow",
-        certification_agency="PADI",
+        certification_agency=padi_agency,
         certification_number="67890",
         certification_date=date.today() - timedelta(days=30),
         total_dives=4,

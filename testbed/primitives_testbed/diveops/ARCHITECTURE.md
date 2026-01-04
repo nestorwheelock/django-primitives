@@ -161,12 +161,17 @@ CheckConstraint(
 | Tax calculation | 🔧 Not started | Add tax support to invoice |
 | Agreement pricing | 🔧 Not started | Pass diver's agreements to price resolution |
 
+### Recently Implemented ✅
+
+| Integration | Status | Location |
+|-------------|--------|----------|
+| Audit logging | ✅ Complete | `audit.py` → `django_audit_log` |
+| Document attachment | ✅ Complete | `DiverCertification.proof_document` → `django_documents` |
+
 ### Future Considerations
 
 | Integration | Primitive | Use Case |
 |-------------|-----------|----------|
-| Document attachment | `django_documents` | Certification proof, medical forms |
-| Audit logging | `django_audit_log` | Verification actions, booking changes |
 | Work sessions | `django_worklog` | Staff time tracking on trips |
 
 ## Domain Models
@@ -301,8 +306,79 @@ All write operations go through services:
 | `start_trip()` | Transition trip to in_progress |
 | `complete_trip()` | Complete trip, increment dive counts |
 | `cancel_booking()` | Cancel a booking |
+| `add_certification()` | Add a certification to a diver |
+| `update_certification()` | Update certification details |
+| `remove_certification()` | Soft delete a certification |
+| `verify_certification()` | Mark certification as verified |
+| `unverify_certification()` | Remove verification status |
 
 All services are atomic (`@transaction.atomic`).
+
+## Audit Logging
+
+DiveOps emits audit events for domain-significant actions but does NOT store audit data locally.
+The `django_audit_log` primitive owns all audit persistence.
+
+### Why This Architecture?
+
+1. **Separation of Concerns**: Domain logic focuses on diving operations; audit infrastructure is a cross-cutting concern handled by a dedicated primitive
+2. **Compliance Ready**: All certification-related actions create immutable audit records
+3. **Extractable**: DiveOps remains thin and portable - audit dependency is explicit
+4. **Consistent**: All domain apps use the same audit infrastructure
+
+### Adapter Pattern
+
+All audit calls go through `diveops/audit.py`, never directly to `django_audit_log`:
+
+```python
+from diveops.audit import log_certification_event, Actions
+
+log_certification_event(
+    action=Actions.CERTIFICATION_VERIFIED,
+    certification=cert,
+    actor=request.user,
+)
+```
+
+### Stable Action Constants
+
+These strings are part of the DiveOps audit contract and must remain stable:
+
+| Action | Description | Trigger |
+|--------|-------------|---------|
+| `certification_added` | New certification created | `add_certification()` |
+| `certification_updated` | Certification fields changed | `update_certification()` |
+| `certification_removed` | Certification soft deleted | `remove_certification()` |
+| `certification_verified` | Staff verified the certification | `verify_certification()` |
+| `certification_unverified` | Verification removed | `unverify_certification()` |
+
+### Audit Event Structure
+
+Each certification audit event includes:
+
+```python
+{
+    "action": "certification_verified",
+    "obj": certification,  # Target model instance
+    "actor": user,         # Django User who performed action
+    "changes": {},         # Field changes (for updates)
+    "metadata": {
+        "agency_id": "uuid",
+        "agency_name": "PADI",
+        "level_id": "uuid",
+        "level_name": "Advanced Open Water",
+        "diver_id": "uuid",
+    }
+}
+```
+
+### Not Audited (by design)
+
+These actions are NOT audited because they don't represent compliance-relevant state changes:
+
+- Reading certification data (selectors)
+- Eligibility checks (decisioning)
+- Booking/trip operations (separate audit scope)
 
 ## Selector Layer
 
@@ -326,6 +402,8 @@ All selectors use `select_related()` and `prefetch_related()` appropriately.
 - django-encounters (Encounter, EncounterDefinition)
 - django-catalog (Basket, BasketItem, CatalogItem)
 - django-agreements (Agreement)
+- django-documents (Document) - for certification proof uploads
+- django-audit-log (log) - for certification audit events
 - django-ledger (Account, Transaction)
 - django-sequence (next_sequence)
 - primitives_testbed.invoicing (Invoice, InvoiceLineItem)
@@ -339,17 +417,22 @@ All selectors use `select_related()` and `prefetch_related()` appropriately.
 diveops/
 ├── __init__.py
 ├── apps.py              # Django app config
+├── audit.py             # Audit logging adapter (wraps django_audit_log)
 ├── integrations.py      # Primitive imports adapter (centralized)
 ├── models.py            # Domain models (5 models)
 ├── services.py          # Write operations (atomic)
 ├── selectors.py         # Read operations (optimized)
 ├── decisioning.py       # Eligibility rules
 ├── exceptions.py        # Custom exceptions
+├── forms.py             # Django forms for staff views
+├── staff_urls.py        # Staff portal URL patterns
+├── staff_views.py       # Staff portal views
 ├── ARCHITECTURE.md      # This document
+├── templates/diveops/   # Staff portal templates
 └── migrations/
     ├── __init__.py
     ├── 0001_initial.py
-    └── 0002_refactor_constraints_add_features.py
+    └── ...
 ```
 
 ### integrations.py

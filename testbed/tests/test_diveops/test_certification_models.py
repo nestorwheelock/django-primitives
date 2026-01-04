@@ -10,13 +10,14 @@ from django.utils import timezone
 
 @pytest.mark.django_db
 class TestCertificationLevel:
-    """Tests for CertificationLevel model."""
+    """Tests for CertificationLevel model (now agency-scoped)."""
 
-    def test_create_certification_level(self):
+    def test_create_certification_level(self, padi_agency):
         """CertificationLevel can be created with valid data."""
         from primitives_testbed.diveops.models import CertificationLevel
 
         level = CertificationLevel.objects.create(
+            agency=padi_agency,
             code="ow",
             name="Open Water Diver",
             rank=2,
@@ -24,69 +25,116 @@ class TestCertificationLevel:
         )
 
         assert level.pk is not None
+        assert level.agency == padi_agency
         assert level.code == "ow"
         assert level.name == "Open Water Diver"
         assert level.rank == 2
         assert level.is_active is True
 
-    def test_code_unique_constraint(self):
-        """Certification level code must be unique."""
+    def test_code_unique_per_agency_constraint(self, padi_agency, ssi_agency):
+        """Certification level code must be unique within same agency."""
         from primitives_testbed.diveops.models import CertificationLevel
 
+        # Create OW for PADI
         CertificationLevel.objects.create(
+            agency=padi_agency,
             code="ow",
             name="Open Water Diver",
             rank=2,
         )
 
+        # Same code for different agency is allowed
+        CertificationLevel.objects.create(
+            agency=ssi_agency,
+            code="ow",
+            name="Open Water Diver",
+            rank=2,
+        )
+
+        # Same code for same agency raises error
         with pytest.raises(IntegrityError):
             CertificationLevel.objects.create(
-                code="ow",  # Duplicate
+                agency=padi_agency,
+                code="ow",  # Duplicate for PADI
                 name="Another Open Water",
                 rank=2,
             )
 
-    def test_rank_positive_constraint(self):
+    def test_rank_positive_constraint(self, padi_agency):
         """Certification level rank must be positive."""
         from primitives_testbed.diveops.models import CertificationLevel
 
         with pytest.raises(IntegrityError):
             CertificationLevel.objects.create(
+                agency=padi_agency,
                 code="invalid",
                 name="Invalid Level",
                 rank=0,  # Must be > 0
             )
 
-    def test_ordering_by_rank(self):
-        """Certification levels are ordered by rank."""
+    def test_max_depth_positive_constraint(self, padi_agency):
+        """Certification level max_depth_m must be positive if set."""
         from primitives_testbed.diveops.models import CertificationLevel
 
-        dm = CertificationLevel.objects.create(code="dm", name="Divemaster", rank=5)
-        ow = CertificationLevel.objects.create(code="ow", name="Open Water", rank=2)
-        aow = CertificationLevel.objects.create(code="aow", name="Advanced Open Water", rank=3)
+        # None is allowed
+        level = CertificationLevel.objects.create(
+            agency=padi_agency,
+            code="ow",
+            name="Open Water",
+            rank=2,
+            max_depth_m=None,
+        )
+        assert level.max_depth_m is None
+
+        # Positive is allowed
+        level2 = CertificationLevel.objects.create(
+            agency=padi_agency,
+            code="aow",
+            name="Advanced",
+            rank=3,
+            max_depth_m=30,
+        )
+        assert level2.max_depth_m == 30
+
+    def test_ordering_by_agency_and_rank(self, padi_agency, ssi_agency):
+        """Certification levels are ordered by agency then rank."""
+        from primitives_testbed.diveops.models import CertificationLevel
+
+        # Create in random order
+        padi_dm = CertificationLevel.objects.create(
+            agency=padi_agency, code="dm", name="PADI Divemaster", rank=5
+        )
+        ssi_ow = CertificationLevel.objects.create(
+            agency=ssi_agency, code="ow", name="SSI Open Water", rank=2
+        )
+        padi_ow = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow", name="PADI Open Water", rank=2
+        )
 
         levels = list(CertificationLevel.objects.all())
-        assert levels[0].code == "ow"
-        assert levels[1].code == "aow"
-        assert levels[2].code == "dm"
+        # Ordering is by agency, then by rank
+        assert len(levels) == 3
 
-    def test_str_representation(self):
-        """CertificationLevel string is its name."""
+    def test_str_representation(self, padi_agency):
+        """CertificationLevel string includes name and agency."""
         from primitives_testbed.diveops.models import CertificationLevel
 
         level = CertificationLevel.objects.create(
+            agency=padi_agency,
             code="ow",
             name="Open Water Diver",
             rank=2,
         )
 
-        assert str(level) == "Open Water Diver"
+        assert "Open Water Diver" in str(level)
+        assert "PADI" in str(level)
 
-    def test_soft_delete_excluded_from_default_manager(self):
+    def test_soft_delete_excluded_from_default_manager(self, padi_agency):
         """Soft deleted levels are excluded from objects manager."""
         from primitives_testbed.diveops.models import CertificationLevel
 
         level = CertificationLevel.objects.create(
+            agency=padi_agency,
             code="deprecated",
             name="Deprecated Level",
             rank=1,
@@ -102,218 +150,188 @@ class TestDiverCertification:
     """Tests for DiverCertification model."""
 
     @pytest.fixture
-    def certification_level(self):
+    def certification_level(self, padi_agency):
         from primitives_testbed.diveops.models import CertificationLevel
 
         return CertificationLevel.objects.create(
+            agency=padi_agency,
             code="ow",
             name="Open Water Diver",
             rank=2,
         )
 
-    @pytest.fixture
-    def certification_agency(self):
-        from django_parties.models import Organization
-
-        return Organization.objects.create(
-            name="PADI",
-            org_type="certification_agency",
-        )
-
-    def test_create_diver_certification(
-        self, diver_profile, certification_level, certification_agency
-    ):
+    def test_create_diver_certification(self, diver_profile, certification_level):
         """DiverCertification can be created with valid data."""
         from primitives_testbed.diveops.models import DiverCertification
 
         cert = DiverCertification.objects.create(
             diver=diver_profile,
             level=certification_level,
-            agency=certification_agency,
-            certification_number="12345",
-            certified_on=date.today() - timedelta(days=365),
+            card_number="12345",
+            issued_on=date.today() - timedelta(days=365),
         )
 
         assert cert.pk is not None
         assert cert.diver == diver_profile
         assert cert.level == certification_level
-        assert cert.agency == certification_agency
+        # Agency is derived from level
+        assert cert.agency == certification_level.agency
         assert cert.is_verified is False
 
-    def test_diver_can_have_multiple_certifications(
-        self, diver_profile, certification_agency
-    ):
+    def test_diver_can_have_multiple_certifications(self, diver_profile, padi_agency):
         """A diver can have multiple certification levels."""
         from primitives_testbed.diveops.models import CertificationLevel, DiverCertification
 
-        ow = CertificationLevel.objects.create(code="ow", name="Open Water", rank=2)
-        aow = CertificationLevel.objects.create(code="aow", name="Advanced Open Water", rank=3)
-
-        cert1 = DiverCertification.objects.create(
-            diver=diver_profile,
-            level=ow,
-            agency=certification_agency,
-            certification_number="OW123",
-            certified_on=date.today() - timedelta(days=365),
+        ow = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow", name="Open Water", rank=2
+        )
+        aow = CertificationLevel.objects.create(
+            agency=padi_agency, code="aow", name="Advanced Open Water", rank=3
         )
 
-        cert2 = DiverCertification.objects.create(
+        DiverCertification.objects.create(
+            diver=diver_profile,
+            level=ow,
+            card_number="OW123",
+            issued_on=date.today() - timedelta(days=365),
+        )
+
+        DiverCertification.objects.create(
             diver=diver_profile,
             level=aow,
-            agency=certification_agency,
-            certification_number="AOW456",
-            certified_on=date.today() - timedelta(days=180),
+            card_number="AOW456",
+            issued_on=date.today() - timedelta(days=180),
         )
 
         assert diver_profile.certifications.count() == 2
 
-    def test_unique_diver_level_agency_constraint(
-        self, diver_profile, certification_level, certification_agency
-    ):
-        """Only one certification per diver+level+agency combination."""
+    def test_unique_diver_level_constraint(self, diver_profile, certification_level):
+        """Only one certification per diver+level combination."""
         from primitives_testbed.diveops.models import DiverCertification
 
         DiverCertification.objects.create(
             diver=diver_profile,
             level=certification_level,
-            agency=certification_agency,
-            certification_number="12345",
-            certified_on=date.today(),
+            card_number="12345",
+            issued_on=date.today(),
         )
 
         with pytest.raises(IntegrityError):
             DiverCertification.objects.create(
                 diver=diver_profile,
                 level=certification_level,  # Same level
-                agency=certification_agency,  # Same agency
-                certification_number="99999",
-                certified_on=date.today(),
+                card_number="99999",
+                issued_on=date.today(),
             )
 
-    def test_different_agency_same_level_allowed(
-        self, diver_profile, certification_level
-    ):
-        """Same diver can have same level from different agencies."""
-        from django_parties.models import Organization
-        from primitives_testbed.diveops.models import DiverCertification
+    def test_different_agency_same_code_allowed(self, diver_profile, padi_agency, ssi_agency):
+        """Same diver can have same level code from different agencies (different levels)."""
+        from primitives_testbed.diveops.models import CertificationLevel, DiverCertification
 
-        padi = Organization.objects.create(name="PADI", org_type="certification_agency")
-        ssi = Organization.objects.create(name="SSI", org_type="certification_agency")
+        # Different agencies have their own level objects
+        padi_ow = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow", name="PADI Open Water", rank=2
+        )
+        ssi_ow = CertificationLevel.objects.create(
+            agency=ssi_agency, code="ow", name="SSI Open Water", rank=2
+        )
 
         cert1 = DiverCertification.objects.create(
             diver=diver_profile,
-            level=certification_level,
-            agency=padi,
-            certification_number="PADI123",
-            certified_on=date.today(),
+            level=padi_ow,
+            card_number="PADI123",
+            issued_on=date.today(),
         )
 
         cert2 = DiverCertification.objects.create(
             diver=diver_profile,
-            level=certification_level,
-            agency=ssi,
-            certification_number="SSI456",
-            certified_on=date.today(),
+            level=ssi_ow,
+            card_number="SSI456",
+            issued_on=date.today(),
         )
 
         assert cert1.pk != cert2.pk
+        assert cert1.agency.name == "PADI"
+        assert cert2.agency.name == "SSI"
 
-    def test_expires_after_certified_constraint(
-        self, diver_profile, certification_level, certification_agency
-    ):
-        """Expiration date must be after certification date."""
+    def test_expires_after_issued_constraint(self, diver_profile, certification_level):
+        """Expiration date must be after issue date."""
         from primitives_testbed.diveops.models import DiverCertification
 
         with pytest.raises(IntegrityError):
             DiverCertification.objects.create(
                 diver=diver_profile,
                 level=certification_level,
-                agency=certification_agency,
-                certification_number="12345",
-                certified_on=date.today(),
-                expires_on=date.today() - timedelta(days=1),  # Before certified_on
+                card_number="12345",
+                issued_on=date.today(),
+                expires_on=date.today() - timedelta(days=1),  # Before issued_on
             )
 
-    def test_certification_can_expire(
-        self, diver_profile, certification_level, certification_agency
-    ):
+    def test_certification_can_expire(self, diver_profile, certification_level):
         """Certification with expiration date can be created."""
         from primitives_testbed.diveops.models import DiverCertification
 
         cert = DiverCertification.objects.create(
             diver=diver_profile,
             level=certification_level,
-            agency=certification_agency,
-            certification_number="12345",
-            certified_on=date.today() - timedelta(days=365),
+            card_number="12345",
+            issued_on=date.today() - timedelta(days=365),
             expires_on=date.today() + timedelta(days=365),
         )
 
         assert cert.expires_on is not None
 
-    def test_is_current_property_no_expiry(
-        self, diver_profile, certification_level, certification_agency
-    ):
+    def test_is_current_property_no_expiry(self, diver_profile, certification_level):
         """Certification without expiry is always current."""
         from primitives_testbed.diveops.models import DiverCertification
 
         cert = DiverCertification.objects.create(
             diver=diver_profile,
             level=certification_level,
-            agency=certification_agency,
-            certification_number="12345",
-            certified_on=date.today(),
+            card_number="12345",
+            issued_on=date.today(),
             expires_on=None,
         )
 
         assert cert.is_current is True
 
-    def test_is_current_property_not_expired(
-        self, diver_profile, certification_level, certification_agency
-    ):
+    def test_is_current_property_not_expired(self, diver_profile, certification_level):
         """Certification with future expiry is current."""
         from primitives_testbed.diveops.models import DiverCertification
 
         cert = DiverCertification.objects.create(
             diver=diver_profile,
             level=certification_level,
-            agency=certification_agency,
-            certification_number="12345",
-            certified_on=date.today() - timedelta(days=365),
+            card_number="12345",
+            issued_on=date.today() - timedelta(days=365),
             expires_on=date.today() + timedelta(days=30),
         )
 
         assert cert.is_current is True
 
-    def test_is_current_property_expired(
-        self, diver_profile, certification_level, certification_agency
-    ):
+    def test_is_current_property_expired(self, diver_profile, certification_level):
         """Certification with past expiry is not current."""
         from primitives_testbed.diveops.models import DiverCertification
 
         cert = DiverCertification.objects.create(
             diver=diver_profile,
             level=certification_level,
-            agency=certification_agency,
-            certification_number="12345",
-            certified_on=date.today() - timedelta(days=730),
+            card_number="12345",
+            issued_on=date.today() - timedelta(days=730),
             expires_on=date.today() - timedelta(days=30),
         )
 
         assert cert.is_current is False
 
-    def test_verification_fields(
-        self, diver_profile, certification_level, certification_agency, user
-    ):
+    def test_verification_fields(self, diver_profile, certification_level, user):
         """Certification can be marked as verified."""
         from primitives_testbed.diveops.models import DiverCertification
 
         cert = DiverCertification.objects.create(
             diver=diver_profile,
             level=certification_level,
-            agency=certification_agency,
-            certification_number="12345",
-            certified_on=date.today(),
+            card_number="12345",
+            issued_on=date.today(),
             is_verified=True,
             verified_by=user,
             verified_at=timezone.now(),
@@ -323,40 +341,38 @@ class TestDiverCertification:
         assert cert.verified_by == user
         assert cert.verified_at is not None
 
-    def test_str_representation(
-        self, diver_profile, certification_level, certification_agency
-    ):
+    def test_str_representation(self, diver_profile, certification_level):
         """DiverCertification string shows diver and level."""
         from primitives_testbed.diveops.models import DiverCertification
 
         cert = DiverCertification.objects.create(
             diver=diver_profile,
             level=certification_level,
-            agency=certification_agency,
-            certification_number="12345",
-            certified_on=date.today(),
+            card_number="12345",
+            issued_on=date.today(),
         )
 
         expected = f"{diver_profile} - Open Water Diver (PADI)"
         assert str(cert) == expected
 
-    def test_highest_level_queryset_method(self, diver_profile):
+    def test_highest_level_queryset_method(self, diver_profile, padi_agency):
         """Can query for diver's highest certification level."""
-        from django_parties.models import Organization
         from primitives_testbed.diveops.models import CertificationLevel, DiverCertification
 
-        agency = Organization.objects.create(name="PADI", org_type="certification_agency")
-        ow = CertificationLevel.objects.create(code="ow", name="Open Water", rank=2)
-        aow = CertificationLevel.objects.create(code="aow", name="Advanced Open Water", rank=3)
-        dm = CertificationLevel.objects.create(code="dm", name="Divemaster", rank=5)
+        ow = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow", name="Open Water", rank=2
+        )
+        aow = CertificationLevel.objects.create(
+            agency=padi_agency, code="aow", name="Advanced Open Water", rank=3
+        )
 
         DiverCertification.objects.create(
-            diver=diver_profile, level=ow, agency=agency,
-            certification_number="1", certified_on=date.today()
+            diver=diver_profile, level=ow,
+            card_number="1", issued_on=date.today()
         )
         DiverCertification.objects.create(
-            diver=diver_profile, level=aow, agency=agency,
-            certification_number="2", certified_on=date.today()
+            diver=diver_profile, level=aow,
+            card_number="2", issued_on=date.today()
         )
 
         highest = diver_profile.certifications.order_by("-level__rank").first()
@@ -368,10 +384,11 @@ class TestTripRequirement:
     """Tests for TripRequirement model."""
 
     @pytest.fixture
-    def certification_level(self):
+    def certification_level(self, padi_agency):
         from primitives_testbed.diveops.models import CertificationLevel
 
         return CertificationLevel.objects.create(
+            agency=padi_agency,
             code="aow",
             name="Advanced Open Water",
             rank=3,
@@ -548,52 +565,64 @@ class TestDiverCertificationQueries:
     """Tests for certification-related queries and selectors."""
 
     @pytest.fixture
-    def setup_certifications(self, diver_profile, person2):
+    def setup_certifications(self, diver_profile, person2, padi_agency, ssi_agency):
         """Set up test certification data."""
-        from django_parties.models import Organization
         from primitives_testbed.diveops.models import (
             CertificationLevel,
             DiverCertification,
             DiverProfile,
         )
 
-        padi = Organization.objects.create(name="PADI", org_type="certification_agency")
-        ssi = Organization.objects.create(name="SSI", org_type="certification_agency")
+        # Create levels for PADI
+        sd = CertificationLevel.objects.create(
+            agency=padi_agency, code="sd", name="Scuba Diver", rank=1
+        )
+        ow = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow", name="Open Water", rank=2
+        )
+        aow = CertificationLevel.objects.create(
+            agency=padi_agency, code="aow", name="Advanced Open Water", rank=3
+        )
+        rescue = CertificationLevel.objects.create(
+            agency=padi_agency, code="rescue", name="Rescue Diver", rank=4
+        )
+        dm = CertificationLevel.objects.create(
+            agency=padi_agency, code="dm", name="Divemaster", rank=5
+        )
 
-        sd = CertificationLevel.objects.create(code="sd", name="Scuba Diver", rank=1)
-        ow = CertificationLevel.objects.create(code="ow", name="Open Water", rank=2)
-        aow = CertificationLevel.objects.create(code="aow", name="Advanced Open Water", rank=3)
-        rescue = CertificationLevel.objects.create(code="rescue", name="Rescue Diver", rank=4)
-        dm = CertificationLevel.objects.create(code="dm", name="Divemaster", rank=5)
+        # Create OW for SSI
+        ssi_ow = CertificationLevel.objects.create(
+            agency=ssi_agency, code="ow", name="SSI Open Water", rank=2
+        )
 
         # Diver 1: has OW and AOW from PADI
         DiverCertification.objects.create(
-            diver=diver_profile, level=ow, agency=padi,
-            certification_number="OW1", certified_on=date.today() - timedelta(days=365)
+            diver=diver_profile, level=ow,
+            card_number="OW1", issued_on=date.today() - timedelta(days=365)
         )
         DiverCertification.objects.create(
-            diver=diver_profile, level=aow, agency=padi,
-            certification_number="AOW1", certified_on=date.today() - timedelta(days=180)
+            diver=diver_profile, level=aow,
+            card_number="AOW1", issued_on=date.today() - timedelta(days=180)
         )
 
         # Diver 2: has OW from SSI, expired
         diver2 = DiverProfile.objects.create(
             person=person2,
             certification_level="ow",  # Legacy field
-            certification_agency="SSI",
+            certification_agency=ssi_agency,
             certification_date=date.today(),
             total_dives=5,
         )
         DiverCertification.objects.create(
-            diver=diver2, level=ow, agency=ssi,
-            certification_number="OW2", certified_on=date.today() - timedelta(days=730),
+            diver=diver2, level=ssi_ow,
+            card_number="OW2", issued_on=date.today() - timedelta(days=730),
             expires_on=date.today() - timedelta(days=30)  # Expired
         )
 
         return {
-            "padi": padi,
-            "ssi": ssi,
-            "levels": {"sd": sd, "ow": ow, "aow": aow, "rescue": rescue, "dm": dm},
+            "padi": padi_agency,
+            "ssi": ssi_agency,
+            "levels": {"sd": sd, "ow": ow, "aow": aow, "rescue": rescue, "dm": dm, "ssi_ow": ssi_ow},
             "diver1": diver_profile,
             "diver2": diver2,
         }
@@ -617,8 +646,6 @@ class TestDiverCertificationQueries:
 
     def test_current_certifications_filter(self, setup_certifications):
         """Can filter for current (non-expired) certifications."""
-        from primitives_testbed.diveops.models import DiverCertification
-
         # Diver 1 has 2 current certs
         diver1 = setup_certifications["diver1"]
         current = diver1.certifications.filter(
@@ -637,12 +664,13 @@ class TestDiverCertificationQueries:
         """Certifications can be prefetched to avoid N+1."""
         from primitives_testbed.diveops.models import DiverProfile
 
-        # Without prefetch: N+1 queries (one per diver for each related object)
         # With prefetch: 4 queries (divers + certifications + levels + agencies)
-        # This is efficient: constant queries regardless of number of divers
+        # Each level of prefetch_related creates a separate query
         with django_assert_num_queries(4):
             divers = DiverProfile.objects.prefetch_related(
-                "certifications__level", "certifications__agency"
+                "certifications__level__agency"
             )
             for diver in divers:
-                list(diver.certifications.all())
+                for cert in diver.certifications.all():
+                    _ = cert.level.name
+                    _ = cert.agency.name  # agency is property accessing level.agency

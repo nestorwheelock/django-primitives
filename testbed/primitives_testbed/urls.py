@@ -1,5 +1,7 @@
 """URL configuration for primitives_testbed project."""
 
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
@@ -21,3 +23,9 @@ urlpatterns = [
     path("staff/", RedirectView.as_view(url="/staff/diveops/", permanent=False), name="staff-index"),
     path("staff/diveops/", include("primitives_testbed.diveops.staff_urls")),
 ]
+
+# Serve media/document files in development
+if settings.DEBUG:
+    # Documents are stored at BASE_DIR/documents/ with upload_to='documents/%Y/%m/%d/'
+    # URLs are /documents/2026/01/04/file.png
+    urlpatterns += static('/documents/', document_root=settings.BASE_DIR / 'documents')

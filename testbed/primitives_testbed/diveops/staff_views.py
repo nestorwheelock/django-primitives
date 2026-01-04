@@ -9,9 +9,9 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Tem
 
 from django_portal_ui.mixins import StaffPortalMixin
 
-from .forms import DiverForm
-from .models import Booking, DiverProfile, DiveTrip, TripRoster
-from .selectors import get_trip_with_roster, list_upcoming_trips
+from .forms import DiverCertificationForm, DiverForm
+from .models import Booking, DiverCertification, DiverProfile, DiveTrip, TripRoster
+from .selectors import get_diver_with_certifications, get_trip_with_roster, list_upcoming_trips
 
 
 class DashboardView(StaffPortalMixin, TemplateView):
@@ -72,7 +72,7 @@ class CreateDiverView(StaffPortalMixin, FormView):
     success_url = reverse_lazy("diveops:diver-list")
 
     def form_valid(self, form):
-        diver = form.save()
+        diver = form.save(actor=self.request.user)
         messages.success(
             self.request,
             f"Diver {diver.person.first_name} {diver.person.last_name} has been created.",
@@ -87,9 +87,13 @@ class CreateDiverView(StaffPortalMixin, FormView):
 
 
 class EditDiverView(StaffPortalMixin, FormView):
-    """Edit an existing diver."""
+    """Edit an existing diver.
 
-    template_name = "diveops/staff/diver_form.html"
+    Shows a simplified form (no inline certification) plus a list of
+    existing certifications with an "Add Certification" button.
+    """
+
+    template_name = "diveops/staff/diver_edit.html"
     form_class = DiverForm
     success_url = reverse_lazy("diveops:diver-list")
 
@@ -103,10 +107,11 @@ class EditDiverView(StaffPortalMixin, FormView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["instance"] = self.diver
+        kwargs["is_edit"] = True  # Signal to exclude certification fields
         return kwargs
 
     def form_valid(self, form):
-        diver = form.save()
+        diver = form.save(actor=self.request.user)
         messages.success(
             self.request,
             f"Diver {diver.person.first_name} {diver.person.last_name} has been updated.",
@@ -118,6 +123,10 @@ class EditDiverView(StaffPortalMixin, FormView):
         context["is_create"] = False
         context["page_title"] = "Edit Diver"
         context["diver"] = self.diver
+        # Get certifications for this diver
+        context["certifications"] = self.diver.certifications.filter(
+            deleted_at__isnull=True
+        ).select_related("level", "level__agency").order_by("-level__rank")
         return context
 
 
@@ -262,4 +271,168 @@ class CompleteTripView(StaffPortalMixin, View):
         messages.success(request, "Trip has been completed.")
         return HttpResponseRedirect(
             reverse("diveops:trip-detail", kwargs={"pk": trip.pk})
+        )
+
+
+class DiverDetailView(StaffPortalMixin, DetailView):
+    """View diver details with all certifications."""
+
+    model = DiverProfile
+    template_name = "diveops/staff/diver_detail.html"
+    context_object_name = "diver"
+
+    def get_object(self, queryset=None):
+        """Get diver with prefetched certifications."""
+        pk = self.kwargs.get("pk")
+        diver = get_diver_with_certifications(pk)
+        if diver is None:
+            from django.http import Http404
+            raise Http404("Diver not found")
+        return diver
+
+    def get_context_data(self, **kwargs):
+        """Add certifications to context."""
+        context = super().get_context_data(**kwargs)
+        context["certifications"] = self.object.certifications.all()
+        return context
+
+
+class AddCertificationView(StaffPortalMixin, CreateView):
+    """Add a new certification to a diver."""
+
+    model = DiverCertification
+    form_class = DiverCertificationForm
+    template_name = "diveops/staff/certification_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.diver = get_object_or_404(DiverProfile, pk=kwargs["diver_pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        # Pre-set the diver
+        if "initial" not in kwargs:
+            kwargs["initial"] = {}
+        kwargs["initial"]["diver"] = self.diver
+        return kwargs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        # Hide the diver field since it's pre-set
+        form.fields["diver"].widget = form.fields["diver"].hidden_widget()
+        return form
+
+    def get_success_url(self):
+        return reverse("diveops:diver-detail", kwargs={"pk": self.diver.pk})
+
+    def form_valid(self, form):
+        # Ensure diver is set
+        form.instance.diver = self.diver
+        # Save with actor for audit logging
+        self.object = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Certification {self.object.level.name} has been added.",
+        )
+        return HttpResponseRedirect(self.get_success_url())
+
+    def get_context_data(self, **kwargs):
+        from django_parties.models import Organization
+
+        context = super().get_context_data(**kwargs)
+        context["diver"] = self.diver
+        context["is_create"] = True
+        context["page_title"] = "Add Certification"
+        context["agencies"] = Organization.objects.filter(org_type="certification_agency").order_by("name")
+        return context
+
+
+class EditCertificationView(StaffPortalMixin, UpdateView):
+    """Edit an existing certification."""
+
+    model = DiverCertification
+    form_class = DiverCertificationForm
+    template_name = "diveops/staff/certification_form.html"
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(
+            DiverCertification.objects.select_related("diver", "level", "level__agency"),
+            pk=self.kwargs["pk"],
+        )
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        # Hide the diver field since it shouldn't be changed
+        form.fields["diver"].widget = form.fields["diver"].hidden_widget()
+        return form
+
+    def get_success_url(self):
+        return reverse("diveops:diver-detail", kwargs={"pk": self.object.diver.pk})
+
+    def form_valid(self, form):
+        # Save with actor for audit logging
+        self.object = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Certification {self.object.level.name} has been updated.",
+        )
+        return HttpResponseRedirect(self.get_success_url())
+
+    def get_context_data(self, **kwargs):
+        from django_parties.models import Organization
+
+        context = super().get_context_data(**kwargs)
+        context["diver"] = self.object.diver
+        context["is_create"] = False
+        context["page_title"] = "Edit Certification"
+        context["agencies"] = Organization.objects.filter(org_type="certification_agency").order_by("name")
+        return context
+
+
+class DeleteCertificationView(StaffPortalMixin, View):
+    """Soft delete a certification."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+        from .services import remove_certification
+
+        cert = get_object_or_404(DiverCertification, pk=pk)
+        diver_pk = cert.diver.pk
+        level_name = cert.level.name
+
+        # Soft delete via service
+        remove_certification(cert, request.user)
+
+        messages.success(request, f"Certification {level_name} has been removed.")
+        return HttpResponseRedirect(
+            reverse("diveops:diver-detail", kwargs={"pk": diver_pk})
+        )
+
+
+class VerifyCertificationView(StaffPortalMixin, View):
+    """Toggle verification status of a certification."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+        from .exceptions import CertificationError
+        from .services import unverify_certification, verify_certification
+
+        cert = get_object_or_404(DiverCertification, pk=pk)
+        diver_pk = cert.diver.pk
+        level_name = cert.level.name
+
+        try:
+            if cert.is_verified:
+                unverify_certification(cert, request.user)
+                messages.success(request, f"Verification removed from {level_name}.")
+            else:
+                verify_certification(cert, request.user)
+                messages.success(request, f"Certification {level_name} has been verified.")
+        except CertificationError as e:
+            messages.error(request, str(e))
+
+        return HttpResponseRedirect(
+            reverse("diveops:diver-detail", kwargs={"pk": diver_pk})
         )

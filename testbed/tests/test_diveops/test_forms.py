@@ -42,7 +42,7 @@ class TestDiverForm:
         assert "medical_clearance_date" in form.fields
         assert "medical_clearance_valid_until" in form.fields
 
-    def test_form_valid_with_required_fields(self):
+    def test_form_valid_with_required_fields(self, padi_agency):
         """DiverForm is valid with all required fields."""
         from primitives_testbed.diveops.forms import DiverForm
 
@@ -51,14 +51,14 @@ class TestDiverForm:
             "last_name": "Diver",
             "email": "alice@example.com",
             "certification_level": "ow",
-            "certification_agency": "PADI",
+            "certification_agency": str(padi_agency.pk),
             "certification_number": "12345",
             "certification_date": date.today() - timedelta(days=30),
             "total_dives": 10,
         })
         assert form.is_valid(), form.errors
 
-    def test_form_creates_person_and_profile(self):
+    def test_form_creates_person_and_profile(self, ssi_agency):
         """DiverForm.save() creates both Person and DiverProfile."""
         from django_parties.models import Person
         from primitives_testbed.diveops.forms import DiverForm
@@ -69,7 +69,7 @@ class TestDiverForm:
             "last_name": "Swimmer",
             "email": "bob@example.com",
             "certification_level": "aow",
-            "certification_agency": "SSI",
+            "certification_agency": str(ssi_agency.pk),
             "certification_number": "98765",
             "certification_date": date.today() - timedelta(days=180),
             "total_dives": 25,
@@ -84,10 +84,10 @@ class TestDiverForm:
         assert diver.person.last_name == "Swimmer"
         assert diver.person.email == "bob@example.com"
         assert diver.certification_level == "aow"
-        assert diver.certification_agency == "SSI"
+        assert diver.certification_agency == ssi_agency
         assert diver.total_dives == 25
 
-    def test_form_email_must_be_unique(self):
+    def test_form_email_must_be_unique(self, padi_agency):
         """DiverForm rejects duplicate email for new diver."""
         from django_parties.models import Person
         from primitives_testbed.diveops.forms import DiverForm
@@ -104,7 +104,7 @@ class TestDiverForm:
             "last_name": "Person",
             "email": "existing@example.com",  # Duplicate
             "certification_level": "ow",
-            "certification_agency": "PADI",
+            "certification_agency": str(padi_agency.pk),
             "certification_number": "11111",
             "certification_date": date.today(),
             "total_dives": 0,
@@ -112,7 +112,7 @@ class TestDiverForm:
         assert not form.is_valid()
         assert "email" in form.errors
 
-    def test_form_edit_existing_diver(self, diver_profile):
+    def test_form_edit_existing_diver(self, diver_profile, padi_agency):
         """DiverForm can edit an existing diver."""
         from primitives_testbed.diveops.forms import DiverForm
 
@@ -121,7 +121,7 @@ class TestDiverForm:
             "last_name": "Diver",
             "email": "john@example.com",
             "certification_level": "rescue",  # Upgraded
-            "certification_agency": "PADI",
+            "certification_agency": str(padi_agency.pk),
             "certification_number": "12345",
             "certification_date": diver_profile.certification_date,
             "total_dives": 75,  # More dives
@@ -133,7 +133,7 @@ class TestDiverForm:
         assert diver.certification_level == "rescue"
         assert diver.total_dives == 75
 
-    def test_form_edit_allows_same_email(self, diver_profile):
+    def test_form_edit_allows_same_email(self, diver_profile, padi_agency):
         """Editing diver can keep the same email."""
         from primitives_testbed.diveops.forms import DiverForm
 
@@ -142,7 +142,7 @@ class TestDiverForm:
             "last_name": "Diver",
             "email": "john@example.com",  # Same email
             "certification_level": "aow",
-            "certification_agency": "PADI",
+            "certification_agency": str(padi_agency.pk),
             "certification_number": "12345",
             "certification_date": diver_profile.certification_date,
             "total_dives": 55,

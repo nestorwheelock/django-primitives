@@ -30,7 +30,7 @@
 
     <!-- Form Card -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <form method="post" class="p-6 space-y-6">
+        <form method="post" enctype="multipart/form-data" class="p-6 space-y-6">
             {% csrf_token %}
 
             {% if form.non_field_errors %}
@@ -90,41 +90,87 @@
             </div>
 
             <!-- Certification Section -->
-            <div class="border-t pt-6">
+            <div class="border-t pt-6" x-data="certificationForm()">
                 <h3 class="text-lg font-medium text-gray-900 mb-4">Certification</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Certification Level -->
-                    <div>
-                        <label for="id_certification_level" class="block text-sm font-medium text-gray-700">Level <span class="text-red-500">*</span></label>
-                        <select name="certification_level" id="id_certification_level"
-                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            {% for value, label in form.fields.certification_level.choices %}
-                            <option value="{{ value }}" {% if form.certification_level.value == value %}selected{% endif %}>{{ label }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+                <p class="text-sm text-gray-500 mb-4">{% if is_create %}Add an initial certification for this diver. Additional certifications can be added from the diver's profile page.{% else %}Manage certifications from the diver's profile page.{% endif %}</p>
 
+                <div class="space-y-4">
                     <!-- Certification Agency -->
                     <div>
-                        <label for="id_certification_agency" class="block text-sm font-medium text-gray-700">Agency <span class="text-red-500">*</span></label>
-                        <input type="text" name="certification_agency" id="id_certification_agency" value="{{ form.certification_agency.value|default:'' }}"
-                               placeholder="e.g., PADI, SSI, NAUI"
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                        <p class="mt-1 text-xs text-gray-500">e.g., PADI, SSI, NAUI, SDI</p>
+                        <label for="id_certification_agency" class="block text-sm font-medium text-gray-700">Certification Agency</label>
+                        <select name="certification_agency" id="id_certification_agency"
+                                x-model="selectedAgency"
+                                @change="filterLevels()"
+                                class="mt-1 block w-full px-3 py-2 border {% if form.certification_agency.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Select an agency...</option>
+                            {% for agency in form.fields.certification_agency.queryset %}
+                            <option value="{{ agency.pk }}" {% if form.certification_agency.value|stringformat:'s' == agency.pk|stringformat:'s' %}selected{% endif %}>
+                                {{ agency.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if form.certification_agency.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.certification_agency.errors.0 }}</p>
+                        {% endif %}
                     </div>
 
-                    <!-- Certification Number -->
+                    <!-- Certification Level (filtered by agency) -->
                     <div>
-                        <label for="id_certification_number" class="block text-sm font-medium text-gray-700">Certification Number</label>
-                        <input type="text" name="certification_number" id="id_certification_number" value="{{ form.certification_number.value|default:'' }}"
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <label for="id_certification_level" class="block text-sm font-medium text-gray-700">Certification Level</label>
+                        <select name="certification_level" id="id_certification_level"
+                                x-model="selectedLevel"
+                                :disabled="!selectedAgency"
+                                class="mt-1 block w-full px-3 py-2 border {% if form.certification_level.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed">
+                            <option value="">Select a level...</option>
+                            <template x-for="level in filteredLevels" :key="level.id">
+                                <option :value="level.id" x-text="level.name + ' (Rank ' + level.rank + ')'"></option>
+                            </template>
+                        </select>
+                        {% if form.certification_level.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.certification_level.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-1 text-xs text-gray-500" x-show="!selectedAgency">Select an agency first to see available levels.</p>
                     </div>
 
-                    <!-- Certification Date -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Card Number -->
+                        <div>
+                            <label for="id_card_number" class="block text-sm font-medium text-gray-700">Card Number</label>
+                            <input type="text" name="card_number" id="id_card_number" value="{{ form.card_number.value|default:'' }}"
+                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <p class="mt-1 text-xs text-gray-500">The number on the certification card.</p>
+                        </div>
+
+                        <!-- Issue Date -->
+                        <div>
+                            <label for="id_issued_on" class="block text-sm font-medium text-gray-700">Issue Date</label>
+                            <input type="date" name="issued_on" id="id_issued_on" value="{{ form.issued_on.value|date:'Y-m-d'|default:'' }}"
+                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Expiration Date -->
+                        <div>
+                            <label for="id_expires_on" class="block text-sm font-medium text-gray-700">Expiration Date</label>
+                            <input type="date" name="expires_on" id="id_expires_on" value="{{ form.expires_on.value|date:'Y-m-d'|default:'' }}"
+                                   class="mt-1 block w-full px-3 py-2 border {% if form.expires_on.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% if form.expires_on.errors %}
+                            <p class="mt-1 text-sm text-red-600">{{ form.expires_on.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-xs text-gray-500">Leave blank if certification doesn't expire.</p>
+                        </div>
+                    </div>
+
+                    <!-- Proof Document Upload -->
                     <div>
-                        <label for="id_certification_date" class="block text-sm font-medium text-gray-700">Certification Date <span class="text-red-500">*</span></label>
-                        <input type="date" name="certification_date" id="id_certification_date" value="{{ form.certification_date.value|date:'Y-m-d'|default:'' }}"
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <label for="id_proof_file" class="block text-sm font-medium text-gray-700">Proof Document</label>
+                        <input type="file" name="proof_file" id="id_proof_file" accept="image/*,application/pdf"
+                               class="mt-1 block w-full text-sm text-gray-500
+                                      file:mr-4 file:py-2 file:px-4
+                                      file:rounded-lg file:border-0
+                                      file:text-sm file:font-medium
+                                      file:bg-blue-50 file:text-blue-700
+                                      hover:file:bg-blue-100">
+                        <p class="mt-1 text-xs text-gray-500">Upload a photo or scan of the certification card (optional).</p>
                     </div>
                 </div>
             </div>
@@ -174,4 +220,46 @@
         </form>
     </div>
 </div>
+
+<script>
+function certificationForm() {
+    // All certification levels with their agency IDs
+    const allLevels = [
+        {% for level in form.fields.certification_level.queryset %}
+        {
+            id: "{{ level.pk }}",
+            name: "{{ level.name }}",
+            rank: {{ level.rank }},
+            agencyId: "{{ level.agency_id }}"
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    return {
+        selectedAgency: "{{ form.certification_agency.value|default:'' }}",
+        selectedLevel: "{{ form.certification_level.value|default:'' }}",
+        allLevels: allLevels,
+        filteredLevels: [],
+
+        init() {
+            this.filterLevels();
+        },
+
+        filterLevels() {
+            if (this.selectedAgency) {
+                this.filteredLevels = this.allLevels.filter(
+                    level => level.agencyId === this.selectedAgency
+                );
+            } else {
+                this.filteredLevels = [];
+            }
+            // Reset level selection if current level doesn't belong to selected agency
+            const levelExists = this.filteredLevels.some(l => l.id === this.selectedLevel);
+            if (!levelExists) {
+                this.selectedLevel = "";
+            }
+        }
+    };
+}
+</script>
 {% endblock %}

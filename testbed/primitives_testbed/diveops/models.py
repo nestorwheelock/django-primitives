@@ -32,18 +32,26 @@ class SoftDeleteManager(models.Manager):
 
 
 class CertificationLevel(models.Model):
-    """Reference data for certification levels.
+    """Reference data for certification levels, scoped by agency.
 
-    Normalized replacement for CERTIFICATION_LEVELS choices.
-    The rank field enables comparison: level.rank >= required.rank
+    Each certification agency (PADI, SSI, NAUI, etc.) defines their own levels.
+    The rank field enables comparison within and across agencies.
+
+    Example: PADI OW (rank=2) and SSI OW (rank=2) are equivalent.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    code = models.CharField(
+    # Agency that defines this level
+    agency = models.ForeignKey(
+        "django_parties.Organization",
+        on_delete=models.PROTECT,
+        related_name="certification_levels",
+        help_text="Certification agency that defines this level (PADI, SSI, etc.)",
+    )
+    code = models.SlugField(
         max_length=20,
-        unique=True,
-        help_text="Short code like 'ow', 'aow', 'dm'",
+        help_text="Short code like 'ow', 'aow', 'dm' (unique per agency)",
     )
     name = models.CharField(
         max_length=100,
@@ -51,6 +59,11 @@ class CertificationLevel(models.Model):
     )
     rank = models.PositiveIntegerField(
         help_text="Numeric rank for comparison (higher = more advanced)",
+    )
+    max_depth_m = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Maximum depth in meters for this level (optional)",
     )
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
@@ -67,15 +80,27 @@ class CertificationLevel(models.Model):
 
     class Meta:
         constraints = [
+            # Unique code per agency (among active records)
+            models.UniqueConstraint(
+                fields=["agency", "code"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_agency_level_code",
+            ),
+            # Rank must be positive
             models.CheckConstraint(
                 condition=Q(rank__gt=0),
                 name="diveops_cert_level_rank_gt_zero",
             ),
+            # Max depth must be positive if set
+            models.CheckConstraint(
+                condition=Q(max_depth_m__isnull=True) | Q(max_depth_m__gt=0),
+                name="diveops_cert_level_depth_gt_zero",
+            ),
         ]
-        ordering = ["rank"]
+        ordering = ["agency", "rank"]
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.agency.name})"
 
     def delete(self, using=None, keep_parents=False):
         """Soft delete the certification level."""
@@ -87,7 +112,12 @@ class DiverCertification(models.Model):
     """A diver's certification record.
 
     Normalized join table allowing multiple certifications per diver.
-    Links to CertificationLevel and Organization (agency).
+    Links to CertificationLevel (which is agency-scoped).
+
+    Invariant: level.agency is the issuing agency (no separate agency FK needed).
+
+    Proof documents (certification card photos/PDFs) are attached via
+    django_documents.Document with GenericFK to this model.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -101,20 +131,36 @@ class DiverCertification(models.Model):
         CertificationLevel,
         on_delete=models.PROTECT,
         related_name="diver_certifications",
-    )
-    agency = models.ForeignKey(
-        "django_parties.Organization",
-        on_delete=models.PROTECT,
-        related_name="diver_certifications",
-        help_text="Certification agency (PADI, SSI, NAUI, etc.)",
+        help_text="Certification level (determines agency)",
     )
 
-    certification_number = models.CharField(max_length=100)
-    certified_on = models.DateField()
+    # Card details
+    card_number = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Certification card number",
+    )
+    issued_on = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date certification was issued",
+    )
     expires_on = models.DateField(
         null=True,
         blank=True,
         help_text="Leave blank if certification never expires",
+    )
+
+    # Proof document - uses django_documents primitive
+    # Documents are attached via GenericFK (target=this certification)
+    # This FK provides a shortcut to the primary proof document
+    proof_document = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="certification_proofs",
+        help_text="Primary proof document (certification card photo/scan)",
     )
 
     # Verification tracking
@@ -140,22 +186,28 @@ class DiverCertification(models.Model):
 
     class Meta:
         constraints = [
-            # Only one certification per diver+level+agency (among active records)
+            # Only one certification per diver+level (among active records)
+            # Since level is agency-scoped, this is effectively diver+agency+level_code
             models.UniqueConstraint(
-                fields=["diver", "level", "agency"],
+                fields=["diver", "level"],
                 condition=Q(deleted_at__isnull=True),
                 name="diveops_unique_active_certification",
             ),
-            # Expiration must be after certification date
+            # Expiration must be after issue date
             models.CheckConstraint(
-                condition=Q(expires_on__isnull=True) | Q(expires_on__gt=F("certified_on")),
-                name="diveops_cert_expires_after_certified",
+                condition=Q(expires_on__isnull=True) | Q(issued_on__isnull=True) | Q(expires_on__gt=F("issued_on")),
+                name="diveops_cert_expires_after_issued",
             ),
         ]
-        ordering = ["-level__rank", "-certified_on"]
+        ordering = ["-level__rank", "-issued_on"]
 
     def __str__(self):
         return f"{self.diver} - {self.level.name} ({self.agency.name})"
+
+    @property
+    def agency(self):
+        """Get the certification agency (from level)."""
+        return self.level.agency
 
     @property
     def is_current(self) -> bool:
@@ -289,17 +341,34 @@ class DiverProfile(models.Model):
         related_name="diver_profile",
     )
 
-    # Certification
+    # Legacy certification fields (deprecated - use DiverCertification instead)
+    # Kept for backwards compatibility during migration
     certification_level = models.CharField(
         max_length=20,
         choices=CERTIFICATION_LEVELS,
+        blank=True,
+        default="",
+        help_text="DEPRECATED: Use DiverCertification model instead",
     )
-    certification_agency = models.CharField(
-        max_length=50,
-        help_text="e.g., PADI, SSI, NAUI, SDI",
+    certification_agency = models.ForeignKey(
+        "django_parties.Organization",
+        on_delete=models.PROTECT,
+        related_name="diver_profiles",
+        null=True,
+        blank=True,
+        help_text="DEPRECATED: Use DiverCertification model instead",
     )
-    certification_number = models.CharField(max_length=100)
-    certification_date = models.DateField()
+    certification_number = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="DEPRECATED: Use DiverCertification model instead",
+    )
+    certification_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="DEPRECATED: Use DiverCertification model instead",
+    )
 
     # Experience
     total_dives = models.PositiveIntegerField(default=0)

@@ -8,9 +8,11 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone
 
+from .audit import Actions, log_certification_event
 from .decisioning import can_diver_join_trip
 from .exceptions import (
     BookingError,
+    CertificationError,
     CheckInError,
     DiverNotEligibleError,
     TripCapacityError,
@@ -22,7 +24,7 @@ from .integrations import (
     create_trip_basket,
     price_basket_item,
 )
-from .models import Booking, DiverProfile, DiveTrip, TripRoster
+from .models import Booking, CertificationLevel, DiverCertification, DiverProfile, DiveTrip, TripRoster
 
 
 def _get_or_create_trip_catalog_item(trip: DiveTrip) -> CatalogItem:
@@ -278,3 +280,236 @@ def cancel_booking(booking: Booking, cancelled_by) -> Booking:
     booking.save()
 
     return booking
+
+
+# =============================================================================
+# Certification Services
+# =============================================================================
+
+
+@transaction.atomic
+def add_certification(
+    diver: DiverProfile,
+    level: CertificationLevel,
+    added_by,
+    *,
+    card_number: str | None = None,
+    issued_on=None,
+    expires_on=None,
+    proof_document=None,
+) -> DiverCertification:
+    """Add a new certification to a diver.
+
+    Args:
+        diver: The diver profile
+        level: The certification level to add
+        added_by: User adding the certification
+        card_number: Optional card number
+        issued_on: Optional issue date
+        expires_on: Optional expiration date
+        proof_document: Optional proof document (django_documents.Document)
+
+    Returns:
+        Created DiverCertification
+
+    Raises:
+        CertificationError: If certification already exists or is invalid
+    """
+    # Check for duplicate certification (same diver + level, not deleted)
+    existing = DiverCertification.objects.filter(
+        diver=diver,
+        level=level,
+    ).exists()
+
+    if existing:
+        raise CertificationError(
+            f"Diver already has {level.name} certification from {level.agency.name}"
+        )
+
+    certification = DiverCertification.objects.create(
+        diver=diver,
+        level=level,
+        card_number=card_number or "",
+        issued_on=issued_on,
+        expires_on=expires_on,
+        proof_document=proof_document,
+    )
+
+    log_certification_event(
+        action=Actions.CERTIFICATION_ADDED,
+        certification=certification,
+        actor=added_by,
+    )
+
+    return certification
+
+
+@transaction.atomic
+def update_certification(
+    certification: DiverCertification,
+    updated_by,
+    *,
+    card_number: str | None = None,
+    issued_on=None,
+    expires_on=None,
+    proof_document=None,
+) -> DiverCertification:
+    """Update an existing certification.
+
+    Args:
+        certification: The certification to update
+        updated_by: User making the update
+        card_number: New card number (None = no change)
+        issued_on: New issue date (None = no change)
+        expires_on: New expiration date (None = no change)
+        proof_document: New proof document (None = no change)
+
+    Returns:
+        Updated DiverCertification
+
+    Raises:
+        CertificationError: If certification is deleted
+    """
+    if certification.deleted_at is not None:
+        raise CertificationError("Cannot update a deleted certification")
+
+    # Track changes for audit log
+    changes = {}
+
+    if card_number is not None and card_number != certification.card_number:
+        changes["card_number"] = {"old": certification.card_number, "new": card_number}
+        certification.card_number = card_number
+
+    if issued_on is not None and issued_on != certification.issued_on:
+        changes["issued_on"] = {
+            "old": str(certification.issued_on) if certification.issued_on else None,
+            "new": str(issued_on) if issued_on else None,
+        }
+        certification.issued_on = issued_on
+
+    if expires_on is not None and expires_on != certification.expires_on:
+        changes["expires_on"] = {
+            "old": str(certification.expires_on) if certification.expires_on else None,
+            "new": str(expires_on) if expires_on else None,
+        }
+        certification.expires_on = expires_on
+
+    if proof_document is not None and proof_document != certification.proof_document:
+        changes["proof_document"] = {"old": str(certification.proof_document_id), "new": str(proof_document.pk)}
+        certification.proof_document = proof_document
+
+    if changes:
+        certification.save()
+
+        log_certification_event(
+            action=Actions.CERTIFICATION_UPDATED,
+            certification=certification,
+            actor=updated_by,
+            changes=changes,
+        )
+
+    return certification
+
+
+@transaction.atomic
+def remove_certification(
+    certification: DiverCertification,
+    removed_by,
+) -> DiverCertification:
+    """Soft delete a certification.
+
+    Sets deleted_at timestamp instead of actually deleting.
+
+    Args:
+        certification: The certification to remove
+        removed_by: User removing the certification
+
+    Returns:
+        Updated DiverCertification with deleted_at set
+
+    Raises:
+        CertificationError: If certification is already deleted
+    """
+    if certification.deleted_at is not None:
+        raise CertificationError("Certification is already removed")
+
+    certification.deleted_at = timezone.now()
+    certification.save()
+
+    log_certification_event(
+        action=Actions.CERTIFICATION_REMOVED,
+        certification=certification,
+        actor=removed_by,
+    )
+
+    return certification
+
+
+@transaction.atomic
+def verify_certification(
+    certification: DiverCertification,
+    verified_by,
+) -> DiverCertification:
+    """Mark a certification as verified by staff.
+
+    Args:
+        certification: The certification to verify
+        verified_by: User verifying the certification
+
+    Returns:
+        Updated DiverCertification with is_verified=True
+
+    Raises:
+        CertificationError: If certification is deleted or already verified
+    """
+    if certification.deleted_at is not None:
+        raise CertificationError("Cannot verify a deleted certification")
+
+    if certification.is_verified:
+        raise CertificationError("Certification is already verified")
+
+    certification.is_verified = True
+    certification.save()
+
+    log_certification_event(
+        action=Actions.CERTIFICATION_VERIFIED,
+        certification=certification,
+        actor=verified_by,
+    )
+
+    return certification
+
+
+@transaction.atomic
+def unverify_certification(
+    certification: DiverCertification,
+    unverified_by,
+) -> DiverCertification:
+    """Remove verification from a certification.
+
+    Args:
+        certification: The certification to unverify
+        unverified_by: User removing verification
+
+    Returns:
+        Updated DiverCertification with is_verified=False
+
+    Raises:
+        CertificationError: If certification is deleted or not verified
+    """
+    if certification.deleted_at is not None:
+        raise CertificationError("Cannot unverify a deleted certification")
+
+    if not certification.is_verified:
+        raise CertificationError("Certification is not verified")
+
+    certification.is_verified = False
+    certification.save()
+
+    log_certification_event(
+        action=Actions.CERTIFICATION_UNVERIFIED,
+        certification=certification,
+        actor=unverified_by,
+    )
+
+    return certification

@@ -47,7 +47,9 @@
                                 <span class="text-sm font-medium text-blue-600">{{ diver.person.first_name|slice:":1"|upper }}</span>
                             </div>
                             <div class="ml-3">
-                                <p class="text-sm font-medium text-gray-900">{{ diver.person.first_name }} {{ diver.person.last_name }}</p>
+                                <a href="{% url 'diveops:diver-detail' pk=diver.pk %}" class="text-sm font-medium text-gray-900 hover:text-blue-600">
+                                    {{ diver.person.first_name }} {{ diver.person.last_name }}
+                                </a>
                             </div>
                         </div>
                     </td>
@@ -58,12 +60,15 @@
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             {{ diver.get_certification_level_display }}
                         </span>
-                        <span class="text-xs text-gray-500 ml-1">{{ diver.certification_agency }}</span>
+                        {% if diver.certification_agency %}
+                        <span class="text-xs text-gray-500 ml-1">{{ diver.certification_agency.name }}</span>
+                        {% endif %}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {{ diver.total_dives }}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <a href="{% url 'diveops:diver-detail' pk=diver.pk %}" class="text-blue-600 hover:text-blue-900 mr-3">View</a>
                         <a href="{% url 'diveops:diver-edit' pk=diver.pk %}" class="text-blue-600 hover:text-blue-900">Edit</a>
                     </td>
                 </tr>

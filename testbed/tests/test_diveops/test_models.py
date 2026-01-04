@@ -12,14 +12,14 @@ from django.utils import timezone
 class TestDiverProfile:
     """Tests for DiverProfile model."""
 
-    def test_create_diver_profile(self, person):
+    def test_create_diver_profile(self, person, padi_agency):
         """DiverProfile can be created with valid data."""
         from primitives_testbed.diveops.models import DiverProfile
 
         profile = DiverProfile.objects.create(
             person=person,
             certification_level="ow",
-            certification_agency="PADI",
+            certification_agency=padi_agency,
             certification_number="12345",
             certification_date=date.today(),
             total_dives=0,
@@ -29,7 +29,7 @@ class TestDiverProfile:
         assert profile.person == person
         assert profile.certification_level == "ow"
 
-    def test_one_profile_per_person_constraint(self, diver_profile, person):
+    def test_one_profile_per_person_constraint(self, diver_profile, person, ssi_agency):
         """Only one DiverProfile per Person is allowed (DB constraint)."""
         from primitives_testbed.diveops.models import DiverProfile
 
@@ -37,20 +37,20 @@ class TestDiverProfile:
             DiverProfile.objects.create(
                 person=person,
                 certification_level="aow",
-                certification_agency="SSI",
+                certification_agency=ssi_agency,
                 certification_number="99999",
                 certification_date=date.today(),
                 total_dives=0,
             )
 
-    def test_certification_level_choices(self, person2):
+    def test_certification_level_choices(self, person2, padi_agency):
         """Certification level must be a valid choice."""
         from primitives_testbed.diveops.models import DiverProfile
 
         profile = DiverProfile.objects.create(
             person=person2,
             certification_level="dm",  # Divemaster
-            certification_agency="PADI",
+            certification_agency=padi_agency,
             certification_number="DM123",
             certification_date=date.today(),
             total_dives=100,
@@ -58,7 +58,7 @@ class TestDiverProfile:
 
         assert profile.certification_level == "dm"
 
-    def test_total_dives_non_negative_constraint(self, person2):
+    def test_total_dives_non_negative_constraint(self, person2, padi_agency):
         """total_dives cannot be negative (DB constraint)."""
         from primitives_testbed.diveops.models import DiverProfile
 
@@ -66,7 +66,7 @@ class TestDiverProfile:
             DiverProfile.objects.create(
                 person=person2,
                 certification_level="ow",
-                certification_agency="PADI",
+                certification_agency=padi_agency,
                 certification_number="12345",
                 certification_date=date.today(),
                 total_dives=-1,  # Invalid
@@ -76,14 +76,14 @@ class TestDiverProfile:
         """is_medical_current returns True when medical clearance is valid."""
         assert diver_profile.is_medical_current is True
 
-    def test_is_medical_current_expired(self, person2):
+    def test_is_medical_current_expired(self, person2, padi_agency):
         """is_medical_current returns False when medical clearance expired."""
         from primitives_testbed.diveops.models import DiverProfile
 
         profile = DiverProfile.objects.create(
             person=person2,
             certification_level="ow",
-            certification_agency="PADI",
+            certification_agency=padi_agency,
             certification_number="12345",
             certification_date=date.today(),
             total_dives=10,
