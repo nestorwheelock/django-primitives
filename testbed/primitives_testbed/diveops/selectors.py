@@ -13,22 +13,28 @@ from django.utils import timezone
 from .models import (
     Booking,
     CertificationLevel,
+    Dive,
     DiverCertification,
     DiverProfile,
     DiveSite,
-    DiveTrip,
-    TripRequirement,
-    TripRoster,
+    Excursion,
+    ExcursionRequirement,
+    ExcursionRoster,
 )
 
+# Backwards compatibility aliases
+DiveTrip = Excursion
+TripRequirement = ExcursionRequirement
+TripRoster = ExcursionRoster
 
-def list_upcoming_trips(
+
+def list_upcoming_excursions(
     dive_shop=None,
     dive_site=None,
     min_spots: int = 0,
     limit: int = 50,
-) -> list[DiveTrip]:
-    """List upcoming dive trips with optional filters.
+) -> list[Excursion]:
+    """List upcoming dive excursions with optional filters.
 
     Optimized query with related data prefetched.
 
@@ -39,14 +45,14 @@ def list_upcoming_trips(
         limit: Maximum results
 
     Returns:
-        List of DiveTrip objects with related data
+        List of Excursion objects with related data
     """
     qs = (
-        DiveTrip.objects.filter(
+        Excursion.objects.filter(
             departure_time__gt=timezone.now(),
             status__in=["scheduled", "boarding"],
         )
-        .select_related("dive_shop", "dive_site")
+        .select_related("dive_shop", "dive_site", "trip")
         .prefetch_related(
             Prefetch(
                 "bookings",
@@ -68,28 +74,32 @@ def list_upcoming_trips(
     if dive_site:
         qs = qs.filter(dive_site=dive_site)
 
-    trips = list(qs[:limit])
+    excursions = list(qs[:limit])
 
     if min_spots > 0:
-        trips = [t for t in trips if t.spots_available >= min_spots]
+        excursions = [e for e in excursions if e.spots_available >= min_spots]
 
-    return trips
+    return excursions
 
 
-def get_trip_with_roster(trip_id) -> Optional[DiveTrip]:
-    """Get a trip with full roster data.
+# Backwards compatibility alias
+list_upcoming_trips = list_upcoming_excursions
 
-    Optimized query for trip detail view.
+
+def get_excursion_with_roster(excursion_id) -> Optional[Excursion]:
+    """Get an excursion with full roster data.
+
+    Optimized query for excursion detail view.
 
     Args:
-        trip_id: Trip UUID
+        excursion_id: Excursion UUID
 
     Returns:
-        DiveTrip or None
+        Excursion or None
     """
     return (
-        DiveTrip.objects.filter(pk=trip_id)
-        .select_related("dive_shop", "dive_site", "encounter")
+        Excursion.objects.filter(pk=excursion_id)
+        .select_related("dive_shop", "dive_site", "trip", "encounter")
         .prefetch_related(
             Prefetch(
                 "bookings",
@@ -97,13 +107,21 @@ def get_trip_with_roster(trip_id) -> Optional[DiveTrip]:
             ),
             Prefetch(
                 "roster",
-                queryset=TripRoster.objects.select_related(
+                queryset=ExcursionRoster.objects.select_related(
                     "diver__person", "checked_in_by"
                 ),
+            ),
+            Prefetch(
+                "dives",
+                queryset=Dive.objects.select_related("dive_site").order_by("sequence"),
             ),
         )
         .first()
     )
+
+
+# Backwards compatibility alias
+get_trip_with_roster = get_excursion_with_roster
 
 
 def list_diver_bookings(
@@ -114,12 +132,12 @@ def list_diver_bookings(
 ) -> list[Booking]:
     """List bookings for a diver.
 
-    Optimized query with trip and site data.
+    Optimized query with excursion and site data.
 
     Args:
         diver: The diver profile
         status: Filter by status (optional)
-        include_past: Include past trips (default False)
+        include_past: Include past excursions (default False)
         limit: Maximum results
 
     Returns:
@@ -127,15 +145,15 @@ def list_diver_bookings(
     """
     qs = (
         Booking.objects.filter(diver=diver)
-        .select_related("trip__dive_shop", "trip__dive_site")
-        .order_by("-trip__departure_time")
+        .select_related("excursion__dive_shop", "excursion__dive_site")
+        .order_by("-excursion__departure_time")
     )
 
     if status:
         qs = qs.filter(status=status)
 
     if not include_past:
-        qs = qs.filter(trip__departure_time__gt=timezone.now())
+        qs = qs.filter(excursion__departure_time__gt=timezone.now())
 
     return list(qs[:limit])
 
@@ -186,30 +204,30 @@ def list_dive_sites(
     return list(qs[:limit])
 
 
-def list_shop_trips(
+def list_shop_excursions(
     dive_shop,
     status: Optional[str] = None,
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
     limit: int = 50,
-) -> list[DiveTrip]:
-    """List trips for a dive shop.
+) -> list[Excursion]:
+    """List excursions for a dive shop.
 
     Optimized for shop management views.
 
     Args:
         dive_shop: The organization
         status: Filter by status
-        from_date: Filter trips departing on or after
-        to_date: Filter trips departing before
+        from_date: Filter excursions departing on or after
+        to_date: Filter excursions departing before
         limit: Maximum results
 
     Returns:
-        List of DiveTrip objects
+        List of Excursion objects
     """
     qs = (
-        DiveTrip.objects.filter(dive_shop=dive_shop)
-        .select_related("dive_site")
+        Excursion.objects.filter(dive_shop=dive_shop)
+        .select_related("dive_site", "trip")
         .prefetch_related(
             Prefetch(
                 "bookings",
@@ -239,6 +257,10 @@ def list_shop_trips(
     return list(qs[:limit])
 
 
+# Backwards compatibility alias
+list_shop_trips = list_shop_excursions
+
+
 def get_booking(booking_id) -> Optional[Booking]:
     """Get a booking with related data.
 
@@ -251,8 +273,9 @@ def get_booking(booking_id) -> Optional[Booking]:
     return (
         Booking.objects.filter(pk=booking_id)
         .select_related(
-            "trip__dive_shop",
-            "trip__dive_site",
+            "excursion__dive_shop",
+            "excursion__dive_site",
+            "excursion__trip",
             "diver__person",
             "booked_by",
         )
@@ -290,30 +313,34 @@ def get_diver_with_certifications(diver_id) -> Optional[DiverProfile]:
     )
 
 
-def get_trip_with_requirements(trip_id) -> Optional[DiveTrip]:
-    """Get a trip with all requirements prefetched.
+def get_excursion_with_requirements(excursion_id) -> Optional[Excursion]:
+    """Get an excursion with all requirements prefetched.
 
     Optimized query to avoid N+1 when checking requirements.
 
     Args:
-        trip_id: Trip UUID
+        excursion_id: Excursion UUID
 
     Returns:
-        DiveTrip with requirements or None
+        Excursion with requirements or None
     """
     return (
-        DiveTrip.objects.filter(pk=trip_id)
-        .select_related("dive_shop", "dive_site")
+        Excursion.objects.filter(pk=excursion_id)
+        .select_related("dive_shop", "dive_site", "trip")
         .prefetch_related(
             Prefetch(
                 "requirements",
-                queryset=TripRequirement.objects.select_related(
+                queryset=ExcursionRequirement.objects.select_related(
                     "certification_level"
                 ).order_by("requirement_type"),
             )
         )
         .first()
     )
+
+
+# Backwards compatibility alias
+get_trip_with_requirements = get_excursion_with_requirements
 
 
 def list_certification_levels(active_only: bool = True) -> list[CertificationLevel]:
@@ -381,26 +408,31 @@ def diver_audit_feed(diver: DiverProfile, limit: int = 100) -> list:
     )
 
 
-def trip_audit_feed(trip: DiveTrip, limit: int = 100) -> list:
-    """Get all audit events related to a trip.
+def excursion_audit_feed(excursion: Excursion, limit: int = 100) -> list:
+    """Get all audit events related to an excursion.
 
-    Returns audit events where trip_id appears in metadata.
+    Returns audit events where excursion_id or trip_id appears in metadata.
     Events are ordered newest first.
 
     Args:
-        trip: DiveTrip
+        excursion: Excursion
         limit: Maximum number of events to return (default 100)
 
     Returns:
-        List of AuditLog entries related to this trip
+        List of AuditLog entries related to this excursion
     """
     from django_audit_log.models import AuditLog
 
-    trip_id_str = str(trip.pk)
+    excursion_id_str = str(excursion.pk)
 
-    # Query by metadata JSON contains trip_id
+    # Query by metadata JSON contains excursion_id or trip_id (backwards compat)
     return list(
         AuditLog.objects.filter(
-            metadata__trip_id=trip_id_str
+            Q(metadata__excursion_id=excursion_id_str) |
+            Q(metadata__trip_id=excursion_id_str)
         ).order_by("-created_at")[:limit]
     )
+
+
+# Backwards compatibility alias
+trip_audit_feed = excursion_audit_feed

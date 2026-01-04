@@ -33,7 +33,19 @@ from .integrations import (
     create_trip_basket,
     price_basket_item,
 )
-from .models import Booking, CertificationLevel, DiverCertification, DiverProfile, DiveSite, DiveTrip, TripRoster
+from .models import (
+    Booking,
+    CertificationLevel,
+    DiverCertification,
+    DiverProfile,
+    DiveSite,
+    Excursion,
+    ExcursionRoster,
+)
+
+# Backwards compatibility aliases
+DiveTrip = Excursion
+TripRoster = ExcursionRoster
 
 
 def _get_constraint_name(exc: IntegrityError) -> str | None:
@@ -70,10 +82,10 @@ def _apply_tracked_update(obj, field: str, new_value, changes: dict) -> None:
     setattr(obj, field, new_value)
 
 
-def _get_or_create_trip_catalog_item(trip: DiveTrip) -> CatalogItem:
-    """Get or create a CatalogItem for a dive trip."""
+def _get_or_create_excursion_catalog_item(excursion: Excursion) -> CatalogItem:
+    """Get or create a CatalogItem for a dive excursion."""
     item, _ = CatalogItem.objects.get_or_create(
-        display_name=f"Dive Trip - {trip.dive_site.name}",
+        display_name=f"Dive Excursion - {excursion.dive_site.name}",
         defaults={
             "kind": "service",
             "is_billable": True,
@@ -83,21 +95,25 @@ def _get_or_create_trip_catalog_item(trip: DiveTrip) -> CatalogItem:
     return item
 
 
+# Backwards compatibility alias
+_get_or_create_trip_catalog_item = _get_or_create_excursion_catalog_item
+
+
 @transaction.atomic
-def book_trip(
-    trip: DiveTrip,
+def book_excursion(
+    excursion: Excursion,
     diver: DiverProfile,
     booked_by,
     *,
     create_invoice: bool = False,
     skip_eligibility_check: bool = False,
 ) -> Booking:
-    """Book a diver on a trip.
+    """Book a diver on an excursion.
 
     Creates a booking and optionally a basket/invoice using the pricing module.
 
     Args:
-        trip: The trip to book
+        excursion: The excursion to book
         diver: The diver profile
         booked_by: User making the booking
         create_invoice: If True, create basket and invoice via billing adapter
@@ -108,15 +124,15 @@ def book_trip(
 
     Raises:
         DiverNotEligibleError: If diver fails eligibility checks
-        TripCapacityError: If trip is at capacity
+        TripCapacityError: If excursion is at capacity
         BookingError: For other booking issues
     """
-    # Lock the trip to prevent race conditions
-    trip = DiveTrip.objects.select_for_update().get(pk=trip.pk)
+    # Lock the excursion to prevent race conditions
+    excursion = Excursion.objects.select_for_update().get(pk=excursion.pk)
 
     # Check eligibility
     if not skip_eligibility_check:
-        result = can_diver_join_trip(diver, trip)
+        result = can_diver_join_trip(diver, excursion)
         if not result.allowed:
             # Determine error type
             if any("capacity" in r.lower() or "full" in r.lower() for r in result.reasons):
@@ -126,27 +142,27 @@ def book_trip(
     # Create booking
     try:
         booking = Booking.objects.create(
-            trip=trip,
+            excursion=excursion,
             diver=diver,
             status="confirmed",
             booked_by=booked_by,
         )
     except IntegrityError as e:
         constraint = _get_constraint_name(e)
-        if constraint == "diveops_booking_one_active_per_trip":
+        if constraint == "diveops_booking_one_active_per_excursion":
             raise BookingError(
-                f"Diver {diver} already has an active booking for this trip"
+                f"Diver {diver} already has an active booking for this excursion"
             ) from e
         # Re-raise unknown IntegrityErrors
         raise
 
     # Create basket and invoice via billing adapter
     if create_invoice:
-        catalog_item = _get_or_create_trip_catalog_item(trip)
+        catalog_item = _get_or_create_excursion_catalog_item(excursion)
 
-        # Create basket with trip item
+        # Create basket with excursion item
         basket = create_trip_basket(
-            trip=trip,
+            trip=excursion,
             diver=diver,
             catalog_item=catalog_item,
             created_by=booked_by,
@@ -157,14 +173,14 @@ def book_trip(
         for item in basket.items.all():
             price_basket_item(
                 basket_item=item,
-                trip=trip,
+                trip=excursion,
                 diver=diver,
             )
 
         # Create invoice from priced basket
         invoice = create_booking_invoice(
             basket=basket,
-            trip=trip,
+            trip=excursion,
             diver=diver,
             created_by=booked_by,
         )
@@ -181,14 +197,18 @@ def book_trip(
     return booking
 
 
+# Backwards compatibility alias
+book_trip = book_excursion
+
+
 @transaction.atomic
 def check_in(
     booking: Booking,
     checked_in_by,
     *,
     require_waiver: bool = False,
-) -> TripRoster:
-    """Check in a diver for a trip.
+) -> ExcursionRoster:
+    """Check in a diver for an excursion.
 
     Creates a roster entry and updates booking status.
 
@@ -198,7 +218,7 @@ def check_in(
         require_waiver: If True, verify waiver is signed
 
     Returns:
-        Created TripRoster entry
+        Created ExcursionRoster entry
 
     Raises:
         CheckInError: If check-in requirements not met
@@ -216,19 +236,19 @@ def check_in(
 
     # Create roster entry
     try:
-        roster = TripRoster.objects.create(
-            trip=booking.trip,
+        roster = ExcursionRoster.objects.create(
+            excursion=booking.excursion,
             diver=booking.diver,
             booking=booking,
             checked_in_by=checked_in_by,
         )
     except IntegrityError as e:
         constraint = _get_constraint_name(e)
-        if constraint == "diveops_roster_one_per_trip":
+        if constraint == "diveops_roster_one_per_excursion":
             raise CheckInError(
-                f"Diver {booking.diver} is already on the roster for this trip"
+                f"Diver {booking.diver} is already on the roster for this excursion"
             ) from e
-        if constraint == "diveops_triproster_booking_id_key":
+        if constraint == "diveops_excursionroster_booking_id_key":
             raise CheckInError(
                 "This booking already has a roster entry"
             ) from e
@@ -250,84 +270,91 @@ def check_in(
 
 
 @transaction.atomic
-def start_trip(trip: DiveTrip, started_by) -> DiveTrip:
-    """Start a trip (transition to in_progress).
+def start_excursion(excursion: Excursion, started_by) -> Excursion:
+    """Start an excursion (transition to in_progress).
 
     Creates an encounter if one doesn't exist.
 
     Args:
-        trip: The trip to start
-        started_by: User starting the trip
+        excursion: The excursion to start
+        started_by: User starting the excursion
 
     Returns:
-        Updated trip
+        Updated excursion
 
     Raises:
-        TripStateError: If trip cannot be started
+        TripStateError: If excursion cannot be started
     """
-    if trip.status not in ["scheduled", "boarding"]:
-        raise TripStateError(f"Cannot start trip in status={trip.status}")
+    if excursion.status not in ["scheduled", "boarding"]:
+        raise TripStateError(f"Cannot start excursion in status={excursion.status}")
 
     # Create encounter if needed
-    if not trip.encounter:
+    if not excursion.encounter:
         from django_encounters.models import Encounter, EncounterDefinition
 
-        definition = EncounterDefinition.objects.filter(key="dive_trip").first()
+        definition = EncounterDefinition.objects.filter(key="dive_excursion").first()
+        if not definition:
+            # Fallback to legacy key
+            definition = EncounterDefinition.objects.filter(key="dive_trip").first()
         if definition:
-            trip_ct = ContentType.objects.get_for_model(trip)
+            excursion_ct = ContentType.objects.get_for_model(excursion)
             encounter = Encounter.objects.create(
                 definition=definition,
-                subject_type=trip_ct,
-                subject_id=str(trip.pk),
+                subject_type=excursion_ct,
+                subject_id=str(excursion.pk),
                 state="in_progress",
                 created_by=started_by,
             )
-            trip.encounter = encounter
+            excursion.encounter = encounter
 
-    trip.status = "in_progress"
-    trip.save()
+    excursion.status = "in_progress"
+    excursion.save()
 
     # Emit audit event AFTER successful transaction
     log_trip_event(
         action=Actions.TRIP_STARTED,
-        trip=trip,
+        trip=excursion,
         actor=started_by,
     )
 
-    return trip
+    return excursion
+
+
+# Backwards compatibility alias
+start_trip = start_excursion
 
 
 @transaction.atomic
-def complete_trip(trip: DiveTrip, completed_by) -> DiveTrip:
-    """Complete a trip.
+def complete_excursion(excursion: Excursion, completed_by) -> Excursion:
+    """Complete an excursion.
 
-    Updates trip status and increments dive counts for all checked-in divers.
-    Idempotent: returns existing completed trip without error.
+    Updates excursion status and increments dive counts for all checked-in divers.
+    Idempotent: returns existing completed excursion without error.
 
     Args:
-        trip: The trip to complete
-        completed_by: User completing the trip
+        excursion: The excursion to complete
+        completed_by: User completing the excursion
 
     Returns:
-        Updated trip (or existing if already completed)
+        Updated excursion (or existing if already completed)
 
     Raises:
-        TripStateError: If trip is cancelled
+        TripStateError: If excursion is cancelled
     """
-    # Lock trip to prevent concurrent completion
-    trip = DiveTrip.objects.select_for_update().get(pk=trip.pk)
+    # Lock excursion to prevent concurrent completion
+    excursion = Excursion.objects.select_for_update().get(pk=excursion.pk)
 
     # Idempotency: already completed is a no-op
-    if trip.status == "completed":
-        return trip
+    if excursion.status == "completed":
+        return excursion
 
-    if trip.status == "cancelled":
-        raise TripStateError("Cannot complete a cancelled trip")
+    if excursion.status == "cancelled":
+        raise TripStateError("Cannot complete a cancelled excursion")
 
     # Lock and fetch roster entries that need completion
     # select_for_update prevents concurrent increment
     roster_entries = list(
-        trip.roster.select_for_update().filter(dive_completed=False)
+        excursion.roster.select_for_update().filter(dive_completed=False)
     )
 
     # Track completed entries for audit logging
@@ -344,16 +371,16 @@ def complete_trip(trip: DiveTrip, completed_by) -> DiveTrip:
 
         completed_roster_entries.append(roster_entry)
 
-    # Update trip status
-    trip.status = "completed"
-    trip.completed_at = timezone.now()
-    trip.save(update_fields=["status", "completed_at", "updated_at"])
+    # Update excursion status
+    excursion.status = "completed"
+    excursion.completed_at = timezone.now()
+    excursion.save(update_fields=["status", "completed_at", "updated_at"])
 
     # Update encounter if exists
-    if trip.encounter:
-        trip.encounter.state = "completed"
-        trip.encounter.ended_at = timezone.now()
-        trip.encounter.save()
+    if excursion.encounter:
+        excursion.encounter.state = "completed"
+        excursion.encounter.ended_at = timezone.now()
+        excursion.encounter.save()
 
     # Emit audit events AFTER successful updates
     # First, emit DIVER_COMPLETED_TRIP for each roster entry
@@ -364,14 +391,18 @@ def complete_trip(trip: DiveTrip, completed_by) -> DiveTrip:
             actor=completed_by,
         )
 
-    # Then emit TRIP_COMPLETED for the trip
+    # Then emit TRIP_COMPLETED for the excursion
     log_trip_event(
         action=Actions.TRIP_COMPLETED,
-        trip=trip,
+        trip=excursion,
         actor=completed_by,
     )
 
-    return trip
+    return excursion
+
+
+# Backwards compatibility alias
+complete_trip = complete_excursion
 
 
 @transaction.atomic

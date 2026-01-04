@@ -188,11 +188,11 @@ class DiverCertification(BaseModel):
         return self.expires_on > date.today()
 
 
-class TripRequirement(BaseModel):
-    """Requirements for joining a trip.
+class ExcursionRequirement(BaseModel):
+    """Requirements for joining an excursion.
 
     Supports multiple requirement types (certification, medical, gear, experience).
-    Replaces DiveSite.min_certification_level with trip-level requirements.
+    Applied at the excursion level for operational validation.
 
     Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
     objects (excludes deleted), all_objects (includes deleted).
@@ -205,8 +205,8 @@ class TripRequirement(BaseModel):
         ("experience", "Dive Experience"),
     ]
 
-    trip = models.ForeignKey(
-        "DiveTrip",
+    excursion = models.ForeignKey(
+        "Excursion",
         on_delete=models.CASCADE,
         related_name="requirements",
     )
@@ -236,19 +236,19 @@ class TripRequirement(BaseModel):
 
     class Meta:
         constraints = [
-            # Only one requirement of each type per trip (among active records)
+            # Only one requirement of each type per excursion (among active records)
             models.UniqueConstraint(
-                fields=["trip", "requirement_type"],
+                fields=["excursion", "requirement_type"],
                 condition=Q(deleted_at__isnull=True),
-                name="diveops_unique_requirement_type_per_trip",
+                name="diveops_unique_requirement_type_per_excursion",
             ),
         ]
         ordering = ["requirement_type"]
 
     def __str__(self):
         if self.certification_level:
-            return f"{self.trip}: {self.certification_level.name} required"
-        return f"{self.trip}: {self.get_requirement_type_display()}"
+            return f"{self.excursion}: {self.certification_level.name} required"
+        return f"{self.excursion}: {self.get_requirement_type_display()}"
 
     def clean(self):
         """Validate that certification requirements have a certification_level."""
@@ -256,6 +256,10 @@ class TripRequirement(BaseModel):
             raise ValidationError({
                 "certification_level": "Certification level is required for certification requirements."
             })
+
+
+# Backwards compatibility alias
+TripRequirement = ExcursionRequirement
 
 
 class DiverProfile(BaseModel):
@@ -474,11 +478,97 @@ class DiveSite(BaseModel):
         return f"{self.name} ({self.max_depth_meters}m)"
 
 
-class DiveTrip(BaseModel):
-    """A scheduled dive trip.
+class Trip(BaseModel):
+    """A commercial dive trip package (itinerary).
 
-    Links a dive shop, dive site, and manages bookings.
-    Can optionally link to django-encounters for workflow tracking.
+    Trip is the commercial/sales wrapper that may span multiple days
+    and contains one or more Excursions. Trips are what customers book
+    and pay for; Excursions are the operational fulfillment.
+
+    Trips can be linked to CatalogItem for commerce integration.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("confirmed", "Confirmed"),
+        ("in_progress", "In Progress"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    # Identity
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+
+    # Ownership
+    dive_shop = models.ForeignKey(
+        "django_parties.Organization",
+        on_delete=models.PROTECT,
+        related_name="trip_packages",
+    )
+
+    # Schedule (date range for multi-day trips)
+    start_date = models.DateField()
+    end_date = models.DateField()
+
+    # Commerce linkage
+    catalog_item = models.ForeignKey(
+        "django_catalog.CatalogItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="trip_packages",
+        help_text="Catalog item representing this trip package",
+    )
+
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="draft",
+    )
+
+    # Audit
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="trip_packages_created",
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(end_date__gte=models.F("start_date")),
+                name="diveops_trip_end_after_start",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["start_date"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["dive_shop", "status"]),
+        ]
+        ordering = ["-start_date"]
+
+    def __str__(self):
+        return f"{self.name} ({self.start_date} - {self.end_date})"
+
+    @property
+    def duration_days(self) -> int:
+        """Return number of days in the trip."""
+        return (self.end_date - self.start_date).days + 1
+
+
+class Excursion(BaseModel):
+    """An operational dive excursion (single calendar day).
+
+    Excursion is the operational fulfillment unit - a single-day outing
+    containing one or more Dives. Excursions can be standalone (walk-ins)
+    or part of a Trip package.
+
+    This replaces the former DiveTrip model with correct semantics.
 
     Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
     objects (excludes deleted), all_objects (includes deleted).
@@ -496,12 +586,22 @@ class DiveTrip(BaseModel):
     dive_shop = models.ForeignKey(
         "django_parties.Organization",
         on_delete=models.PROTECT,
-        related_name="dive_trips",
+        related_name="excursions",
     )
     dive_site = models.ForeignKey(
         DiveSite,
         on_delete=models.PROTECT,
-        related_name="trips",
+        related_name="excursions",
+    )
+
+    # Optional link to Trip package (null = standalone/walk-in)
+    trip = models.ForeignKey(
+        Trip,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="excursions",
+        help_text="Trip package this excursion belongs to (null = standalone)",
     )
 
     # Optional encounter for workflow tracking
@@ -510,17 +610,17 @@ class DiveTrip(BaseModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="dive_trip",
+        related_name="excursion",
     )
 
-    # Schedule
+    # Schedule (must be same calendar day)
     departure_time = models.DateTimeField()
     return_time = models.DateTimeField()
 
     # Capacity
     max_divers = models.PositiveIntegerField()
 
-    # Pricing
+    # Pricing (for standalone excursions)
     price_per_diver = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default="USD")
 
@@ -532,26 +632,26 @@ class DiveTrip(BaseModel):
     )
     completed_at = models.DateTimeField(null=True, blank=True)
 
-    # Audit (created_by is application-specific, not from BaseModel)
+    # Audit
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="dive_trips_created",
+        related_name="excursions_created",
     )
 
     class Meta:
         constraints = [
             models.CheckConstraint(
                 condition=Q(return_time__gt=models.F("departure_time")),
-                name="diveops_trip_return_after_departure",
+                name="diveops_excursion_return_after_departure",
             ),
             models.CheckConstraint(
                 condition=Q(max_divers__gt=0),
-                name="diveops_trip_max_divers_gt_zero",
+                name="diveops_excursion_max_divers_gt_zero",
             ),
             models.CheckConstraint(
                 condition=Q(price_per_diver__gte=0),
-                name="diveops_trip_price_gte_zero",
+                name="diveops_excursion_price_gte_zero",
             ),
         ]
         indexes = [
@@ -564,6 +664,18 @@ class DiveTrip(BaseModel):
     def __str__(self):
         return f"{self.dive_site.name} - {self.departure_time.strftime('%Y-%m-%d %H:%M')}"
 
+    def clean(self):
+        """Validate that departure and return are on the same calendar day."""
+        super().clean()
+        if self.departure_time and self.return_time:
+            dep_date = self.departure_time.date()
+            ret_date = self.return_time.date()
+            if dep_date != ret_date:
+                raise ValidationError(
+                    "Excursion departure and return must be on the same calendar day. "
+                    f"Departure: {dep_date}, Return: {ret_date}"
+                )
+
     @property
     def spots_available(self) -> int:
         """Return number of available spots (excluding cancelled bookings)."""
@@ -574,14 +686,104 @@ class DiveTrip(BaseModel):
 
     @property
     def is_full(self) -> bool:
-        """Check if trip is at capacity."""
+        """Check if excursion is at capacity."""
         return self.spots_available == 0
 
 
-class Booking(BaseModel):
-    """A diver's reservation for a trip.
+# Backwards compatibility alias
+DiveTrip = Excursion
 
-    Links diver to trip and tracks booking status.
+
+class Dive(BaseModel):
+    """An atomic dive within an excursion.
+
+    Dive is the loggable unit of underwater activity. Each excursion
+    contains one or more dives (e.g., morning dive, afternoon dive).
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    # Core relationship
+    excursion = models.ForeignKey(
+        Excursion,
+        on_delete=models.CASCADE,
+        related_name="dives",
+    )
+
+    # Dive site (may differ from excursion's site for multi-site excursions)
+    dive_site = models.ForeignKey(
+        DiveSite,
+        on_delete=models.PROTECT,
+        related_name="dives",
+    )
+
+    # Sequence within excursion (1st dive, 2nd dive, etc.)
+    sequence = models.PositiveSmallIntegerField(
+        help_text="Dive number within the excursion (1, 2, 3...)",
+    )
+
+    # Planned timing
+    planned_start = models.DateTimeField()
+    planned_duration_minutes = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Planned dive duration in minutes",
+    )
+
+    # Actual timing (logged after dive)
+    actual_start = models.DateTimeField(null=True, blank=True)
+    actual_end = models.DateTimeField(null=True, blank=True)
+
+    # Dive metrics (logged after dive)
+    max_depth_meters = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Maximum depth reached in meters",
+    )
+    bottom_time_minutes = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Total bottom time in minutes",
+    )
+
+    # Notes
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [
+            # Unique sequence per excursion
+            models.UniqueConstraint(
+                fields=["excursion", "sequence"],
+                name="diveops_dive_unique_sequence",
+            ),
+            # Sequence must be positive
+            models.CheckConstraint(
+                condition=Q(sequence__gt=0),
+                name="diveops_dive_sequence_gt_zero",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["excursion", "sequence"]),
+        ]
+        ordering = ["excursion", "sequence"]
+
+    def __str__(self):
+        return f"Dive {self.sequence} - {self.excursion}"
+
+    @property
+    def duration_minutes(self) -> int | None:
+        """Return actual dive duration if logged."""
+        if self.actual_start and self.actual_end:
+            delta = self.actual_end - self.actual_start
+            return int(delta.total_seconds() / 60)
+        return None
+
+
+class Booking(BaseModel):
+    """A diver's reservation for an excursion.
+
+    Links diver to excursion and tracks booking status.
     Can link to basket/invoice for payment tracking.
 
     Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
@@ -596,12 +798,19 @@ class Booking(BaseModel):
         ("no_show", "No Show"),
     ]
 
-    # Core relationship
-    trip = models.ForeignKey(
-        DiveTrip,
+    # Core relationship - links to Excursion (operational unit)
+    excursion = models.ForeignKey(
+        Excursion,
         on_delete=models.PROTECT,
         related_name="bookings",
     )
+
+    # Backwards compatibility: 'trip' as alias for 'excursion'
+    @property
+    def trip(self):
+        """Backwards compatibility alias for excursion."""
+        return self.excursion
+
     diver = models.ForeignKey(
         DiverProfile,
         on_delete=models.PROTECT,
@@ -651,29 +860,29 @@ class Booking(BaseModel):
 
     class Meta:
         constraints = [
-            # Conditional unique: only one active booking per diver per trip
+            # Conditional unique: only one active booking per diver per excursion
             # Cancelled bookings are excluded, allowing rebooking after cancellation
             models.UniqueConstraint(
-                fields=["trip", "diver"],
-                name="diveops_booking_one_active_per_trip",
+                fields=["excursion", "diver"],
+                name="diveops_booking_one_active_per_excursion",
                 condition=Q(status__in=["pending", "confirmed", "checked_in"]),
             ),
         ]
         indexes = [
-            models.Index(fields=["trip", "status"]),
+            models.Index(fields=["excursion", "status"]),
             models.Index(fields=["diver"]),
         ]
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.diver.person} - {self.trip}"
+        return f"{self.diver.person} - {self.excursion}"
 
 
-class TripRoster(BaseModel):
-    """Check-in record for a diver on a trip.
+class ExcursionRoster(BaseModel):
+    """Check-in record for a diver on an excursion.
 
     Created when diver checks in, records actual participants.
-    Tracks role (diver, divemaster, instructor) on the trip.
+    Tracks role (diver, divemaster, instructor) on the excursion.
 
     Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
     objects (excludes deleted), all_objects (includes deleted).
@@ -686,15 +895,15 @@ class TripRoster(BaseModel):
     ]
 
     # Core relationship
-    trip = models.ForeignKey(
-        DiveTrip,
+    excursion = models.ForeignKey(
+        Excursion,
         on_delete=models.CASCADE,
         related_name="roster",
     )
     diver = models.ForeignKey(
         DiverProfile,
         on_delete=models.PROTECT,
-        related_name="trip_roster_entries",
+        related_name="excursion_roster_entries",
     )
     booking = models.OneToOneField(
         Booking,
@@ -702,12 +911,12 @@ class TripRoster(BaseModel):
         related_name="roster_entry",
     )
 
-    # Role on this trip
+    # Role on this excursion
     role = models.CharField(
         max_length=20,
         choices=ROSTER_ROLES,
         default="DIVER",
-        help_text="Role on this trip (diver, divemaster, or instructor)",
+        help_text="Role on this excursion (diver, divemaster, or instructor)",
     )
 
     # Check-in data
@@ -725,12 +934,12 @@ class TripRoster(BaseModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["trip", "diver"],
-                name="diveops_roster_one_per_trip",
+                fields=["excursion", "diver"],
+                name="diveops_roster_one_per_excursion",
             ),
         ]
         indexes = [
-            models.Index(fields=["trip"]),
+            models.Index(fields=["excursion"]),
             models.Index(fields=["role"]),
         ]
         ordering = ["checked_in_at"]
@@ -738,4 +947,8 @@ class TripRoster(BaseModel):
     def __str__(self):
         role_display = self.get_role_display() if self.role != "DIVER" else ""
         suffix = f" ({role_display})" if role_display else ""
-        return f"{self.diver.person} - {self.trip} (checked in){suffix}"
+        return f"{self.diver.person} - {self.excursion} (checked in){suffix}"
+
+
+# Backwards compatibility alias
+TripRoster = ExcursionRoster

@@ -12,9 +12,13 @@ from .models import (
     DiverCertification,
     DiverProfile,
     DiveSite,
-    DiveTrip,
-    TripRequirement,
+    Excursion,
+    ExcursionRequirement,
 )
+
+# Backwards compatibility aliases
+DiveTrip = Excursion
+TripRequirement = ExcursionRequirement
 
 
 class DiverForm(forms.Form):
@@ -426,13 +430,13 @@ class DiverCertificationForm(forms.ModelForm):
             return instance
 
 
-class TripRequirementForm(forms.ModelForm):
-    """Form for creating/editing TripRequirement."""
+class ExcursionRequirementForm(forms.ModelForm):
+    """Form for creating/editing ExcursionRequirement."""
 
     class Meta:
-        model = TripRequirement
+        model = ExcursionRequirement
         fields = [
-            "trip",
+            "excursion",
             "requirement_type",
             "certification_level",
             "min_dives",
@@ -454,6 +458,10 @@ class TripRequirementForm(forms.ModelForm):
             })
 
         return cleaned_data
+
+
+# Backwards compatibility alias
+TripRequirementForm = ExcursionRequirementForm
 
 
 class DiveSiteForm(forms.Form):
