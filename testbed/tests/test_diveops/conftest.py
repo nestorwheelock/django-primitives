@@ -5,9 +5,40 @@ from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.test import Client
 from django.utils import timezone
 
 User = get_user_model()
+
+
+@pytest.fixture
+def staff_user(db):
+    """Create a staff user."""
+    return User.objects.create_user(
+        username="staff",
+        email="staff@example.com",
+        password="testpass123",
+        is_staff=True,
+    )
+
+
+@pytest.fixture
+def staff_client(staff_user):
+    """Create a client logged in as staff."""
+    client = Client()
+    client.login(username="staff", password="testpass123")
+    return client
+
+
+@pytest.fixture
+def regular_user(db):
+    """Create a non-staff user."""
+    return User.objects.create_user(
+        username="regular",
+        email="regular@example.com",
+        password="testpass123",
+        is_staff=False,
+    )
 
 
 @pytest.fixture

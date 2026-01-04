@@ -436,3 +436,23 @@ class VerifyCertificationView(StaffPortalMixin, View):
         return HttpResponseRedirect(
             reverse("diveops:diver-detail", kwargs={"pk": diver_pk})
         )
+
+
+class AuditLogView(StaffPortalMixin, ListView):
+    """View audit log entries."""
+
+    template_name = "diveops/staff/audit_log.html"
+    context_object_name = "entries"
+    paginate_by = 25
+
+    def get_queryset(self):
+        """Return audit log entries, newest first."""
+        from django_audit_log.models import AuditLog
+
+        return AuditLog.objects.all().order_by("-created_at")
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Audit Log"
+        return context

@@ -24,14 +24,15 @@ class TestDiverForm:
         assert "email" in form.fields
 
     def test_form_has_certification_fields(self):
-        """DiverForm has certification fields."""
+        """DiverForm has certification fields (new normalized model)."""
         from primitives_testbed.diveops.forms import DiverForm
 
         form = DiverForm()
         assert "certification_level" in form.fields
         assert "certification_agency" in form.fields
-        assert "certification_number" in form.fields
-        assert "certification_date" in form.fields
+        assert "card_number" in form.fields
+        assert "issued_on" in form.fields
+        assert "expires_on" in form.fields
 
     def test_form_has_experience_fields(self):
         """DiverForm has experience and medical fields."""
@@ -42,7 +43,7 @@ class TestDiverForm:
         assert "medical_clearance_date" in form.fields
         assert "medical_clearance_valid_until" in form.fields
 
-    def test_form_valid_with_required_fields(self, padi_agency):
+    def test_form_valid_with_required_fields(self, padi_open_water):
         """DiverForm is valid with all required fields."""
         from primitives_testbed.diveops.forms import DiverForm
 
@@ -50,28 +51,28 @@ class TestDiverForm:
             "first_name": "Alice",
             "last_name": "Diver",
             "email": "alice@example.com",
-            "certification_level": "ow",
-            "certification_agency": str(padi_agency.pk),
-            "certification_number": "12345",
-            "certification_date": date.today() - timedelta(days=30),
+            "certification_level": str(padi_open_water.pk),
+            "certification_agency": str(padi_open_water.agency.pk),
+            "card_number": "12345",
+            "issued_on": date.today() - timedelta(days=30),
             "total_dives": 10,
         })
         assert form.is_valid(), form.errors
 
-    def test_form_creates_person_and_profile(self, ssi_agency):
+    def test_form_creates_person_and_profile(self, ssi_open_water):
         """DiverForm.save() creates both Person and DiverProfile."""
         from django_parties.models import Person
         from primitives_testbed.diveops.forms import DiverForm
-        from primitives_testbed.diveops.models import DiverProfile
+        from primitives_testbed.diveops.models import DiverCertification, DiverProfile
 
         form = DiverForm(data={
             "first_name": "Bob",
             "last_name": "Swimmer",
             "email": "bob@example.com",
-            "certification_level": "aow",
-            "certification_agency": str(ssi_agency.pk),
-            "certification_number": "98765",
-            "certification_date": date.today() - timedelta(days=180),
+            "certification_level": str(ssi_open_water.pk),
+            "certification_agency": str(ssi_open_water.agency.pk),
+            "card_number": "98765",
+            "issued_on": date.today() - timedelta(days=180),
             "total_dives": 25,
         })
         assert form.is_valid(), form.errors
@@ -83,11 +84,12 @@ class TestDiverForm:
         assert diver.person.first_name == "Bob"
         assert diver.person.last_name == "Swimmer"
         assert diver.person.email == "bob@example.com"
-        assert diver.certification_level == "aow"
-        assert diver.certification_agency == ssi_agency
         assert diver.total_dives == 25
+        # Certification is now in separate model
+        cert = DiverCertification.objects.get(diver=diver, level=ssi_open_water)
+        assert cert.card_number == "98765"
 
-    def test_form_email_must_be_unique(self, padi_agency):
+    def test_form_email_must_be_unique(self, padi_open_water):
         """DiverForm rejects duplicate email for new diver."""
         from django_parties.models import Person
         from primitives_testbed.diveops.forms import DiverForm
@@ -103,48 +105,40 @@ class TestDiverForm:
             "first_name": "New",
             "last_name": "Person",
             "email": "existing@example.com",  # Duplicate
-            "certification_level": "ow",
-            "certification_agency": str(padi_agency.pk),
-            "certification_number": "11111",
-            "certification_date": date.today(),
+            "certification_level": str(padi_open_water.pk),
+            "certification_agency": str(padi_open_water.agency.pk),
+            "card_number": "11111",
+            "issued_on": date.today(),
             "total_dives": 0,
         })
         assert not form.is_valid()
         assert "email" in form.errors
 
-    def test_form_edit_existing_diver(self, diver_profile, padi_agency):
-        """DiverForm can edit an existing diver."""
+    def test_form_edit_existing_diver(self, diver_profile):
+        """DiverForm can edit an existing diver (edit mode excludes certification fields)."""
         from primitives_testbed.diveops.forms import DiverForm
 
-        form = DiverForm(instance=diver_profile, data={
+        # In edit mode, certification fields are excluded - use separate certification form
+        form = DiverForm(instance=diver_profile, is_edit=True, data={
             "first_name": "John",
             "last_name": "Diver",
             "email": "john@example.com",
-            "certification_level": "rescue",  # Upgraded
-            "certification_agency": str(padi_agency.pk),
-            "certification_number": "12345",
-            "certification_date": diver_profile.certification_date,
             "total_dives": 75,  # More dives
         })
         assert form.is_valid(), form.errors
 
         diver = form.save()
         assert diver.pk == diver_profile.pk
-        assert diver.certification_level == "rescue"
         assert diver.total_dives == 75
 
-    def test_form_edit_allows_same_email(self, diver_profile, padi_agency):
+    def test_form_edit_allows_same_email(self, diver_profile):
         """Editing diver can keep the same email."""
         from primitives_testbed.diveops.forms import DiverForm
 
-        form = DiverForm(instance=diver_profile, data={
+        form = DiverForm(instance=diver_profile, is_edit=True, data={
             "first_name": "John",
             "last_name": "Diver",
             "email": "john@example.com",  # Same email
-            "certification_level": "aow",
-            "certification_agency": str(padi_agency.pk),
-            "certification_number": "12345",
-            "certification_date": diver_profile.certification_date,
             "total_dives": 55,
         })
         assert form.is_valid(), form.errors

@@ -27,4 +27,6 @@ urlpatterns = [
     path("bookings/<uuid:pk>/check-in/", staff_views.CheckInView.as_view(), name="check-in"),
     path("trips/<uuid:pk>/start/", staff_views.StartTripView.as_view(), name="start-trip"),
     path("trips/<uuid:pk>/complete/", staff_views.CompleteTripView.as_view(), name="complete-trip"),
+    # System
+    path("audit-log/", staff_views.AuditLogView.as_view(), name="audit-log"),
 ]

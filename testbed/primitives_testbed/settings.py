@@ -201,5 +201,11 @@ PORTAL_UI = {
             "url": "diveops:diver-list",
             "icon": "users",
         },
+        {
+            "section": "System",
+            "label": "Audit Log",
+            "url": "diveops:audit-log",
+            "icon": "file-text",
+        },
     ],
 }
