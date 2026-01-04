@@ -159,27 +159,29 @@ def get_diver_profile(person) -> Optional[DiverProfile]:
 
 def list_dive_sites(
     is_active: bool = True,
-    max_certification: Optional[str] = None,
+    max_certification_rank: Optional[int] = None,
     limit: int = 50,
 ) -> list[DiveSite]:
     """List dive sites with optional filters.
 
     Args:
         is_active: Filter by active status
-        max_certification: Maximum certification level required
+        max_certification_rank: Maximum certification rank required (filter sites requiring this rank or lower)
         limit: Maximum results
 
     Returns:
         List of DiveSite objects
     """
-    qs = DiveSite.objects.filter(is_active=is_active).order_by("name")
+    qs = DiveSite.objects.select_related("place", "min_certification_level").filter(
+        is_active=is_active
+    ).order_by("name")
 
-    if max_certification:
-        # Get sites that require this level or lower
-        level_hierarchy = DiverProfile.LEVEL_HIERARCHY
-        max_rank = level_hierarchy.get(max_certification, 0)
-        allowed_levels = [k for k, v in level_hierarchy.items() if v <= max_rank]
-        qs = qs.filter(min_certification_level__in=allowed_levels)
+    if max_certification_rank is not None:
+        # Get sites that require this level or lower (by rank), or no requirement
+        qs = qs.filter(
+            Q(min_certification_level__isnull=True)
+            | Q(min_certification_level__rank__lte=max_certification_rank)
+        )
 
     return list(qs[:limit])
 

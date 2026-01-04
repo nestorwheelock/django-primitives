@@ -218,3 +218,249 @@ class TestBookDiverForm:
         # The model should have __str__ that shows name and cert
         choice_str = str(choices[0])
         assert diver_profile.person.first_name in choice_str or "Advanced" in choice_str
+
+
+@pytest.mark.django_db
+class TestDiverFormCertificationPrePopulate:
+    """Tests for DiverForm certification field pre-population."""
+
+    def test_form_prepopulates_certification_from_existing(self, diver_profile, padi_open_water):
+        """DiverForm pre-populates certification fields from existing cert when not in edit mode."""
+        from primitives_testbed.diveops.forms import DiverForm
+        from primitives_testbed.diveops.models import DiverCertification
+
+        # Create a certification for the diver
+        cert = DiverCertification.objects.create(
+            diver=diver_profile,
+            level=padi_open_water,
+            card_number="PREPOP123",
+            issued_on=date.today() - timedelta(days=100),
+            expires_on=date.today() + timedelta(days=265),
+        )
+
+        # Create form with instance but NOT in edit mode
+        form = DiverForm(instance=diver_profile, is_edit=False)
+
+        # Certification fields should be pre-populated
+        assert form.fields["certification_agency"].initial == padi_open_water.agency
+        assert form.fields["certification_level"].initial == padi_open_water
+        assert form.fields["card_number"].initial == "PREPOP123"
+
+
+@pytest.mark.django_db
+class TestDiverFormDateValidation:
+    """Tests for DiverForm date validation."""
+
+    def test_form_rejects_expiry_before_issued(self, padi_open_water):
+        """DiverForm rejects expiration date before issue date."""
+        from primitives_testbed.diveops.forms import DiverForm
+
+        form = DiverForm(data={
+            "first_name": "Test",
+            "last_name": "Diver",
+            "email": "test@example.com",
+            "certification_level": str(padi_open_water.pk),
+            "certification_agency": str(padi_open_water.agency.pk),
+            "card_number": "12345",
+            "issued_on": date.today(),
+            "expires_on": date.today() - timedelta(days=1),  # Before issued
+            "total_dives": 10,
+        })
+
+        assert not form.is_valid()
+        assert "expires_on" in form.errors
+
+    def test_form_accepts_valid_expiry_after_issued(self, padi_open_water):
+        """DiverForm accepts expiration date after issue date."""
+        from primitives_testbed.diveops.forms import DiverForm
+
+        form = DiverForm(data={
+            "first_name": "Test",
+            "last_name": "Diver",
+            "email": "testvalid@example.com",
+            "certification_level": str(padi_open_water.pk),
+            "certification_agency": str(padi_open_water.agency.pk),
+            "card_number": "12345",
+            "issued_on": date.today() - timedelta(days=30),
+            "expires_on": date.today() + timedelta(days=365),  # After issued
+            "total_dives": 10,
+        })
+
+        assert form.is_valid(), form.errors
+
+
+@pytest.mark.django_db
+class TestDiverFormWithProofFile:
+    """Tests for DiverForm proof document upload (lines 222-256)."""
+
+    def test_form_creates_document_with_proof_file(self, padi_open_water, user):
+        """DiverForm.save() creates Document when proof_file is provided."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from django_documents.models import Document
+        from primitives_testbed.diveops.forms import DiverForm
+        from primitives_testbed.diveops.models import DiverCertification
+
+        proof_file = SimpleUploadedFile(
+            name="cert_card.jpg",
+            content=b"fake image content",
+            content_type="image/jpeg",
+        )
+
+        form = DiverForm(
+            data={
+                "first_name": "Proof",
+                "last_name": "Tester",
+                "email": "proof@example.com",
+                "certification_level": str(padi_open_water.pk),
+                "certification_agency": str(padi_open_water.agency.pk),
+                "card_number": "PROOF123",
+                "issued_on": date.today() - timedelta(days=30),
+                "total_dives": 5,
+            },
+            files={"proof_file": proof_file},
+        )
+        assert form.is_valid(), form.errors
+
+        diver = form.save(actor=user)
+
+        # Verify certification was created
+        cert = DiverCertification.objects.get(diver=diver, level=padi_open_water)
+        assert cert is not None
+
+        # Verify document was created and linked
+        doc = Document.objects.filter(
+            document_type="certification_proof",
+            target_id=str(cert.pk),
+        ).first()
+        assert doc is not None
+        assert doc.filename == "cert_card.jpg"
+        assert doc.content_type == "image/jpeg"
+
+
+@pytest.mark.django_db
+class TestDiverCertificationFormWithProofFile:
+    """Tests for DiverCertificationForm proof document upload (lines 366-425)."""
+
+    def test_certification_form_creates_document_with_proof_file(
+        self, diver_profile, padi_open_water, user
+    ):
+        """DiverCertificationForm.save() creates Document when proof_file is provided."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from django_documents.models import Document
+        from primitives_testbed.diveops.forms import DiverCertificationForm
+
+        proof_file = SimpleUploadedFile(
+            name="padi_card.pdf",
+            content=b"fake pdf content",
+            content_type="application/pdf",
+        )
+
+        form = DiverCertificationForm(
+            data={
+                "diver": diver_profile.pk,
+                "level": padi_open_water.pk,
+                "card_number": "CERTPROOF456",
+                "issued_on": date.today() - timedelta(days=60),
+            },
+            files={"proof_file": proof_file},
+        )
+        assert form.is_valid(), form.errors
+
+        cert = form.save(actor=user)
+
+        # Verify document was created and linked
+        doc = Document.objects.filter(
+            document_type="certification_proof",
+            target_id=str(cert.pk),
+        ).first()
+        assert doc is not None
+        assert doc.filename == "padi_card.pdf"
+        assert doc.content_type == "application/pdf"
+
+    def test_certification_form_save_without_commit(
+        self, diver_profile, padi_open_water, user
+    ):
+        """DiverCertificationForm.save(commit=False) returns unsaved instance."""
+        from primitives_testbed.diveops.forms import DiverCertificationForm
+
+        form = DiverCertificationForm(
+            data={
+                "diver": diver_profile.pk,
+                "level": padi_open_water.pk,
+                "card_number": "NOCOMMIT789",
+                "issued_on": date.today() - timedelta(days=30),
+            }
+        )
+        assert form.is_valid(), form.errors
+
+        cert = form.save(actor=user, commit=False)
+
+        # Instance should be returned but not saved to DB
+        assert cert is not None
+        # Primary key should still be set (UUID) but not in database
+        # For commit=False, the instance uses super().save(commit=False)
+
+    def test_certification_form_save_with_proof_file_no_commit(
+        self, diver_profile, padi_open_water, user
+    ):
+        """DiverCertificationForm.save(commit=False) with proof_file attaches document."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from primitives_testbed.diveops.forms import DiverCertificationForm
+
+        proof_file = SimpleUploadedFile(
+            name="proof_nocommit.jpg",
+            content=b"fake jpg",
+            content_type="image/jpeg",
+        )
+
+        form = DiverCertificationForm(
+            data={
+                "diver": diver_profile.pk,
+                "level": padi_open_water.pk,
+                "card_number": "NOCOMMIT999",
+                "issued_on": date.today() - timedelta(days=10),
+            },
+            files={"proof_file": proof_file},
+        )
+        assert form.is_valid(), form.errors
+
+        cert = form.save(actor=user, commit=False)
+
+        # The proof_document should be attached to the instance
+        assert hasattr(cert, "proof_document")
+
+    def test_certification_form_updates_existing_certification(
+        self, diver_profile, padi_open_water, user
+    ):
+        """DiverCertificationForm updates existing certification (lines 403-405)."""
+        from primitives_testbed.diveops.forms import DiverCertificationForm
+        from primitives_testbed.diveops.models import DiverCertification
+
+        # Create existing certification
+        existing_cert = DiverCertification.objects.create(
+            diver=diver_profile,
+            level=padi_open_water,
+            card_number="OLD_NUMBER",
+            issued_on=date.today() - timedelta(days=100),
+        )
+
+        # Update via form with the instance
+        form = DiverCertificationForm(
+            instance=existing_cert,
+            data={
+                "diver": diver_profile.pk,
+                "level": padi_open_water.pk,
+                "card_number": "NEW_NUMBER",
+                "issued_on": date.today() - timedelta(days=50),
+            },
+        )
+        assert form.is_valid(), form.errors
+
+        updated_cert = form.save(actor=user)
+
+        # Verify update applied
+        assert updated_cert.pk == existing_cert.pk
+        assert updated_cert.card_number == "NEW_NUMBER"

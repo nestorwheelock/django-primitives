@@ -27,6 +27,12 @@ urlpatterns = [
     path("bookings/<uuid:pk>/check-in/", staff_views.CheckInView.as_view(), name="check-in"),
     path("trips/<uuid:pk>/start/", staff_views.StartTripView.as_view(), name="start-trip"),
     path("trips/<uuid:pk>/complete/", staff_views.CompleteTripView.as_view(), name="complete-trip"),
+    # Dive Site management
+    path("sites/", staff_views.DiveSiteListView.as_view(), name="staff-site-list"),
+    path("sites/add/", staff_views.DiveSiteCreateView.as_view(), name="staff-site-create"),
+    path("sites/<uuid:pk>/", staff_views.DiveSiteDetailView.as_view(), name="staff-site-detail"),
+    path("sites/<uuid:pk>/edit/", staff_views.DiveSiteUpdateView.as_view(), name="staff-site-edit"),
+    path("sites/<uuid:pk>/delete/", staff_views.DiveSiteDeleteView.as_view(), name="staff-site-delete"),
     # System
     path("audit-log/", staff_views.AuditLogView.as_view(), name="audit-log"),
 ]

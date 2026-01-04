@@ -118,6 +118,13 @@ class Actions:
     TRIP_REQUIREMENT_UPDATED = "trip_requirement_updated"
     TRIP_REQUIREMENT_REMOVED = "trip_requirement_removed"
 
+    # -------------------------------------------------------------------------
+    # Dive Site Actions
+    # -------------------------------------------------------------------------
+    DIVE_SITE_CREATED = "dive_site_created"
+    DIVE_SITE_UPDATED = "dive_site_updated"
+    DIVE_SITE_DELETED = "dive_site_deleted"
+
 
 # =============================================================================
 # Audit Adapter - Single Entry Point
@@ -437,6 +444,39 @@ def log_trip_requirement_event(
     )
 
 
+def log_site_event(
+    action: str,
+    site,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a dive site operation.
+
+    Args:
+        action: One of Actions.DIVE_SITE_* constants
+        site: DiveSite instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = _build_site_metadata(site, data)
+
+    return audit_log(
+        action=action,
+        obj=site,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
 # =============================================================================
 # Metadata Builders
 # =============================================================================
@@ -560,6 +600,36 @@ def _build_roster_metadata(roster, extra_data: dict | None = None) -> dict:
 
     if roster.role:
         metadata["role"] = roster.role
+
+    if extra_data:
+        metadata.update(extra_data)
+
+    return metadata
+
+
+def _build_site_metadata(site, extra_data: dict | None = None) -> dict:
+    """Build consistent metadata for dive site audit events."""
+    metadata = {
+        "site_id": str(site.pk),
+        "site_name": site.name,
+    }
+
+    if site.place_id:
+        metadata["place_id"] = str(site.place_id)
+        if site.place:
+            metadata["latitude"] = str(site.place.latitude)
+            metadata["longitude"] = str(site.place.longitude)
+
+    if site.min_certification_level_id:
+        metadata["min_certification_level_id"] = str(site.min_certification_level_id)
+        if site.min_certification_level:
+            metadata["min_certification_level_name"] = site.min_certification_level.name
+
+    if site.difficulty:
+        metadata["difficulty"] = site.difficulty
+
+    if site.max_depth_meters:
+        metadata["max_depth_meters"] = site.max_depth_meters
 
     if extra_data:
         metadata.update(extra_data)

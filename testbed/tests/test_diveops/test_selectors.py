@@ -43,29 +43,51 @@ def dive_shop(db):
 
 
 @pytest.fixture
-def dive_site(db):
+def dive_site_place(db):
+    """Create a Place for a dive site."""
+    from django_geo.models import Place
+
+    return Place.objects.create(
+        name="Test Reef Location",
+        latitude=Decimal("25.123456"),
+        longitude=Decimal("-80.123456"),
+    )
+
+
+@pytest.fixture
+def dive_site(db, dive_site_place):
     """Create a dive site."""
     return DiveSite.objects.create(
         name="Test Reef",
         description="A test dive site",
+        place=dive_site_place,
         max_depth_meters=30,
-        min_certification_level="ow",
-        latitude=Decimal("25.123456"),
-        longitude=Decimal("-80.123456"),
+        min_certification_level=None,
         is_active=True,
     )
 
 
 @pytest.fixture
-def another_dive_site(db):
+def another_dive_site_place(db):
+    """Create a Place for another dive site."""
+    from django_geo.models import Place
+
+    return Place.objects.create(
+        name="Deep Wall Location",
+        latitude=Decimal("25.234567"),
+        longitude=Decimal("-80.234567"),
+    )
+
+
+@pytest.fixture
+def another_dive_site(db, another_dive_site_place):
     """Create another dive site."""
     return DiveSite.objects.create(
         name="Deep Wall",
         description="A deep dive site",
+        place=another_dive_site_place,
         max_depth_meters=40,
-        min_certification_level="aow",
-        latitude=Decimal("25.234567"),
-        longitude=Decimal("-80.234567"),
+        min_certification_level=None,
         is_active=True,
     )
 
@@ -338,34 +360,60 @@ class TestListDiveSites:
 
     def test_excludes_inactive_sites(self, db):
         """Excludes inactive sites by default."""
+        from django_geo.models import Place
+
+        place = Place.objects.create(
+            name="Inactive Site Location",
+            latitude=Decimal("25.345678"),
+            longitude=Decimal("-80.345678"),
+        )
         DiveSite.objects.create(
             name="Inactive Site",
             description="Closed",
+            place=place,
             max_depth_meters=20,
-            min_certification_level="ow",
-            latitude=Decimal("25.345678"),
-            longitude=Decimal("-80.345678"),
             is_active=False,
         )
         sites = list_dive_sites()
         assert len(sites) == 0
 
-    def test_can_filter_by_max_certification(self, dive_site, another_dive_site):
-        """Can filter by max certification level."""
-        # dive_site requires ow, another_dive_site requires aow
-        sites = list_dive_sites(max_certification="ow")
+    def test_can_filter_by_certification_level(self, dive_site, another_dive_site, padi_agency):
+        """Can filter by certification level FK."""
+        from primitives_testbed.diveops.models import CertificationLevel
+
+        # Create certification levels
+        ow_level = CertificationLevel.objects.create(
+            agency=padi_agency, code="ow_test", name="Open Water", rank=2
+        )
+        aow_level = CertificationLevel.objects.create(
+            agency=padi_agency, code="aow_test", name="Advanced Open Water", rank=3
+        )
+
+        # Update sites with certification requirements
+        dive_site.min_certification_level = ow_level
+        dive_site.save()
+        another_dive_site.min_certification_level = aow_level
+        another_dive_site.save()
+
+        # Test: sites requiring OW or less (rank <= 2)
+        sites = list_dive_sites(max_certification_rank=2)
         assert len(sites) == 1
         assert sites[0].name == "Test Reef"
 
     def test_returns_inactive_when_requested(self, db):
         """Returns inactive sites when is_active=False."""
+        from django_geo.models import Place
+
+        place = Place.objects.create(
+            name="Inactive Site Location",
+            latitude=Decimal("25.345678"),
+            longitude=Decimal("-80.345678"),
+        )
         inactive = DiveSite.objects.create(
             name="Inactive Site",
             description="Closed",
+            place=place,
             max_depth_meters=20,
-            min_certification_level="ow",
-            latitude=Decimal("25.345678"),
-            longitude=Decimal("-80.345678"),
             is_active=False,
         )
         sites = list_dive_sites(is_active=False)

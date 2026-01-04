@@ -96,64 +96,46 @@ class TestDiverProfile:
 
 @pytest.mark.django_db
 class TestDiveSite:
-    """Tests for DiveSite model."""
+    """Tests for DiveSite model.
 
-    def test_create_dive_site(self):
+    Note: Comprehensive model tests are in test_site_models.py.
+    These tests are kept for basic smoke testing.
+    """
+
+    def test_create_dive_site(self, dive_site):
         """DiveSite can be created with valid data."""
-        from primitives_testbed.diveops.models import DiveSite
+        assert dive_site.pk is not None
+        assert dive_site.name == "Coral Reef Point"
+        assert dive_site.place is not None
 
-        site = DiveSite.objects.create(
-            name="Test Site",
-            max_depth_meters=20,
-            min_certification_level="ow",
-            difficulty="beginner",
-            latitude=Decimal("20.000000"),
-            longitude=Decimal("-87.000000"),
-        )
-
-        assert site.pk is not None
-        assert site.name == "Test Site"
-
-    def test_max_depth_positive_constraint(self):
+    def test_max_depth_positive_constraint(self, dive_site_place):
         """max_depth_meters must be positive (DB constraint)."""
         from primitives_testbed.diveops.models import DiveSite
 
         with pytest.raises(IntegrityError):
             DiveSite.objects.create(
                 name="Invalid Site",
+                place=dive_site_place,
                 max_depth_meters=0,  # Invalid
-                min_certification_level="ow",
                 difficulty="beginner",
-                latitude=Decimal("20.000000"),
-                longitude=Decimal("-87.000000"),
             )
 
-    def test_latitude_range_constraint(self):
-        """latitude must be between -90 and 90 (DB constraint)."""
+    def test_dive_site_coordinates_via_place(self, dive_site):
+        """DiveSite coordinates are accessed via Place."""
+        assert dive_site.place.latitude == Decimal("20.123456")
+        assert dive_site.place.longitude == Decimal("-87.654321")
+
+    def test_dive_site_rating_constraint(self, dive_site_place):
+        """DiveSite rating must be 1-5 or null."""
         from primitives_testbed.diveops.models import DiveSite
 
         with pytest.raises(IntegrityError):
             DiveSite.objects.create(
-                name="Invalid Site",
+                name="Invalid Rating Site",
+                place=dive_site_place,
                 max_depth_meters=20,
-                min_certification_level="ow",
                 difficulty="beginner",
-                latitude=Decimal("91.000000"),  # Invalid
-                longitude=Decimal("-87.000000"),
-            )
-
-    def test_longitude_range_constraint(self):
-        """longitude must be between -180 and 180 (DB constraint)."""
-        from primitives_testbed.diveops.models import DiveSite
-
-        with pytest.raises(IntegrityError):
-            DiveSite.objects.create(
-                name="Invalid Site",
-                max_depth_meters=20,
-                min_certification_level="ow",
-                difficulty="beginner",
-                latitude=Decimal("20.000000"),
-                longitude=Decimal("181.000000"),  # Invalid
+                rating=6,  # Invalid
             )
 
 

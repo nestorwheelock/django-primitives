@@ -14,6 +14,7 @@ from .audit import (
     log_certification_event,
     log_diver_event,
     log_roster_event,
+    log_site_event,
     log_trip_event,
 )
 from .decisioning import can_diver_join_trip
@@ -32,7 +33,7 @@ from .integrations import (
     create_trip_basket,
     price_basket_item,
 )
-from .models import Booking, CertificationLevel, DiverCertification, DiverProfile, DiveTrip, TripRoster
+from .models import Booking, CertificationLevel, DiverCertification, DiverProfile, DiveSite, DiveTrip, TripRoster
 
 
 def _get_constraint_name(exc: IntegrityError) -> str | None:
@@ -746,3 +747,186 @@ def update_diver(
         )
 
     return diver
+
+
+# =============================================================================
+# Dive Site Services
+# =============================================================================
+
+
+@transaction.atomic
+def create_dive_site(
+    *,
+    actor,
+    name: str,
+    latitude,
+    longitude,
+    max_depth_meters: int,
+    difficulty: str,
+    description: str = "",
+    min_certification_level: CertificationLevel | None = None,
+    rating: int | None = None,
+    tags: list[str] | None = None,
+) -> DiveSite:
+    """Create a new dive site with an owned Place.
+
+    Creates a Place from coordinates, then creates a DiveSite with that Place.
+    The Place is owned by the DiveSite (no sharing/deduplication).
+
+    Args:
+        actor: User creating the site (required)
+        name: Site name
+        latitude: Decimal latitude
+        longitude: Decimal longitude
+        max_depth_meters: Maximum depth in meters
+        difficulty: Difficulty level (beginner/intermediate/advanced/expert)
+        description: Optional site description
+        min_certification_level: Optional minimum certification FK
+        rating: Optional rating (1-5)
+        tags: Optional list of tags
+
+    Returns:
+        Created DiveSite
+
+    Raises:
+        IntegrityError: If constraints are violated
+    """
+    from django_geo.models import Place
+
+    # Create owned Place from coordinates
+    place = Place.objects.create(
+        name=name,
+        latitude=latitude,
+        longitude=longitude,
+    )
+
+    # Create DiveSite with the owned Place
+    site = DiveSite.objects.create(
+        name=name,
+        description=description,
+        place=place,
+        max_depth_meters=max_depth_meters,
+        min_certification_level=min_certification_level,
+        difficulty=difficulty,
+        rating=rating,
+        tags=tags or [],
+    )
+
+    # Emit audit event
+    log_site_event(
+        action=Actions.DIVE_SITE_CREATED,
+        site=site,
+        actor=actor,
+    )
+
+    return site
+
+
+@transaction.atomic
+def update_dive_site(
+    *,
+    actor,
+    site: DiveSite,
+    name: str | None = None,
+    latitude=None,
+    longitude=None,
+    max_depth_meters: int | None = None,
+    difficulty: str | None = None,
+    description: str | None = None,
+    min_certification_level: CertificationLevel | None = None,
+    rating: int | None = None,
+    tags: list[str] | None = None,
+) -> DiveSite:
+    """Update an existing dive site.
+
+    Updates both the DiveSite and its owned Place if coordinates change.
+
+    Args:
+        actor: User making the update (required)
+        site: DiveSite to update
+        name: New name (None = no change)
+        latitude: New latitude (None = no change)
+        longitude: New longitude (None = no change)
+        max_depth_meters: New depth (None = no change)
+        difficulty: New difficulty (None = no change)
+        description: New description (None = no change)
+        min_certification_level: New certification FK (None = no change)
+        rating: New rating (None = no change)
+        tags: New tags (None = no change)
+
+    Returns:
+        Updated DiveSite
+
+    Raises:
+        IntegrityError: If constraints are violated
+    """
+    changes = {}
+
+    # Update DiveSite fields
+    _apply_tracked_update(site, "name", name, changes)
+    _apply_tracked_update(site, "description", description, changes)
+    _apply_tracked_update(site, "max_depth_meters", max_depth_meters, changes)
+    _apply_tracked_update(site, "difficulty", difficulty, changes)
+    _apply_tracked_update(site, "rating", rating, changes)
+    _apply_tracked_update(site, "tags", tags, changes)
+
+    # Handle min_certification_level FK specially
+    if min_certification_level is not None and min_certification_level != site.min_certification_level:
+        changes["min_certification_level"] = {
+            "old": str(site.min_certification_level_id) if site.min_certification_level_id else None,
+            "new": str(min_certification_level.pk),
+        }
+        site.min_certification_level = min_certification_level
+
+    # Update Place coordinates if changed
+    place = site.place
+    if latitude is not None and latitude != place.latitude:
+        changes["latitude"] = {"old": str(place.latitude), "new": str(latitude)}
+        place.latitude = latitude
+
+    if longitude is not None and longitude != place.longitude:
+        changes["longitude"] = {"old": str(place.longitude), "new": str(longitude)}
+        place.longitude = longitude
+
+    if changes:
+        place.save()
+        site.save()
+
+        log_site_event(
+            action=Actions.DIVE_SITE_UPDATED,
+            site=site,
+            actor=actor,
+            changes=changes,
+        )
+
+    return site
+
+
+@transaction.atomic
+def delete_dive_site(
+    *,
+    actor,
+    site: DiveSite,
+) -> DiveSite:
+    """Soft delete a dive site.
+
+    Sets deleted_at timestamp instead of actually deleting.
+    The site will be excluded from default queries.
+
+    Args:
+        actor: User deleting the site (required)
+        site: DiveSite to delete
+
+    Returns:
+        Updated DiveSite with deleted_at set
+    """
+    site.deleted_at = timezone.now()
+    site.save()
+
+    log_site_event(
+        action=Actions.DIVE_SITE_DELETED,
+        site=site,
+        actor=actor,
+    )
+
+    return site

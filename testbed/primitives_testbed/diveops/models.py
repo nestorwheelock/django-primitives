@@ -392,9 +392,12 @@ class DiverProfile(BaseModel):
 
 
 class DiveSite(BaseModel):
-    """A dive site location with diving-specific metadata.
+    """A dive site location composing primitives.
 
-    Stores coordinates, depth limits, and certification requirements.
+    Thin overlay model that composes:
+    - django_geo.Place for location (required, owned per site)
+    - CertificationLevel FK for eligibility (nullable)
+    - Domain-only fields: rating, tags, max_depth, difficulty
 
     Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
     objects (excludes deleted), all_objects (includes deleted).
@@ -411,12 +414,23 @@ class DiveSite(BaseModel):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
 
+    # Location - owned Place (required, coordinates accessed via place.latitude/longitude)
+    place = models.ForeignKey(
+        "django_geo.Place",
+        on_delete=models.PROTECT,
+        related_name="dive_sites",
+        help_text="Location (owned per site, not shared)",
+    )
+
     # Diving characteristics
     max_depth_meters = models.PositiveIntegerField()
-    min_certification_level = models.CharField(
-        max_length=20,
-        choices=DiverProfile.CERTIFICATION_LEVELS,
-        default="ow",
+    min_certification_level = models.ForeignKey(
+        CertificationLevel,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="dive_sites",
+        help_text="Minimum certification required (null = no requirement)",
     )
     difficulty = models.CharField(
         max_length=20,
@@ -424,17 +438,16 @@ class DiveSite(BaseModel):
         default="intermediate",
     )
 
-    # Location (coordinates)
-    latitude = models.DecimalField(max_digits=9, decimal_places=6)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6)
-
-    # Optional link to django-geo Place
-    place = models.ForeignKey(
-        "django_geo.Place",
-        on_delete=models.SET_NULL,
+    # Quality/categorization
+    rating = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
-        related_name="dive_sites",
+        help_text="Site rating 1-5 (null = unrated)",
+    )
+    tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Tags for categorization (e.g., ['reef', 'coral', 'wreck'])",
     )
 
     # Status
@@ -446,18 +459,14 @@ class DiveSite(BaseModel):
                 condition=Q(max_depth_meters__gt=0),
                 name="diveops_site_depth_gt_zero",
             ),
+            # Rating must be 1-5 or null
             models.CheckConstraint(
-                condition=Q(latitude__gte=-90) & Q(latitude__lte=90),
-                name="diveops_site_valid_latitude",
-            ),
-            models.CheckConstraint(
-                condition=Q(longitude__gte=-180) & Q(longitude__lte=180),
-                name="diveops_site_valid_longitude",
+                condition=Q(rating__isnull=True) | (Q(rating__gte=1) & Q(rating__lte=5)),
+                name="diveops_site_rating_1_to_5",
             ),
         ]
         indexes = [
             models.Index(fields=["is_active"]),
-            models.Index(fields=["min_certification_level"]),
         ]
         ordering = ["name"]
 

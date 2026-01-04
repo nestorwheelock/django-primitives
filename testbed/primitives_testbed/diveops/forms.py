@@ -11,6 +11,7 @@ from .models import (
     CertificationLevel,
     DiverCertification,
     DiverProfile,
+    DiveSite,
     DiveTrip,
     TripRequirement,
 )
@@ -453,3 +454,138 @@ class TripRequirementForm(forms.ModelForm):
             })
 
         return cleaned_data
+
+
+class DiveSiteForm(forms.Form):
+    """Form to create or edit a dive site.
+
+    Handles coordinate input (from map JS) and delegates to service layer.
+    Does NOT create models directly - passes to create_dive_site/update_dive_site services.
+    """
+
+    name = forms.CharField(
+        max_length=200,
+        label="Site Name",
+    )
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        label="Description",
+    )
+    latitude = forms.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        label="Latitude",
+        widget=forms.HiddenInput(),
+        help_text="Set by clicking on the map",
+    )
+    longitude = forms.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        label="Longitude",
+        widget=forms.HiddenInput(),
+        help_text="Set by clicking on the map",
+    )
+    max_depth_meters = forms.IntegerField(
+        min_value=1,
+        label="Maximum Depth (meters)",
+    )
+    difficulty = forms.ChoiceField(
+        choices=DiveSite.DIFFICULTY_CHOICES,
+        label="Difficulty",
+    )
+    min_certification_level = forms.ModelChoiceField(
+        queryset=CertificationLevel.objects.filter(is_active=True).select_related("agency").order_by("rank"),
+        required=False,
+        empty_label="No requirement",
+        label="Minimum Certification",
+    )
+    rating = forms.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=5,
+        label="Rating (1-5)",
+    )
+    tags = forms.CharField(
+        required=False,
+        label="Tags",
+        help_text="Comma-separated tags (e.g., reef, coral, wreck)",
+    )
+
+    def __init__(self, *args, instance=None, **kwargs):
+        """Initialize form, optionally with existing DiveSite.
+
+        Args:
+            instance: Existing DiveSite for editing
+        """
+        self.instance = instance
+        super().__init__(*args, **kwargs)
+
+        # Pre-populate fields if editing existing site
+        if instance:
+            self.fields["name"].initial = instance.name
+            self.fields["description"].initial = instance.description
+            self.fields["latitude"].initial = instance.place.latitude
+            self.fields["longitude"].initial = instance.place.longitude
+            self.fields["max_depth_meters"].initial = instance.max_depth_meters
+            self.fields["difficulty"].initial = instance.difficulty
+            self.fields["min_certification_level"].initial = instance.min_certification_level
+            self.fields["rating"].initial = instance.rating
+            self.fields["tags"].initial = ", ".join(instance.tags) if instance.tags else ""
+
+    def clean_tags(self):
+        """Parse comma-separated tags into list."""
+        tags_str = self.cleaned_data.get("tags", "")
+        if not tags_str:
+            return []
+        # Split by comma, strip whitespace, filter empty
+        return [tag.strip() for tag in tags_str.split(",") if tag.strip()]
+
+    @transaction.atomic
+    def save(self, actor=None):
+        """Save DiveSite via service layer.
+
+        Delegates to create_dive_site or update_dive_site services.
+        Services handle audit events.
+
+        Args:
+            actor: User performing the action (passed to services)
+
+        Returns:
+            DiveSite instance
+        """
+        from .services import create_dive_site, update_dive_site
+
+        data = self.cleaned_data
+
+        if self.instance:
+            # Update existing site via service
+            site = update_dive_site(
+                actor=actor,
+                site=self.instance,
+                name=data["name"],
+                description=data.get("description", ""),
+                latitude=data["latitude"],
+                longitude=data["longitude"],
+                max_depth_meters=data["max_depth_meters"],
+                difficulty=data["difficulty"],
+                min_certification_level=data.get("min_certification_level"),
+                rating=data.get("rating"),
+                tags=data.get("tags", []),
+            )
+        else:
+            # Create new site via service
+            site = create_dive_site(
+                actor=actor,
+                name=data["name"],
+                description=data.get("description", ""),
+                latitude=data["latitude"],
+                longitude=data["longitude"],
+                max_depth_meters=data["max_depth_meters"],
+                difficulty=data["difficulty"],
+                min_certification_level=data.get("min_certification_level"),
+                rating=data.get("rating"),
+                tags=data.get("tags", []),
+            )
+
+        return site

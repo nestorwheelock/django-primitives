@@ -593,15 +593,21 @@ class TestBookTripConcurrency:
             password="password123",
             is_staff=True,
         )
+        from django_geo.models import Place
+
         dive_shop = Organization.objects.create(
             name="Spots Test Dive Shop",
             org_type="dive_shop",
         )
-        dive_site = DiveSite.objects.create(
-            name="Spots Test Site",
-            max_depth_meters=20,
+        place = Place.objects.create(
+            name="Spots Test Site Location",
             latitude=Decimal("25.0"),
             longitude=Decimal("-80.0"),
+        )
+        dive_site = DiveSite.objects.create(
+            name="Spots Test Site",
+            place=place,
+            max_depth_meters=20,
         )
 
         # Create trip with small capacity

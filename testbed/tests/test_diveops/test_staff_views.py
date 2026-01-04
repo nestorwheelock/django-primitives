@@ -1148,3 +1148,229 @@ class TestEditCertificationView:
 
         assert response.status_code == 200
         assert "form" in response.context
+
+    def test_edit_certification_submit(self, staff_client, certification):
+        """Edit certification via POST updates the certification."""
+        url = reverse("diveops:certification-edit", kwargs={"pk": certification.pk})
+        data = {
+            "diver": certification.diver.pk,
+            "level": certification.level.pk,
+            "card_number": "UPDATED123",
+            "issued_on": date.today().isoformat(),
+        }
+        response = staff_client.post(url, data)
+
+        # Should redirect to diver detail on success
+        assert response.status_code == 302
+        assert str(certification.diver.pk) in response.url
+
+        # Certification should be updated
+        certification.refresh_from_db()
+        assert certification.card_number == "UPDATED123"
+
+    def test_edit_certification_context_has_agencies(self, staff_client, certification, padi_agency):
+        """Edit certification context includes agencies."""
+        url = reverse("diveops:certification-edit", kwargs={"pk": certification.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert "agencies" in response.context
+        assert response.context["is_create"] is False
+
+
+@pytest.mark.django_db
+class TestDeleteCertificationView:
+    """Tests for deleting certifications."""
+
+    @pytest.fixture
+    def certification(self, diver_profile, padi_open_water):
+        """Create a certification for testing."""
+        from primitives_testbed.diveops.models import DiverCertification
+
+        return DiverCertification.objects.create(
+            diver=diver_profile,
+            level=padi_open_water,
+            card_number="DELETE123",
+            issued_on=date.today(),
+        )
+
+    def test_delete_certification_requires_staff(self, anonymous_client, certification):
+        """Delete certification requires staff authentication."""
+        url = reverse("diveops:certification-delete", kwargs={"pk": certification.pk})
+        response = anonymous_client.post(url)
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_delete_certification_requires_post(self, staff_client, certification):
+        """Delete certification only accepts POST."""
+        url = reverse("diveops:certification-delete", kwargs={"pk": certification.pk})
+        response = staff_client.get(url)
+        assert response.status_code == 405  # Method not allowed
+
+    def test_delete_certification_soft_deletes(self, staff_client, certification):
+        """Delete certification soft-deletes the record."""
+        url = reverse("diveops:certification-delete", kwargs={"pk": certification.pk})
+        response = staff_client.post(url)
+
+        # Should redirect to diver detail
+        assert response.status_code == 302
+        assert str(certification.diver.pk) in response.url
+
+        # Certification should be soft-deleted
+        certification.refresh_from_db()
+        assert certification.deleted_at is not None
+
+
+@pytest.mark.django_db
+class TestVerifyCertificationView:
+    """Tests for verifying/unverifying certifications."""
+
+    @pytest.fixture
+    def certification(self, diver_profile, padi_open_water):
+        """Create an unverified certification for testing."""
+        from primitives_testbed.diveops.models import DiverCertification
+
+        return DiverCertification.objects.create(
+            diver=diver_profile,
+            level=padi_open_water,
+            card_number="VERIFY123",
+            issued_on=date.today(),
+            is_verified=False,
+        )
+
+    def test_verify_certification_requires_staff(self, anonymous_client, certification):
+        """Verify certification requires staff authentication."""
+        url = reverse("diveops:certification-verify", kwargs={"pk": certification.pk})
+        response = anonymous_client.post(url)
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_verify_certification_requires_post(self, staff_client, certification):
+        """Verify certification only accepts POST."""
+        url = reverse("diveops:certification-verify", kwargs={"pk": certification.pk})
+        response = staff_client.get(url)
+        assert response.status_code == 405  # Method not allowed
+
+    def test_verify_certification_verifies_unverified(self, staff_client, certification):
+        """POST verifies an unverified certification."""
+        assert certification.is_verified is False
+
+        url = reverse("diveops:certification-verify", kwargs={"pk": certification.pk})
+        response = staff_client.post(url)
+
+        # Should redirect to diver detail
+        assert response.status_code == 302
+        assert str(certification.diver.pk) in response.url
+
+        # Certification should now be verified
+        certification.refresh_from_db()
+        assert certification.is_verified is True
+
+    def test_verify_certification_unverifies_verified(self, staff_client, certification, staff_user):
+        """POST unverifies a verified certification."""
+        # First verify it
+        certification.is_verified = True
+        certification.verified_by = staff_user
+        certification.save()
+
+        url = reverse("diveops:certification-verify", kwargs={"pk": certification.pk})
+        response = staff_client.post(url)
+
+        # Should redirect to diver detail
+        assert response.status_code == 302
+
+        # Certification should now be unverified
+        certification.refresh_from_db()
+        assert certification.is_verified is False
+
+    def test_verify_shows_error_on_certification_error(self, staff_client, certification):
+        """Verify view shows error message when CertificationError raised (lines 433-434)."""
+        from unittest.mock import patch
+
+        from primitives_testbed.diveops.exceptions import CertificationError
+
+        url = reverse("diveops:certification-verify", kwargs={"pk": certification.pk})
+
+        # Mock at services module since it's imported inside the view method
+        with patch(
+            "primitives_testbed.diveops.services.verify_certification",
+            side_effect=CertificationError("Test error message"),
+        ):
+            response = staff_client.post(url, follow=True)
+
+        # Should redirect to diver detail with error message
+        assert response.status_code == 200  # After redirect
+        # Check error message in response
+        messages_list = list(response.context.get("messages", []))
+        assert len(messages_list) > 0
+        assert any("Test error message" in str(m) for m in messages_list)
+
+
+@pytest.mark.django_db
+class TestAuditLogView:
+    """Tests for AuditLogView (lines 450-458)."""
+
+    def test_audit_log_requires_staff(self, anonymous_client):
+        """Audit log requires staff authentication."""
+        url = reverse("diveops:audit-log")
+        response = anonymous_client.get(url)
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_audit_log_accessible_by_staff(self, staff_client):
+        """Staff can access audit log view."""
+        url = reverse("diveops:audit-log")
+        response = staff_client.get(url)
+        assert response.status_code == 200
+
+    def test_audit_log_shows_entries(self, staff_client, staff_user, diver_profile, padi_open_water):
+        """Audit log shows audit entries."""
+        from primitives_testbed.diveops.services import add_certification
+
+        # Create a certification to generate audit log entry
+        add_certification(
+            diver=diver_profile,
+            level=padi_open_water,
+            added_by=staff_user,
+            card_number="AUDIT123",
+            issued_on=date.today(),
+        )
+
+        url = reverse("diveops:audit-log")
+        response = staff_client.get(url)
+
+        # Should have entries in context
+        assert response.status_code == 200
+        assert "entries" in response.context
+        assert "page_title" in response.context
+        assert response.context["page_title"] == "Audit Log"
+
+    def test_audit_log_entries_ordered_newest_first(self, staff_client, staff_user, diver_profile, padi_open_water, padi_advanced):
+        """Audit log entries are ordered newest first."""
+        from primitives_testbed.diveops.services import add_certification
+
+        # Create multiple certifications to generate multiple audit entries
+        add_certification(
+            diver=diver_profile,
+            level=padi_open_water,
+            added_by=staff_user,
+            card_number="FIRST123",
+            issued_on=date.today(),
+        )
+        add_certification(
+            diver=diver_profile,
+            level=padi_advanced,
+            added_by=staff_user,
+            card_number="SECOND456",
+            issued_on=date.today(),
+        )
+
+        url = reverse("diveops:audit-log")
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        entries = response.context["entries"]
+        assert len(entries) >= 2
+        # Newest should be first (higher created_at)
+        if len(entries) >= 2:
+            assert entries[0].created_at >= entries[1].created_at

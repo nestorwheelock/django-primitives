@@ -1,0 +1,247 @@
+{% extends "portal_ui/base_staff.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:staff-site-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Dive Sites</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{% if object %}Edit{% else %}Add{% endif %} Site</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{% if object %}Edit Dive Site{% else %}Add Dive Site{% endif %}</h1>
+        <p class="text-gray-600">{% if object %}Update dive site information{% else %}Create a new dive site location{% endif %}</p>
+    </div>
+
+    <form method="post" class="space-y-6" x-data="siteFormMap()" x-init="init()">
+        {% csrf_token %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Form Fields -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Site Details</h2>
+
+                <!-- Name -->
+                <div>
+                    <label for="id_name" class="block text-sm font-medium text-gray-700">Site Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="name" id="id_name" value="{{ form.name.value|default:'' }}"
+                           class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                           required>
+                    {% if form.name.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label for="id_description" class="block text-sm font-medium text-gray-700">Description</label>
+                    <textarea name="description" id="id_description" rows="3"
+                              class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">{{ form.description.value|default:'' }}</textarea>
+                    {% if form.description.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.description.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Max Depth -->
+                <div>
+                    <label for="id_max_depth_meters" class="block text-sm font-medium text-gray-700">Maximum Depth (meters) <span class="text-red-500">*</span></label>
+                    <input type="number" name="max_depth_meters" id="id_max_depth_meters" value="{{ form.max_depth_meters.value|default:'' }}"
+                           min="1" max="500"
+                           class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                           required>
+                    {% if form.max_depth_meters.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.max_depth_meters.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Difficulty -->
+                <div>
+                    <label for="id_difficulty" class="block text-sm font-medium text-gray-700">Difficulty <span class="text-red-500">*</span></label>
+                    <select name="difficulty" id="id_difficulty"
+                            class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            required>
+                        <option value="">Select difficulty...</option>
+                        <option value="beginner" {% if form.difficulty.value == 'beginner' %}selected{% endif %}>Beginner</option>
+                        <option value="intermediate" {% if form.difficulty.value == 'intermediate' %}selected{% endif %}>Intermediate</option>
+                        <option value="advanced" {% if form.difficulty.value == 'advanced' %}selected{% endif %}>Advanced</option>
+                        <option value="expert" {% if form.difficulty.value == 'expert' %}selected{% endif %}>Expert</option>
+                    </select>
+                    {% if form.difficulty.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.difficulty.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Min Certification Level -->
+                <div>
+                    <label for="id_min_certification_level" class="block text-sm font-medium text-gray-700">Minimum Certification</label>
+                    <select name="min_certification_level" id="id_min_certification_level"
+                            class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">No minimum requirement</option>
+                        {% for cert in certification_levels %}
+                        <option value="{{ cert.pk }}" {% if form.min_certification_level.value|stringformat:'s' == cert.pk|stringformat:'s' %}selected{% endif %}>
+                            {{ cert.name }} ({{ cert.agency.name }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if form.min_certification_level.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.min_certification_level.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Rating -->
+                <div>
+                    <label for="id_rating" class="block text-sm font-medium text-gray-700">Rating (1-5)</label>
+                    <select name="rating" id="id_rating"
+                            class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">No rating</option>
+                        {% for i in "12345" %}
+                        <option value="{{ i }}" {% if form.rating.value|stringformat:'s' == i %}selected{% endif %}>
+                            {{ i }} star{% if i != "1" %}s{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if form.rating.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.rating.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Tags -->
+                <div>
+                    <label for="id_tags" class="block text-sm font-medium text-gray-700">Tags</label>
+                    <input type="text" name="tags" id="id_tags" value="{{ form.tags.value|default:'' }}"
+                           placeholder="reef, coral, wall, wreck"
+                           class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <p class="mt-1 text-xs text-gray-500">Separate multiple tags with commas</p>
+                    {% if form.tags.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.tags.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Map Panel -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Location</h2>
+                <p class="text-sm text-gray-600 mb-4">Click on the map to set the dive site location, or drag the marker to adjust.</p>
+
+                <!-- Hidden lat/lon fields -->
+                <input type="hidden" name="latitude" id="id_latitude" x-model="latitude" value="{{ form.latitude.value|default:'' }}">
+                <input type="hidden" name="longitude" id="id_longitude" x-model="longitude" value="{{ form.longitude.value|default:'' }}">
+
+                <div id="site-map" class="h-80 rounded-lg border border-gray-200 mb-4"></div>
+
+                <!-- Coordinate display -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500">Latitude</label>
+                        <p class="mt-1 text-sm text-gray-900" x-text="latitude ? parseFloat(latitude).toFixed(6) : 'Click map to set'"></p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500">Longitude</label>
+                        <p class="mt-1 text-sm text-gray-900" x-text="longitude ? parseFloat(longitude).toFixed(6) : 'Click map to set'"></p>
+                    </div>
+                </div>
+
+                {% if form.latitude.errors %}
+                <p class="mt-2 text-sm text-red-600">{{ form.latitude.errors.0 }}</p>
+                {% endif %}
+                {% if form.longitude.errors %}
+                <p class="mt-2 text-sm text-red-600">{{ form.longitude.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end space-x-3">
+            <a href="{% if object %}{% url 'diveops:staff-site-detail' pk=object.pk %}{% else %}{% url 'diveops:staff-site-list' %}{% endif %}"
+               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% if object %}Update Site{% else %}Create Site{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+function siteFormMap() {
+    return {
+        map: null,
+        marker: null,
+        latitude: '{{ form.latitude.value|default:"" }}',
+        longitude: '{{ form.longitude.value|default:"" }}',
+
+        init() {
+            // Default center (can be adjusted based on your region)
+            let defaultLat = 20.5;
+            let defaultLng = -87.0;
+            let defaultZoom = 10;
+
+            // If we have existing coordinates, use them
+            if (this.latitude && this.longitude) {
+                defaultLat = parseFloat(this.latitude);
+                defaultLng = parseFloat(this.longitude);
+                defaultZoom = 14;
+            }
+
+            this.map = L.map('site-map').setView([defaultLat, defaultLng], defaultZoom);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(this.map);
+
+            // If we have existing coordinates, place marker
+            if (this.latitude && this.longitude) {
+                this.placeMarker(parseFloat(this.latitude), parseFloat(this.longitude));
+            }
+
+            // Click handler to place/move marker
+            this.map.on('click', (e) => {
+                this.placeMarker(e.latlng.lat, e.latlng.lng);
+            });
+        },
+
+        placeMarker(lat, lng) {
+            if (this.marker) {
+                this.marker.setLatLng([lat, lng]);
+            } else {
+                this.marker = L.marker([lat, lng], { draggable: true }).addTo(this.map);
+
+                // Update coordinates when marker is dragged
+                this.marker.on('dragend', (e) => {
+                    const pos = e.target.getLatLng();
+                    this.updateCoordinates(pos.lat, pos.lng);
+                });
+            }
+
+            this.updateCoordinates(lat, lng);
+        },
+
+        updateCoordinates(lat, lng) {
+            this.latitude = lat.toFixed(6);
+            this.longitude = lng.toFixed(6);
+        }
+    }
+}
+</script>
+{% endblock %}

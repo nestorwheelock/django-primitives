@@ -9,8 +9,8 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Tem
 
 from django_portal_ui.mixins import StaffPortalMixin
 
-from .forms import DiverCertificationForm, DiverForm
-from .models import Booking, DiverCertification, DiverProfile, DiveTrip
+from .forms import DiverCertificationForm, DiverForm, DiveSiteForm
+from .models import Booking, CertificationLevel, DiverCertification, DiverProfile, DiveSite, DiveTrip
 from .selectors import get_diver_with_certifications, get_trip_with_roster, list_upcoming_trips
 
 
@@ -456,3 +456,145 @@ class AuditLogView(StaffPortalMixin, ListView):
         context = super().get_context_data(**kwargs)
         context["page_title"] = "Audit Log"
         return context
+
+
+# =============================================================================
+# Dive Site Views
+# =============================================================================
+
+
+class DiveSiteListView(StaffPortalMixin, ListView):
+    """List all dive sites for staff."""
+
+    model = DiveSite
+    template_name = "diveops/staff/site_list.html"
+    context_object_name = "sites"
+
+    def get_queryset(self):
+        """Return active dive sites with related data."""
+        return DiveSite.objects.select_related(
+            "place", "min_certification_level"
+        ).order_by("name")
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Dive Sites"
+        return context
+
+
+class DiveSiteDetailView(StaffPortalMixin, DetailView):
+    """View dive site details."""
+
+    model = DiveSite
+    template_name = "diveops/staff/site_detail.html"
+    context_object_name = "site"
+
+    def get_object(self, queryset=None):
+        """Get site with related data."""
+        return get_object_or_404(
+            DiveSite.objects.select_related("place", "min_certification_level"),
+            pk=self.kwargs["pk"],
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = self.object.name
+        return context
+
+
+class DiveSiteCreateView(StaffPortalMixin, FormView):
+    """Create a new dive site."""
+
+    template_name = "diveops/staff/site_form.html"
+    form_class = DiveSiteForm
+    success_url = reverse_lazy("diveops:staff-site-list")
+
+    def form_valid(self, form):
+        site = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Dive site '{site.name}' has been created.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = True
+        context["page_title"] = "Add Dive Site"
+        context["certification_levels"] = CertificationLevel.objects.filter(
+            is_active=True
+        ).select_related("agency").order_by("agency__name", "rank")
+        return context
+
+
+class DiveSiteUpdateView(StaffPortalMixin, FormView):
+    """Edit an existing dive site."""
+
+    template_name = "diveops/staff/site_form.html"
+    form_class = DiveSiteForm
+    success_url = reverse_lazy("diveops:staff-site-list")
+
+    def dispatch(self, request, *args, **kwargs):
+        self.site = get_object_or_404(
+            DiveSite.objects.select_related("place", "min_certification_level"),
+            pk=kwargs["pk"],
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["instance"] = self.site
+        return kwargs
+
+    def form_valid(self, form):
+        site = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Dive site '{site.name}' has been updated.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = False
+        context["page_title"] = f"Edit {self.site.name}"
+        context["object"] = self.site
+        context["certification_levels"] = CertificationLevel.objects.filter(
+            is_active=True
+        ).select_related("agency").order_by("agency__name", "rank")
+        return context
+
+
+class DiveSiteDeleteView(StaffPortalMixin, View):
+    """Soft delete a dive site."""
+
+    http_method_names = ["get", "post"]
+
+    def get(self, request, pk):
+        """Show delete confirmation page."""
+        site = get_object_or_404(DiveSite, pk=pk)
+        return self.render_confirmation(request, site)
+
+    def post(self, request, pk):
+        """Perform soft delete."""
+        from .services import delete_dive_site
+
+        site = get_object_or_404(DiveSite, pk=pk)
+        site_name = site.name
+
+        delete_dive_site(actor=request.user, site=site)
+
+        messages.success(request, f"Dive site '{site_name}' has been deleted.")
+        return HttpResponseRedirect(reverse("diveops:staff-site-list"))
+
+    def render_confirmation(self, request, site):
+        """Render delete confirmation template."""
+        from django.template.response import TemplateResponse
+
+        return TemplateResponse(
+            request,
+            "diveops/staff/site_confirm_delete.html",
+            {"site": site, "page_title": f"Delete {site.name}"},
+        )

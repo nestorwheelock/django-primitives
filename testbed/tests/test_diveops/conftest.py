@@ -181,49 +181,82 @@ def ssi_open_water(db, ssi_agency):
 
 
 @pytest.fixture
-def dive_site(db):
+def dive_site_place(db):
+    """Create a Place for a dive site."""
+    from django_geo.models import Place
+
+    return Place.objects.create(
+        name="Coral Reef Point Location",
+        latitude=Decimal("20.123456"),
+        longitude=Decimal("-87.654321"),
+    )
+
+
+@pytest.fixture
+def dive_site(db, dive_site_place):
     """Create a dive site."""
     from primitives_testbed.diveops.models import DiveSite
 
     return DiveSite.objects.create(
         name="Coral Reef Point",
+        place=dive_site_place,
         max_depth_meters=30,
-        min_certification_level="ow",
+        min_certification_level=None,  # No cert requirement (nullable FK)
         difficulty="intermediate",
-        latitude=Decimal("20.123456"),
-        longitude=Decimal("-87.654321"),
         description="Beautiful coral reef",
     )
 
 
 @pytest.fixture
-def shallow_site(db):
+def shallow_site_place(db):
+    """Create a Place for shallow dive site."""
+    from django_geo.models import Place
+
+    return Place.objects.create(
+        name="Shallow Bay Location",
+        latitude=Decimal("20.200000"),
+        longitude=Decimal("-87.700000"),
+    )
+
+
+@pytest.fixture
+def shallow_site(db, shallow_site_place):
     """Create a shallow dive site suitable for beginners."""
     from primitives_testbed.diveops.models import DiveSite
 
     return DiveSite.objects.create(
         name="Shallow Bay",
+        place=shallow_site_place,
         max_depth_meters=12,
-        min_certification_level="ow",
+        min_certification_level=None,  # No cert requirement
         difficulty="beginner",
-        latitude=Decimal("20.200000"),
-        longitude=Decimal("-87.700000"),
         description="Easy dive site",
     )
 
 
 @pytest.fixture
-def deep_site(db):
+def deep_site_place(db):
+    """Create a Place for deep dive site."""
+    from django_geo.models import Place
+
+    return Place.objects.create(
+        name="The Abyss Location",
+        latitude=Decimal("20.300000"),
+        longitude=Decimal("-87.800000"),
+    )
+
+
+@pytest.fixture
+def deep_site(db, deep_site_place):
     """Create a deep dive site requiring advanced certification."""
     from primitives_testbed.diveops.models import DiveSite
 
     return DiveSite.objects.create(
         name="The Abyss",
+        place=deep_site_place,
         max_depth_meters=40,
-        min_certification_level="aow",
+        min_certification_level=None,  # Cert requirements now via TripRequirement
         difficulty="advanced",
-        latitude=Decimal("20.300000"),
-        longitude=Decimal("-87.800000"),
         description="Deep wall dive",
     )
 
