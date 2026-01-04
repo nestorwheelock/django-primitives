@@ -45,6 +45,30 @@ def _get_constraint_name(exc: IntegrityError) -> str | None:
     return None
 
 
+def _apply_tracked_update(obj, field: str, new_value, changes: dict) -> None:
+    """Apply a field update and track the change if value differs.
+
+    Args:
+        obj: Model instance to update
+        field: Field name to update
+        new_value: New value (None means no change requested)
+        changes: Dict to record changes for audit log
+    """
+    if new_value is None:
+        return
+
+    old_value = getattr(obj, field)
+    if new_value == old_value:
+        return
+
+    # Format values for audit log (convert dates to strings)
+    old_str = str(old_value) if old_value is not None else None
+    new_str = str(new_value) if new_value is not None else None
+
+    changes[field] = {"old": old_str, "new": new_str}
+    setattr(obj, field, new_value)
+
+
 def _get_or_create_trip_catalog_item(trip: DiveTrip) -> CatalogItem:
     """Get or create a CatalogItem for a dive trip."""
     item, _ = CatalogItem.objects.get_or_create(
@@ -474,29 +498,17 @@ def update_certification(
     if certification.deleted_at is not None:
         raise CertificationError("Cannot update a deleted certification")
 
-    # Track changes for audit log
     changes = {}
+    _apply_tracked_update(certification, "card_number", card_number, changes)
+    _apply_tracked_update(certification, "issued_on", issued_on, changes)
+    _apply_tracked_update(certification, "expires_on", expires_on, changes)
 
-    if card_number is not None and card_number != certification.card_number:
-        changes["card_number"] = {"old": certification.card_number, "new": card_number}
-        certification.card_number = card_number
-
-    if issued_on is not None and issued_on != certification.issued_on:
-        changes["issued_on"] = {
-            "old": str(certification.issued_on) if certification.issued_on else None,
-            "new": str(issued_on) if issued_on else None,
-        }
-        certification.issued_on = issued_on
-
-    if expires_on is not None and expires_on != certification.expires_on:
-        changes["expires_on"] = {
-            "old": str(certification.expires_on) if certification.expires_on else None,
-            "new": str(expires_on) if expires_on else None,
-        }
-        certification.expires_on = expires_on
-
+    # proof_document needs special handling for FK
     if proof_document is not None and proof_document != certification.proof_document:
-        changes["proof_document"] = {"old": str(certification.proof_document_id), "new": str(proof_document.pk)}
+        changes["proof_document"] = {
+            "old": str(certification.proof_document_id) if certification.proof_document_id else None,
+            "new": str(proof_document.pk),
+        }
         certification.proof_document = proof_document
 
     if changes:
@@ -709,43 +721,19 @@ def update_diver(
     if diver.deleted_at is not None:
         raise DiverError("Cannot update a deleted diver")
 
-    # Track changes for audit log
     changes = {}
     person = diver.person
 
     # Update Person fields
-    if first_name is not None and first_name != person.first_name:
-        changes["first_name"] = {"old": person.first_name, "new": first_name}
-        person.first_name = first_name
-
-    if last_name is not None and last_name != person.last_name:
-        changes["last_name"] = {"old": person.last_name, "new": last_name}
-        person.last_name = last_name
-
-    if email is not None and email != person.email:
-        changes["email"] = {"old": person.email, "new": email}
-        person.email = email
+    _apply_tracked_update(person, "first_name", first_name, changes)
+    _apply_tracked_update(person, "last_name", last_name, changes)
+    _apply_tracked_update(person, "email", email, changes)
 
     # Update DiverProfile fields
-    if total_dives is not None and total_dives != diver.total_dives:
-        changes["total_dives"] = {"old": diver.total_dives, "new": total_dives}
-        diver.total_dives = total_dives
+    _apply_tracked_update(diver, "total_dives", total_dives, changes)
+    _apply_tracked_update(diver, "medical_clearance_date", medical_clearance_date, changes)
+    _apply_tracked_update(diver, "medical_clearance_valid_until", medical_clearance_valid_until, changes)
 
-    if medical_clearance_date is not None and medical_clearance_date != diver.medical_clearance_date:
-        changes["medical_clearance_date"] = {
-            "old": str(diver.medical_clearance_date) if diver.medical_clearance_date else None,
-            "new": str(medical_clearance_date) if medical_clearance_date else None,
-        }
-        diver.medical_clearance_date = medical_clearance_date
-
-    if medical_clearance_valid_until is not None and medical_clearance_valid_until != diver.medical_clearance_valid_until:
-        changes["medical_clearance_valid_until"] = {
-            "old": str(diver.medical_clearance_valid_until) if diver.medical_clearance_valid_until else None,
-            "new": str(medical_clearance_valid_until) if medical_clearance_valid_until else None,
-        }
-        diver.medical_clearance_valid_until = medical_clearance_valid_until
-
-    # Save if changes were made
     if changes:
         person.save()
         diver.save()

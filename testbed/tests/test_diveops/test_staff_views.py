@@ -989,3 +989,162 @@ class TestEditDiverView:
         # Should NOT have certification_level dropdown (the inline form)
         assert b'name="certification_level"' not in response.content
         assert b'name="certification_agency"' not in response.content
+
+
+@pytest.mark.django_db
+class TestDashboardView:
+    """Tests for the staff dashboard view."""
+
+    def test_dashboard_requires_staff(self, anonymous_client):
+        """Dashboard requires staff authentication."""
+        url = reverse("diveops:dashboard")
+        response = anonymous_client.get(url)
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_dashboard_accessible_to_staff(self, staff_client):
+        """Staff users can access the dashboard."""
+        url = reverse("diveops:dashboard")
+        response = staff_client.get(url)
+        assert response.status_code == 200
+
+    def test_dashboard_shows_upcoming_trips(self, staff_client, dive_trip):
+        """Dashboard displays upcoming trips."""
+        url = reverse("diveops:dashboard")
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert "upcoming_trips" in response.context
+        assert "upcoming_trips_count" in response.context
+
+    def test_dashboard_shows_diver_count(self, staff_client, diver_profile):
+        """Dashboard displays diver count."""
+        url = reverse("diveops:dashboard")
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert "diver_count" in response.context
+        assert response.context["diver_count"] >= 1
+
+    def test_dashboard_shows_todays_trips(self, staff_client):
+        """Dashboard displays today's trips context."""
+        url = reverse("diveops:dashboard")
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert "todays_trips" in response.context
+
+    def test_dashboard_shows_pending_bookings(self, staff_client):
+        """Dashboard displays pending bookings count."""
+        url = reverse("diveops:dashboard")
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert "pending_bookings_count" in response.context
+
+
+@pytest.mark.django_db
+class TestDiverDetailView:
+    """Tests for the diver detail view."""
+
+    def test_diver_detail_requires_staff(self, anonymous_client, diver_profile):
+        """Diver detail requires staff authentication."""
+        url = reverse("diveops:diver-detail", kwargs={"pk": diver_profile.pk})
+        response = anonymous_client.get(url)
+        assert response.status_code == 302
+
+    def test_diver_detail_accessible_to_staff(self, staff_client, diver_profile):
+        """Staff can access diver detail."""
+        url = reverse("diveops:diver-detail", kwargs={"pk": diver_profile.pk})
+        response = staff_client.get(url)
+        assert response.status_code == 200
+
+    def test_diver_detail_shows_certifications(self, staff_client, diver_profile):
+        """Diver detail shows certifications in context."""
+        url = reverse("diveops:diver-detail", kwargs={"pk": diver_profile.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert "certifications" in response.context
+
+    def test_diver_detail_404_for_invalid_pk(self, staff_client):
+        """Diver detail returns 404 for invalid PK."""
+        import uuid
+        url = reverse("diveops:diver-detail", kwargs={"pk": uuid.uuid4()})
+        response = staff_client.get(url)
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestAddCertificationView:
+    """Tests for adding certifications."""
+
+    def test_add_certification_requires_staff(self, anonymous_client, diver_profile):
+        """Add certification requires staff authentication."""
+        url = reverse("diveops:certification-add", kwargs={"diver_pk": diver_profile.pk})
+        response = anonymous_client.get(url)
+        assert response.status_code == 302
+
+    def test_add_certification_form_displayed(self, staff_client, diver_profile, padi_agency):
+        """Add certification form is displayed."""
+        url = reverse("diveops:certification-add", kwargs={"diver_pk": diver_profile.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert "form" in response.context
+        assert "diver" in response.context
+        assert response.context["is_create"] is True
+
+    def test_add_certification_shows_agencies(self, staff_client, diver_profile, padi_agency):
+        """Add certification shows available agencies."""
+        url = reverse("diveops:certification-add", kwargs={"diver_pk": diver_profile.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert "agencies" in response.context
+
+    def test_add_certification_submit(self, staff_client, diver_profile, padi_open_water):
+        """Add certification via POST."""
+        url = reverse("diveops:certification-add", kwargs={"diver_pk": diver_profile.pk})
+        data = {
+            "diver": diver_profile.pk,
+            "level": padi_open_water.pk,
+            "card_number": "TEST123",
+            "issued_on": date.today().isoformat(),
+        }
+        response = staff_client.post(url, data)
+
+        # Should redirect to diver detail on success
+        assert response.status_code == 302
+        assert str(diver_profile.pk) in response.url
+
+
+@pytest.mark.django_db
+class TestEditCertificationView:
+    """Tests for editing certifications."""
+
+    @pytest.fixture
+    def certification(self, diver_profile, padi_open_water, staff_user):
+        """Create a certification for testing."""
+        from primitives_testbed.diveops.models import DiverCertification
+
+        return DiverCertification.objects.create(
+            diver=diver_profile,
+            level=padi_open_water,
+            card_number="EDIT123",
+            issued_on=date.today(),
+        )
+
+    def test_edit_certification_requires_staff(self, anonymous_client, certification):
+        """Edit certification requires staff authentication."""
+        url = reverse("diveops:certification-edit", kwargs={"pk": certification.pk})
+        response = anonymous_client.get(url)
+        assert response.status_code == 302
+
+    def test_edit_certification_form_displayed(self, staff_client, certification):
+        """Edit certification form is displayed."""
+        url = reverse("diveops:certification-edit", kwargs={"pk": certification.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 200
+        assert "form" in response.context
