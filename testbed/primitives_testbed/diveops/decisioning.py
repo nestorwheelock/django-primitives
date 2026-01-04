@@ -105,8 +105,6 @@ def _check_trip_requirements(
 
     Modifies reasons and required_actions lists in place.
     """
-    from .models import TripRequirement
-
     # Get mandatory requirements only
     mandatory_reqs = trip.requirements.filter(is_mandatory=True)
 

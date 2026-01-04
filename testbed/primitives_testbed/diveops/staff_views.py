@@ -10,7 +10,7 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Tem
 from django_portal_ui.mixins import StaffPortalMixin
 
 from .forms import DiverCertificationForm, DiverForm
-from .models import Booking, DiverCertification, DiverProfile, DiveTrip, TripRoster
+from .models import Booking, DiverCertification, DiverProfile, DiveTrip
 from .selectors import get_diver_with_certifications, get_trip_with_roster, list_upcoming_trips
 
 

@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Count, F, Q
+from django.db.models import F, Q
 from django.utils import timezone
 
 from django_basemodels import BaseModel
