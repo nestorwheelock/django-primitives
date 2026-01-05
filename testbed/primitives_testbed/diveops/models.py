@@ -414,6 +414,12 @@ class DiveSite(BaseModel):
         ("expert", "Expert"),
     ]
 
+    class DiveMode(models.TextChoices):
+        BOAT = "boat", "Boat Accessible"
+        SHORE = "shore", "Shore Accessible"
+        CENOTE = "cenote", "Cenote"
+        CAVERN = "cavern", "Cavern/Cave"
+
     # Basic info
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -440,6 +446,12 @@ class DiveSite(BaseModel):
         max_length=20,
         choices=DIFFICULTY_CHOICES,
         default="intermediate",
+    )
+    dive_mode = models.CharField(
+        max_length=10,
+        choices=DiveMode.choices,
+        default=DiveMode.BOAT,
+        help_text="How this site is accessed (boat, shore, cenote, cavern)",
     )
 
     # Quality/categorization
@@ -592,6 +604,9 @@ class Excursion(BaseModel):
         DiveSite,
         on_delete=models.PROTECT,
         related_name="excursions",
+        null=True,
+        blank=True,
+        help_text="Primary dive site (optional - sites can be set per dive)",
     )
 
     # Optional link to Trip package (null = standalone/walk-in)
@@ -602,6 +617,16 @@ class Excursion(BaseModel):
         blank=True,
         related_name="excursions",
         help_text="Trip package this excursion belongs to (null = standalone)",
+    )
+
+    # Optional link to ExcursionType (product template)
+    excursion_type = models.ForeignKey(
+        "ExcursionType",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="excursions",
+        help_text="Product type template (for pricing and eligibility)",
     )
 
     # Optional encounter for workflow tracking
@@ -662,7 +687,28 @@ class Excursion(BaseModel):
         ordering = ["-departure_time"]
 
     def __str__(self):
-        return f"{self.dive_site.name} - {self.departure_time.strftime('%Y-%m-%d %H:%M')}"
+        site_name = self.dive_site.name if self.dive_site else self.site_names or "No site"
+        return f"{site_name} - {self.departure_time.strftime('%Y-%m-%d %H:%M')}"
+
+    @property
+    def site_names(self) -> str:
+        """Return comma-separated list of dive site names.
+
+        Prefers dive site names from child dives, falls back to
+        the excursion's dive_site if no dives exist.
+        """
+        sites = list(self.dives.values_list("dive_site__name", flat=True).distinct())
+        if sites:
+            return ", ".join(sites)
+        if self.dive_site:
+            return self.dive_site.name
+        return ""
+
+    @property
+    def dive_sites(self):
+        """Return queryset of all dive sites for this excursion's dives."""
+        from .models import DiveSite
+        return DiveSite.objects.filter(dives__excursion=self).distinct()
 
     def clean(self):
         """Validate that departure and return are on the same calendar day."""
@@ -858,6 +904,28 @@ class Booking(BaseModel):
     # Domain-specific: when this booking was cancelled (distinct from soft delete)
     cancelled_at = models.DateTimeField(null=True, blank=True)
 
+    # INV-3: Price Immutability - price locked at booking creation
+    # The price_snapshot captures full pricing context at booking time
+    # price_amount/price_currency are denormalized for efficient queries
+    price_snapshot = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Full pricing context at booking time (immutable snapshot)",
+    )
+    price_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Price locked at booking (denormalized from snapshot)",
+    )
+    price_currency = models.CharField(
+        max_length=3,
+        blank=True,
+        default="",
+        help_text="Currency code (denormalized from snapshot)",
+    )
+
     class Meta:
         constraints = [
             # Conditional unique: only one active booking per diver per excursion
@@ -952,3 +1020,264 @@ class ExcursionRoster(BaseModel):
 
 # Backwards compatibility alias
 TripRoster = ExcursionRoster
+
+
+class ExcursionType(BaseModel):
+    """Template for a bookable excursion product.
+
+    Thin overlay model defining standardized excursion offerings that customers
+    can browse and book. Includes dive characteristics, eligibility requirements,
+    and base pricing.
+
+    Pricing note: base_price is the starting point. Final price is computed by
+    ExcursionTypePricingService which adds site-specific adjustments (distance,
+    park fees, night surcharges, etc.).
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class DiveMode(models.TextChoices):
+        BOAT = "boat", "Boat Dive"
+        SHORE = "shore", "Shore Dive"
+        CENOTE = "cenote", "Cenote Dive"
+        CAVERN = "cavern", "Cavern/Cave Dive"
+
+    class TimeOfDay(models.TextChoices):
+        DAY = "day", "Day Dive"
+        NIGHT = "night", "Night Dive"
+        DAWN = "dawn", "Dawn Dive"
+        DUSK = "dusk", "Dusk Dive"
+
+    # Identity
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+
+    # Dive characteristics
+    dive_mode = models.CharField(
+        max_length=10,
+        choices=DiveMode.choices,
+    )
+    time_of_day = models.CharField(
+        max_length=10,
+        choices=TimeOfDay.choices,
+        default=TimeOfDay.DAY,
+    )
+    max_depth_meters = models.PositiveIntegerField()
+    typical_duration_minutes = models.PositiveIntegerField(default=60)
+    dives_per_excursion = models.PositiveSmallIntegerField(default=2)
+
+    # Eligibility
+    min_certification_level = models.ForeignKey(
+        CertificationLevel,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="excursion_types",
+        help_text="Minimum certification required (null = no requirement)",
+    )
+    requires_cert = models.BooleanField(
+        default=True,
+        help_text="If False, no certification check (for DSD)",
+    )
+    is_training = models.BooleanField(
+        default=False,
+        help_text="If True, this is a training/intro dive (DSD)",
+    )
+
+    # Site constraints
+    suitable_sites = models.ManyToManyField(
+        DiveSite,
+        blank=True,
+        related_name="excursion_types",
+        help_text="Sites where this type can be run (empty = all sites)",
+    )
+
+    # Base pricing
+    base_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Base price before site adjustments",
+    )
+    currency = models.CharField(max_length=3, default="USD")
+
+    # Status
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(base_price__gte=0),
+                name="diveops_excursion_type_base_price_gte_zero",
+            ),
+            models.CheckConstraint(
+                condition=Q(max_depth_meters__gt=0),
+                name="diveops_excursion_type_depth_gt_zero",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["dive_mode"]),
+        ]
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_dive_mode_display()})"
+
+
+class ExcursionTypeDive(BaseModel):
+    """Template for a dive within an excursion type.
+
+    Defines the individual dives that make up an excursion product.
+    For example, a "Morning 2-Tank Boat Dive" would have two dive templates:
+    - Dive 1: First tank, typically shallower reef
+    - Dive 2: Second tank, possibly deeper or different site
+
+    When an excursion is created from this type, these templates are used
+    to pre-populate the actual Dive records.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    excursion_type = models.ForeignKey(
+        ExcursionType,
+        on_delete=models.CASCADE,
+        related_name="dive_templates",
+    )
+
+    # Sequence within excursion (1st dive, 2nd dive, etc.)
+    sequence = models.PositiveSmallIntegerField(
+        help_text="Dive number within the excursion (1, 2, 3...)",
+    )
+
+    # Dive details
+    name = models.CharField(
+        max_length=100,
+        help_text="Name for this dive (e.g., 'First Tank', 'Deep Dive')",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Description or notes about this dive",
+    )
+
+    # Dive specifications
+    planned_depth_meters = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Target maximum depth in meters",
+    )
+    planned_duration_minutes = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Planned dive duration in minutes",
+    )
+
+    # Timing offset from excursion start (for scheduling)
+    offset_minutes = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Minutes after excursion departure that this dive starts",
+    )
+
+    # Optional: specific certification for this dive (may differ from excursion type)
+    min_certification_level = models.ForeignKey(
+        CertificationLevel,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="dive_templates",
+        help_text="Specific certification for this dive (overrides excursion type if set)",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["excursion_type", "sequence"],
+                name="diveops_excursion_type_dive_unique_sequence",
+            ),
+            models.CheckConstraint(
+                condition=Q(sequence__gte=1),
+                name="diveops_excursion_type_dive_sequence_gte_1",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["excursion_type", "sequence"]),
+        ]
+        ordering = ["excursion_type", "sequence"]
+
+    def __str__(self):
+        return f"{self.excursion_type.name} - Dive {self.sequence}: {self.name}"
+
+
+class SitePriceAdjustment(BaseModel):
+    """Site-specific price adjustment for excursions.
+
+    Represents cost factors that vary by dive site location:
+    - Distance/fuel surcharge (farther sites cost more)
+    - Park entry fees (marine parks, national parks)
+    - Night dive surcharge
+    - Boat charter fees
+
+    These adjustments are added to ExcursionType.base_price by the
+    ExcursionTypePricingService to compute final excursion price.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class AdjustmentKind(models.TextChoices):
+        DISTANCE = "distance", "Distance/Fuel Surcharge"
+        PARK_FEE = "park_fee", "Park Entry Fee"
+        NIGHT = "night", "Night Dive Surcharge"
+        BOAT = "boat", "Boat Charter Fee"
+
+    dive_site = models.ForeignKey(
+        DiveSite,
+        on_delete=models.CASCADE,
+        related_name="price_adjustments",
+    )
+    kind = models.CharField(
+        max_length=20,
+        choices=AdjustmentKind.choices,
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Adjustment amount (added to base price)",
+    )
+    currency = models.CharField(max_length=3, default="USD")
+
+    # Optional mode filter
+    applies_to_mode = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        help_text="If set, only applies to this dive mode (boat/shore)",
+    )
+
+    # Pricing behavior
+    is_per_diver = models.BooleanField(
+        default=True,
+        help_text="If True, applied per diver; if False, applied per trip",
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            # Only one adjustment of each kind per site (among active records)
+            models.UniqueConstraint(
+                fields=["dive_site", "kind"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_site_adjustment_kind",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["dive_site", "is_active"]),
+        ]
+        ordering = ["dive_site", "kind"]
+
+    def __str__(self):
+        return f"{self.dive_site.name}: {self.get_kind_display()} ({self.amount} {self.currency})"
+
+

@@ -5,7 +5,7 @@ All write operations are atomic transactions.
 """
 
 from django.contrib.contenttypes.models import ContentType
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
 from .audit import (
@@ -13,9 +13,11 @@ from .audit import (
     log_booking_event,
     log_certification_event,
     log_diver_event,
+    log_excursion_event,
+    log_excursion_type_event,
     log_roster_event,
     log_site_event,
-    log_excursion_event,
+    log_site_price_adjustment_event,
 )
 from .decisioning import can_diver_join_trip
 from .exceptions import (
@@ -36,11 +38,14 @@ from .integrations import (
 from .models import (
     Booking,
     CertificationLevel,
+    Dive,
     DiverCertification,
     DiverProfile,
     DiveSite,
     Excursion,
     ExcursionRoster,
+    ExcursionType,
+    SitePriceAdjustment,
 )
 
 # Backwards compatibility aliases
@@ -99,6 +104,45 @@ def _get_or_create_excursion_catalog_item(excursion: Excursion) -> CatalogItem:
 _get_or_create_trip_catalog_item = _get_or_create_excursion_catalog_item
 
 
+def get_compatible_sites(excursion_type: ExcursionType | None = None):
+    """Get dive sites compatible with an excursion type.
+
+    Filters sites based on:
+    1. dive_mode: Site must match the excursion type's dive mode
+    2. certification: Site's min_certification must not exceed what the
+       excursion type allows (by certification rank)
+
+    Args:
+        excursion_type: The excursion type to filter for (None = all active sites)
+
+    Returns:
+        QuerySet of compatible DiveSite instances
+    """
+    sites = DiveSite.objects.filter(is_active=True)
+
+    if excursion_type is None:
+        return sites.order_by("name")
+
+    # Filter by dive mode
+    sites = sites.filter(dive_mode=excursion_type.dive_mode)
+
+    # Filter by certification level compatibility
+    # If excursion type has no cert requirement, only include sites with no requirement
+    # If excursion type requires a cert, include sites that require same or lower rank
+    if excursion_type.min_certification_level is None:
+        # No cert excursion (like DSD) - only allow sites with no cert requirement
+        sites = sites.filter(min_certification_level__isnull=True)
+    else:
+        # Include sites with no requirement OR requirement <= excursion's requirement
+        excursion_rank = excursion_type.min_certification_level.rank
+        sites = sites.filter(
+            models.Q(min_certification_level__isnull=True)
+            | models.Q(min_certification_level__rank__lte=excursion_rank)
+        )
+
+    return sites.select_related("min_certification_level", "place").order_by("name")
+
+
 @transaction.atomic
 def book_excursion(
     excursion: Excursion,
@@ -139,6 +183,28 @@ def book_excursion(
                 raise TripCapacityError("; ".join(result.reasons))
             raise DiverNotEligibleError("; ".join(result.reasons))
 
+    # INV-3: Price Immutability - snapshot price at booking creation
+    # Price is ONLY captured if excursion has both excursion_type AND dive_site
+    # This enables structured pricing breakdown in the snapshot
+    price_snapshot = None
+    price_amount = None
+    price_currency = ""
+
+    if excursion.excursion_type and excursion.dive_site:
+        # Compute price from excursion type + site adjustments
+        from .pricing_service import compute_excursion_price, create_price_snapshot
+
+        computed = compute_excursion_price(excursion.excursion_type, excursion.dive_site)
+        price_snapshot = create_price_snapshot(
+            computed_price=computed,
+            excursion_type_id=str(excursion.excursion_type.pk),
+            dive_site_id=str(excursion.dive_site.pk),
+        )
+        price_amount = computed.total_price
+        price_currency = computed.currency
+    # Note: If excursion_type or dive_site is missing, price fields remain null
+    # This is intentional per INV-3 - only structured pricing is snapshotted
+
     # Create booking
     try:
         booking = Booking.objects.create(
@@ -146,6 +212,9 @@ def book_excursion(
             diver=diver,
             status="confirmed",
             booked_by=booked_by,
+            price_snapshot=price_snapshot,
+            price_amount=price_amount,
+            price_currency=price_currency,
         )
     except IntegrityError as e:
         constraint = _get_constraint_name(e)
@@ -162,7 +231,7 @@ def book_excursion(
 
         # Create basket with excursion item
         basket = create_trip_basket(
-            excursion=excursion,
+            trip=excursion,
             diver=diver,
             catalog_item=catalog_item,
             created_by=booked_by,
@@ -173,14 +242,14 @@ def book_excursion(
         for item in basket.items.all():
             price_basket_item(
                 basket_item=item,
-                excursion=excursion,
+                trip=excursion,
                 diver=diver,
             )
 
         # Create invoice from priced basket
         invoice = create_booking_invoice(
             basket=basket,
-            excursion=excursion,
+            trip=excursion,
             diver=diver,
             created_by=booked_by,
         )
@@ -312,7 +381,7 @@ def start_excursion(excursion: Excursion, started_by) -> Excursion:
 
     # Emit audit event AFTER successful transaction
     log_excursion_event(
-        action=Actions.TRIP_STARTED,
+        action=Actions.EXCURSION_STARTED,
         excursion=excursion,
         actor=started_by,
     )
@@ -391,9 +460,9 @@ def complete_excursion(excursion: Excursion, completed_by) -> Excursion:
             actor=completed_by,
         )
 
-    # Then emit TRIP_COMPLETED for the excursion
+    # Then emit EXCURSION_COMPLETED for the excursion
     log_excursion_event(
-        action=Actions.TRIP_COMPLETED,
+        action=Actions.EXCURSION_COMPLETED,
         excursion=excursion,
         actor=completed_by,
     )
@@ -794,6 +863,7 @@ def create_dive_site(
     longitude,
     max_depth_meters: int,
     difficulty: str,
+    dive_mode: str = "boat",
     description: str = "",
     min_certification_level: CertificationLevel | None = None,
     rating: int | None = None,
@@ -811,6 +881,7 @@ def create_dive_site(
         longitude: Decimal longitude
         max_depth_meters: Maximum depth in meters
         difficulty: Difficulty level (beginner/intermediate/advanced/expert)
+        dive_mode: Access mode (boat/shore/cenote/cavern)
         description: Optional site description
         min_certification_level: Optional minimum certification FK
         rating: Optional rating (1-5)
@@ -839,6 +910,7 @@ def create_dive_site(
         max_depth_meters=max_depth_meters,
         min_certification_level=min_certification_level,
         difficulty=difficulty,
+        dive_mode=dive_mode,
         rating=rating,
         tags=tags or [],
     )
@@ -863,6 +935,7 @@ def update_dive_site(
     longitude=None,
     max_depth_meters: int | None = None,
     difficulty: str | None = None,
+    dive_mode: str | None = None,
     description: str | None = None,
     min_certification_level: CertificationLevel | None = None,
     rating: int | None = None,
@@ -880,6 +953,7 @@ def update_dive_site(
         longitude: New longitude (None = no change)
         max_depth_meters: New depth (None = no change)
         difficulty: New difficulty (None = no change)
+        dive_mode: New access mode (None = no change)
         description: New description (None = no change)
         min_certification_level: New certification FK (None = no change)
         rating: New rating (None = no change)
@@ -898,6 +972,7 @@ def update_dive_site(
     _apply_tracked_update(site, "description", description, changes)
     _apply_tracked_update(site, "max_depth_meters", max_depth_meters, changes)
     _apply_tracked_update(site, "difficulty", difficulty, changes)
+    _apply_tracked_update(site, "dive_mode", dive_mode, changes)
     _apply_tracked_update(site, "rating", rating, changes)
     _apply_tracked_update(site, "tags", tags, changes)
 
@@ -961,3 +1036,554 @@ def delete_dive_site(
     )
 
     return site
+
+
+# =============================================================================
+# Excursion CRUD Services
+# =============================================================================
+
+
+@transaction.atomic
+def create_excursion(
+    *,
+    actor,
+    dive_site: DiveSite,
+    dive_shop,
+    departure_time,
+    max_divers: int,
+    return_time=None,
+    price_per_diver=None,
+    currency: str = "USD",
+    trip=None,
+    excursion_type: "ExcursionType | None" = None,
+) -> Excursion:
+    """Create a new dive excursion.
+
+    Args:
+        actor: User creating the excursion (required)
+        dive_site: DiveSite for this excursion
+        dive_shop: Organization running this excursion
+        departure_time: Scheduled departure datetime
+        max_divers: Maximum number of divers allowed
+        return_time: Scheduled return datetime (defaults to 4 hours after departure)
+        price_per_diver: Optional price per diver (Decimal). If not provided and
+            excursion_type is set, computes price from type + site adjustments.
+        currency: Currency code (default: USD)
+        trip: Optional Trip package this excursion belongs to
+        excursion_type: Optional product template for pricing and eligibility
+
+    Returns:
+        Created Excursion
+
+    Raises:
+        IntegrityError: If constraints are violated
+    """
+    from datetime import timedelta
+    from decimal import Decimal
+
+    # Default return_time to 4 hours after departure
+    if return_time is None:
+        return_time = departure_time + timedelta(hours=4)
+
+    # If excursion_type is set and no explicit price, compute from pricing service
+    if excursion_type is not None and price_per_diver is None:
+        from .pricing_service import compute_excursion_price
+
+        computed = compute_excursion_price(excursion_type, dive_site)
+        price_per_diver = computed.total_price
+        currency = computed.currency
+
+    excursion = Excursion.objects.create(
+        dive_site=dive_site,
+        dive_shop=dive_shop,
+        departure_time=departure_time,
+        return_time=return_time,
+        max_divers=max_divers,
+        price_per_diver=price_per_diver or Decimal("0.00"),
+        currency=currency,
+        trip=trip,
+        excursion_type=excursion_type,
+        status="scheduled",
+        created_by=actor,
+    )
+
+    # Auto-create dives from excursion type templates
+    if excursion_type is not None:
+        dive_templates = excursion_type.dive_templates.all().order_by("sequence")
+        for template in dive_templates:
+            # Calculate planned start time based on offset
+            planned_start = departure_time + timedelta(minutes=template.offset_minutes)
+
+            Dive.objects.create(
+                excursion=excursion,
+                dive_site=dive_site,  # Default to excursion's site
+                sequence=template.sequence,
+                planned_start=planned_start,
+                planned_duration_minutes=template.planned_duration_minutes,
+                notes=f"From template: {template.name}",
+            )
+
+    log_excursion_event(
+        action=Actions.EXCURSION_CREATED,
+        excursion=excursion,
+        actor=actor,
+    )
+
+    return excursion
+
+
+@transaction.atomic
+def update_excursion(
+    *,
+    actor,
+    excursion: Excursion,
+    dive_site: DiveSite | None = None,
+    departure_time=None,
+    return_time=None,
+    max_divers: int | None = None,
+    price_per_diver=None,
+    currency: str | None = None,
+    excursion_type: "ExcursionType | None" = None,
+) -> Excursion:
+    """Update an existing excursion.
+
+    Args:
+        actor: User making the update (required)
+        excursion: Excursion to update
+        dive_site: New dive site (None = no change)
+        departure_time: New departure time (None = no change)
+        return_time: New return time (None = no change)
+        max_divers: New max divers (None = no change)
+        price_per_diver: New price (None = no change)
+        currency: New currency (None = no change)
+        excursion_type: New excursion type (None = no change)
+
+    Returns:
+        Updated Excursion
+
+    Raises:
+        TripStateError: If excursion is completed or cancelled
+    """
+    if excursion.status in ["completed", "cancelled"]:
+        raise TripStateError(f"Cannot update excursion in status={excursion.status}")
+
+    changes = {}
+
+    # Update fields
+    _apply_tracked_update(excursion, "departure_time", departure_time, changes)
+    _apply_tracked_update(excursion, "return_time", return_time, changes)
+    _apply_tracked_update(excursion, "max_divers", max_divers, changes)
+    _apply_tracked_update(excursion, "price_per_diver", price_per_diver, changes)
+    _apply_tracked_update(excursion, "currency", currency, changes)
+
+    # Handle dive_site FK specially
+    if dive_site is not None and dive_site != excursion.dive_site:
+        changes["dive_site"] = {
+            "old": str(excursion.dive_site_id),
+            "new": str(dive_site.pk),
+        }
+        excursion.dive_site = dive_site
+
+    # Handle excursion_type FK specially
+    if excursion_type is not None and excursion_type != excursion.excursion_type:
+        changes["excursion_type"] = {
+            "old": str(excursion.excursion_type_id) if excursion.excursion_type else None,
+            "new": str(excursion_type.pk),
+        }
+        excursion.excursion_type = excursion_type
+
+    if changes:
+        excursion.save()
+
+        log_excursion_event(
+            action=Actions.EXCURSION_UPDATED,
+            excursion=excursion,
+            actor=actor,
+            changes=changes,
+        )
+
+    return excursion
+
+
+@transaction.atomic
+def cancel_excursion(
+    *,
+    excursion: Excursion,
+    actor,
+    reason: str = "",
+) -> Excursion:
+    """Cancel an excursion and all its active bookings.
+
+    Args:
+        excursion: Excursion to cancel
+        actor: User cancelling the excursion
+        reason: Optional cancellation reason
+
+    Returns:
+        Cancelled Excursion
+
+    Raises:
+        TripStateError: If excursion is already cancelled or completed
+    """
+    if excursion.status == "cancelled":
+        raise TripStateError("Excursion is already cancelled")
+
+    if excursion.status == "completed":
+        raise TripStateError("Cannot cancel a completed excursion")
+
+    # Cancel all active bookings
+    active_bookings = excursion.bookings.filter(
+        status__in=["pending", "confirmed"]
+    )
+    cancelled_at = timezone.now()
+
+    for booking in active_bookings:
+        booking.status = "cancelled"
+        booking.cancelled_at = cancelled_at
+        booking.save()
+
+        log_booking_event(
+            action=Actions.BOOKING_CANCELLED,
+            booking=booking,
+            actor=actor,
+            data={"reason": "Excursion cancelled"},
+        )
+
+    # Cancel the excursion
+    excursion.status = "cancelled"
+    excursion.save()
+
+    log_excursion_event(
+        action=Actions.EXCURSION_CANCELLED,
+        excursion=excursion,
+        actor=actor,
+        data={"reason": reason} if reason else None,
+    )
+
+    return excursion
+
+
+# =============================================================================
+# ExcursionType CRUD Services
+# =============================================================================
+
+
+@transaction.atomic
+def create_excursion_type(
+    *,
+    actor,
+    name: str,
+    slug: str,
+    dive_mode: str,
+    time_of_day: str,
+    max_depth_meters: int,
+    base_price,
+    currency: str = "USD",
+    description: str = "",
+    typical_duration_minutes: int = 60,
+    dives_per_excursion: int = 2,
+    min_certification_level: CertificationLevel | None = None,
+    requires_cert: bool = True,
+    is_training: bool = False,
+    is_active: bool = True,
+) -> ExcursionType:
+    """Create a new excursion type.
+
+    Args:
+        actor: User creating the type (required for audit)
+        name: Display name
+        slug: URL-friendly unique identifier
+        dive_mode: "boat" or "shore"
+        time_of_day: "day", "night", "dawn", or "dusk"
+        max_depth_meters: Maximum depth for this type
+        base_price: Starting price (Decimal)
+        currency: Currency code (default: USD)
+        description: Optional description
+        typical_duration_minutes: Expected duration (default: 60)
+        dives_per_excursion: Number of dives included (default: 2)
+        min_certification_level: Required certification FK (None = no requirement)
+        requires_cert: If False, skip certification check (DSD)
+        is_training: If True, this is a training dive
+        is_active: If False, type is not bookable
+
+    Returns:
+        Created ExcursionType
+
+    Raises:
+        IntegrityError: If slug already exists
+    """
+    excursion_type = ExcursionType.objects.create(
+        name=name,
+        slug=slug,
+        description=description,
+        dive_mode=dive_mode,
+        time_of_day=time_of_day,
+        max_depth_meters=max_depth_meters,
+        typical_duration_minutes=typical_duration_minutes,
+        dives_per_excursion=dives_per_excursion,
+        min_certification_level=min_certification_level,
+        requires_cert=requires_cert,
+        is_training=is_training,
+        base_price=base_price,
+        currency=currency,
+        is_active=is_active,
+    )
+
+    log_excursion_type_event(
+        action=Actions.EXCURSION_TYPE_CREATED,
+        excursion_type=excursion_type,
+        actor=actor,
+    )
+
+    return excursion_type
+
+
+@transaction.atomic
+def update_excursion_type(
+    *,
+    actor,
+    excursion_type: ExcursionType,
+    name: str | None = None,
+    slug: str | None = None,
+    description: str | None = None,
+    dive_mode: str | None = None,
+    time_of_day: str | None = None,
+    max_depth_meters: int | None = None,
+    typical_duration_minutes: int | None = None,
+    dives_per_excursion: int | None = None,
+    min_certification_level: CertificationLevel | None = None,
+    requires_cert: bool | None = None,
+    is_training: bool | None = None,
+    base_price=None,
+    currency: str | None = None,
+    is_active: bool | None = None,
+) -> ExcursionType:
+    """Update an existing excursion type.
+
+    Only provided fields are updated. Pass explicit value to change.
+
+    Args:
+        actor: User making the update (required for audit)
+        excursion_type: ExcursionType to update
+        name: New name (None = no change)
+        slug: New slug (None = no change)
+        description: New description (None = no change)
+        dive_mode: New dive mode (None = no change)
+        time_of_day: New time of day (None = no change)
+        max_depth_meters: New max depth (None = no change)
+        typical_duration_minutes: New duration (None = no change)
+        dives_per_excursion: New dive count (None = no change)
+        min_certification_level: New certification FK (None = no change)
+        requires_cert: New requires_cert flag (None = no change)
+        is_training: New is_training flag (None = no change)
+        base_price: New base price (None = no change)
+        currency: New currency (None = no change)
+        is_active: New active status (None = no change)
+
+    Returns:
+        Updated ExcursionType
+    """
+    changes = {}
+
+    # Update simple fields
+    _apply_tracked_update(excursion_type, "name", name, changes)
+    _apply_tracked_update(excursion_type, "slug", slug, changes)
+    _apply_tracked_update(excursion_type, "description", description, changes)
+    _apply_tracked_update(excursion_type, "dive_mode", dive_mode, changes)
+    _apply_tracked_update(excursion_type, "time_of_day", time_of_day, changes)
+    _apply_tracked_update(excursion_type, "max_depth_meters", max_depth_meters, changes)
+    _apply_tracked_update(excursion_type, "typical_duration_minutes", typical_duration_minutes, changes)
+    _apply_tracked_update(excursion_type, "dives_per_excursion", dives_per_excursion, changes)
+    _apply_tracked_update(excursion_type, "requires_cert", requires_cert, changes)
+    _apply_tracked_update(excursion_type, "is_training", is_training, changes)
+    _apply_tracked_update(excursion_type, "base_price", base_price, changes)
+    _apply_tracked_update(excursion_type, "currency", currency, changes)
+    _apply_tracked_update(excursion_type, "is_active", is_active, changes)
+
+    # Handle min_certification_level FK specially (can be set to None explicitly)
+    if min_certification_level is not None or "min_certification_level" in changes:
+        old_id = excursion_type.min_certification_level_id
+        new_id = min_certification_level.pk if min_certification_level else None
+        if new_id != old_id:
+            changes["min_certification_level"] = {
+                "old": str(old_id) if old_id else None,
+                "new": str(new_id) if new_id else None,
+            }
+            excursion_type.min_certification_level = min_certification_level
+
+    if changes:
+        excursion_type.save()
+
+        log_excursion_type_event(
+            action=Actions.EXCURSION_TYPE_UPDATED,
+            excursion_type=excursion_type,
+            actor=actor,
+            changes=changes,
+        )
+
+    return excursion_type
+
+
+@transaction.atomic
+def delete_excursion_type(
+    *,
+    actor,
+    excursion_type: ExcursionType,
+) -> ExcursionType:
+    """Soft delete an excursion type.
+
+    Sets deleted_at timestamp instead of actually deleting.
+    The type will be excluded from default queries.
+
+    Args:
+        actor: User deleting the type (required for audit)
+        excursion_type: ExcursionType to delete
+
+    Returns:
+        Updated ExcursionType with deleted_at set
+    """
+    excursion_type.deleted_at = timezone.now()
+    excursion_type.save()
+
+    log_excursion_type_event(
+        action=Actions.EXCURSION_TYPE_DELETED,
+        excursion_type=excursion_type,
+        actor=actor,
+    )
+
+    return excursion_type
+
+
+# =============================================================================
+# SitePriceAdjustment CRUD Services
+# =============================================================================
+
+
+@transaction.atomic
+def create_site_price_adjustment(
+    *,
+    actor,
+    dive_site: DiveSite,
+    kind: str,
+    amount,
+    currency: str = "USD",
+    applies_to_mode: str = "",
+    is_per_diver: bool = True,
+    is_active: bool = True,
+) -> SitePriceAdjustment:
+    """Create a new price adjustment for a dive site.
+
+    Args:
+        actor: User creating the adjustment (required for audit)
+        dive_site: DiveSite this adjustment applies to
+        kind: Adjustment type (distance, park_fee, night, boat)
+        amount: Adjustment amount (Decimal)
+        currency: Currency code (default: USD)
+        applies_to_mode: Optional mode filter (boat/shore, empty = all)
+        is_per_diver: If True, applied per diver; else per trip
+        is_active: If False, adjustment is not applied
+
+    Returns:
+        Created SitePriceAdjustment
+
+    Raises:
+        IntegrityError: If constraints are violated
+    """
+    adjustment = SitePriceAdjustment.objects.create(
+        dive_site=dive_site,
+        kind=kind,
+        amount=amount,
+        currency=currency,
+        applies_to_mode=applies_to_mode,
+        is_per_diver=is_per_diver,
+        is_active=is_active,
+    )
+
+    log_site_price_adjustment_event(
+        action=Actions.SITE_PRICE_ADJUSTMENT_CREATED,
+        adjustment=adjustment,
+        actor=actor,
+    )
+
+    return adjustment
+
+
+@transaction.atomic
+def update_site_price_adjustment(
+    *,
+    actor,
+    adjustment: SitePriceAdjustment,
+    kind: str | None = None,
+    amount=None,
+    currency: str | None = None,
+    applies_to_mode: str | None = None,
+    is_per_diver: bool | None = None,
+    is_active: bool | None = None,
+) -> SitePriceAdjustment:
+    """Update an existing price adjustment.
+
+    Only provided fields are updated. Pass explicit value to change.
+
+    Args:
+        actor: User making the update (required for audit)
+        adjustment: SitePriceAdjustment to update
+        kind: New adjustment type (None = no change)
+        amount: New amount (None = no change)
+        currency: New currency (None = no change)
+        applies_to_mode: New mode filter (None = no change)
+        is_per_diver: New per-diver flag (None = no change)
+        is_active: New active status (None = no change)
+
+    Returns:
+        Updated SitePriceAdjustment
+    """
+    changes = {}
+
+    _apply_tracked_update(adjustment, "kind", kind, changes)
+    _apply_tracked_update(adjustment, "amount", amount, changes)
+    _apply_tracked_update(adjustment, "currency", currency, changes)
+    _apply_tracked_update(adjustment, "applies_to_mode", applies_to_mode, changes)
+    _apply_tracked_update(adjustment, "is_per_diver", is_per_diver, changes)
+    _apply_tracked_update(adjustment, "is_active", is_active, changes)
+
+    if changes:
+        adjustment.save()
+
+        log_site_price_adjustment_event(
+            action=Actions.SITE_PRICE_ADJUSTMENT_UPDATED,
+            adjustment=adjustment,
+            actor=actor,
+            changes=changes,
+        )
+
+    return adjustment
+
+
+@transaction.atomic
+def delete_site_price_adjustment(
+    *,
+    actor,
+    adjustment: SitePriceAdjustment,
+) -> SitePriceAdjustment:
+    """Soft delete a price adjustment.
+
+    Sets deleted_at timestamp instead of actually deleting.
+    The adjustment will be excluded from default queries.
+
+    Args:
+        actor: User deleting the adjustment (required for audit)
+        adjustment: SitePriceAdjustment to delete
+
+    Returns:
+        Updated SitePriceAdjustment with deleted_at set
+    """
+    adjustment.deleted_at = timezone.now()
+    adjustment.save()
+
+    log_site_price_adjustment_event(
+        action=Actions.SITE_PRICE_ADJUSTMENT_DELETED,
+        adjustment=adjustment,
+        actor=actor,
+    )
+
+    return adjustment
