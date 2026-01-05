@@ -119,8 +119,10 @@ def run_settlement_batch(
     failed_count = 0
     error_details = {}
 
-    # Process each booking
+    # Process each booking with per-booking savepoints
+    # This ensures one failed booking doesn't poison the entire batch
     for booking in eligible_bookings:
+        sid = transaction.savepoint()
         try:
             settlement = create_revenue_settlement(
                 booking=booking,
@@ -132,7 +134,9 @@ def run_settlement_batch(
 
             total_amount += settlement.amount
             settled_count += 1
+            transaction.savepoint_commit(sid)
         except Exception as e:
+            transaction.savepoint_rollback(sid)
             failed_count += 1
             error_details[str(booking.pk)] = str(e)
 
