@@ -946,6 +946,70 @@ class Booking(BaseModel):
         return f"{self.diver.person} - {self.excursion}"
 
 
+class EligibilityOverride(BaseModel):
+    """INV-1: Booking-scoped eligibility override.
+
+    Allows staff to override eligibility checks for a SPECIFIC booking.
+    NOT a global override for a diver, excursion, or trip.
+
+    Key constraints:
+    - OneToOne relationship to Booking (booking-scoped ONLY)
+    - No FK to Excursion, Trip, or TripDay
+    - Override does NOT modify requirements - only bypasses check for this booking
+    - Requires approved_by and reason
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    # OneToOne to Booking - one override per booking maximum
+    booking = models.OneToOneField(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name="eligibility_override",
+    )
+
+    # The diver this override applies to (denormalized for clarity)
+    diver = models.ForeignKey(
+        DiverProfile,
+        on_delete=models.PROTECT,
+        related_name="eligibility_overrides",
+    )
+
+    # What requirement was bypassed
+    requirement_type = models.CharField(
+        max_length=50,
+        help_text="Type of requirement bypassed (certification, experience, medical, etc.)",
+    )
+    original_requirement = models.JSONField(
+        help_text="Original requirement that was bypassed (for audit trail)",
+    )
+
+    # Approval details (required)
+    reason = models.TextField(
+        help_text="Justification for the override (required)",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="eligibility_overrides_approved",
+    )
+    approved_at = models.DateTimeField(
+        default=timezone.now,
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["booking"]),
+            models.Index(fields=["diver"]),
+            models.Index(fields=["approved_at"]),
+        ]
+        ordering = ["-approved_at"]
+
+    def __str__(self):
+        return f"Override: {self.booking} ({self.requirement_type})"
+
+
 class ExcursionRoster(BaseModel):
     """Check-in record for a diver on an excursion.
 
@@ -1279,5 +1343,96 @@ class SitePriceAdjustment(BaseModel):
 
     def __str__(self):
         return f"{self.dive_site.name}: {self.get_kind_display()} ({self.amount} {self.currency})"
+
+
+# =============================================================================
+# Settlement Records - INV-4: Idempotent Financial Postings
+# =============================================================================
+
+
+class SettlementRecord(BaseModel):
+    """INV-4: Idempotent settlement record for booking payments.
+
+    Tracks financial settlements for bookings with ledger integration.
+    The idempotency_key ensures duplicate settlements are rejected.
+
+    Settlement types:
+    - revenue: Initial revenue recognition for a booking
+    - refund: Refund posting for cancelled bookings (T-006)
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class SettlementType(models.TextChoices):
+        REVENUE = "revenue", "Revenue"
+        REFUND = "refund", "Refund"
+
+    # Core relationship
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="settlements",
+    )
+
+    # Settlement type
+    settlement_type = models.CharField(
+        max_length=20,
+        choices=SettlementType.choices,
+        default=SettlementType.REVENUE,
+    )
+
+    # Idempotency - unique key prevents duplicate settlements
+    idempotency_key = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="Deterministic key: {booking_id}:{type}:{sequence}",
+    )
+
+    # Amount and currency (from booking price_snapshot)
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Settlement amount",
+    )
+    currency = models.CharField(
+        max_length=3,
+        default="USD",
+    )
+
+    # Ledger integration - links to posted transaction
+    transaction = models.ForeignKey(
+        "django_ledger.Transaction",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="diveops_settlements",
+        help_text="Linked ledger transaction (immutable after posting)",
+    )
+
+    # Audit
+    processed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="processed_settlements",
+    )
+    settled_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="When the settlement was recorded",
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [
+            # Unique idempotency key is handled by unique=True on field
+        ]
+        indexes = [
+            models.Index(fields=["booking", "settlement_type"]),
+            models.Index(fields=["settled_at"]),
+        ]
+        ordering = ["-settled_at"]
+
+    def __str__(self):
+        return f"Settlement {self.idempotency_key}: {self.amount} {self.currency}"
 
 

@@ -81,16 +81,26 @@ class Actions:
     CERTIFICATION_PROOF_REMOVED = "certification_proof_removed"
 
     # -------------------------------------------------------------------------
-    # Trip Actions
+    # Excursion Actions
     # -------------------------------------------------------------------------
-    TRIP_CREATED = "trip_created"
-    TRIP_UPDATED = "trip_updated"
-    TRIP_DELETED = "trip_deleted"
-    TRIP_PUBLISHED = "trip_published"
-    TRIP_CANCELLED = "trip_cancelled"
-    TRIP_RESCHEDULED = "trip_rescheduled"
-    TRIP_STARTED = "trip_started"
-    TRIP_COMPLETED = "trip_completed"
+    EXCURSION_CREATED = "excursion_created"
+    EXCURSION_UPDATED = "excursion_updated"
+    EXCURSION_DELETED = "excursion_deleted"
+    EXCURSION_PUBLISHED = "excursion_published"
+    EXCURSION_CANCELLED = "excursion_cancelled"
+    EXCURSION_RESCHEDULED = "excursion_rescheduled"
+    EXCURSION_STARTED = "excursion_started"
+    EXCURSION_COMPLETED = "excursion_completed"
+
+    # Backwards compatibility aliases (deprecated)
+    TRIP_CREATED = EXCURSION_CREATED
+    TRIP_UPDATED = EXCURSION_UPDATED
+    TRIP_DELETED = EXCURSION_DELETED
+    TRIP_PUBLISHED = EXCURSION_PUBLISHED
+    TRIP_CANCELLED = EXCURSION_CANCELLED
+    TRIP_RESCHEDULED = EXCURSION_RESCHEDULED
+    TRIP_STARTED = EXCURSION_STARTED
+    TRIP_COMPLETED = EXCURSION_COMPLETED
 
     # -------------------------------------------------------------------------
     # Booking / Roster Actions
@@ -101,8 +111,12 @@ class Actions:
     BOOKING_REFUNDED = "booking_refunded"
     DIVER_CHECKED_IN = "diver_checked_in"
     DIVER_NO_SHOW = "diver_no_show"
-    DIVER_COMPLETED_TRIP = "diver_completed_trip"
-    DIVER_REMOVED_FROM_TRIP = "diver_removed_from_trip"
+    DIVER_COMPLETED_EXCURSION = "diver_completed_excursion"
+    DIVER_REMOVED_FROM_EXCURSION = "diver_removed_from_excursion"
+
+    # Backwards compatibility aliases (deprecated)
+    DIVER_COMPLETED_TRIP = DIVER_COMPLETED_EXCURSION
+    DIVER_REMOVED_FROM_TRIP = DIVER_REMOVED_FROM_EXCURSION
 
     # -------------------------------------------------------------------------
     # Eligibility / Override Actions
@@ -110,13 +124,19 @@ class Actions:
     ELIGIBILITY_CHECKED = "eligibility_checked"
     ELIGIBILITY_FAILED = "eligibility_failed"
     ELIGIBILITY_OVERRIDDEN = "eligibility_overridden"
+    BOOKING_ELIGIBILITY_OVERRIDDEN = "booking_eligibility_overridden"  # INV-1: booking-scoped
 
     # -------------------------------------------------------------------------
-    # Trip Requirement Actions
+    # Excursion Requirement Actions
     # -------------------------------------------------------------------------
-    TRIP_REQUIREMENT_ADDED = "trip_requirement_added"
-    TRIP_REQUIREMENT_UPDATED = "trip_requirement_updated"
-    TRIP_REQUIREMENT_REMOVED = "trip_requirement_removed"
+    EXCURSION_REQUIREMENT_ADDED = "excursion_requirement_added"
+    EXCURSION_REQUIREMENT_UPDATED = "excursion_requirement_updated"
+    EXCURSION_REQUIREMENT_REMOVED = "excursion_requirement_removed"
+
+    # Backwards compatibility aliases (deprecated)
+    TRIP_REQUIREMENT_ADDED = EXCURSION_REQUIREMENT_ADDED
+    TRIP_REQUIREMENT_UPDATED = EXCURSION_REQUIREMENT_UPDATED
+    TRIP_REQUIREMENT_REMOVED = EXCURSION_REQUIREMENT_REMOVED
 
     # -------------------------------------------------------------------------
     # Dive Site Actions
@@ -124,6 +144,36 @@ class Actions:
     DIVE_SITE_CREATED = "dive_site_created"
     DIVE_SITE_UPDATED = "dive_site_updated"
     DIVE_SITE_DELETED = "dive_site_deleted"
+
+    # -------------------------------------------------------------------------
+    # Excursion Type Actions
+    # -------------------------------------------------------------------------
+    EXCURSION_TYPE_CREATED = "excursion_type_created"
+    EXCURSION_TYPE_UPDATED = "excursion_type_updated"
+    EXCURSION_TYPE_DELETED = "excursion_type_deleted"
+    EXCURSION_TYPE_ACTIVATED = "excursion_type_activated"
+    EXCURSION_TYPE_DEACTIVATED = "excursion_type_deactivated"
+
+    # -------------------------------------------------------------------------
+    # Site Price Adjustment Actions
+    # -------------------------------------------------------------------------
+    SITE_PRICE_ADJUSTMENT_CREATED = "site_price_adjustment_created"
+    SITE_PRICE_ADJUSTMENT_UPDATED = "site_price_adjustment_updated"
+    SITE_PRICE_ADJUSTMENT_DELETED = "site_price_adjustment_deleted"
+    SITE_PRICE_ADJUSTMENT_ACTIVATED = "site_price_adjustment_activated"
+    SITE_PRICE_ADJUSTMENT_DEACTIVATED = "site_price_adjustment_deactivated"
+
+    # -------------------------------------------------------------------------
+    # Agreement Actions
+    # -------------------------------------------------------------------------
+    AGREEMENT_CREATED = "agreement_created"
+    AGREEMENT_TERMINATED = "agreement_terminated"
+
+    # -------------------------------------------------------------------------
+    # Settlement Actions (INV-4)
+    # -------------------------------------------------------------------------
+    SETTLEMENT_POSTED = "settlement_posted"
+    REFUND_SETTLEMENT_POSTED = "refund_settlement_posted"
 
 
 # =============================================================================
@@ -277,7 +327,7 @@ def log_excursion_event(
     """Log an audit event for an excursion operation.
 
     Args:
-        action: One of Actions.TRIP_* constants
+        action: One of Actions.EXCURSION_* constants
         excursion: Excursion instance
         actor: Django User who performed the action
         data: Optional additional context
@@ -402,6 +452,39 @@ def log_eligibility_event(
     )
 
 
+def log_booking_override_event(
+    override,
+    actor=None,
+    request=None,
+):
+    """Log an audit event for a booking eligibility override (INV-1).
+
+    Args:
+        override: EligibilityOverride instance
+        actor: Django User who approved the override
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "booking_id": str(override.booking_id),
+        "diver_id": str(override.diver_id),
+        "requirement_type": override.requirement_type,
+        "original_requirement": override.original_requirement,
+        "reason": override.reason,
+        "approved_by_id": str(override.approved_by_id),
+    }
+
+    return audit_log(
+        action=Actions.BOOKING_ELIGIBILITY_OVERRIDDEN,
+        obj=override.booking,
+        actor=actor or override.approved_by,
+        metadata=metadata,
+        request=request,
+    )
+
+
 def log_trip_requirement_event(
     action: str,
     requirement,
@@ -410,11 +493,11 @@ def log_trip_requirement_event(
     changes: dict | None = None,
     request=None,
 ):
-    """Log an audit event for a trip requirement operation.
+    """Log an audit event for an excursion requirement operation.
 
     Args:
-        action: One of Actions.TRIP_REQUIREMENT_* constants
-        requirement: TripRequirement instance
+        action: One of Actions.EXCURSION_REQUIREMENT_* constants
+        requirement: ExcursionRequirement instance
         actor: Django User who performed the action
         data: Optional additional context
         changes: Optional field changes
@@ -470,6 +553,72 @@ def log_site_event(
     return audit_log(
         action=action,
         obj=site,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_excursion_type_event(
+    action: str,
+    excursion_type,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for an excursion type operation.
+
+    Args:
+        action: One of Actions.EXCURSION_TYPE_* constants
+        excursion_type: ExcursionType instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = _build_excursion_type_metadata(excursion_type, data)
+
+    return audit_log(
+        action=action,
+        obj=excursion_type,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_site_price_adjustment_event(
+    action: str,
+    adjustment,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a site price adjustment operation.
+
+    Args:
+        action: One of Actions.SITE_PRICE_ADJUSTMENT_* constants
+        adjustment: SitePriceAdjustment instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = _build_site_price_adjustment_metadata(adjustment, data)
+
+    return audit_log(
+        action=action,
+        obj=adjustment,
         actor=actor,
         changes=changes or {},
         metadata=metadata,
@@ -635,3 +784,97 @@ def _build_site_metadata(site, extra_data: dict | None = None) -> dict:
         metadata.update(extra_data)
 
     return metadata
+
+
+def _build_excursion_type_metadata(excursion_type, extra_data: dict | None = None) -> dict:
+    """Build consistent metadata for excursion type audit events."""
+    metadata = {
+        "excursion_type_id": str(excursion_type.pk),
+        "excursion_type_name": excursion_type.name,
+        "dive_mode": excursion_type.dive_mode,
+        "time_of_day": excursion_type.time_of_day,
+        "is_active": excursion_type.is_active,
+    }
+
+    if excursion_type.base_price is not None:
+        metadata["base_price"] = str(excursion_type.base_price)
+        metadata["currency"] = excursion_type.currency
+
+    if excursion_type.min_certification_level_id:
+        metadata["min_certification_level_id"] = str(excursion_type.min_certification_level_id)
+        if excursion_type.min_certification_level:
+            metadata["min_certification_level_name"] = excursion_type.min_certification_level.name
+
+    metadata["requires_cert"] = excursion_type.requires_cert
+    metadata["is_training"] = excursion_type.is_training
+
+    if extra_data:
+        metadata.update(extra_data)
+
+    return metadata
+
+
+def _build_site_price_adjustment_metadata(adjustment, extra_data: dict | None = None) -> dict:
+    """Build consistent metadata for site price adjustment audit events."""
+    metadata = {
+        "adjustment_id": str(adjustment.pk),
+        "kind": adjustment.kind,
+        "amount": str(adjustment.amount),
+        "is_active": adjustment.is_active,
+    }
+
+    if adjustment.dive_site_id:
+        metadata["dive_site_id"] = str(adjustment.dive_site_id)
+        if adjustment.dive_site:
+            metadata["dive_site_name"] = adjustment.dive_site.name
+
+    if adjustment.applies_to_mode:
+        metadata["applies_to_mode"] = adjustment.applies_to_mode
+
+    if extra_data:
+        metadata.update(extra_data)
+
+    return metadata
+
+
+def log_settlement_event(
+    action: str,
+    settlement,
+    actor=None,
+    data: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a settlement operation.
+
+    Args:
+        action: One of Actions.SETTLEMENT_* constants
+        settlement: SettlementRecord instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "settlement_id": str(settlement.pk),
+        "booking_id": str(settlement.booking_id),
+        "idempotency_key": settlement.idempotency_key,
+        "settlement_type": settlement.settlement_type,
+        "amount": str(settlement.amount),
+        "currency": settlement.currency,
+    }
+
+    if settlement.transaction_id:
+        metadata["transaction_id"] = str(settlement.transaction_id)
+
+    if data:
+        metadata.update(data)
+
+    return audit_log(
+        action=action,
+        obj=settlement,
+        actor=actor,
+        metadata=metadata,
+        request=request,
+    )

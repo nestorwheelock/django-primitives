@@ -246,6 +246,71 @@ def record_eligibility_override(
 
 
 # =============================================================================
+# INV-1: Booking-Scoped Eligibility Override
+# =============================================================================
+
+
+def record_booking_eligibility_override(
+    booking: "Booking",
+    diver: DiverProfile,
+    *,
+    requirement_type: str,
+    original_requirement: dict,
+    approver,
+    reason: str,
+    effective_at: datetime | None = None,
+) -> "EligibilityOverride":
+    """Record a booking-level eligibility override (INV-1).
+
+    Creates an EligibilityOverride record that allows a specific booking
+    to bypass eligibility requirements. This is booking-scoped ONLY and
+    does not affect any other bookings, excursions, or trips.
+
+    Args:
+        booking: Booking to override eligibility for
+        diver: DiverProfile being overridden
+        requirement_type: Type of requirement being bypassed (e.g., "certification")
+        original_requirement: Original requirement that was bypassed (dict for audit)
+        approver: User who approved the override (required)
+        reason: Justification for the override (required)
+        effective_at: When the override was approved (defaults to now)
+
+    Returns:
+        EligibilityOverride instance
+
+    Raises:
+        ValueError: If approver or reason is missing/empty
+    """
+    from .audit import log_booking_override_event
+    from .models import EligibilityOverride
+
+    if not approver:
+        raise ValueError("approver is required for booking eligibility override")
+
+    if not reason or not reason.strip():
+        raise ValueError("reason is required for booking eligibility override")
+
+    if effective_at is None:
+        effective_at = timezone.now()
+
+    # Create the override record
+    override = EligibilityOverride.objects.create(
+        booking=booking,
+        diver=diver,
+        requirement_type=requirement_type,
+        original_requirement=original_requirement,
+        reason=reason,
+        approved_by=approver,
+        approved_at=effective_at,
+    )
+
+    # Emit audit event
+    log_booking_override_event(override=override, actor=approver)
+
+    return override
+
+
+# =============================================================================
 # INV-2: Unified Layered Eligibility Engine
 # =============================================================================
 
@@ -263,6 +328,7 @@ class LayeredEligibilityResult:
         checked_layers: List of layers that were evaluated (e.g., ["excursion_type", "excursion"])
         diver_rank: Diver's highest certification rank (None if uncertified)
         required_rank: Required certification rank (None if no requirement)
+        override_used: True if eligibility granted via booking-level override (INV-1)
     """
 
     eligible: bool
@@ -271,6 +337,7 @@ class LayeredEligibilityResult:
     checked_layers: list[str] = field(default_factory=list)
     diver_rank: int | None = None
     required_rank: int | None = None
+    override_used: bool = False
 
 
 def get_diver_highest_certification_rank_as_of(
@@ -385,13 +452,14 @@ def check_layered_eligibility(
     """Unified eligibility check supporting layered hierarchy.
 
     INV-2: Single authoritative entry point for all eligibility checks.
+    INV-1: Booking-level overrides are checked for Booking targets.
 
     Layer evaluation order:
     1. ExcursionType (certification requirements)
     2. Excursion (operational requirements)
     3. Trip (commercial/status requirements)
 
-    Short-circuits on first failure.
+    Short-circuits on first failure, UNLESS a booking-level override exists (INV-1).
 
     Args:
         diver: DiverProfile to check
@@ -402,7 +470,7 @@ def check_layered_eligibility(
     Returns:
         LayeredEligibilityResult with eligibility status, reason, and checked_layers
     """
-    from .models import Booking, Trip
+    from .models import Booking, EligibilityOverride, Trip
 
     if effective_at is None:
         effective_at = timezone.now()
@@ -414,6 +482,7 @@ def check_layered_eligibility(
     excursion_type: ExcursionType | None = None
     excursion: Excursion | None = None
     trip: Trip | None = None
+    booking: Booking | None = None
 
     if isinstance(target, ExcursionType):
         excursion_type = target
@@ -426,11 +495,19 @@ def check_layered_eligibility(
         # Trip may have excursions with types, but Trip-level check doesn't
         # require excursion_type layer
     elif isinstance(target, Booking):
+        booking = target
         excursion = target.excursion
         excursion_type = excursion.excursion_type if excursion else None
         trip = excursion.trip if excursion else None
     else:
         raise TypeError(f"Unsupported target type: {type(target).__name__}")
+
+    # INV-1: Check for booking-level override (only for Booking targets)
+    has_override = False
+    if booking is not None:
+        has_override = EligibilityOverride.objects.filter(
+            booking=booking, diver=diver
+        ).exists()
 
     # Layer 1: ExcursionType eligibility (certification)
     if excursion_type is not None:
@@ -439,6 +516,17 @@ def check_layered_eligibility(
             _check_excursion_type_eligibility(diver, excursion_type, as_of_date)
         )
         if not eligible:
+            # INV-1: Check if booking-level override permits eligibility
+            if has_override:
+                return LayeredEligibilityResult(
+                    eligible=True,
+                    reason="",
+                    override_allowed=False,
+                    checked_layers=checked_layers,
+                    diver_rank=diver_rank,
+                    required_rank=required_rank,
+                    override_used=True,
+                )
             return LayeredEligibilityResult(
                 eligible=False,
                 reason=reason,
@@ -459,6 +547,17 @@ def check_layered_eligibility(
                 _check_excursion_type_eligibility(diver, excursion.excursion_type, as_of_date)
             )
             if not eligible:
+                # INV-1: Check if booking-level override permits eligibility
+                if has_override:
+                    return LayeredEligibilityResult(
+                        eligible=True,
+                        reason="",
+                        override_allowed=False,
+                        checked_layers=checked_layers,
+                        diver_rank=diver_rank,
+                        required_rank=required_rank,
+                        override_used=True,
+                    )
                 return LayeredEligibilityResult(
                     eligible=False,
                     reason=reason,
