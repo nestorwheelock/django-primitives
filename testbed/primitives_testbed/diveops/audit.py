@@ -140,6 +140,20 @@ class Actions:
     TRIP_REQUIREMENT_REMOVED = EXCURSION_REQUIREMENT_REMOVED
 
     # -------------------------------------------------------------------------
+    # Dive Actions (individual dives within an excursion)
+    # -------------------------------------------------------------------------
+    DIVE_CREATED = "dive_created"
+    DIVE_UPDATED = "dive_updated"
+    DIVE_DELETED = "dive_deleted"
+
+    # -------------------------------------------------------------------------
+    # Dive Template Actions (ExcursionTypeDive - product configuration)
+    # -------------------------------------------------------------------------
+    DIVE_TEMPLATE_CREATED = "dive_template_created"
+    DIVE_TEMPLATE_UPDATED = "dive_template_updated"
+    DIVE_TEMPLATE_DELETED = "dive_template_deleted"
+
+    # -------------------------------------------------------------------------
     # Dive Site Actions
     # -------------------------------------------------------------------------
     DIVE_SITE_CREATED = "dive_site_created"
@@ -529,6 +543,72 @@ def log_trip_requirement_event(
     )
 
 
+def log_dive_event(
+    action: str,
+    dive,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a dive operation.
+
+    Args:
+        action: One of Actions.DIVE_* constants
+        dive: Dive instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = _build_dive_metadata(dive, data)
+
+    return audit_log(
+        action=action,
+        obj=dive,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_dive_template_event(
+    action: str,
+    dive_template,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for an excursion type dive template operation.
+
+    Args:
+        action: One of Actions.DIVE_TEMPLATE_* constants
+        dive_template: ExcursionTypeDive instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = _build_dive_template_metadata(dive_template, data)
+
+    return audit_log(
+        action=action,
+        obj=dive_template,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
 def log_site_event(
     action: str,
     site,
@@ -751,6 +831,61 @@ def _build_roster_metadata(roster, extra_data: dict | None = None) -> dict:
 
     if roster.role:
         metadata["role"] = roster.role
+
+    if extra_data:
+        metadata.update(extra_data)
+
+    return metadata
+
+
+def _build_dive_metadata(dive, extra_data: dict | None = None) -> dict:
+    """Build consistent metadata for dive audit events."""
+    metadata = {
+        "dive_id": str(dive.pk),
+        "sequence": dive.sequence,
+    }
+
+    if dive.excursion_id:
+        metadata["excursion_id"] = str(dive.excursion_id)
+
+    if dive.dive_site_id:
+        metadata["dive_site_id"] = str(dive.dive_site_id)
+        if dive.dive_site:
+            metadata["dive_site_name"] = dive.dive_site.name
+
+    if dive.planned_start:
+        metadata["planned_start"] = dive.planned_start.isoformat()
+
+    if dive.planned_duration_minutes:
+        metadata["planned_duration_minutes"] = dive.planned_duration_minutes
+
+    if dive.max_depth_meters:
+        metadata["max_depth_meters"] = dive.max_depth_meters
+
+    if extra_data:
+        metadata.update(extra_data)
+
+    return metadata
+
+
+def _build_dive_template_metadata(dive_template, extra_data: dict | None = None) -> dict:
+    """Build consistent metadata for excursion type dive template audit events."""
+    metadata = {
+        "dive_template_id": str(dive_template.pk),
+        "sequence": dive_template.sequence,
+        "name": dive_template.name,
+    }
+
+    if dive_template.excursion_type_id:
+        metadata["excursion_type_id"] = str(dive_template.excursion_type_id)
+        if dive_template.excursion_type:
+            metadata["excursion_type_name"] = dive_template.excursion_type.name
+
+    if dive_template.offset_minutes is not None:
+        metadata["offset_minutes"] = dive_template.offset_minutes
+
+    if dive_template.planned_duration_minutes:
+        metadata["planned_duration_minutes"] = dive_template.planned_duration_minutes
 
     if extra_data:
         metadata.update(extra_data)

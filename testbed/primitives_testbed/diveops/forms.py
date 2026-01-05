@@ -6,14 +6,20 @@ from django.db import transaction
 
 from django_parties.models import Organization, Person
 
+from django.db import models
+
 from .models import (
     Booking,
     CertificationLevel,
+    Dive,
     DiverCertification,
     DiverProfile,
     DiveSite,
     Excursion,
     ExcursionRequirement,
+    ExcursionType,
+    ExcursionTypeDive,
+    SitePriceAdjustment,
 )
 
 # Backwards compatibility aliases
@@ -502,6 +508,11 @@ class DiveSiteForm(forms.Form):
         choices=DiveSite.DIFFICULTY_CHOICES,
         label="Difficulty",
     )
+    dive_mode = forms.ChoiceField(
+        choices=DiveSite.DiveMode.choices,
+        label="Access Type",
+        help_text="How divers access this site (boat, shore, cenote, cavern)",
+    )
     min_certification_level = forms.ModelChoiceField(
         queryset=CertificationLevel.objects.filter(is_active=True).select_related("agency").order_by("rank"),
         required=False,
@@ -537,6 +548,7 @@ class DiveSiteForm(forms.Form):
             self.fields["longitude"].initial = instance.place.longitude
             self.fields["max_depth_meters"].initial = instance.max_depth_meters
             self.fields["difficulty"].initial = instance.difficulty
+            self.fields["dive_mode"].initial = instance.dive_mode
             self.fields["min_certification_level"].initial = instance.min_certification_level
             self.fields["rating"].initial = instance.rating
             self.fields["tags"].initial = ", ".join(instance.tags) if instance.tags else ""
@@ -577,6 +589,7 @@ class DiveSiteForm(forms.Form):
                 longitude=data["longitude"],
                 max_depth_meters=data["max_depth_meters"],
                 difficulty=data["difficulty"],
+                dive_mode=data["dive_mode"],
                 min_certification_level=data.get("min_certification_level"),
                 rating=data.get("rating"),
                 tags=data.get("tags", []),
@@ -591,9 +604,630 @@ class DiveSiteForm(forms.Form):
                 longitude=data["longitude"],
                 max_depth_meters=data["max_depth_meters"],
                 difficulty=data["difficulty"],
+                dive_mode=data["dive_mode"],
                 min_certification_level=data.get("min_certification_level"),
                 rating=data.get("rating"),
                 tags=data.get("tags", []),
             )
 
         return site
+
+
+class ExcursionForm(forms.Form):
+    """Form to create or edit an excursion.
+
+    Uses services for all write operations.
+    Supports optional excursion_type selection for pricing computation.
+    """
+
+    excursion_type = forms.ModelChoiceField(
+        queryset=ExcursionType.objects.filter(is_active=True).order_by("name"),
+        label="Excursion Type",
+        required=False,
+        help_text="Optional: Select a product type for automatic pricing",
+    )
+    dive_site = forms.ModelChoiceField(
+        queryset=DiveSite.objects.order_by("name"),
+        label="Dive Site",
+        help_text="Select the dive site for this excursion",
+    )
+    dive_shop = forms.ModelChoiceField(
+        queryset=Organization.objects.filter(org_type="dive_shop").order_by("name"),
+        label="Dive Shop",
+        help_text="Select the dive shop operating this excursion",
+    )
+    departure_time = forms.DateTimeField(
+        label="Departure Time",
+        widget=forms.DateTimeInput(
+            attrs={"type": "datetime-local"},
+            format="%Y-%m-%dT%H:%M",
+        ),
+        help_text="Scheduled departure date and time",
+    )
+    return_time = forms.DateTimeField(
+        label="Return Time",
+        widget=forms.DateTimeInput(
+            attrs={"type": "datetime-local"},
+            format="%Y-%m-%dT%H:%M",
+        ),
+        help_text="Scheduled return date and time",
+    )
+    max_divers = forms.IntegerField(
+        label="Max Divers",
+        min_value=1,
+        max_value=100,
+        initial=8,
+        help_text="Maximum number of divers for this excursion",
+    )
+    price_per_diver = forms.DecimalField(
+        label="Price per Diver",
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        help_text="Price per diver (leave blank to use computed price from excursion type)",
+    )
+    currency = forms.ChoiceField(
+        label="Currency",
+        choices=[
+            ("USD", "USD"),
+            ("EUR", "EUR"),
+            ("GBP", "GBP"),
+            ("AUD", "AUD"),
+        ],
+        initial="USD",
+        required=False,
+    )
+
+    def __init__(self, *args, instance=None, **kwargs):
+        """Initialize form with optional instance for editing."""
+        self.instance = instance
+        super().__init__(*args, **kwargs)
+
+        if instance:
+            # Pre-populate form with existing values
+            self.fields["excursion_type"].initial = instance.excursion_type
+            self.fields["dive_site"].initial = instance.dive_site
+            self.fields["dive_shop"].initial = instance.dive_shop
+            self.fields["departure_time"].initial = instance.departure_time
+            self.fields["return_time"].initial = instance.return_time
+            self.fields["max_divers"].initial = instance.max_divers
+            self.fields["price_per_diver"].initial = instance.price_per_diver
+            self.fields["currency"].initial = instance.currency
+
+    def clean(self):
+        """Validate that return time is after departure time."""
+        cleaned_data = super().clean()
+        departure = cleaned_data.get("departure_time")
+        return_time = cleaned_data.get("return_time")
+
+        if departure and return_time and return_time <= departure:
+            raise ValidationError(
+                "Return time must be after departure time."
+            )
+
+        return cleaned_data
+
+    def get_computed_price(self):
+        """Compute price from excursion type and dive site if available.
+
+        Returns:
+            ComputedPrice or None if no excursion_type selected
+        """
+        excursion_type = self.cleaned_data.get("excursion_type")
+        dive_site = self.cleaned_data.get("dive_site")
+
+        if excursion_type and dive_site:
+            from .pricing_service import compute_excursion_price
+
+            return compute_excursion_price(excursion_type, dive_site)
+        return None
+
+
+class DiveForm(forms.Form):
+    """Form for creating/editing a dive within an excursion."""
+
+    dive_site = forms.ModelChoiceField(
+        queryset=DiveSite.objects.all(),
+        label="Dive Site",
+        help_text="Select the dive site for this dive",
+    )
+    sequence = forms.IntegerField(
+        label="Dive Number",
+        min_value=1,
+        max_value=10,
+        initial=1,
+        help_text="Sequence number (1st dive, 2nd dive, etc.)",
+    )
+    planned_start = forms.DateTimeField(
+        label="Planned Start Time",
+        widget=forms.DateTimeInput(
+            attrs={"type": "datetime-local"},
+            format="%Y-%m-%dT%H:%M",
+        ),
+        help_text="When this dive is scheduled to start",
+    )
+    planned_duration_minutes = forms.IntegerField(
+        label="Planned Duration (minutes)",
+        min_value=10,
+        max_value=180,
+        required=False,
+        help_text="Estimated dive duration in minutes",
+    )
+    max_depth_meters = forms.IntegerField(
+        label="Max Depth (meters)",
+        min_value=1,
+        max_value=60,
+        required=False,
+        help_text="Maximum planned depth in meters",
+    )
+    notes = forms.CharField(
+        label="Notes",
+        widget=forms.Textarea(attrs={"rows": 3}),
+        required=False,
+        help_text="Any additional notes about this dive",
+    )
+
+    def __init__(self, *args, excursion=None, instance=None, **kwargs):
+        """Initialize form with excursion context and optional instance."""
+        self.excursion = excursion
+        self.instance = instance
+        super().__init__(*args, **kwargs)
+
+        if instance:
+            self.fields["dive_site"].initial = instance.dive_site
+            self.fields["sequence"].initial = instance.sequence
+            self.fields["planned_start"].initial = instance.planned_start
+            self.fields["planned_duration_minutes"].initial = instance.planned_duration_minutes
+            self.fields["max_depth_meters"].initial = instance.max_depth_meters
+            self.fields["notes"].initial = instance.notes
+        elif excursion:
+            # Default sequence to next available
+            max_seq = excursion.dives.aggregate(models.Max("sequence"))["sequence__max"] or 0
+            self.fields["sequence"].initial = max_seq + 1
+            # Default planned_start to excursion departure
+            self.fields["planned_start"].initial = excursion.departure_time
+
+
+class ExcursionTypeForm(forms.Form):
+    """Form to create or edit an excursion type.
+
+    Handles all ExcursionType fields and delegates to service layer for writes.
+    """
+
+    name = forms.CharField(
+        max_length=100,
+        label="Name",
+        help_text="Display name for this excursion type",
+    )
+    slug = forms.SlugField(
+        max_length=50,
+        label="Slug",
+        help_text="URL-friendly identifier (unique)",
+    )
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        label="Description",
+    )
+    dive_mode = forms.ChoiceField(
+        choices=ExcursionType.DiveMode.choices,
+        label="Dive Mode",
+    )
+    time_of_day = forms.ChoiceField(
+        choices=ExcursionType.TimeOfDay.choices,
+        label="Time of Day",
+    )
+    max_depth_meters = forms.IntegerField(
+        min_value=1,
+        max_value=100,
+        label="Max Depth (meters)",
+    )
+    typical_duration_minutes = forms.IntegerField(
+        min_value=15,
+        max_value=480,
+        initial=60,
+        label="Typical Duration (minutes)",
+    )
+    dives_per_excursion = forms.IntegerField(
+        min_value=1,
+        max_value=10,
+        initial=2,
+        label="Dives per Excursion",
+    )
+    min_certification_level = forms.ModelChoiceField(
+        queryset=CertificationLevel.objects.filter(is_active=True).select_related("agency").order_by("rank"),
+        required=False,
+        empty_label="No requirement",
+        label="Minimum Certification",
+        help_text="Required certification level (leave empty for DSD)",
+    )
+    requires_cert = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Requires Certification",
+        help_text="Uncheck for Discover Scuba Diving (DSD)",
+    )
+    is_training = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Is Training Dive",
+        help_text="Check for intro/training dives (DSD)",
+    )
+    base_price = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=0,
+        label="Base Price",
+        help_text="Starting price before site adjustments",
+    )
+    currency = forms.ChoiceField(
+        choices=[
+            ("USD", "USD"),
+            ("EUR", "EUR"),
+            ("GBP", "GBP"),
+            ("AUD", "AUD"),
+        ],
+        initial="USD",
+        label="Currency",
+    )
+    is_active = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Active",
+        help_text="Inactive types are hidden from booking",
+    )
+
+    def __init__(self, *args, instance=None, **kwargs):
+        """Initialize form, optionally with existing ExcursionType.
+
+        Args:
+            instance: Existing ExcursionType for editing
+        """
+        self.instance = instance
+        super().__init__(*args, **kwargs)
+
+        # Pre-populate fields if editing existing type
+        if instance:
+            self.fields["name"].initial = instance.name
+            self.fields["slug"].initial = instance.slug
+            self.fields["description"].initial = instance.description
+            self.fields["dive_mode"].initial = instance.dive_mode
+            self.fields["time_of_day"].initial = instance.time_of_day
+            self.fields["max_depth_meters"].initial = instance.max_depth_meters
+            self.fields["typical_duration_minutes"].initial = instance.typical_duration_minutes
+            self.fields["dives_per_excursion"].initial = instance.dives_per_excursion
+            self.fields["min_certification_level"].initial = instance.min_certification_level
+            self.fields["requires_cert"].initial = instance.requires_cert
+            self.fields["is_training"].initial = instance.is_training
+            self.fields["base_price"].initial = instance.base_price
+            self.fields["currency"].initial = instance.currency
+            self.fields["is_active"].initial = instance.is_active
+
+    def clean_slug(self):
+        """Validate slug is unique (unless editing same type)."""
+        slug = self.cleaned_data["slug"]
+
+        existing = ExcursionType.objects.filter(slug=slug).first()
+        if existing:
+            if self.instance and self.instance.pk == existing.pk:
+                return slug
+            raise forms.ValidationError("An excursion type with this slug already exists.")
+
+        return slug
+
+    @transaction.atomic
+    def save(self, actor=None):
+        """Save ExcursionType via service layer.
+
+        Delegates to create_excursion_type or update_excursion_type services.
+        Services handle audit events.
+
+        Args:
+            actor: User performing the action (passed to services)
+
+        Returns:
+            ExcursionType instance
+        """
+        from .services import create_excursion_type, update_excursion_type
+
+        data = self.cleaned_data
+
+        if self.instance:
+            # Update existing type via service
+            excursion_type = update_excursion_type(
+                actor=actor,
+                excursion_type=self.instance,
+                name=data["name"],
+                slug=data["slug"],
+                description=data.get("description", ""),
+                dive_mode=data["dive_mode"],
+                time_of_day=data["time_of_day"],
+                max_depth_meters=data["max_depth_meters"],
+                typical_duration_minutes=data["typical_duration_minutes"],
+                dives_per_excursion=data["dives_per_excursion"],
+                min_certification_level=data.get("min_certification_level"),
+                requires_cert=data.get("requires_cert", True),
+                is_training=data.get("is_training", False),
+                base_price=data["base_price"],
+                currency=data["currency"],
+                is_active=data.get("is_active", True),
+            )
+        else:
+            # Create new type via service
+            excursion_type = create_excursion_type(
+                actor=actor,
+                name=data["name"],
+                slug=data["slug"],
+                description=data.get("description", ""),
+                dive_mode=data["dive_mode"],
+                time_of_day=data["time_of_day"],
+                max_depth_meters=data["max_depth_meters"],
+                typical_duration_minutes=data["typical_duration_minutes"],
+                dives_per_excursion=data["dives_per_excursion"],
+                min_certification_level=data.get("min_certification_level"),
+                requires_cert=data.get("requires_cert", True),
+                is_training=data.get("is_training", False),
+                base_price=data["base_price"],
+                currency=data["currency"],
+                is_active=data.get("is_active", True),
+            )
+
+        return excursion_type
+
+
+class ExcursionTypeDiveForm(forms.Form):
+    """Form to create or edit a dive template within an excursion type.
+
+    Handles all ExcursionTypeDive fields. Used to define the individual dives
+    that make up an excursion product (e.g., "First Tank", "Second Tank").
+    """
+
+    sequence = forms.IntegerField(
+        min_value=1,
+        max_value=10,
+        label="Dive Number",
+        help_text="Sequence within the excursion (1st dive, 2nd dive, etc.)",
+    )
+    name = forms.CharField(
+        max_length=100,
+        label="Name",
+        help_text="Name for this dive (e.g., 'First Tank', 'Deep Dive')",
+    )
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+        label="Description",
+    )
+    planned_depth_meters = forms.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=100,
+        label="Target Depth (m)",
+        help_text="Maximum depth in meters for this dive",
+    )
+    planned_duration_minutes = forms.IntegerField(
+        required=False,
+        min_value=10,
+        max_value=180,
+        label="Duration (min)",
+        help_text="Planned duration in minutes",
+    )
+    offset_minutes = forms.IntegerField(
+        min_value=0,
+        max_value=480,
+        initial=0,
+        label="Offset (min)",
+        help_text="Minutes after excursion departure that this dive starts",
+    )
+    min_certification_level = forms.ModelChoiceField(
+        queryset=CertificationLevel.objects.filter(is_active=True).select_related("agency").order_by("rank"),
+        required=False,
+        empty_label="Same as excursion type",
+        label="Certification Override",
+        help_text="Override certification requirement for this specific dive",
+    )
+
+    def __init__(self, *args, excursion_type=None, instance=None, **kwargs):
+        """Initialize form with excursion type context and optional instance.
+
+        Args:
+            excursion_type: Parent ExcursionType (required for create)
+            instance: Existing ExcursionTypeDive for editing
+        """
+        self.excursion_type = excursion_type or (instance.excursion_type if instance else None)
+        self.instance = instance
+        super().__init__(*args, **kwargs)
+
+        if instance:
+            self.fields["sequence"].initial = instance.sequence
+            self.fields["name"].initial = instance.name
+            self.fields["description"].initial = instance.description
+            self.fields["planned_depth_meters"].initial = instance.planned_depth_meters
+            self.fields["planned_duration_minutes"].initial = instance.planned_duration_minutes
+            self.fields["offset_minutes"].initial = instance.offset_minutes
+            self.fields["min_certification_level"].initial = instance.min_certification_level
+        elif excursion_type:
+            # Default sequence to next available
+            max_seq = excursion_type.dive_templates.aggregate(
+                models.Max("sequence")
+            )["sequence__max"] or 0
+            self.fields["sequence"].initial = max_seq + 1
+
+    def clean_sequence(self):
+        """Validate sequence is unique within excursion type."""
+        sequence = self.cleaned_data["sequence"]
+
+        # Check for duplicate sequence (excluding current instance if editing)
+        existing = ExcursionTypeDive.objects.filter(
+            excursion_type=self.excursion_type,
+            sequence=sequence,
+        )
+        if self.instance:
+            existing = existing.exclude(pk=self.instance.pk)
+
+        if existing.exists():
+            raise forms.ValidationError(
+                f"Dive {sequence} already exists for this excursion type."
+            )
+
+        return sequence
+
+    def save(self, actor=None):
+        """Save ExcursionTypeDive via service layer.
+
+        Delegates to create_dive_template or update_dive_template services.
+        Services handle audit events and transaction management.
+
+        Args:
+            actor: User performing the action (passed to services)
+
+        Returns:
+            ExcursionTypeDive instance
+        """
+        from .services import create_dive_template, update_dive_template
+
+        data = self.cleaned_data
+
+        if self.instance:
+            # Update existing via service
+            return update_dive_template(
+                actor=actor,
+                dive_template=self.instance,
+                sequence=data["sequence"],
+                name=data["name"],
+                description=data.get("description", ""),
+                planned_depth_meters=data.get("planned_depth_meters"),
+                planned_duration_minutes=data.get("planned_duration_minutes"),
+                offset_minutes=data["offset_minutes"],
+                min_certification_level=data.get("min_certification_level"),
+                clear_min_certification=data.get("min_certification_level") is None,
+            )
+        else:
+            # Create new via service
+            return create_dive_template(
+                actor=actor,
+                excursion_type=self.excursion_type,
+                sequence=data["sequence"],
+                name=data["name"],
+                description=data.get("description", ""),
+                planned_depth_meters=data.get("planned_depth_meters"),
+                planned_duration_minutes=data.get("planned_duration_minutes"),
+                offset_minutes=data["offset_minutes"],
+                min_certification_level=data.get("min_certification_level"),
+            )
+
+
+class SitePriceAdjustmentForm(forms.Form):
+    """Form to create or edit a site price adjustment.
+
+    Handles all SitePriceAdjustment fields and delegates to service layer for writes.
+    Note: dive_site is not a form field - it's set externally when creating adjustments.
+    """
+
+    kind = forms.ChoiceField(
+        choices=SitePriceAdjustment.AdjustmentKind.choices,
+        label="Adjustment Type",
+        help_text="Type of price adjustment",
+    )
+    amount = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        label="Amount",
+        help_text="Adjustment amount (added to base price)",
+    )
+    currency = forms.ChoiceField(
+        choices=[
+            ("USD", "USD"),
+            ("EUR", "EUR"),
+            ("GBP", "GBP"),
+            ("AUD", "AUD"),
+        ],
+        label="Currency",
+        initial="USD",
+    )
+    applies_to_mode = forms.ChoiceField(
+        choices=[
+            ("", "All modes"),
+            ("boat", "Boat dives only"),
+            ("shore", "Shore dives only"),
+        ],
+        required=False,
+        label="Applies To",
+        help_text="If set, only applies to this dive mode",
+    )
+    is_per_diver = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Per Diver",
+        help_text="If checked, applied per diver; otherwise per trip",
+    )
+    is_active = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Active",
+        help_text="If unchecked, adjustment is not applied to prices",
+    )
+
+    def __init__(self, *args, instance=None, dive_site=None, **kwargs):
+        """Initialize form with optional existing adjustment.
+
+        Args:
+            instance: Existing SitePriceAdjustment for editing
+            dive_site: DiveSite for new adjustments (required for create)
+        """
+        self.instance = instance
+        self.dive_site = dive_site or (instance.dive_site if instance else None)
+        super().__init__(*args, **kwargs)
+
+        # Pre-populate fields if editing existing adjustment
+        if instance:
+            self.fields["kind"].initial = instance.kind
+            self.fields["amount"].initial = instance.amount
+            self.fields["currency"].initial = instance.currency
+            self.fields["applies_to_mode"].initial = instance.applies_to_mode
+            self.fields["is_per_diver"].initial = instance.is_per_diver
+            self.fields["is_active"].initial = instance.is_active
+
+    @transaction.atomic
+    def save(self, actor=None):
+        """Save SitePriceAdjustment via service layer.
+
+        Delegates to create_site_price_adjustment or update_site_price_adjustment services.
+        Services handle audit events.
+
+        Args:
+            actor: User performing the action (passed to services)
+
+        Returns:
+            SitePriceAdjustment instance
+        """
+        from .services import create_site_price_adjustment, update_site_price_adjustment
+
+        data = self.cleaned_data
+
+        if self.instance:
+            # Update existing adjustment via service
+            adjustment = update_site_price_adjustment(
+                actor=actor,
+                adjustment=self.instance,
+                kind=data["kind"],
+                amount=data["amount"],
+                currency=data["currency"],
+                applies_to_mode=data.get("applies_to_mode", ""),
+                is_per_diver=data.get("is_per_diver", True),
+                is_active=data.get("is_active", True),
+            )
+        else:
+            # Create new adjustment via service
+            adjustment = create_site_price_adjustment(
+                actor=actor,
+                dive_site=self.dive_site,
+                kind=data["kind"],
+                amount=data["amount"],
+                currency=data["currency"],
+                applies_to_mode=data.get("applies_to_mode", ""),
+                is_per_diver=data.get("is_per_diver", True),
+                is_active=data.get("is_active", True),
+            )
+
+        return adjustment

@@ -9,8 +9,8 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Tem
 
 from django_portal_ui.mixins import StaffPortalMixin
 
-from .forms import DiverCertificationForm, DiverForm, DiveSiteForm
-from .models import Booking, CertificationLevel, DiverCertification, DiverProfile, DiveSite, Excursion
+from .forms import DiverCertificationForm, DiverForm, DiveSiteForm, ExcursionTypeDiveForm, ExcursionTypeForm, SitePriceAdjustmentForm
+from .models import Booking, CertificationLevel, DiverCertification, DiverProfile, DiveSite, Excursion, ExcursionType, ExcursionTypeDive, SitePriceAdjustment
 from .selectors import get_diver_with_certifications, get_excursion_with_roster, list_upcoming_excursions
 
 
@@ -503,9 +503,11 @@ class DiveSiteDetailView(StaffPortalMixin, DetailView):
         )
 
     def get_context_data(self, **kwargs):
-        """Add page title to context."""
+        """Add page title and price adjustments to context."""
         context = super().get_context_data(**kwargs)
         context["page_title"] = self.object.name
+        # Get price adjustments for this site
+        context["price_adjustments"] = self.object.price_adjustments.all().order_by("kind")
         return context
 
 
@@ -603,3 +605,842 @@ class DiveSiteDeleteView(StaffPortalMixin, View):
             "diveops/staff/site_confirm_delete.html",
             {"site": site, "page_title": f"Delete {site.name}"},
         )
+
+
+# =============================================================================
+# Excursion Calendar Views
+# =============================================================================
+
+
+class ExcursionCalendarView(StaffPortalMixin, TemplateView):
+    """Calendar view for excursions with daily/weekly/monthly options."""
+
+    template_name = "diveops/staff/calendar.html"
+
+    def get_context_data(self, **kwargs):
+        """Add calendar data to context."""
+        from calendar import monthcalendar
+        from datetime import date, timedelta
+
+        context = super().get_context_data(**kwargs)
+
+        # Determine view mode (default to weekly)
+        view_mode = self.request.GET.get("view", "weekly")
+        context["view_mode"] = view_mode
+
+        # Get date from URL params or default to today
+        date_str = self.request.GET.get("date")
+        if date_str:
+            try:
+                current_date = date.fromisoformat(date_str)
+            except ValueError:
+                current_date = date.today()
+        else:
+            current_date = date.today()
+
+        context["current_date"] = current_date
+
+        if view_mode == "daily":
+            context.update(self._get_daily_context(current_date))
+        elif view_mode == "weekly":
+            context.update(self._get_weekly_context(current_date))
+        else:  # monthly
+            context.update(self._get_monthly_context(current_date))
+
+        return context
+
+    def _get_daily_context(self, current_date):
+        """Get context for daily view."""
+        from datetime import timedelta
+
+        day_start = timezone.make_aware(
+            timezone.datetime.combine(current_date, timezone.datetime.min.time())
+        )
+        day_end = day_start + timedelta(days=1)
+
+        excursions = Excursion.objects.filter(
+            departure_time__gte=day_start,
+            departure_time__lt=day_end,
+        ).select_related("dive_site", "dive_shop").order_by("departure_time")
+
+        return {
+            "excursions": excursions,
+            "prev_date": current_date - timedelta(days=1),
+            "next_date": current_date + timedelta(days=1),
+            "period_label": current_date.strftime("%B %d, %Y"),
+        }
+
+    def _get_weekly_context(self, current_date):
+        """Get context for weekly view."""
+        from datetime import timedelta
+
+        # Get Sunday of current week (weekday() returns 0=Mon, 6=Sun)
+        days_since_sunday = (current_date.weekday() + 1) % 7
+        week_start = current_date - timedelta(days=days_since_sunday)
+        week_end = week_start + timedelta(days=7)
+
+        # Generate days of the week
+        week_days = []
+        for i in range(7):
+            day = week_start + timedelta(days=i)
+            day_start = timezone.make_aware(
+                timezone.datetime.combine(day, timezone.datetime.min.time())
+            )
+            day_end = day_start + timedelta(days=1)
+
+            day_excursions = Excursion.objects.filter(
+                departure_time__gte=day_start,
+                departure_time__lt=day_end,
+            ).select_related("dive_site", "dive_shop").order_by("departure_time")
+
+            week_days.append({
+                "date": day,
+                "excursions": day_excursions,
+                "is_today": day == timezone.now().date(),
+            })
+
+        return {
+            "week_days": week_days,
+            "week_start": week_start,
+            "week_end": week_end - timedelta(days=1),
+            "prev_date": week_start - timedelta(weeks=1),
+            "next_date": week_start + timedelta(weeks=1),
+            "period_label": f"Week of {week_start.strftime('%B %d, %Y')}",
+        }
+
+    def _get_monthly_context(self, current_date):
+        """Get context for monthly view."""
+        from calendar import Calendar
+        from datetime import date, timedelta
+
+        year = current_date.year
+        month = current_date.month
+
+        # Get first and last day of month
+        first_day = date(year, month, 1)
+        if month == 12:
+            last_day = date(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            last_day = date(year, month + 1, 1) - timedelta(days=1)
+
+        # Get month calendar with Sunday as first day (firstweekday=6)
+        cal = Calendar(firstweekday=6)
+        month_days = cal.monthdatescalendar(year, month)
+
+        # Fetch all excursions for the visible range (includes days from prev/next month)
+        visible_start = month_days[0][0]
+        visible_end = month_days[-1][-1] + timedelta(days=1)
+
+        month_start = timezone.make_aware(
+            timezone.datetime.combine(visible_start, timezone.datetime.min.time())
+        )
+        month_end = timezone.make_aware(
+            timezone.datetime.combine(visible_end, timezone.datetime.min.time())
+        )
+
+        excursions = Excursion.objects.filter(
+            departure_time__gte=month_start,
+            departure_time__lt=month_end,
+        ).select_related("dive_site", "dive_shop").order_by("departure_time")
+
+        # Group excursions by date
+        excursions_by_date = {}
+        for exc in excursions:
+            exc_date = exc.departure_time.date()
+            if exc_date not in excursions_by_date:
+                excursions_by_date[exc_date] = []
+            excursions_by_date[exc_date].append(exc)
+
+        # Build weeks with excursions
+        calendar_weeks = []
+        today = timezone.now().date()
+        for week in month_days:
+            week_data = []
+            for day_date in week:
+                week_data.append({
+                    "date": day_date,
+                    "excursions": excursions_by_date.get(day_date, []),
+                    "is_today": day_date == today,
+                    "in_month": day_date.month == month,
+                })
+            calendar_weeks.append(week_data)
+
+        # Calculate prev/next month
+        if month == 1:
+            prev_month = date(year - 1, 12, 1)
+        else:
+            prev_month = date(year, month - 1, 1)
+
+        if month == 12:
+            next_month = date(year + 1, 1, 1)
+        else:
+            next_month = date(year, month + 1, 1)
+
+        return {
+            "calendar_weeks": calendar_weeks,
+            "month": first_day,
+            "prev_date": prev_month,
+            "next_date": next_month,
+            "period_label": first_day.strftime("%B %Y"),
+        }
+
+
+class ExcursionCreateView(StaffPortalMixin, FormView):
+    """Create a new excursion."""
+
+    template_name = "diveops/staff/excursion_form.html"
+    success_url = reverse_lazy("diveops:calendar")
+
+    def get_form_class(self):
+        from .forms import ExcursionForm
+        return ExcursionForm
+
+    def form_valid(self, form):
+        from .services import create_excursion
+
+        excursion = create_excursion(
+            actor=self.request.user,
+            dive_site=form.cleaned_data["dive_site"],
+            dive_shop=form.cleaned_data["dive_shop"],
+            departure_time=form.cleaned_data["departure_time"],
+            return_time=form.cleaned_data["return_time"],
+            max_divers=form.cleaned_data["max_divers"],
+            price_per_diver=form.cleaned_data.get("price_per_diver"),
+            currency=form.cleaned_data.get("currency", "USD"),
+            excursion_type=form.cleaned_data.get("excursion_type"),
+        )
+        messages.success(
+            self.request,
+            f"Excursion to {excursion.dive_site.name} has been created.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = True
+        context["page_title"] = "Create Excursion"
+        context["excursion_types"] = ExcursionType.objects.filter(is_active=True).order_by("name")
+        return context
+
+
+class ExcursionUpdateView(StaffPortalMixin, FormView):
+    """Edit an existing excursion."""
+
+    template_name = "diveops/staff/excursion_form.html"
+    success_url = reverse_lazy("diveops:calendar")
+
+    def dispatch(self, request, *args, **kwargs):
+        self.excursion = get_object_or_404(
+            Excursion.objects.select_related("dive_site", "dive_shop"),
+            pk=kwargs["pk"],
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_class(self):
+        from .forms import ExcursionForm
+        return ExcursionForm
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["instance"] = self.excursion
+        return kwargs
+
+    def form_valid(self, form):
+        from .services import update_excursion
+
+        update_excursion(
+            actor=self.request.user,
+            excursion=self.excursion,
+            dive_site=form.cleaned_data["dive_site"],
+            departure_time=form.cleaned_data["departure_time"],
+            return_time=form.cleaned_data["return_time"],
+            max_divers=form.cleaned_data["max_divers"],
+            price_per_diver=form.cleaned_data.get("price_per_diver"),
+            currency=form.cleaned_data.get("currency"),
+            excursion_type=form.cleaned_data.get("excursion_type"),
+        )
+        messages.success(
+            self.request,
+            f"Excursion to {self.excursion.dive_site.name} has been updated.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = False
+        context["page_title"] = f"Edit Excursion - {self.excursion.dive_site.name}"
+        context["excursion"] = self.excursion
+        context["excursion_types"] = ExcursionType.objects.filter(is_active=True).order_by("name")
+        return context
+
+
+class ExcursionCancelView(StaffPortalMixin, View):
+    """Cancel an excursion (soft delete)."""
+
+    http_method_names = ["get", "post"]
+
+    def get(self, request, pk):
+        """Show cancel confirmation page."""
+        excursion = get_object_or_404(Excursion, pk=pk)
+        return self.render_confirmation(request, excursion)
+
+    def post(self, request, pk):
+        """Perform cancellation."""
+        from .services import cancel_excursion
+
+        excursion = get_object_or_404(Excursion, pk=pk)
+        site_name = excursion.dive_site.name
+
+        try:
+            cancel_excursion(excursion=excursion, actor=request.user)
+            messages.success(request, f"Excursion to {site_name} has been cancelled.")
+        except Exception as e:
+            messages.error(request, str(e))
+
+        return HttpResponseRedirect(reverse("diveops:calendar"))
+
+    def render_confirmation(self, request, excursion):
+        """Render cancel confirmation template."""
+        from django.template.response import TemplateResponse
+
+        booking_count = excursion.bookings.exclude(status="cancelled").count()
+        return TemplateResponse(
+            request,
+            "diveops/staff/excursion_confirm_cancel.html",
+            {
+                "excursion": excursion,
+                "page_title": "Cancel Excursion",
+                "booking_count": booking_count,
+            },
+        )
+
+
+class DiveCreateView(StaffPortalMixin, FormView):
+    """Create a new dive within an excursion."""
+
+    template_name = "diveops/staff/dive_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        """Get the excursion before processing request."""
+        from .models import Excursion
+
+        self.excursion = get_object_or_404(Excursion, pk=kwargs["excursion_pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form(self, form_class=None):
+        """Return form with excursion context."""
+        from .forms import DiveForm
+
+        return DiveForm(
+            data=self.request.POST or None,
+            excursion=self.excursion,
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add excursion to context."""
+        context = super().get_context_data(**kwargs)
+        context["excursion"] = self.excursion
+        context["page_title"] = "Add Dive"
+        context["is_create"] = True
+        return context
+
+    def form_valid(self, form):
+        """Create the dive using service layer."""
+        from .services import create_dive
+
+        dive = create_dive(
+            actor=self.request.user,
+            excursion=self.excursion,
+            dive_site=form.cleaned_data["dive_site"],
+            sequence=form.cleaned_data["sequence"],
+            planned_start=form.cleaned_data["planned_start"],
+            planned_duration_minutes=form.cleaned_data.get("planned_duration_minutes"),
+            max_depth_meters=form.cleaned_data.get("max_depth_meters"),
+            notes=form.cleaned_data.get("notes", ""),
+        )
+        messages.success(
+            self.request,
+            f"Dive {dive.sequence} at {dive.dive_site.name} has been added.",
+        )
+        return HttpResponseRedirect(
+            reverse("diveops:excursion-detail", kwargs={"pk": self.excursion.pk})
+        )
+
+
+class DiveUpdateView(StaffPortalMixin, FormView):
+    """Edit an existing dive."""
+
+    template_name = "diveops/staff/dive_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        """Get the dive before processing request."""
+        from .models import Dive
+
+        self.dive = get_object_or_404(Dive, pk=kwargs["pk"])
+        self.excursion = self.dive.excursion
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form(self, form_class=None):
+        """Return form with dive instance."""
+        from .forms import DiveForm
+
+        return DiveForm(
+            data=self.request.POST or None,
+            excursion=self.excursion,
+            instance=self.dive,
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add dive and excursion to context."""
+        context = super().get_context_data(**kwargs)
+        context["dive"] = self.dive
+        context["excursion"] = self.excursion
+        context["page_title"] = "Edit Dive"
+        context["is_create"] = False
+        return context
+
+    def form_valid(self, form):
+        """Update the dive using service layer."""
+        from .services import update_dive
+
+        dive = update_dive(
+            actor=self.request.user,
+            dive=self.dive,
+            dive_site=form.cleaned_data["dive_site"],
+            sequence=form.cleaned_data["sequence"],
+            planned_start=form.cleaned_data["planned_start"],
+            planned_duration_minutes=form.cleaned_data.get("planned_duration_minutes"),
+            max_depth_meters=form.cleaned_data.get("max_depth_meters"),
+            notes=form.cleaned_data.get("notes", ""),
+        )
+
+        messages.success(
+            self.request,
+            f"Dive {dive.sequence} has been updated.",
+        )
+        return HttpResponseRedirect(
+            reverse("diveops:excursion-detail", kwargs={"pk": self.excursion.pk})
+        )
+
+
+# =============================================================================
+# Excursion Type Views
+# =============================================================================
+
+
+class ExcursionTypeListView(StaffPortalMixin, ListView):
+    """List all excursion types for staff."""
+
+    model = ExcursionType
+    template_name = "diveops/staff/excursion_type_list.html"
+    context_object_name = "excursion_types"
+
+    def get_queryset(self):
+        """Return excursion types with related data."""
+        return ExcursionType.objects.select_related(
+            "min_certification_level", "min_certification_level__agency"
+        ).order_by("name")
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Excursion Types"
+        return context
+
+
+class ExcursionTypeDetailView(StaffPortalMixin, DetailView):
+    """View excursion type details."""
+
+    model = ExcursionType
+    template_name = "diveops/staff/excursion_type_detail.html"
+    context_object_name = "excursion_type"
+
+    def get_object(self, queryset=None):
+        """Get excursion type with related data."""
+        return get_object_or_404(
+            ExcursionType.objects.select_related(
+                "min_certification_level", "min_certification_level__agency"
+            ).prefetch_related(
+                "suitable_sites",
+                "dive_templates",
+                "dive_templates__min_certification_level",
+                "dive_templates__min_certification_level__agency",
+            ),
+            pk=self.kwargs["pk"],
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add page title and dive templates to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = self.object.name
+        context["dive_templates"] = self.object.dive_templates.all().order_by("sequence")
+        return context
+
+
+class ExcursionTypeCreateView(StaffPortalMixin, FormView):
+    """Create a new excursion type."""
+
+    template_name = "diveops/staff/excursion_type_form.html"
+    form_class = ExcursionTypeForm
+    success_url = reverse_lazy("diveops:excursion-type-list")
+
+    def form_valid(self, form):
+        excursion_type = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Excursion type '{excursion_type.name}' has been created.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = True
+        context["page_title"] = "Add Excursion Type"
+        return context
+
+
+class ExcursionTypeUpdateView(StaffPortalMixin, FormView):
+    """Edit an existing excursion type."""
+
+    template_name = "diveops/staff/excursion_type_form.html"
+    form_class = ExcursionTypeForm
+    success_url = reverse_lazy("diveops:excursion-type-list")
+
+    def dispatch(self, request, *args, **kwargs):
+        self.excursion_type = get_object_or_404(
+            ExcursionType.objects.select_related(
+                "min_certification_level", "min_certification_level__agency"
+            ),
+            pk=kwargs["pk"],
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["instance"] = self.excursion_type
+        return kwargs
+
+    def form_valid(self, form):
+        excursion_type = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Excursion type '{excursion_type.name}' has been updated.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = False
+        context["page_title"] = f"Edit {self.excursion_type.name}"
+        context["object"] = self.excursion_type
+        return context
+
+
+class ExcursionTypeDeleteView(StaffPortalMixin, View):
+    """Soft delete an excursion type."""
+
+    http_method_names = ["get", "post"]
+
+    def get(self, request, pk):
+        """Show delete confirmation page."""
+        excursion_type = get_object_or_404(ExcursionType, pk=pk)
+        return self.render_confirmation(request, excursion_type)
+
+    def post(self, request, pk):
+        """Perform soft delete."""
+        from .services import delete_excursion_type
+
+        excursion_type = get_object_or_404(ExcursionType, pk=pk)
+        type_name = excursion_type.name
+
+        delete_excursion_type(actor=request.user, excursion_type=excursion_type)
+
+        messages.success(request, f"Excursion type '{type_name}' has been deleted.")
+        return HttpResponseRedirect(reverse("diveops:excursion-type-list"))
+
+    def render_confirmation(self, request, excursion_type):
+        """Render delete confirmation template."""
+        from django.template.response import TemplateResponse
+
+        return TemplateResponse(
+            request,
+            "diveops/staff/excursion_type_confirm_delete.html",
+            {"excursion_type": excursion_type, "page_title": f"Delete {excursion_type.name}"},
+        )
+
+
+# =============================================================================
+# Excursion Type Dive Template Views
+# =============================================================================
+
+
+class ExcursionTypeDiveCreateView(StaffPortalMixin, FormView):
+    """Create a new dive template for an excursion type."""
+
+    template_name = "diveops/staff/excursion_type_dive_form.html"
+    form_class = ExcursionTypeDiveForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.excursion_type = get_object_or_404(
+            ExcursionType.objects.select_related(
+                "min_certification_level", "min_certification_level__agency"
+            ),
+            pk=kwargs["type_pk"],
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["excursion_type"] = self.excursion_type
+        return kwargs
+
+    def form_valid(self, form):
+        dive_template = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Dive template '{dive_template.name}' has been added.",
+        )
+        return HttpResponseRedirect(
+            reverse("diveops:excursion-type-detail", kwargs={"pk": self.excursion_type.pk})
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = True
+        context["page_title"] = f"Add Dive Template"
+        context["excursion_type"] = self.excursion_type
+        return context
+
+
+class ExcursionTypeDiveUpdateView(StaffPortalMixin, FormView):
+    """Edit an existing dive template."""
+
+    template_name = "diveops/staff/excursion_type_dive_form.html"
+    form_class = ExcursionTypeDiveForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.dive_template = get_object_or_404(
+            ExcursionTypeDive.objects.select_related(
+                "excursion_type", "min_certification_level", "min_certification_level__agency"
+            ),
+            pk=kwargs["pk"],
+        )
+        self.excursion_type = self.dive_template.excursion_type
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["instance"] = self.dive_template
+        return kwargs
+
+    def form_valid(self, form):
+        dive_template = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Dive template '{dive_template.name}' has been updated.",
+        )
+        return HttpResponseRedirect(
+            reverse("diveops:excursion-type-detail", kwargs={"pk": self.excursion_type.pk})
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = False
+        context["page_title"] = f"Edit Dive {self.dive_template.sequence}: {self.dive_template.name}"
+        context["excursion_type"] = self.excursion_type
+        context["dive_template"] = self.dive_template
+        return context
+
+
+class ExcursionTypeDiveDeleteView(StaffPortalMixin, View):
+    """Delete a dive template from an excursion type."""
+
+    http_method_names = ["get", "post"]
+
+    def get(self, request, pk):
+        """Show delete confirmation page."""
+        dive_template = get_object_or_404(
+            ExcursionTypeDive.objects.select_related("excursion_type"),
+            pk=pk,
+        )
+        return self.render_confirmation(request, dive_template)
+
+    def post(self, request, pk):
+        """Perform hard delete using service layer."""
+        from .services import delete_dive_template
+
+        dive_template = get_object_or_404(
+            ExcursionTypeDive.objects.select_related("excursion_type"),
+            pk=pk,
+        )
+        excursion_type = dive_template.excursion_type
+        template_name = dive_template.name
+
+        delete_dive_template(actor=request.user, dive_template=dive_template)
+
+        messages.success(request, f"Dive template '{template_name}' has been deleted.")
+        return HttpResponseRedirect(
+            reverse("diveops:excursion-type-detail", kwargs={"pk": excursion_type.pk})
+        )
+
+    def render_confirmation(self, request, dive_template):
+        """Render delete confirmation template."""
+        from django.template.response import TemplateResponse
+
+        return TemplateResponse(
+            request,
+            "diveops/staff/excursion_type_dive_confirm_delete.html",
+            {
+                "dive_template": dive_template,
+                "excursion_type": dive_template.excursion_type,
+                "page_title": f"Delete Dive {dive_template.sequence}",
+            },
+        )
+
+
+# =============================================================================
+# Site Price Adjustment Views
+# =============================================================================
+
+
+class SitePriceAdjustmentCreateView(StaffPortalMixin, FormView):
+    """Create a new price adjustment for a dive site."""
+
+    template_name = "diveops/staff/price_adjustment_form.html"
+    form_class = SitePriceAdjustmentForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.site = get_object_or_404(DiveSite, pk=kwargs["site_pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_success_url(self):
+        return reverse("diveops:staff-site-detail", kwargs={"pk": self.site.pk})
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["dive_site"] = self.site
+        return kwargs
+
+    def form_valid(self, form):
+        adjustment = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Price adjustment '{adjustment.get_kind_display()}' has been added.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["site"] = self.site
+        context["is_create"] = True
+        context["page_title"] = f"Add Price Adjustment - {self.site.name}"
+        return context
+
+
+class SitePriceAdjustmentUpdateView(StaffPortalMixin, FormView):
+    """Edit an existing price adjustment."""
+
+    template_name = "diveops/staff/price_adjustment_form.html"
+    form_class = SitePriceAdjustmentForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.adjustment = get_object_or_404(
+            SitePriceAdjustment.objects.select_related("dive_site"),
+            pk=kwargs["pk"],
+        )
+        self.site = self.adjustment.dive_site
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_success_url(self):
+        return reverse("diveops:staff-site-detail", kwargs={"pk": self.site.pk})
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["instance"] = self.adjustment
+        return kwargs
+
+    def form_valid(self, form):
+        adjustment = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Price adjustment '{adjustment.get_kind_display()}' has been updated.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["site"] = self.site
+        context["adjustment"] = self.adjustment
+        context["is_create"] = False
+        context["page_title"] = f"Edit Price Adjustment - {self.site.name}"
+        return context
+
+
+class SitePriceAdjustmentDeleteView(StaffPortalMixin, View):
+    """Soft delete a price adjustment."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+        from .services import delete_site_price_adjustment
+
+        adjustment = get_object_or_404(
+            SitePriceAdjustment.objects.select_related("dive_site"),
+            pk=pk,
+        )
+        site_pk = adjustment.dive_site.pk
+        kind_display = adjustment.get_kind_display()
+
+        delete_site_price_adjustment(actor=request.user, adjustment=adjustment)
+
+        messages.success(request, f"Price adjustment '{kind_display}' has been deleted.")
+        return HttpResponseRedirect(reverse("diveops:staff-site-detail", kwargs={"pk": site_pk}))
+
+
+# =============================================================================
+# API Endpoints
+# =============================================================================
+
+
+class CompatibleSitesAPIView(StaffPortalMixin, View):
+    """API endpoint to get dive sites compatible with an excursion type.
+
+    Returns JSON list of sites filtered by dive mode and certification requirements.
+    """
+
+    def get(self, request):
+        from django.http import JsonResponse
+
+        from .services import get_compatible_sites
+
+        excursion_type_id = request.GET.get("excursion_type")
+
+        if excursion_type_id:
+            try:
+                excursion_type = ExcursionType.objects.select_related(
+                    "min_certification_level"
+                ).get(pk=excursion_type_id)
+            except ExcursionType.DoesNotExist:
+                return JsonResponse({"error": "Excursion type not found"}, status=404)
+        else:
+            excursion_type = None
+
+        sites = get_compatible_sites(excursion_type)
+
+        data = [
+            {
+                "id": str(site.pk),
+                "name": site.name,
+                "dive_mode": site.dive_mode,
+                "difficulty": site.difficulty,
+                "max_depth_meters": site.max_depth_meters,
+                "min_certification": (
+                    site.min_certification_level.name
+                    if site.min_certification_level
+                    else None
+                ),
+            }
+            for site in sites
+        ]
+
+        return JsonResponse({"sites": data})

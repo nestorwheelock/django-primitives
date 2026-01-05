@@ -30,6 +30,8 @@ class CancellationResult:
 from .audit import (
     Actions,
     log_booking_event,
+    log_dive_event,
+    log_dive_template_event,
     log_settlement_event,
     log_certification_event,
     log_diver_event,
@@ -66,6 +68,7 @@ from .models import (
     Excursion,
     ExcursionRoster,
     ExcursionType,
+    ExcursionTypeDive,
     SitePriceAdjustment,
 )
 
@@ -2065,3 +2068,293 @@ def create_refund_settlement(
     )
 
     return settlement
+
+
+# =============================================================================
+# Dive CRUD Services
+# =============================================================================
+
+
+@transaction.atomic
+def create_dive(
+    *,
+    actor,
+    excursion: Excursion,
+    dive_site: DiveSite,
+    sequence: int,
+    planned_start,
+    planned_duration_minutes: int | None = None,
+    max_depth_meters: int | None = None,
+    notes: str = "",
+) -> Dive:
+    """Create a new dive within an excursion.
+
+    Args:
+        actor: User creating the dive (required for audit)
+        excursion: Excursion this dive belongs to
+        dive_site: DiveSite where the dive takes place
+        sequence: Order of this dive in the excursion (1, 2, 3, etc.)
+        planned_start: Planned start datetime
+        planned_duration_minutes: Optional planned duration
+        max_depth_meters: Optional max planned depth
+        notes: Optional notes
+
+    Returns:
+        Created Dive
+
+    Raises:
+        IntegrityError: If constraints are violated
+    """
+    dive = Dive.objects.create(
+        excursion=excursion,
+        dive_site=dive_site,
+        sequence=sequence,
+        planned_start=planned_start,
+        planned_duration_minutes=planned_duration_minutes,
+        max_depth_meters=max_depth_meters,
+        notes=notes,
+    )
+
+    log_dive_event(
+        action=Actions.DIVE_CREATED,
+        dive=dive,
+        actor=actor,
+    )
+
+    return dive
+
+
+@transaction.atomic
+def update_dive(
+    *,
+    actor,
+    dive: Dive,
+    dive_site: DiveSite | None = None,
+    sequence: int | None = None,
+    planned_start=None,
+    planned_duration_minutes: int | None = None,
+    max_depth_meters: int | None = None,
+    notes: str | None = None,
+) -> Dive:
+    """Update an existing dive.
+
+    Args:
+        actor: User making the update (required for audit)
+        dive: Dive to update
+        dive_site: New dive site (None = no change)
+        sequence: New sequence (None = no change)
+        planned_start: New planned start (None = no change)
+        planned_duration_minutes: New duration (None = no change)
+        max_depth_meters: New max depth (None = no change)
+        notes: New notes (None = no change)
+
+    Returns:
+        Updated Dive
+    """
+    changes = {}
+
+    _apply_tracked_update(dive, "sequence", sequence, changes)
+    _apply_tracked_update(dive, "planned_start", planned_start, changes)
+    _apply_tracked_update(dive, "planned_duration_minutes", planned_duration_minutes, changes)
+    _apply_tracked_update(dive, "max_depth_meters", max_depth_meters, changes)
+    _apply_tracked_update(dive, "notes", notes, changes)
+
+    # Handle dive_site FK specially
+    if dive_site is not None and dive_site != dive.dive_site:
+        changes["dive_site"] = {
+            "old": str(dive.dive_site_id),
+            "new": str(dive_site.pk),
+        }
+        dive.dive_site = dive_site
+
+    if changes:
+        dive.save()
+
+        log_dive_event(
+            action=Actions.DIVE_UPDATED,
+            dive=dive,
+            actor=actor,
+            changes=changes,
+        )
+
+    return dive
+
+
+@transaction.atomic
+def delete_dive(
+    *,
+    actor,
+    dive: Dive,
+) -> Dive:
+    """Soft delete a dive.
+
+    Sets deleted_at timestamp instead of actually deleting.
+    The dive will be excluded from default queries.
+
+    Args:
+        actor: User deleting the dive (required for audit)
+        dive: Dive to delete
+
+    Returns:
+        Updated Dive with deleted_at set
+    """
+    dive.deleted_at = timezone.now()
+    dive.save()
+
+    log_dive_event(
+        action=Actions.DIVE_DELETED,
+        dive=dive,
+        actor=actor,
+    )
+
+    return dive
+
+
+# =============================================================================
+# ExcursionTypeDive (Dive Template) CRUD Services
+# =============================================================================
+
+
+@transaction.atomic
+def create_dive_template(
+    *,
+    actor,
+    excursion_type: ExcursionType,
+    name: str,
+    sequence: int,
+    offset_minutes: int = 0,
+    planned_duration_minutes: int | None = None,
+    description: str = "",
+    planned_depth_meters: int | None = None,
+    min_certification_level: CertificationLevel | None = None,
+) -> ExcursionTypeDive:
+    """Create a new dive template for an excursion type.
+
+    Args:
+        actor: User creating the template (required for audit)
+        excursion_type: ExcursionType this template belongs to
+        name: Name of this dive (e.g., "First Dive", "Night Dive")
+        sequence: Order of this dive (1, 2, 3, etc.)
+        offset_minutes: Minutes after departure when this dive starts
+        planned_duration_minutes: Optional planned duration
+        description: Optional description
+        planned_depth_meters: Optional planned depth
+        min_certification_level: Optional certification level override
+
+    Returns:
+        Created ExcursionTypeDive
+
+    Raises:
+        IntegrityError: If constraints are violated
+    """
+    dive_template = ExcursionTypeDive.objects.create(
+        excursion_type=excursion_type,
+        name=name,
+        sequence=sequence,
+        offset_minutes=offset_minutes,
+        planned_duration_minutes=planned_duration_minutes,
+        description=description,
+        planned_depth_meters=planned_depth_meters,
+        min_certification_level=min_certification_level,
+    )
+
+    log_dive_template_event(
+        action=Actions.DIVE_TEMPLATE_CREATED,
+        dive_template=dive_template,
+        actor=actor,
+    )
+
+    return dive_template
+
+
+@transaction.atomic
+def update_dive_template(
+    *,
+    actor,
+    dive_template: ExcursionTypeDive,
+    name: str | None = None,
+    sequence: int | None = None,
+    offset_minutes: int | None = None,
+    planned_duration_minutes: int | None = None,
+    description: str | None = None,
+    planned_depth_meters: int | None = None,
+    min_certification_level: CertificationLevel | None = None,
+    clear_min_certification: bool = False,
+) -> ExcursionTypeDive:
+    """Update an existing dive template.
+
+    Args:
+        actor: User making the update (required for audit)
+        dive_template: ExcursionTypeDive to update
+        name: New name (None = no change)
+        sequence: New sequence (None = no change)
+        offset_minutes: New offset (None = no change)
+        planned_duration_minutes: New duration (None = no change)
+        description: New description (None = no change)
+        planned_depth_meters: New planned depth (None = no change)
+        min_certification_level: New certification level (None = no change)
+        clear_min_certification: If True, clear min_certification_level
+
+    Returns:
+        Updated ExcursionTypeDive
+    """
+    changes = {}
+
+    _apply_tracked_update(dive_template, "name", name, changes)
+    _apply_tracked_update(dive_template, "sequence", sequence, changes)
+    _apply_tracked_update(dive_template, "offset_minutes", offset_minutes, changes)
+    _apply_tracked_update(dive_template, "planned_duration_minutes", planned_duration_minutes, changes)
+    _apply_tracked_update(dive_template, "description", description, changes)
+    _apply_tracked_update(dive_template, "planned_depth_meters", planned_depth_meters, changes)
+
+    # Handle min_certification_level FK specially
+    if clear_min_certification:
+        if dive_template.min_certification_level_id is not None:
+            changes["min_certification_level"] = {
+                "old": str(dive_template.min_certification_level_id),
+                "new": None,
+            }
+            dive_template.min_certification_level = None
+    elif min_certification_level is not None and min_certification_level != dive_template.min_certification_level:
+        changes["min_certification_level"] = {
+            "old": str(dive_template.min_certification_level_id) if dive_template.min_certification_level_id else None,
+            "new": str(min_certification_level.pk),
+        }
+        dive_template.min_certification_level = min_certification_level
+
+    if changes:
+        dive_template.save()
+
+        log_dive_template_event(
+            action=Actions.DIVE_TEMPLATE_UPDATED,
+            dive_template=dive_template,
+            actor=actor,
+            changes=changes,
+        )
+
+    return dive_template
+
+
+@transaction.atomic
+def delete_dive_template(
+    *,
+    actor,
+    dive_template: ExcursionTypeDive,
+) -> None:
+    """Delete a dive template (hard delete).
+
+    Dive templates are configuration data, not transactional records,
+    so hard delete is appropriate. The audit log preserves history.
+
+    Args:
+        actor: User deleting the template (required for audit)
+        dive_template: ExcursionTypeDive to delete
+    """
+    # Capture metadata before deletion
+    log_dive_template_event(
+        action=Actions.DIVE_TEMPLATE_DELETED,
+        dive_template=dive_template,
+        actor=actor,
+    )
+
+    dive_template.delete()
