@@ -4,7 +4,10 @@ Business logic for booking, check-in, and trip completion.
 All write operations are atomic transactions.
 """
 
+import logging
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError, models, transaction
@@ -2720,6 +2723,27 @@ def retire_dive_template(
 # Dive Plan Snapshot Helpers
 # =============================================================================
 
+# Gas label to O2 fraction mapping for decompression validation
+GAS_O2_MAP = {
+    "air": 0.21,
+    "ean32": 0.32,
+    "ean36": 0.36,
+}
+
+
+def _gas_o2_fraction(gas_label: str | None) -> float:
+    """Get O2 fraction for a gas label.
+
+    Args:
+        gas_label: Gas label like "air", "ean32", "ean36", or None
+
+    Returns:
+        O2 fraction (0.0-1.0), defaults to 0.21 (air) for unknown
+    """
+    if not gas_label:
+        return 0.21
+    return GAS_O2_MAP.get(gas_label.lower(), 0.21)
+
 
 def build_plan_snapshot(*, template: "ExcursionTypeDive", dive: "Dive") -> dict:
     """Build the snapshot dictionary from template and dive.
@@ -2754,6 +2778,8 @@ def build_plan_snapshot(*, template: "ExcursionTypeDive", dive: "Dive") -> dict:
         },
         "briefing": {
             "gas": template.gas,
+            "gas_o2": _gas_o2_fraction(template.gas),
+            "gas_he": 0.0,  # Helium not yet supported in templates
             "equipment_requirements": template.equipment_requirements,
             "skills": template.skills,
             "route": template.route,
@@ -2978,3 +3004,110 @@ def lock_excursion_plans(
         )
 
     return locked_dives
+
+
+# =============================================================================
+# Dive Plan Decompression Validation Services
+# =============================================================================
+
+
+@transaction.atomic
+def validate_dive_plan(
+    *,
+    actor,
+    dive: "Dive",
+    force: bool = False,
+) -> "Dive":
+    """Validate locked dive plan using Bühlmann ZHL-16C.
+
+    Runs the dive plan through the decompression validator to calculate
+    ceiling, TTS, NDL, and deco stops. Results are stored in the
+    plan_snapshot["validation"] field.
+
+    Args:
+        actor: User performing validation
+        dive: Dive with locked plan_snapshot
+        force: If True, re-validate even if validation exists
+
+    Returns:
+        Updated Dive with validation results in plan_snapshot
+
+    Raises:
+        ValueError: If plan_snapshot doesn't exist (plan not locked)
+    """
+    from django.conf import settings
+
+    from .audit import Actions, log_dive_event
+
+    if not dive.plan_snapshot:
+        raise ValueError("Dive plan must be locked before validation")
+
+    # Skip if already validated (unless force)
+    if dive.plan_snapshot.get("validation") and not force:
+        logger.info(
+            f"Dive {dive.id} already validated, skipping (use force=True to re-validate)"
+        )
+        return dive
+
+    # Check if validation is enabled
+    if not getattr(settings, "ENABLE_DECO_VALIDATION", False):
+        logger.info(f"Deco validation disabled, skipping dive {dive.id}")
+        return dive
+
+    from .planning import build_validator_input, run_deco_validator
+
+    briefing = dive.plan_snapshot.get("briefing", {})
+    route_segments = briefing.get("route_segments", [])
+
+    if not route_segments:
+        dive.plan_snapshot["validation"] = {
+            "error": "no_route_segments",
+            "validated_at": timezone.now().isoformat(),
+        }
+        dive.save(update_fields=["plan_snapshot"])
+        return dive
+
+    # Use stored gas values (floats), not label lookup
+    gas_o2 = briefing.get("gas_o2", 0.21)
+    gas_he = briefing.get("gas_he", 0.0)
+
+    # Build validator input using configured GF values
+    gf_low = getattr(settings, "DECO_GF_LOW", 0.40)
+    gf_high = getattr(settings, "DECO_GF_HIGH", 0.85)
+
+    input_data = build_validator_input(
+        route_segments=route_segments,
+        gas_o2=gas_o2,
+        gas_he=gas_he,
+        gf_low=gf_low,
+        gf_high=gf_high,
+    )
+
+    result = run_deco_validator(input_data)
+    result["validated_at"] = timezone.now().isoformat()
+
+    dive.plan_snapshot["validation"] = result
+    dive.save(update_fields=["plan_snapshot"])
+
+    # Emit audit event
+    if "error" not in result:
+        log_dive_event(
+            action=Actions.DIVE_PLAN_VALIDATED,
+            dive=dive,
+            actor=actor,
+            data={
+                "deco_required": result.get("deco_required", False),
+                "ceiling_m": result.get("ceiling_m"),
+                "tts_min": result.get("tts_min"),
+                "ndl_min": result.get("ndl_min"),
+            },
+        )
+    else:
+        log_dive_event(
+            action=Actions.DIVE_PLAN_VALIDATION_FAILED,
+            dive=dive,
+            actor=actor,
+            data={"error": result.get("error")},
+        )
+
+    return dive

@@ -179,6 +179,12 @@ class Actions:
     EXCURSION_PLANS_LOCKED = "excursion_plans_locked"
 
     # -------------------------------------------------------------------------
+    # Dive Plan Decompression Validation Actions
+    # -------------------------------------------------------------------------
+    DIVE_PLAN_VALIDATED = "dive_plan_validated"
+    DIVE_PLAN_VALIDATION_FAILED = "dive_plan_validation_failed"
+
+    # -------------------------------------------------------------------------
     # Dive Site Actions
     # -------------------------------------------------------------------------
     DIVE_SITE_CREATED = "dive_site_created"
