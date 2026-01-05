@@ -2624,3 +2624,356 @@ def update_dive_log(
         )
 
     return dive_log
+
+
+# =============================================================================
+# Dive Plan Lifecycle Services
+# =============================================================================
+
+
+@transaction.atomic
+def publish_dive_template(
+    *,
+    actor,
+    dive_template: "ExcursionTypeDive",
+) -> "ExcursionTypeDive":
+    """Publish a dive template for use in excursions.
+
+    Changes template status from draft to published, making it available
+    for use when locking dive plans.
+
+    Args:
+        actor: Staff user publishing the template
+        dive_template: ExcursionTypeDive to publish
+
+    Returns:
+        Updated ExcursionTypeDive
+
+    Raises:
+        ValueError: If template is not in draft status
+    """
+    from .models import ExcursionTypeDive
+
+    if dive_template.status != ExcursionTypeDive.PlanStatus.DRAFT:
+        raise ValueError(
+            f"Cannot publish template: not in draft status (current: {dive_template.status})"
+        )
+
+    dive_template.status = ExcursionTypeDive.PlanStatus.PUBLISHED
+    dive_template.published_at = timezone.now()
+    dive_template.published_by = actor
+    dive_template.save()
+
+    log_dive_template_event(
+        action=Actions.DIVE_TEMPLATE_PUBLISHED,
+        dive_template=dive_template,
+        actor=actor,
+    )
+
+    return dive_template
+
+
+@transaction.atomic
+def retire_dive_template(
+    *,
+    actor,
+    dive_template: "ExcursionTypeDive",
+) -> "ExcursionTypeDive":
+    """Retire a dive template.
+
+    Changes template status from published to retired, making it unavailable
+    for new excursions. Existing scheduled dives with locked snapshots are
+    not affected.
+
+    Args:
+        actor: Staff user retiring the template
+        dive_template: ExcursionTypeDive to retire
+
+    Returns:
+        Updated ExcursionTypeDive
+
+    Raises:
+        ValueError: If template is not in published status
+    """
+    from .models import ExcursionTypeDive
+
+    if dive_template.status != ExcursionTypeDive.PlanStatus.PUBLISHED:
+        raise ValueError(
+            f"Cannot retire template: not in published status (current: {dive_template.status})"
+        )
+
+    dive_template.status = ExcursionTypeDive.PlanStatus.RETIRED
+    dive_template.retired_at = timezone.now()
+    dive_template.retired_by = actor
+    dive_template.save()
+
+    log_dive_template_event(
+        action=Actions.DIVE_TEMPLATE_RETIRED,
+        dive_template=dive_template,
+        actor=actor,
+    )
+
+    return dive_template
+
+
+# =============================================================================
+# Dive Plan Snapshot Helpers
+# =============================================================================
+
+
+def build_plan_snapshot(*, template: "ExcursionTypeDive", dive: "Dive") -> dict:
+    """Build the snapshot dictionary from template and dive.
+
+    Creates a versioned JSON structure containing all relevant template
+    and dive information to freeze at the time of locking.
+
+    Args:
+        template: ExcursionTypeDive template to snapshot
+        dive: Dive instance being locked
+
+    Returns:
+        Dictionary suitable for storing in plan_snapshot field
+    """
+    return {
+        "version": 1,
+        "template": {
+            "id": str(template.id),
+            "name": template.name,
+            "status": template.status,
+            "published_at": (
+                template.published_at.isoformat()
+                if template.published_at
+                else None
+            ),
+        },
+        "planning": {
+            "sequence": template.sequence,
+            "planned_depth_meters": template.planned_depth_meters,
+            "planned_duration_minutes": template.planned_duration_minutes,
+            "offset_minutes": template.offset_minutes,
+        },
+        "briefing": {
+            "gas": template.gas,
+            "equipment_requirements": template.equipment_requirements,
+            "skills": template.skills,
+            "route": template.route,
+            "hazards": template.hazards,
+            "briefing_text": template.briefing_text,
+        },
+        "certification": {
+            "min_level_id": (
+                str(template.min_certification_level_id)
+                if template.min_certification_level_id
+                else None
+            ),
+            "min_level_name": (
+                template.min_certification_level.name
+                if template.min_certification_level
+                else None
+            ),
+        },
+        "metadata": {
+            "locked_at": timezone.now().isoformat(),
+        },
+    }
+
+
+# =============================================================================
+# Dive Plan Locking Services
+# =============================================================================
+
+
+@transaction.atomic
+def lock_dive_plan(
+    *,
+    actor,
+    dive: "Dive",
+    force: bool = False,
+) -> "Dive":
+    """Lock the dive plan by creating a snapshot.
+
+    Snapshots the current state of the associated ExcursionTypeDive
+    template. After locking, template changes don't affect this dive.
+
+    This operation is idempotent - if already locked and force=False,
+    returns the dive unchanged.
+
+    Args:
+        actor: Staff user locking the plan
+        dive: Dive to lock
+        force: If True, re-lock even if already locked (for resnapshot)
+
+    Returns:
+        Updated Dive with plan_snapshot populated
+
+    Raises:
+        ValidationError: If template is not published (unless force=True)
+        ValueError: If no template available to snapshot
+    """
+    from django.core.exceptions import ValidationError
+
+    from .models import ExcursionTypeDive
+
+    # Idempotent: if already locked and not forcing, return unchanged
+    if dive.plan_locked_at is not None and not force:
+        return dive
+
+    # Find matching template by sequence
+    if not dive.excursion or not dive.excursion.excursion_type:
+        raise ValueError("Cannot lock dive plan: no excursion type template available")
+
+    try:
+        template = ExcursionTypeDive.objects.get(
+            excursion_type=dive.excursion.excursion_type,
+            sequence=dive.sequence,
+        )
+    except ExcursionTypeDive.DoesNotExist:
+        raise ValueError(
+            f"Cannot lock dive plan: no template found for sequence {dive.sequence}"
+        )
+
+    # Validate template is published (unless force)
+    if template.status != ExcursionTypeDive.PlanStatus.PUBLISHED and not force:
+        raise ValidationError(
+            f"Cannot lock dive plan: template not published (status: {template.status})"
+        )
+
+    # Build and save snapshot
+    dive.plan_snapshot = build_plan_snapshot(template=template, dive=dive)
+    dive.plan_locked_at = timezone.now()
+    dive.plan_locked_by = actor
+    dive.plan_template_id = template.id
+    dive.plan_template_published_at = template.published_at
+    dive.plan_snapshot_outdated = False
+    dive.save()
+
+    log_dive_event(
+        action=Actions.DIVE_PLAN_LOCKED,
+        dive=dive,
+        actor=actor,
+        data={
+            "template_id": str(template.id),
+            "template_name": template.name,
+        },
+    )
+
+    return dive
+
+
+@transaction.atomic
+def resnapshot_dive_plan(
+    *,
+    actor,
+    dive: "Dive",
+    reason: str,
+) -> "Dive":
+    """Re-snapshot an already locked dive plan.
+
+    This is a privileged operation for correcting briefings before
+    the dive occurs. Requires explicit reason for audit trail.
+
+    Args:
+        actor: Staff user re-snapshotting
+        dive: Already-locked Dive to update
+        reason: Explanation for the resnapshot (required)
+
+    Returns:
+        Updated Dive with new plan_snapshot
+
+    Raises:
+        ValueError: If dive is not currently locked
+        ValueError: If reason is empty
+    """
+    from .models import ExcursionTypeDive
+
+    if dive.plan_locked_at is None:
+        raise ValueError("Cannot resnapshot: dive is not locked")
+
+    if not reason or not reason.strip():
+        raise ValueError("Cannot resnapshot: reason is required")
+
+    # Get fresh template
+    try:
+        template = ExcursionTypeDive.objects.get(
+            excursion_type=dive.excursion.excursion_type,
+            sequence=dive.sequence,
+        )
+    except ExcursionTypeDive.DoesNotExist:
+        raise ValueError(
+            f"Cannot resnapshot: no template found for sequence {dive.sequence}"
+        )
+
+    # Store old snapshot for audit
+    old_snapshot = dive.plan_snapshot
+
+    # Build and save new snapshot
+    dive.plan_snapshot = build_plan_snapshot(template=template, dive=dive)
+    dive.plan_locked_at = timezone.now()
+    dive.plan_locked_by = actor
+    dive.plan_template_id = template.id
+    dive.plan_template_published_at = template.published_at
+    dive.plan_snapshot_outdated = False
+    dive.save()
+
+    log_dive_event(
+        action=Actions.DIVE_PLAN_RESNAPSHOTTED,
+        dive=dive,
+        actor=actor,
+        changes={
+            "reason": reason,
+            "old_snapshot": old_snapshot,
+            "new_snapshot": dive.plan_snapshot,
+        },
+        data={
+            "template_id": str(template.id),
+            "reason": reason,
+        },
+    )
+
+    return dive
+
+
+@transaction.atomic
+def lock_excursion_plans(
+    *,
+    actor,
+    excursion: "Excursion",
+) -> list["Dive"]:
+    """Lock plans for all dives in an excursion.
+
+    Typically called when sending briefing to customers. Only locks
+    dives that are not already locked.
+
+    Args:
+        actor: Staff user locking plans
+        excursion: Excursion whose dives to lock
+
+    Returns:
+        List of locked Dive instances
+    """
+    from .models import Dive
+
+    # Get all unlocked dives in this excursion
+    unlocked_dives = excursion.dives.filter(plan_locked_at__isnull=True)
+
+    locked_dives = []
+    for dive in unlocked_dives:
+        try:
+            locked_dive = lock_dive_plan(actor=actor, dive=dive)
+            locked_dives.append(locked_dive)
+        except (ValueError, Exception):
+            # Skip dives without templates or other issues
+            pass
+
+    if locked_dives:
+        log_excursion_event(
+            action=Actions.EXCURSION_PLANS_LOCKED,
+            excursion=excursion,
+            actor=actor,
+            data={
+                "dives_locked": len(locked_dives),
+                "dive_ids": [str(d.id) for d in locked_dives],
+            },
+        )
+
+    return locked_dives

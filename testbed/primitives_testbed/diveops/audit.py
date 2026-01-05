@@ -166,6 +166,19 @@ class Actions:
     DIVE_TEMPLATE_DELETED = "dive_template_deleted"
 
     # -------------------------------------------------------------------------
+    # Dive Template Lifecycle Actions (publish/retire)
+    # -------------------------------------------------------------------------
+    DIVE_TEMPLATE_PUBLISHED = "dive_template_published"
+    DIVE_TEMPLATE_RETIRED = "dive_template_retired"
+
+    # -------------------------------------------------------------------------
+    # Dive Plan Locking Actions
+    # -------------------------------------------------------------------------
+    DIVE_PLAN_LOCKED = "dive_plan_locked"
+    DIVE_PLAN_RESNAPSHOTTED = "dive_plan_resnapshotted"
+    EXCURSION_PLANS_LOCKED = "excursion_plans_locked"
+
+    # -------------------------------------------------------------------------
     # Dive Site Actions
     # -------------------------------------------------------------------------
     DIVE_SITE_CREATED = "dive_site_created"

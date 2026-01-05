@@ -855,6 +855,56 @@ class Dive(BaseModel):
         help_text="When the dive results were logged",
     )
 
+    # ─────────────────────────────────────────────────────────────
+    # Plan Snapshot (Dive Plan Extension)
+    # ─────────────────────────────────────────────────────────────
+
+    plan_snapshot = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Frozen copy of plan at time of briefing lock",
+    )
+
+    plan_locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the plan was locked (briefing sent)",
+    )
+
+    plan_locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Staff member who locked the plan",
+    )
+
+    # ─────────────────────────────────────────────────────────────
+    # Plan Provenance (tracks where snapshot came from)
+    # ─────────────────────────────────────────────────────────────
+
+    plan_template_id = models.UUIDField(
+        null=True,
+        blank=True,
+        help_text="ID of ExcursionTypeDive template used for snapshot",
+    )
+
+    plan_template_published_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the source template was published",
+    )
+
+    # ─────────────────────────────────────────────────────────────
+    # Snapshot Status
+    # ─────────────────────────────────────────────────────────────
+
+    plan_snapshot_outdated = models.BooleanField(
+        default=False,
+        help_text="True if planned fields changed after lock (needs resend)",
+    )
+
     class Meta:
         constraints = [
             # Unique sequence per excursion
@@ -871,6 +921,7 @@ class Dive(BaseModel):
         indexes = [
             models.Index(fields=["excursion", "sequence"]),
             models.Index(fields=["logged_at"]),
+            models.Index(fields=["plan_locked_at"]),
         ]
         ordering = ["excursion", "sequence"]
 
@@ -889,6 +940,11 @@ class Dive(BaseModel):
     def is_logged(self) -> bool:
         """Check if dive results have been logged."""
         return self.logged_at is not None
+
+    @property
+    def is_plan_locked(self) -> bool:
+        """Check if dive plan has been locked."""
+        return self.plan_locked_at is not None
 
 
 class Booking(BaseModel):
@@ -1365,6 +1421,89 @@ class ExcursionTypeDive(BaseModel):
         blank=True,
         related_name="dive_templates",
         help_text="Specific certification for this dive (overrides excursion type if set)",
+    )
+
+    # ─────────────────────────────────────────────────────────────
+    # Briefing Content Fields (Dive Plan Extension)
+    # ─────────────────────────────────────────────────────────────
+
+    class GasType(models.TextChoices):
+        AIR = "air", "Air"
+        EAN32 = "ean32", "EAN32"
+        EAN36 = "ean36", "EAN36"
+        TRIMIX = "trimix", "Trimix"
+
+    gas = models.CharField(
+        max_length=20,
+        choices=GasType.choices,
+        blank=True,
+        default="",
+        help_text="Gas mix for this dive",
+    )
+
+    equipment_requirements = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Equipment requirements by category: {required: [], recommended: [], rental_available: []}",
+    )
+
+    skills = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Skills to practice (for training dives)",
+    )
+
+    route = models.TextField(
+        blank=True,
+        default="",
+        help_text="Dive profile, route description, or navigation plan",
+    )
+
+    hazards = models.TextField(
+        blank=True,
+        default="",
+        help_text="Known hazards and safety considerations",
+    )
+
+    briefing_text = models.TextField(
+        blank=True,
+        default="",
+        help_text="Full briefing content for communication to divers",
+    )
+
+    # ─────────────────────────────────────────────────────────────
+    # Publish Lifecycle (Dive Plan Extension)
+    # ─────────────────────────────────────────────────────────────
+
+    class PlanStatus(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        RETIRED = "retired", "Retired"
+
+    status = models.CharField(
+        max_length=10,
+        choices=PlanStatus.choices,
+        default=PlanStatus.DRAFT,
+    )
+
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="User who published this template",
+    )
+
+    retired_at = models.DateTimeField(null=True, blank=True)
+    retired_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="User who retired this template",
     )
 
     class Meta:
