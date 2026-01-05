@@ -12,6 +12,7 @@ This module provides domain models for a diving operation built on django-primit
 """
 
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -1410,6 +1411,16 @@ class SettlementRecord(BaseModel):
         help_text="Linked ledger transaction (immutable after posting)",
     )
 
+    # Link to settlement run (if part of a batch)
+    settlement_run = models.ForeignKey(
+        "SettlementRun",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="settlements",
+        help_text="Settlement run this record belongs to (if batch processed)",
+    )
+
     # Audit
     processed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1429,6 +1440,7 @@ class SettlementRecord(BaseModel):
         indexes = [
             models.Index(fields=["booking", "settlement_type"]),
             models.Index(fields=["settled_at"]),
+            models.Index(fields=["settlement_run"]),
         ]
         ordering = ["-settled_at"]
 
@@ -1527,5 +1539,109 @@ class CommissionRule(BaseModel):
         if self.rate_type == self.RateType.PERCENTAGE:
             return f"{scope}: {self.rate_value}%"
         return f"{scope}: ${self.rate_value} fixed"
+
+
+# =============================================================================
+# T-010: Settlement Run (Batch Posting)
+# =============================================================================
+
+
+class SettlementRun(BaseModel):
+    """Batch settlement run record.
+
+    Tracks a batch of settlements processed together:
+    - Period (date range) of bookings included
+    - Success/failure counts
+    - Total amount settled
+    - Audit trail
+
+    Individual SettlementRecords link to their SettlementRun.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    # Shop this run is for
+    dive_shop = models.ForeignKey(
+        "django_parties.Organization",
+        on_delete=models.PROTECT,
+        related_name="settlement_runs",
+    )
+
+    # Period covered by this run
+    period_start = models.DateTimeField(
+        help_text="Start of period for eligible bookings",
+    )
+    period_end = models.DateTimeField(
+        help_text="End of period for eligible bookings",
+    )
+
+    # Run status
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+
+    # Counts
+    total_bookings = models.IntegerField(
+        default=0,
+        help_text="Total eligible bookings found",
+    )
+    settled_count = models.IntegerField(
+        default=0,
+        help_text="Number of bookings successfully settled",
+    )
+    failed_count = models.IntegerField(
+        default=0,
+        help_text="Number of bookings that failed to settle",
+    )
+
+    # Total amount
+    total_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Total amount settled in this run",
+    )
+    currency = models.CharField(
+        max_length=3,
+        default="USD",
+    )
+
+    # Audit
+    processed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="settlement_runs_processed",
+    )
+    run_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When the run was executed",
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the run finished",
+    )
+    notes = models.TextField(blank=True)
+    error_details = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Details of any failures during the run",
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["dive_shop", "run_at"]),
+            models.Index(fields=["status"]),
+        ]
+        ordering = ["-run_at"]
+
+    def __str__(self):
+        return f"SettlementRun {self.pk}: {self.dive_shop.name} ({self.settled_count}/{self.total_bookings})"
 
 

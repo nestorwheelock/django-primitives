@@ -174,6 +174,7 @@ class Actions:
     # -------------------------------------------------------------------------
     SETTLEMENT_POSTED = "settlement_posted"
     REFUND_SETTLEMENT_POSTED = "refund_settlement_posted"
+    SETTLEMENT_RUN_COMPLETED = "settlement_run_completed"
 
 
 # =============================================================================
