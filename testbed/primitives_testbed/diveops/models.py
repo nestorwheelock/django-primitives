@@ -1436,3 +1436,96 @@ class SettlementRecord(BaseModel):
         return f"Settlement {self.idempotency_key}: {self.amount} {self.currency}"
 
 
+# =============================================================================
+# T-009: Commission Rule Definition
+# =============================================================================
+
+
+class CommissionRule(BaseModel):
+    """INV-3: Effective-dated commission rule for revenue sharing.
+
+    Commission rules define how revenue is split for bookings:
+    - Shop default commission rate (excursion_type=NULL)
+    - ExcursionType-specific overrides (higher priority)
+    - Rate can be percentage of booking price or fixed amount
+    - Effective dating allows rate changes without losing history
+
+    Rule priority (highest to lowest):
+    1. ExcursionType-specific rule (matching excursion_type, latest effective_at)
+    2. Shop default rule (excursion_type=NULL, latest effective_at)
+    3. Zero commission (no matching rule)
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class RateType(models.TextChoices):
+        PERCENTAGE = "percentage", "Percentage"
+        FIXED = "fixed", "Fixed Amount"
+
+    # Ownership - which shop this rule applies to
+    dive_shop = models.ForeignKey(
+        "django_parties.Organization",
+        on_delete=models.PROTECT,
+        related_name="commission_rules",
+    )
+
+    # Optional scope - if NULL, applies as shop default
+    excursion_type = models.ForeignKey(
+        ExcursionType,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="commission_rules",
+        help_text="If set, rule only applies to this ExcursionType. NULL = shop default.",
+    )
+
+    # Rate configuration
+    rate_type = models.CharField(
+        max_length=20,
+        choices=RateType.choices,
+        default=RateType.PERCENTAGE,
+    )
+    rate_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Percentage (e.g., 15.00 = 15%) or fixed amount (e.g., 25.00)",
+    )
+
+    # Effective dating (INV-3)
+    effective_at = models.DateTimeField(
+        help_text="When this rule becomes effective. Latest effective_at <= as_of wins.",
+    )
+
+    # Optional description
+    description = models.TextField(
+        blank=True,
+        help_text="Reason for this rate or notes about the rule",
+    )
+
+    class Meta:
+        constraints = [
+            # Rate value must be non-negative
+            models.CheckConstraint(
+                condition=Q(rate_value__gte=0),
+                name="diveops_commission_rate_non_negative",
+            ),
+            # Percentage must be <= 100
+            models.CheckConstraint(
+                condition=~Q(rate_type="percentage") | Q(rate_value__lte=100),
+                name="diveops_commission_percentage_max_100",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["dive_shop", "excursion_type", "effective_at"]),
+            models.Index(fields=["effective_at"]),
+        ]
+        ordering = ["-effective_at"]
+
+    def __str__(self):
+        scope = self.excursion_type.name if self.excursion_type else "Shop Default"
+        if self.rate_type == self.RateType.PERCENTAGE:
+            return f"{scope}: {self.rate_value}%"
+        return f"{scope}: ${self.rate_value} fixed"
+
+
