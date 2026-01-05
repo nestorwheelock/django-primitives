@@ -107,6 +107,7 @@ class Actions:
     # -------------------------------------------------------------------------
     BOOKING_CREATED = "booking_created"
     BOOKING_CANCELLED = "booking_cancelled"
+    BOOKING_CANCELLATION_BLOCKED = "booking_cancellation_blocked"
     BOOKING_PAID = "booking_paid"
     BOOKING_REFUNDED = "booking_refunded"
     DIVER_CHECKED_IN = "diver_checked_in"

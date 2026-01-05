@@ -4,15 +4,36 @@ Business logic for booking, check-in, and trip completion.
 All write operations are atomic transactions.
 """
 
+from dataclasses import dataclass
+
 from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
+from .cancellation_policy import RefundDecision
+
+
+@dataclass
+class CancellationResult:
+    """Result of a booking cancellation.
+
+    Bundles the cancelled booking with its refund decision.
+
+    Attributes:
+        booking: The cancelled Booking instance
+        refund_decision: The computed RefundDecision (None if no agreement)
+    """
+
+    booking: "Booking"
+    refund_decision: RefundDecision | None
+
 from .audit import (
     Actions,
     log_booking_event,
+    log_settlement_event,
     log_certification_event,
     log_diver_event,
+    log_event,
     log_excursion_event,
     log_excursion_type_event,
     log_roster_event,
@@ -151,10 +172,13 @@ def book_excursion(
     *,
     create_invoice: bool = False,
     skip_eligibility_check: bool = False,
+    create_agreement: bool = False,
+    cancellation_policy: dict | None = None,
 ) -> Booking:
     """Book a diver on an excursion.
 
     Creates a booking and optionally a basket/invoice using the pricing module.
+    Can also create a waiver agreement with cancellation policy terms.
 
     Args:
         excursion: The excursion to book
@@ -162,6 +186,8 @@ def book_excursion(
         booked_by: User making the booking
         create_invoice: If True, create basket and invoice via billing adapter
         skip_eligibility_check: If True, skip eligibility validation
+        create_agreement: If True, create waiver agreement with cancellation terms
+        cancellation_policy: Custom cancellation policy (uses default if None)
 
     Returns:
         Created Booking
@@ -170,6 +196,7 @@ def book_excursion(
         DiverNotEligibleError: If diver fails eligibility checks
         TripCapacityError: If excursion is at capacity
         BookingError: For other booking issues
+        ValueError: If cancellation_policy is invalid
     """
     # Lock the excursion to prevent race conditions
     excursion = Excursion.objects.select_for_update().get(pk=excursion.pk)
@@ -205,6 +232,16 @@ def book_excursion(
     # Note: If excursion_type or dive_site is missing, price fields remain null
     # This is intentional per INV-3 - only structured pricing is snapshotted
 
+    # Validate cancellation policy if provided
+    if create_agreement and cancellation_policy is not None:
+        from .cancellation_policy import validate_cancellation_policy
+
+        validation = validate_cancellation_policy(cancellation_policy)
+        if not validation.is_valid:
+            raise ValueError(
+                f"Invalid cancellation policy: {'; '.join(validation.errors)}"
+            )
+
     # Create booking
     try:
         booking = Booking.objects.create(
@@ -224,6 +261,52 @@ def book_excursion(
             ) from e
         # Re-raise unknown IntegrityErrors
         raise
+
+    # Create waiver agreement if requested
+    if create_agreement:
+        from django_agreements.services import create_agreement as create_agr
+        from django.utils import timezone
+
+        from .cancellation_policy import DEFAULT_CANCELLATION_POLICY
+
+        # Use provided policy or default
+        policy = cancellation_policy if cancellation_policy else DEFAULT_CANCELLATION_POLICY
+
+        # Build agreement terms
+        agreement_terms = {
+            "booking_id": str(booking.pk),
+            "excursion_id": str(excursion.pk),
+            "cancellation_policy": policy,
+            "agreed_at": timezone.now().isoformat(),
+        }
+
+        # Create agreement via django_agreements service
+        agreement = create_agr(
+            party_a=diver.person,
+            party_b=excursion.dive_shop,
+            scope_type="booking_waiver",
+            terms=agreement_terms,
+            agreed_by=booked_by,
+            valid_from=timezone.now(),
+            scope_ref=booking,
+        )
+
+        # Link agreement to booking
+        booking.waiver_agreement = agreement
+        booking.save(update_fields=["waiver_agreement"])
+
+        # Emit agreement audit event
+        log_event(
+            action=Actions.AGREEMENT_CREATED,
+            target=agreement,
+            actor=booked_by,
+            data={
+                "booking_id": str(booking.pk),
+                "diver_id": str(diver.pk),
+                "excursion_id": str(excursion.pk),
+                "scope_type": "booking_waiver",
+            },
+        )
 
     # Create basket and invoice via billing adapter
     if create_invoice:
@@ -474,38 +557,149 @@ def complete_excursion(excursion: Excursion, completed_by) -> Excursion:
 complete_trip = complete_excursion
 
 
-@transaction.atomic
-def cancel_booking(booking: Booking, cancelled_by) -> Booking:
-    """Cancel a booking.
+def cancel_booking(
+    booking: Booking,
+    cancelled_by,
+    *,
+    force_with_refund: bool = False,
+) -> CancellationResult:
+    """Cancel a booking and compute refund decision.
+
+    If the booking has a waiver agreement with cancellation terms,
+    computes the refund decision based on the agreement's policy.
+
+    T-004: This computes a DECISION, not a MOVEMENT of money.
+    No settlement records or ledger entries are created (unless force_with_refund=True).
+
+    T-011: Financial State Enforcement (INV-5)
+    - If booking is settled (has revenue settlement), cancellation is blocked
+    - Use force_with_refund=True to auto-create refund settlement and proceed
 
     Args:
         booking: The booking to cancel
         cancelled_by: User cancelling the booking
+        force_with_refund: If True and booking is settled, auto-create refund settlement
 
     Returns:
-        Updated booking
+        CancellationResult with booking and refund decision
 
     Raises:
         BookingError: If booking cannot be cancelled
     """
+    # Pre-validation (outside atomic block to preserve audit log on failure)
     if booking.status == "cancelled":
         raise BookingError("Booking is already cancelled")
 
     if booking.status == "checked_in":
         raise BookingError("Cannot cancel a checked-in booking")
 
+    # T-011: Financial state enforcement (INV-5)
+    # Check before atomic block so audit log persists even if cancelled
+    was_settled = booking.is_settled
+
+    if was_settled and not force_with_refund:
+        # Emit audit event for blocked action (outside atomic so it persists)
+        log_event(
+            action=Actions.BOOKING_CANCELLATION_BLOCKED,
+            target=booking,
+            actor=cancelled_by,
+            data={
+                "booking_id": str(booking.pk),
+                "reason": "Booking is settled without refund",
+                "financial_state": booking.get_financial_state(),
+            },
+        )
+        raise BookingError(
+            "Cannot cancel settled booking without refund. "
+            "Use force_with_refund=True to auto-create refund settlement."
+        )
+
+    # All mutations happen in atomic block
+    return _cancel_booking_atomic(booking, cancelled_by, was_settled, force_with_refund)
+
+
+@transaction.atomic
+def _cancel_booking_atomic(
+    booking: Booking,
+    cancelled_by,
+    was_settled: bool,
+    force_with_refund: bool,
+) -> CancellationResult:
+    """Internal atomic implementation of cancel_booking."""
+    cancellation_time = timezone.now()
+    refund_decision = None
+    audit_data = {}
+
+    # Compute refund decision if agreement exists with cancellation policy
+    if booking.waiver_agreement is not None:
+        agreement = booking.waiver_agreement
+        terms = agreement.terms or {}
+        cancellation_policy = terms.get("cancellation_policy")
+
+        if cancellation_policy and booking.price_amount is not None:
+            from .cancellation_policy import compute_refund_decision
+
+            refund_decision = compute_refund_decision(
+                original_amount=booking.price_amount,
+                currency=booking.price_currency or "USD",
+                departure_time=booking.excursion.departure_time,
+                cancellation_time=cancellation_time,
+                policy=cancellation_policy,
+            )
+
+            # Include refund decision in audit metadata
+            audit_data = {
+                "refund_percent": refund_decision.refund_percent,
+                "refund_amount": str(refund_decision.refund_amount),
+                "original_amount": str(refund_decision.original_amount),
+                "hours_before_departure": refund_decision.hours_before_departure,
+            }
+
+        # Terminate the agreement
+        from django_agreements.services import terminate_agreement
+
+        terminate_agreement(
+            agreement=agreement,
+            terminated_by=cancelled_by,
+            reason="Booking cancelled",
+        )
+
+        # Emit agreement termination audit event
+        log_event(
+            action=Actions.AGREEMENT_TERMINATED,
+            target=agreement,
+            actor=cancelled_by,
+            data={
+                "booking_id": str(booking.pk),
+                "reason": "Booking cancelled",
+            },
+        )
+
+    # Update booking status
     booking.status = "cancelled"
-    booking.cancelled_at = timezone.now()
+    booking.cancelled_at = cancellation_time
     booking.save()
 
-    # Emit audit event AFTER successful transaction
+    # Emit audit event with refund metadata
     log_booking_event(
         action=Actions.BOOKING_CANCELLED,
         booking=booking,
         actor=cancelled_by,
+        data=audit_data if audit_data else None,
     )
 
-    return booking
+    # T-011: Auto-create refund settlement if force_with_refund and booking was settled
+    if force_with_refund and was_settled and refund_decision is not None:
+        create_refund_settlement(
+            booking=booking,
+            refund_decision=refund_decision,
+            processed_by=cancelled_by,
+        )
+
+    return CancellationResult(
+        booking=booking,
+        refund_decision=refund_decision,
+    )
 
 
 # =============================================================================
@@ -1587,3 +1781,287 @@ def delete_site_price_adjustment(
     )
 
     return adjustment
+
+
+# =============================================================================
+# T-005: Revenue Settlement Services
+# =============================================================================
+
+
+@transaction.atomic
+def create_revenue_settlement(
+    booking: "Booking",
+    *,
+    processed_by,
+    effective_at=None,
+) -> "SettlementRecord":
+    """Create revenue settlement for a booking (idempotent).
+
+    Records revenue recognition for a booking by:
+    1. Creating a SettlementRecord with deterministic idempotency key
+    2. Creating balanced ledger transaction (DR: Receivable, CR: Revenue)
+    3. Emitting audit event
+
+    T-005: This is the first financial posting primitive. Revenue only.
+    Refunds are out of scope (T-006).
+
+    Idempotency: If called twice with same booking, returns existing record.
+    The idempotency_key is deterministic: "{booking_id}:revenue:1"
+
+    Args:
+        booking: Booking to settle (must have price_amount)
+        processed_by: User processing the settlement
+        effective_at: When the settlement is effective (defaults to now)
+
+    Returns:
+        SettlementRecord (new or existing if idempotent)
+
+    Raises:
+        ValueError: If booking has no price_amount or is cancelled
+    """
+    from django_ledger.models import Account
+    from django_ledger.services import record_transaction
+
+    from .models import SettlementRecord
+
+    # Validate booking has price snapshot
+    if booking.price_amount is None:
+        raise ValueError(
+            "Cannot create revenue settlement: booking has no price_amount. "
+            "Price snapshot is required for settlement."
+        )
+
+    # Validate booking status - cannot settle cancelled bookings
+    if booking.status == "cancelled":
+        raise ValueError(
+            "Cannot create revenue settlement: booking is cancelled. "
+            "Cancelled bookings cannot be settled for revenue."
+        )
+
+    # Build deterministic idempotency key
+    idempotency_key = f"{booking.pk}:revenue:1"
+
+    # Check for existing settlement (idempotent)
+    existing = SettlementRecord.objects.filter(idempotency_key=idempotency_key).first()
+    if existing:
+        return existing
+
+    effective_at = effective_at or timezone.now()
+
+    # Get or create accounts for the transaction
+    # DR: Accounts Receivable (owned by diver's person)
+    # CR: Revenue (owned by dive shop)
+    diver_owner = booking.diver.person
+    shop_owner = booking.excursion.dive_shop
+
+    receivable_account, _ = Account.objects.get_or_create(
+        owner_content_type=ContentType.objects.get_for_model(diver_owner),
+        owner_id=str(diver_owner.pk),
+        account_type="receivable",
+        currency=booking.price_currency or "USD",
+        defaults={"name": f"Receivable - {diver_owner}"},
+    )
+
+    revenue_account, _ = Account.objects.get_or_create(
+        owner_content_type=ContentType.objects.get_for_model(shop_owner),
+        owner_id=str(shop_owner.pk),
+        account_type="revenue",
+        currency=booking.price_currency or "USD",
+        defaults={"name": f"Revenue - {shop_owner}"},
+    )
+
+    # Create balanced ledger transaction
+    tx = record_transaction(
+        description=f"Revenue for booking {booking.pk}",
+        entries=[
+            {
+                "account": receivable_account,
+                "amount": booking.price_amount,
+                "entry_type": "debit",
+                "description": "Customer receivable",
+            },
+            {
+                "account": revenue_account,
+                "amount": booking.price_amount,
+                "entry_type": "credit",
+                "description": "Booking revenue",
+            },
+        ],
+        effective_at=effective_at,
+        metadata={
+            "booking_id": str(booking.pk),
+            "idempotency_key": idempotency_key,
+            "settlement_type": "revenue",
+        },
+    )
+
+    # Create settlement record
+    settlement = SettlementRecord.objects.create(
+        booking=booking,
+        settlement_type="revenue",
+        idempotency_key=idempotency_key,
+        amount=booking.price_amount,
+        currency=booking.price_currency or "USD",
+        transaction=tx,
+        processed_by=processed_by,
+        settled_at=effective_at,
+    )
+
+    # Emit audit event
+    log_settlement_event(
+        action=Actions.SETTLEMENT_POSTED,
+        settlement=settlement,
+        actor=processed_by,
+    )
+
+    return settlement
+
+
+# =============================================================================
+# T-006: Refund Settlement Services
+# =============================================================================
+
+
+@transaction.atomic
+def create_refund_settlement(
+    booking: "Booking",
+    refund_decision: RefundDecision,
+    *,
+    processed_by,
+    effective_at=None,
+) -> "SettlementRecord | None":
+    """Create refund settlement for a cancelled booking (idempotent).
+
+    Records refund for a cancelled booking by:
+    1. Creating a SettlementRecord with deterministic idempotency key
+    2. Creating balanced ledger transaction (DR: Revenue, CR: Receivable)
+    3. Emitting audit event
+
+    T-006: This reverses revenue direction for refunds.
+    Requires RefundDecision from cancel_booking().
+
+    Idempotency: If called twice with same booking, returns existing record.
+    The idempotency_key is deterministic: "{booking_id}:refund:1"
+
+    Zero refund: If refund_decision.refund_amount is 0, returns None.
+    No settlement or ledger entry is created for zero refunds.
+
+    Args:
+        booking: Cancelled booking to refund
+        refund_decision: RefundDecision from cancel_booking()
+        processed_by: User processing the settlement
+        effective_at: When the settlement is effective (defaults to now)
+
+    Returns:
+        SettlementRecord (new or existing if idempotent), or None if zero refund
+
+    Raises:
+        ValueError: If refund_decision is None or booking is not cancelled
+    """
+    from django_ledger.models import Account
+    from django_ledger.services import record_transaction
+
+    from .models import SettlementRecord
+
+    # Validate refund_decision is provided
+    if refund_decision is None:
+        raise ValueError(
+            "Cannot create refund settlement: refund_decision is required. "
+            "Use cancel_booking() to compute the refund decision first."
+        )
+
+    # Validate booking status - must be cancelled for refund
+    if booking.status != "cancelled":
+        raise ValueError(
+            "Cannot create refund settlement: booking is not cancelled. "
+            "Only cancelled bookings can be refunded."
+        )
+
+    # Zero refund - no settlement needed
+    if refund_decision.refund_amount == 0:
+        return None
+
+    # Build deterministic idempotency key
+    idempotency_key = f"{booking.pk}:refund:1"
+
+    # Check for existing settlement (idempotent)
+    existing = SettlementRecord.objects.filter(idempotency_key=idempotency_key).first()
+    if existing:
+        return existing
+
+    effective_at = effective_at or timezone.now()
+
+    # Get or create accounts for the transaction
+    # Refund REVERSES revenue direction:
+    # DR: Revenue (reduce revenue)
+    # CR: Accounts Receivable (reduce receivable)
+    diver_owner = booking.diver.person
+    shop_owner = booking.excursion.dive_shop
+
+    receivable_account, _ = Account.objects.get_or_create(
+        owner_content_type=ContentType.objects.get_for_model(diver_owner),
+        owner_id=str(diver_owner.pk),
+        account_type="receivable",
+        currency=refund_decision.currency,
+        defaults={"name": f"Receivable - {diver_owner}"},
+    )
+
+    revenue_account, _ = Account.objects.get_or_create(
+        owner_content_type=ContentType.objects.get_for_model(shop_owner),
+        owner_id=str(shop_owner.pk),
+        account_type="revenue",
+        currency=refund_decision.currency,
+        defaults={"name": f"Revenue - {shop_owner}"},
+    )
+
+    # Create balanced ledger transaction - REVERSED from revenue
+    tx = record_transaction(
+        description=f"Refund for booking {booking.pk}",
+        entries=[
+            {
+                "account": revenue_account,
+                "amount": refund_decision.refund_amount,
+                "entry_type": "debit",
+                "description": "Revenue reversal (refund)",
+            },
+            {
+                "account": receivable_account,
+                "amount": refund_decision.refund_amount,
+                "entry_type": "credit",
+                "description": "Receivable reversal (refund)",
+            },
+        ],
+        effective_at=effective_at,
+        metadata={
+            "booking_id": str(booking.pk),
+            "idempotency_key": idempotency_key,
+            "settlement_type": "refund",
+            "refund_percent": refund_decision.refund_percent,
+            "original_amount": str(refund_decision.original_amount),
+        },
+    )
+
+    # Create settlement record
+    settlement = SettlementRecord.objects.create(
+        booking=booking,
+        settlement_type="refund",
+        idempotency_key=idempotency_key,
+        amount=refund_decision.refund_amount,
+        currency=refund_decision.currency,
+        transaction=tx,
+        processed_by=processed_by,
+        settled_at=effective_at,
+    )
+
+    # Emit audit event
+    log_settlement_event(
+        action=Actions.REFUND_SETTLEMENT_POSTED,
+        settlement=settlement,
+        actor=processed_by,
+        data={
+            "refund_percent": refund_decision.refund_percent,
+            "original_amount": str(refund_decision.original_amount),
+        },
+    )
+
+    return settlement

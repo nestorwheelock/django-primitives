@@ -946,6 +946,54 @@ class Booking(BaseModel):
     def __str__(self):
         return f"{self.diver.person} - {self.excursion}"
 
+    # -------------------------------------------------------------------------
+    # T-011: Financial State Properties and Methods
+    # -------------------------------------------------------------------------
+
+    @property
+    def is_settled(self) -> bool:
+        """Check if booking has a revenue settlement.
+
+        Returns True if any revenue SettlementRecord exists for this booking.
+        """
+        return self.settlements.filter(settlement_type="revenue").exists()
+
+    @property
+    def has_refund(self) -> bool:
+        """Check if booking has a refund settlement.
+
+        Returns True if any refund SettlementRecord exists for this booking.
+        """
+        return self.settlements.filter(settlement_type="refund").exists()
+
+    def get_financial_state(self) -> str:
+        """Get the current financial state of the booking.
+
+        Returns:
+            'unsettled': No settlements exist
+            'settled': Has revenue settlement but no refund
+            'refunded': Has refund settlement
+        """
+        if self.has_refund:
+            return "refunded"
+        if self.is_settled:
+            return "settled"
+        return "unsettled"
+
+    def delete(self, *args, **kwargs):
+        """Override delete to block deletion of settled bookings.
+
+        INV-5: Bookings with settlements cannot be deleted.
+        """
+        from .exceptions import BookingError
+
+        if self.is_settled:
+            raise BookingError(
+                "Booking has settlement records and cannot be deleted. "
+                "Financial records must be preserved for audit trail."
+            )
+        return super().delete(*args, **kwargs)
+
 
 class EligibilityOverride(BaseModel):
     """INV-1: Booking-scoped eligibility override.
