@@ -1471,6 +1471,12 @@ class ExcursionTypeDive(BaseModel):
         help_text="Full briefing content for communication to divers",
     )
 
+    route_segments = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Structured dive profile: [{phase, depth_m, duration_min, description}, ...]",
+    )
+
     # ─────────────────────────────────────────────────────────────
     # Publish Lifecycle (Dive Plan Extension)
     # ─────────────────────────────────────────────────────────────

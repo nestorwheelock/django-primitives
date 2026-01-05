@@ -2757,6 +2757,7 @@ def build_plan_snapshot(*, template: "ExcursionTypeDive", dive: "Dive") -> dict:
             "equipment_requirements": template.equipment_requirements,
             "skills": template.skills,
             "route": template.route,
+            "route_segments": template.route_segments,
             "hazards": template.hazards,
             "briefing_text": template.briefing_text,
         },
