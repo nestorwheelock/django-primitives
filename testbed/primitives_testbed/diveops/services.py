@@ -30,7 +30,9 @@ class CancellationResult:
 from .audit import (
     Actions,
     log_booking_event,
+    log_dive_assignment_event,
     log_dive_event,
+    log_dive_log_event,
     log_dive_template_event,
     log_settlement_event,
     log_certification_event,
@@ -62,8 +64,10 @@ from .models import (
     Booking,
     CertificationLevel,
     Dive,
+    DiveAssignment,
     DiverCertification,
     DiverProfile,
+    DiveLog,
     DiveSite,
     Excursion,
     ExcursionRoster,
@@ -2358,3 +2362,265 @@ def delete_dive_template(
     )
 
     dive_template.delete()
+
+
+# =============================================================================
+# Dive Log Services
+# =============================================================================
+
+
+@transaction.atomic
+def log_dive_results(
+    *,
+    actor,
+    dive: Dive,
+    actual_start,
+    actual_end,
+    max_depth_meters: int,
+    bottom_time_minutes: int | None = None,
+    visibility_meters: int | None = None,
+    water_temp_celsius=None,
+    surface_conditions: str = "",
+    current: str = "",
+) -> Dive:
+    """Log actual results for a completed dive.
+
+    Updates the Dive record with actual conditions and creates DiveLog
+    entries for all participating divers (status in_water, surfaced, or on_boat).
+
+    This operation is idempotent - calling twice will update the Dive
+    but not duplicate DiveLog entries.
+
+    Args:
+        actor: Staff user logging the results
+        dive: Dive instance to update
+        actual_start: When dive actually started
+        actual_end: When dive actually ended
+        max_depth_meters: Maximum depth reached
+        bottom_time_minutes: Total bottom time (optional)
+        visibility_meters: Visibility in meters (optional)
+        water_temp_celsius: Water temperature (optional)
+        surface_conditions: Surface conditions (optional)
+        current: Current strength (optional)
+
+    Returns:
+        Updated Dive instance
+    """
+    # Update dive with actual results
+    dive.actual_start = actual_start
+    dive.actual_end = actual_end
+    dive.max_depth_meters = max_depth_meters
+
+    if bottom_time_minutes is not None:
+        dive.bottom_time_minutes = bottom_time_minutes
+
+    if visibility_meters is not None:
+        dive.visibility_meters = visibility_meters
+
+    if water_temp_celsius is not None:
+        dive.water_temp_celsius = water_temp_celsius
+
+    if surface_conditions:
+        dive.surface_conditions = surface_conditions
+
+    if current:
+        dive.current = current
+
+    # Set audit fields
+    dive.logged_by = actor
+    dive.logged_at = timezone.now()
+
+    dive.save()
+
+    # Create DiveLog entries for participating divers
+    # Participating statuses: in_water, surfaced, on_boat
+    participating_statuses = [
+        DiveAssignment.Status.IN_WATER,
+        DiveAssignment.Status.SURFACED,
+        DiveAssignment.Status.ON_BOAT,
+    ]
+
+    assignments = dive.assignments.filter(status__in=participating_statuses)
+
+    for assignment in assignments:
+        # Check if DiveLog already exists (idempotency)
+        if not DiveLog.objects.filter(dive=dive, diver=assignment.diver).exists():
+            # Calculate dive number for this diver
+            existing_logs = DiveLog.objects.filter(diver=assignment.diver).count()
+            dive_number = existing_logs + 1
+
+            DiveLog.objects.create(
+                dive=dive,
+                diver=assignment.diver,
+                assignment=assignment,
+                dive_number=dive_number,
+            )
+
+    # Log audit event
+    log_dive_event(
+        action=Actions.DIVE_LOGGED,
+        dive=dive,
+        actor=actor,
+    )
+
+    return dive
+
+
+@transaction.atomic
+def update_diver_status(
+    *,
+    actor,
+    assignment: DiveAssignment,
+    new_status: str,
+) -> DiveAssignment:
+    """Update a diver's status during a dive.
+
+    Tracks status changes and automatically sets timestamps for key transitions:
+    - entered_water_at: Set on first transition to 'in_water'
+    - surfaced_at: Set on first transition to 'surfaced'
+
+    Args:
+        actor: Staff user making the change
+        assignment: DiveAssignment to update
+        new_status: New status value
+
+    Returns:
+        Updated DiveAssignment instance
+    """
+    old_status = assignment.status
+    now = timezone.now()
+
+    # Update status
+    assignment.status = new_status
+
+    # Set timestamps on first transition only
+    if new_status == DiveAssignment.Status.IN_WATER and assignment.entered_water_at is None:
+        assignment.entered_water_at = now
+
+    if new_status == DiveAssignment.Status.SURFACED and assignment.surfaced_at is None:
+        assignment.surfaced_at = now
+
+    assignment.save()
+
+    # Log audit event with status change
+    log_dive_assignment_event(
+        action=Actions.DIVER_STATUS_CHANGED,
+        assignment=assignment,
+        actor=actor,
+        changes={"status": {"old": old_status, "new": new_status}},
+    )
+
+    return assignment
+
+
+@transaction.atomic
+def verify_dive_log(
+    *,
+    actor,
+    dive_log: DiveLog,
+) -> DiveLog:
+    """Verify a dive log entry.
+
+    Sets verified_by and verified_at to record who verified the log and when.
+    Can be called multiple times - subsequent calls update the verifier.
+
+    Args:
+        actor: Staff user verifying the log
+        dive_log: DiveLog to verify
+
+    Returns:
+        Updated DiveLog instance
+    """
+    dive_log.verified_by = actor
+    dive_log.verified_at = timezone.now()
+    dive_log.save()
+
+    log_dive_log_event(
+        action=Actions.DIVE_LOG_VERIFIED,
+        dive_log=dive_log,
+        actor=actor,
+    )
+
+    return dive_log
+
+
+@transaction.atomic
+def update_dive_log(
+    *,
+    actor,
+    dive_log: DiveLog,
+    max_depth_meters=None,
+    bottom_time_minutes: int | None = None,
+    air_start_bar: int | None = None,
+    air_end_bar: int | None = None,
+    weight_kg=None,
+    suit_type: str | None = None,
+    tank_size_liters: int | None = None,
+    nitrox_percentage: int | None = None,
+    notes: str | None = None,
+    buddy_name: str | None = None,
+) -> DiveLog:
+    """Update personal details on a dive log.
+
+    Only updates fields that are explicitly provided (not None).
+    Tracks changes for audit purposes. No audit event is logged if
+    no values actually changed.
+
+    Args:
+        actor: User making the update
+        dive_log: DiveLog to update
+        max_depth_meters: Personal max depth (optional)
+        bottom_time_minutes: Personal bottom time (optional)
+        air_start_bar: Starting air pressure (optional)
+        air_end_bar: Ending air pressure (optional)
+        weight_kg: Weight used (optional)
+        suit_type: Wetsuit/drysuit type (optional)
+        tank_size_liters: Tank size (optional)
+        nitrox_percentage: Nitrox percentage (optional)
+        notes: Personal notes (optional)
+        buddy_name: Buddy name (optional)
+
+    Returns:
+        Updated DiveLog instance
+    """
+    changes = {}
+
+    # Track changes for all updatable fields
+    field_updates = [
+        ("max_depth_meters", max_depth_meters),
+        ("bottom_time_minutes", bottom_time_minutes),
+        ("air_start_bar", air_start_bar),
+        ("air_end_bar", air_end_bar),
+        ("weight_kg", weight_kg),
+        ("suit_type", suit_type),
+        ("tank_size_liters", tank_size_liters),
+        ("nitrox_percentage", nitrox_percentage),
+        ("notes", notes),
+        ("buddy_name", buddy_name),
+    ]
+
+    for field_name, new_value in field_updates:
+        if new_value is not None:
+            old_value = getattr(dive_log, field_name)
+            # Convert to comparable types
+            old_comparable = str(old_value) if old_value is not None else None
+            new_comparable = str(new_value)
+
+            if old_comparable != new_comparable:
+                # Convert Decimal to string for JSON serialization
+                old_for_json = str(old_value) if old_value is not None else None
+                new_for_json = str(new_value)
+                changes[field_name] = {"old": old_for_json, "new": new_for_json}
+                setattr(dive_log, field_name, new_value)
+
+    if changes:
+        dive_log.save()
+
+        log_dive_log_event(
+            action=Actions.DIVE_LOG_UPDATED,
+            dive_log=dive_log,
+            actor=actor,
+            changes=changes,
+        )
+
+    return dive_log

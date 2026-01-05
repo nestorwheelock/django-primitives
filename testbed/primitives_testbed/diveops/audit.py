@@ -145,6 +145,18 @@ class Actions:
     DIVE_CREATED = "dive_created"
     DIVE_UPDATED = "dive_updated"
     DIVE_DELETED = "dive_deleted"
+    DIVE_LOGGED = "dive_logged"
+
+    # -------------------------------------------------------------------------
+    # Dive Assignment Actions (diver status during dive)
+    # -------------------------------------------------------------------------
+    DIVER_STATUS_CHANGED = "diver_status_changed"
+
+    # -------------------------------------------------------------------------
+    # Dive Log Actions (personal dive records)
+    # -------------------------------------------------------------------------
+    DIVE_LOG_VERIFIED = "dive_log_verified"
+    DIVE_LOG_UPDATED = "dive_log_updated"
 
     # -------------------------------------------------------------------------
     # Dive Template Actions (ExcursionTypeDive - product configuration)
@@ -701,6 +713,97 @@ def log_site_price_adjustment_event(
     return audit_log(
         action=action,
         obj=adjustment,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_dive_assignment_event(
+    action: str,
+    assignment,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a dive assignment operation.
+
+    Args:
+        action: One of Actions.DIVER_STATUS_* constants
+        assignment: DiveAssignment instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "assignment_id": str(assignment.pk),
+        "dive_id": str(assignment.dive_id),
+        "diver_id": str(assignment.diver_id),
+        "status": assignment.status,
+        "role": assignment.role,
+    }
+
+    if assignment.diver and assignment.diver.person:
+        metadata["diver_name"] = assignment.diver.person.get_full_name()
+
+    if data:
+        metadata.update(data)
+
+    return audit_log(
+        action=action,
+        obj=assignment,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_dive_log_event(
+    action: str,
+    dive_log,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a dive log operation.
+
+    Args:
+        action: One of Actions.DIVE_LOG_* constants
+        dive_log: DiveLog instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "dive_log_id": str(dive_log.pk),
+        "dive_id": str(dive_log.dive_id),
+        "diver_id": str(dive_log.diver_id),
+    }
+
+    if dive_log.dive_number:
+        metadata["dive_number"] = dive_log.dive_number
+
+    if dive_log.diver and dive_log.diver.person:
+        metadata["diver_name"] = dive_log.diver.person.get_full_name()
+
+    if data:
+        metadata.update(data)
+
+    return audit_log(
+        action=action,
+        obj=dive_log,
         actor=actor,
         changes=changes or {},
         metadata=metadata,
