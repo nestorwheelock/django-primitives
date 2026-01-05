@@ -1,11 +1,14 @@
 """Eligibility decisioning for dive operations.
 
+DEPRECATED: This module is deprecated. Use eligibility_service.check_layered_eligibility() instead.
+
 This module provides rule-based eligibility checks for diving operations.
 Uses temporal evaluation to determine eligibility at a specific point in time.
 
 Uses TripRequirement and DiverCertification models for certification checks.
 """
 
+import warnings
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
@@ -37,6 +40,8 @@ def can_diver_join_trip(
 ) -> EligibilityResult:
     """Check if a diver is eligible to join a trip.
 
+    DEPRECATED: Use eligibility_service.check_layered_eligibility() instead.
+
     Uses TripRequirement and DiverCertification models for certification checks.
 
     Evaluates:
@@ -53,6 +58,12 @@ def can_diver_join_trip(
     Returns:
         EligibilityResult with allowed status, reasons, and required actions
     """
+    warnings.warn(
+        "can_diver_join_trip() is deprecated. "
+        "Use eligibility_service.check_layered_eligibility() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if as_of is None:
         as_of = timezone.now()
 
