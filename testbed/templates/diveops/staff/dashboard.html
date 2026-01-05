@@ -6,12 +6,12 @@
     <!-- Page Header -->
     <div>
         <h1 class="text-2xl font-bold text-gray-900">Dive Operations Dashboard</h1>
-        <p class="text-gray-600">Overview of trips, divers, and bookings</p>
+        <p class="text-gray-600">Overview of excursions, divers, and bookings</p>
     </div>
 
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <!-- Upcoming Trips -->
+        <!-- Upcoming Excursions -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div class="flex items-center">
                 <div class="flex-shrink-0 p-2 rounded-lg bg-blue-100">
@@ -19,7 +19,7 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-2xl font-bold text-gray-900">{{ upcoming_trips_count }}</p>
-                    <p class="text-sm text-gray-500">Upcoming Trips</p>
+                    <p class="text-sm text-gray-500">Upcoming Excursions</p>
                 </div>
             </div>
         </div>
@@ -37,7 +37,7 @@
             </div>
         </div>
 
-        <!-- Today's Trips -->
+        <!-- Today's Excursions -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div class="flex items-center">
                 <div class="flex-shrink-0 p-2 rounded-lg bg-yellow-100">
@@ -45,7 +45,7 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-2xl font-bold text-gray-900">{{ todays_trips|length }}</p>
-                    <p class="text-sm text-gray-500">Today's Trips</p>
+                    <p class="text-sm text-gray-500">Today's Excursions</p>
                 </div>
             </div>
         </div>
@@ -66,17 +66,17 @@
 
     <!-- Main Content Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Upcoming Trips Card -->
+        <!-- Upcoming Excursions Card -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                <h3 class="text-lg font-medium text-gray-900">Upcoming Trips</h3>
+                <h3 class="text-lg font-medium text-gray-900">Upcoming Excursions</h3>
                 <a href="{% url 'diveops:excursion-list' %}" class="text-sm text-blue-600 hover:text-blue-700">View all</a>
             </div>
             <div class="p-4">
                 {% if upcoming_trips %}
                 <div class="space-y-3">
                     {% for trip in upcoming_trips %}
-                    <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}" class="block p-3 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50 transition-colors">
+                    <a href="{% url 'diveops:excursion-detail' pk=trip.pk %}" class="block p-3 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50 transition-colors">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="font-medium text-gray-900">{{ trip.dive_site.name }}</p>
@@ -93,7 +93,7 @@
                     {% endfor %}
                 </div>
                 {% else %}
-                <p class="text-gray-500 text-center py-4">No upcoming trips scheduled</p>
+                <p class="text-gray-500 text-center py-4">No upcoming excursions scheduled</p>
                 {% endif %}
             </div>
         </div>
@@ -107,7 +107,7 @@
                 {% if todays_trips %}
                 <div class="space-y-3">
                     {% for trip in todays_trips %}
-                    <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}" class="block p-3 rounded-lg border border-gray-100 hover:border-green-200 hover:bg-green-50 transition-colors">
+                    <a href="{% url 'diveops:excursion-detail' pk=trip.pk %}" class="block p-3 rounded-lg border border-gray-100 hover:border-green-200 hover:bg-green-50 transition-colors">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="font-medium text-gray-900">{{ trip.dive_site.name }}</p>
@@ -123,7 +123,7 @@
                     {% endfor %}
                 </div>
                 {% else %}
-                <p class="text-gray-500 text-center py-4">No trips scheduled for today</p>
+                <p class="text-gray-500 text-center py-4">No excursions scheduled for today</p>
                 {% endif %}
             </div>
         </div>
@@ -133,17 +133,47 @@
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <h3 class="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
         <div class="flex flex-wrap gap-3">
+            <a href="{% url 'diveops:calendar' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "calendar" "w-4 h-4 mr-2" %}
+                Calendar
+            </a>
             <a href="{% url 'diveops:excursion-list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                 {% icon "anchor" "w-4 h-4 mr-2" %}
-                View All Trips
+                Excursions
             </a>
             <a href="{% url 'diveops:diver-list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                 {% icon "users" "w-4 h-4 mr-2" %}
-                View All Divers
+                Divers
             </a>
-            <a href="{% url 'diveops:diver-create' %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+            <a href="{% url 'diveops:staff-site-list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "map-pin" "w-4 h-4 mr-2" %}
+                Dive Sites
+            </a>
+            <a href="{% url 'diveops:excursion-type-list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "clipboard-list" "w-4 h-4 mr-2" %}
+                Excursion Types
+            </a>
+            <a href="{% url 'diveops:audit-log' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "file-text" "w-4 h-4 mr-2" %}
+                Audit Log
+            </a>
+        </div>
+        <div class="flex flex-wrap gap-3 mt-3 pt-3 border-t border-gray-200">
+            <a href="{% url 'diveops:excursion-create' %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "plus" "w-4 h-4 mr-2" %}
+                New Excursion
+            </a>
+            <a href="{% url 'diveops:diver-create' %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700">
                 {% icon "user-plus" "w-4 h-4 mr-2" %}
-                Add New Diver
+                New Diver
+            </a>
+            <a href="{% url 'diveops:staff-site-create' %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-purple-600 hover:bg-purple-700">
+                {% icon "map" "w-4 h-4 mr-2" %}
+                New Dive Site
+            </a>
+            <a href="{% url 'diveops:excursion-type-create' %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700">
+                {% icon "clipboard-list" "w-4 h-4 mr-2" %}
+                New Excursion Type
             </a>
         </div>
     </div>
