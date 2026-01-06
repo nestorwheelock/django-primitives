@@ -525,29 +525,33 @@ document.addEventListener('DOMContentLoaded', function() {
     const gfDisplay = document.getElementById('gf-display');
 
     let profileChart = null;
-    let currentGfLow = 100;
-    let currentGfHigh = 100;
 
-    // Gradient Factor handlers
-    function updateGfDisplay() {
-        gfDisplay.textContent = `GF ${currentGfLow}/${currentGfHigh}`;
+    // Gradient Factor handlers - ALWAYS read from UI, never cache
+    function getGfValues() {
+        // Read directly from dropdown/inputs at request time - no caching
+        const presetValue = gfPreset.value;
+        if (presetValue === 'custom') {
+            const low = Math.max(30, Math.min(100, parseInt(gfLowInput.value) || 100));
+            const high = Math.max(30, Math.min(100, parseInt(gfHighInput.value) || 100));
+            return { gfLow: Math.min(low, high), gfHigh: Math.max(low, high) };
+        } else {
+            const [low, high] = presetValue.split('/').map(Number);
+            return { gfLow: low, gfHigh: high };
+        }
     }
 
-    function getGfValues() {
-        return { gfLow: currentGfLow, gfHigh: currentGfHigh };
+    function updateGfDisplay() {
+        const { gfLow, gfHigh } = getGfValues();
+        gfDisplay.textContent = `GF ${gfLow}/${gfHigh}`;
     }
 
     gfPreset.addEventListener('change', function() {
         const value = this.value;
         if (value === 'custom') {
             gfCustomInputs.classList.remove('hidden');
-            currentGfLow = parseInt(gfLowInput.value) || 100;
-            currentGfHigh = parseInt(gfHighInput.value) || 100;
         } else {
             gfCustomInputs.classList.add('hidden');
             const [low, high] = value.split('/').map(Number);
-            currentGfLow = low;
-            currentGfHigh = high;
             gfLowInput.value = low;
             gfHighInput.value = high;
         }
@@ -555,26 +559,27 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     gfLowInput.addEventListener('change', function() {
-        currentGfLow = Math.max(30, Math.min(100, parseInt(this.value) || 100));
-        this.value = currentGfLow;
+        let val = Math.max(30, Math.min(100, parseInt(this.value) || 100));
+        this.value = val;
         // Ensure low <= high
-        if (currentGfLow > currentGfHigh) {
-            currentGfHigh = currentGfLow;
-            gfHighInput.value = currentGfHigh;
+        if (val > parseInt(gfHighInput.value)) {
+            gfHighInput.value = val;
         }
         updateGfDisplay();
     });
 
     gfHighInput.addEventListener('change', function() {
-        currentGfHigh = Math.max(30, Math.min(100, parseInt(this.value) || 100));
-        this.value = currentGfHigh;
+        let val = Math.max(30, Math.min(100, parseInt(this.value) || 100));
+        this.value = val;
         // Ensure low <= high
-        if (currentGfLow > currentGfHigh) {
-            currentGfLow = currentGfHigh;
-            gfLowInput.value = currentGfLow;
+        if (parseInt(gfLowInput.value) > val) {
+            gfLowInput.value = val;
         }
         updateGfDisplay();
     });
+
+    // Initialize display on page load
+    updateGfDisplay();
 
     function showState(state) {
         loadingEl.classList.add('hidden');
