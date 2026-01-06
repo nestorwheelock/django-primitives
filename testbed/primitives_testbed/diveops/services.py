@@ -4432,6 +4432,9 @@ def calculate_excursion_tissue_loading(
                 bottom_time = getattr(dive, "bottom_time_min", 30.0)
             steps = [{"depth_m": float(max_depth), "duration_min": float(bottom_time)}]
 
+        # Extract max depth from steps (works for both branches)
+        dive_max_depth = max((s.get("depth_m", 0) for s in steps), default=18.0)
+
         # Get gas mix (default to air)
         gas_o2 = 0.21
         if hasattr(dive, "gas_o2_fraction") and dive.gas_o2_fraction:
@@ -4440,7 +4443,7 @@ def calculate_excursion_tissue_loading(
         # Calculate NDL at start of this dive (with gradient factors)
         ndl_at_start = calculate_ndl(
             tissue_state=current_tissue_state,
-            depth_m=float(max_depth),
+            depth_m=float(dive_max_depth),
             gas_o2_fraction=gas_o2,
             gf_low=gf_low,
             gf_high=gf_high,
