@@ -4180,10 +4180,15 @@ def calculate_excursion_tissue_loading(excursion_type) -> ExcursionTissueProfile
             # Convert route_segments to flat steps for calculation
             steps = segments_to_steps(dive.route_segments)
         else:
-            # Simple rectangular profile based on max_depth and bottom_time
-            max_depth = getattr(dive, "max_depth_m", 18.0)
-            bottom_time = getattr(dive, "bottom_time_min", 30.0)
-            steps = [{"depth_m": max_depth, "duration_min": bottom_time}]
+            # Simple rectangular profile based on planned depth and duration
+            # ExcursionTypeDive uses planned_depth_meters and planned_duration_minutes
+            max_depth = getattr(dive, "planned_depth_meters", None)
+            if max_depth is None:
+                max_depth = getattr(dive, "max_depth_m", 18.0)
+            bottom_time = getattr(dive, "planned_duration_minutes", None)
+            if bottom_time is None:
+                bottom_time = getattr(dive, "bottom_time_min", 30.0)
+            steps = [{"depth_m": float(max_depth), "duration_min": float(bottom_time)}]
 
         # Get gas mix (default to air)
         gas_o2 = 0.21
