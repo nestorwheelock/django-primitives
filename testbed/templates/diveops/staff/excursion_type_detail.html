@@ -269,6 +269,25 @@
 
                     <!-- Results -->
                     <div id="profile-results" class="hidden space-y-4">
+                        <!-- Conservatism Indicator -->
+                        <div id="conservatism-indicator" class="rounded-lg p-4 border-2">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div id="conservatism-icon" class="w-10 h-10 rounded-full flex items-center justify-center mr-3">
+                                        <!-- Icon inserted by JS -->
+                                    </div>
+                                    <div>
+                                        <div id="conservatism-label" class="text-lg font-bold">-</div>
+                                        <div id="conservatism-desc" class="text-sm">-</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xs text-gray-500 uppercase">Peak N2 Loading</div>
+                                    <div class="text-xl font-mono" id="stat-max-loading">-</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Summary Stats -->
                         <div class="grid grid-cols-3 gap-4">
                             <div class="bg-gray-50 rounded-lg p-3 text-center">
@@ -277,11 +296,12 @@
                             </div>
                             <div class="bg-gray-50 rounded-lg p-3 text-center">
                                 <div class="text-2xl font-bold text-cyan-600" id="stat-final-loading">-</div>
-                                <div class="text-xs text-gray-500 uppercase tracking-wide">Final Loading</div>
+                                <div class="text-xs text-gray-500 uppercase tracking-wide">End Loading</div>
+                                <div class="text-xs text-gray-400">(vs 100% surface)</div>
                             </div>
                             <div class="bg-gray-50 rounded-lg p-3 text-center">
-                                <div class="text-2xl font-bold text-gray-900" id="stat-max-loading">-</div>
-                                <div class="text-xs text-gray-500 uppercase tracking-wide">Peak Loading</div>
+                                <div class="text-2xl font-bold text-gray-900" id="stat-total-time">-</div>
+                                <div class="text-xs text-gray-500 uppercase tracking-wide">Total Time</div>
                             </div>
                         </div>
 
@@ -439,6 +459,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const statDives = document.getElementById('stat-dives');
     const statFinalLoading = document.getElementById('stat-final-loading');
     const statMaxLoading = document.getElementById('stat-max-loading');
+    const statTotalTime = document.getElementById('stat-total-time');
+
+    // Conservatism indicator elements
+    const conservatismIndicator = document.getElementById('conservatism-indicator');
+    const conservatismIcon = document.getElementById('conservatism-icon');
+    const conservatismLabel = document.getElementById('conservatism-label');
+    const conservatismDesc = document.getElementById('conservatism-desc');
 
     let profileChart = null;
 
@@ -455,14 +482,61 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getLoadingColor(percent) {
-        if (percent <= 100) return 'text-green-600';
-        if (percent <= 150) return 'text-yellow-600';
-        if (percent <= 200) return 'text-orange-600';
+        if (percent <= 150) return 'text-green-600';
+        if (percent <= 220) return 'text-yellow-600';
+        if (percent <= 280) return 'text-orange-600';
         return 'text-red-600';
     }
 
     function formatLoading(percent) {
         return percent.toFixed(1) + '%';
+    }
+
+    function updateConservatismIndicator(maxLoading) {
+        // Conservatism levels based on peak tissue loading
+        // 100% = surface saturation, recreational limits typically allow 200-300%
+        let level, label, desc, bgClass, borderClass, iconBg, icon;
+
+        if (maxLoading <= 180) {
+            level = 'conservative';
+            label = 'Conservative';
+            desc = 'Well within recreational limits. Good safety margins.';
+            bgClass = 'bg-green-50';
+            borderClass = 'border-green-400';
+            iconBg = 'bg-green-500';
+            icon = '<svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+        } else if (maxLoading <= 240) {
+            level = 'moderate';
+            label = 'Moderate';
+            desc = 'Standard recreational profile. Normal nitrogen loading.';
+            bgClass = 'bg-blue-50';
+            borderClass = 'border-blue-400';
+            iconBg = 'bg-blue-500';
+            icon = '<svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+        } else if (maxLoading <= 300) {
+            level = 'aggressive';
+            label = 'Approaching Limits';
+            desc = 'Higher nitrogen loading. Consider longer surface intervals.';
+            bgClass = 'bg-amber-50';
+            borderClass = 'border-amber-400';
+            iconBg = 'bg-amber-500';
+            icon = '<svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+        } else {
+            level = 'caution';
+            label = 'Requires Caution';
+            desc = 'Near decompression limits. Extend surface intervals or reduce depth/time.';
+            bgClass = 'bg-red-50';
+            borderClass = 'border-red-400';
+            iconBg = 'bg-red-500';
+            icon = '<svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+        }
+
+        conservatismIndicator.className = `rounded-lg p-4 border-2 ${bgClass} ${borderClass}`;
+        conservatismIcon.className = `w-10 h-10 rounded-full flex items-center justify-center mr-3 ${iconBg}`;
+        conservatismIcon.innerHTML = icon;
+        conservatismLabel.textContent = label;
+        conservatismLabel.className = 'text-lg font-bold ' + (level === 'caution' ? 'text-red-700' : level === 'aggressive' ? 'text-amber-700' : level === 'moderate' ? 'text-blue-700' : 'text-green-700');
+        conservatismDesc.textContent = desc;
     }
 
     function buildChartData(data) {
@@ -662,18 +736,27 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             const data = await response.json();
 
+            // Find peak loading and calculate total time
+            let maxLoading = 100;
+            let totalTime = 0;
+            data.dive_results.forEach(dive => {
+                maxLoading = Math.max(maxLoading, dive.loading_after_percent);
+                totalTime += dive.runtime_min;
+            });
+            data.surface_intervals.forEach(si => {
+                totalTime += si.duration_min;
+            });
+
+            // Update conservatism indicator (the main visual feedback)
+            updateConservatismIndicator(maxLoading);
+
             // Update stats
             statDives.textContent = data.dive_results.length;
             statFinalLoading.textContent = formatLoading(data.final_loading_percent);
             statFinalLoading.className = 'text-2xl font-bold ' + getLoadingColor(data.final_loading_percent);
-
-            // Find peak loading
-            let maxLoading = 100;
-            data.dive_results.forEach(dive => {
-                maxLoading = Math.max(maxLoading, dive.loading_after_percent);
-            });
             statMaxLoading.textContent = formatLoading(maxLoading);
-            statMaxLoading.className = 'text-2xl font-bold ' + getLoadingColor(maxLoading);
+            statMaxLoading.className = 'text-xl font-mono ' + getLoadingColor(maxLoading);
+            statTotalTime.textContent = totalTime + ' min';
 
             // Render the dive profile chart
             renderChart(data);
