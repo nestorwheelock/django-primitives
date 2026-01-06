@@ -470,6 +470,22 @@ class DiveSite(BaseModel):
     # Status
     is_active = models.BooleanField(default=True)
 
+    # Marine park integration (optional)
+    marine_park = models.ForeignKey(
+        "MarinePark",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="dive_sites",
+    )
+    park_zone = models.ForeignKey(
+        "ParkZone",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="dive_sites",
+    )
+
     class Meta:
         constraints = [
             models.CheckConstraint(
@@ -481,14 +497,32 @@ class DiveSite(BaseModel):
                 condition=Q(rating__isnull=True) | (Q(rating__gte=1) & Q(rating__lte=5)),
                 name="diveops_site_rating_1_to_5",
             ),
+            # If park_zone is set, marine_park must be set
+            models.CheckConstraint(
+                condition=(
+                    Q(park_zone__isnull=True) |
+                    Q(marine_park__isnull=False)
+                ),
+                name="diveops_site_zone_requires_park",
+            ),
         ]
         indexes = [
             models.Index(fields=["is_active"]),
+            models.Index(fields=["marine_park"]),
         ]
         ordering = ["name"]
 
     def __str__(self):
         return f"{self.name} ({self.max_depth_meters}m)"
+
+    def clean(self):
+        """Validate zone belongs to marine_park (cross-FK validation)."""
+        super().clean()
+        if self.park_zone and self.marine_park:
+            if self.park_zone.marine_park_id != self.marine_park_id:
+                raise ValidationError(
+                    "Zone must belong to the selected marine park."
+                )
 
 
 class Trip(BaseModel):
@@ -1297,7 +1331,6 @@ class ExcursionType(BaseModel):
         choices=TimeOfDay.choices,
         default=TimeOfDay.DAY,
     )
-    max_depth_meters = models.PositiveIntegerField()
     typical_duration_minutes = models.PositiveIntegerField(default=60)
     dives_per_excursion = models.PositiveSmallIntegerField(default=2)
 
@@ -1335,6 +1368,16 @@ class ExcursionType(BaseModel):
     )
     currency = models.CharField(max_length=3, default="USD")
 
+    # Commerce linkage - auto-created when excursion type is created
+    catalog_item = models.ForeignKey(
+        "django_catalog.CatalogItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="excursion_types",
+        help_text="Catalog item representing this excursion type product",
+    )
+
     # Status
     is_active = models.BooleanField(default=True)
 
@@ -1343,10 +1386,6 @@ class ExcursionType(BaseModel):
             models.CheckConstraint(
                 condition=Q(base_price__gte=0),
                 name="diveops_excursion_type_base_price_gte_zero",
-            ),
-            models.CheckConstraint(
-                condition=Q(max_depth_meters__gt=0),
-                name="diveops_excursion_type_depth_gt_zero",
             ),
         ]
         indexes = [
@@ -1358,9 +1397,78 @@ class ExcursionType(BaseModel):
     def __str__(self):
         return f"{self.name} ({self.get_dive_mode_display()})"
 
+    @property
+    def max_depth_meters(self) -> int | None:
+        """Calculate max depth from dive templates.
+
+        Returns the maximum planned_depth_meters across all dive templates,
+        or None if no templates have depth specified.
+        """
+        max_depth = self.dive_templates.aggregate(
+            max_depth=models.Max("planned_depth_meters")
+        )["max_depth"]
+        return max_depth
+
+
+class DiveSegmentType(BaseModel):
+    """Configurable dive profile segment types.
+
+    Defines the types of segments that can be used in dive profiles
+    (e.g., descent, level, safety stop, exploration, wreck tour).
+
+    Setup allows operators to customize segment types for their operations.
+    """
+
+    name = models.CharField(
+        max_length=50,
+        unique=True,
+        help_text="Segment type name (e.g., 'descent', 'level', 'wreck_exploration')",
+    )
+    display_name = models.CharField(
+        max_length=100,
+        help_text="Human-readable name (e.g., 'Descent', 'Level Section', 'Wreck Exploration')",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Description of this segment type",
+    )
+    color = models.CharField(
+        max_length=20,
+        default="blue",
+        help_text="Color for UI display (tailwind color name: blue, green, yellow, etc.)",
+    )
+    is_depth_transition = models.BooleanField(
+        default=False,
+        help_text="True for descent/ascent segments that have from/to depths",
+    )
+    sort_order = models.PositiveSmallIntegerField(
+        default=100,
+        help_text="Order in dropdown menus (lower = first)",
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sort_order", "display_name"]
+
+    def __str__(self):
+        return self.display_name
+
+    @classmethod
+    def get_default_types(cls):
+        """Return default segment types for initial setup."""
+        return [
+            {"name": "descent", "display_name": "Descent", "is_depth_transition": True, "sort_order": 10, "color": "cyan"},
+            {"name": "level", "display_name": "Level Section", "is_depth_transition": False, "sort_order": 20, "color": "blue"},
+            {"name": "exploration", "display_name": "Exploration", "is_depth_transition": False, "sort_order": 30, "color": "indigo"},
+            {"name": "wreck_tour", "display_name": "Wreck Tour", "is_depth_transition": False, "sort_order": 40, "color": "purple"},
+            {"name": "reef_tour", "display_name": "Reef Tour", "is_depth_transition": False, "sort_order": 50, "color": "teal"},
+            {"name": "safety_stop", "display_name": "Safety Stop", "is_depth_transition": False, "sort_order": 90, "color": "green"},
+            {"name": "ascent", "display_name": "Ascent", "is_depth_transition": True, "sort_order": 100, "color": "amber"},
+        ]
+
 
 class ExcursionTypeDive(BaseModel):
-    """Template for a dive within an excursion type.
+    """Template for a dive within an excursion type (Dive Plan Template).
 
     Defines the individual dives that make up an excursion product.
     For example, a "Morning 2-Tank Boat Dive" would have two dive templates:
@@ -1374,10 +1482,11 @@ class ExcursionTypeDive(BaseModel):
     objects (excludes deleted), all_objects (includes deleted).
     """
 
-    excursion_type = models.ForeignKey(
+    excursion_types = models.ManyToManyField(
         ExcursionType,
-        on_delete=models.CASCADE,
+        blank=True,
         related_name="dive_templates",
+        help_text="Excursion types that use this dive plan template",
     )
 
     # Site this plan is designed for (optional for generic templates)
@@ -1440,6 +1549,35 @@ class ExcursionTypeDive(BaseModel):
         help_text="Specific certification for this dive (overrides excursion type if set)",
     )
 
+    # Commerce linkage - links to sellable product for this dive
+    catalog_item = models.ForeignKey(
+        "django_catalog.CatalogItem",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="dive_plan_templates",
+        help_text="Product sold for this dive (includes components like tank, weights, etc.).",
+    )
+
+    # ─────────────────────────────────────────────────────────────
+    # Access & Transport
+    # ─────────────────────────────────────────────────────────────
+
+    class AccessMode(models.TextChoices):
+        BOAT = "boat", "Boat"
+        VEHICLE = "vehicle", "Vehicle Transport"
+        BEACH_MEET = "beach_meet", "Meet at Beach"
+        SHORE_WALK = "shore_walk", "Shore Walk-In"
+        DOCK = "dock", "Dock Entry"
+
+    access_mode = models.CharField(
+        max_length=20,
+        choices=AccessMode.choices,
+        blank=True,
+        default="",
+        help_text="How divers get to the dive site",
+    )
+
     # ─────────────────────────────────────────────────────────────
     # Briefing Content Fields (Dive Plan Extension)
     # ─────────────────────────────────────────────────────────────
@@ -1488,6 +1626,18 @@ class ExcursionTypeDive(BaseModel):
         help_text="Full briefing content for communication to divers",
     )
 
+    briefing_video_url = models.URLField(
+        blank=True,
+        default="",
+        help_text="YouTube video URL for dive briefing",
+    )
+
+    boat_instructions = models.TextField(
+        blank=True,
+        default="",
+        help_text="Instructions for boat dives (boarding, gear storage, entry/exit procedures)",
+    )
+
     route_segments = models.JSONField(
         default=list,
         blank=True,
@@ -1530,23 +1680,22 @@ class ExcursionTypeDive(BaseModel):
     )
 
     class Meta:
+        verbose_name = "Dive Plan Template"
+        verbose_name_plural = "Dive Plan Templates"
         constraints = [
-            models.UniqueConstraint(
-                fields=["excursion_type", "sequence"],
-                name="diveops_excursion_type_dive_unique_sequence",
-            ),
             models.CheckConstraint(
                 condition=Q(sequence__gte=1),
                 name="diveops_excursion_type_dive_sequence_gte_1",
             ),
         ]
         indexes = [
-            models.Index(fields=["excursion_type", "sequence"]),
+            models.Index(fields=["sequence"]),
+            models.Index(fields=["dive_site"]),
         ]
-        ordering = ["excursion_type", "sequence"]
+        ordering = ["sequence", "name"]
 
     def __str__(self):
-        return f"{self.excursion_type.name} - Dive {self.sequence}: {self.name}"
+        return f"Dive {self.sequence}: {self.name}"
 
 
 class SitePriceAdjustment(BaseModel):
@@ -2428,6 +2577,689 @@ class AgreementTemplate(BaseModel):
 
 
 # =============================================================================
+# Marine Park Models (Regulatory Framework)
+# =============================================================================
+
+
+class MarinePark(BaseModel):
+    """Marine protected area with regulatory authority.
+
+    Represents protected areas like Parque Nacional Arrecife de Puerto Morelos.
+    Marine parks manage zones, rules, fees, permits, and guide credentials.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class DesignationType(models.TextChoices):
+        NATIONAL_PARK = "national_park", "National Park"
+        MARINE_RESERVE = "marine_reserve", "Marine Reserve"
+        BIOSPHERE_RESERVE = "biosphere_reserve", "Biosphere Reserve"
+        PROTECTED_AREA = "protected_area", "Protected Natural Area"
+        SANCTUARY = "sanctuary", "Marine Sanctuary"
+
+    # Identity
+    name = models.CharField(max_length=200)
+    code = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+
+    # Location reference (approximate center)
+    place = models.ForeignKey(
+        "django_geo.Place",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="marine_parks",
+    )
+
+    # Boundary file (KML/KMZ)
+    boundary_file = models.FileField(
+        upload_to="marine_parks/boundaries/%Y/",
+        blank=True,
+        null=True,
+    )
+    boundary_filename = models.CharField(max_length=255, blank=True)
+
+    # Authority/Governance
+    governing_authority = models.CharField(max_length=200, blank=True)
+    authority_contact = models.TextField(blank=True)
+    official_website = models.URLField(blank=True)
+
+    # Regulatory info
+    established_date = models.DateField(null=True, blank=True)
+    designation_type = models.CharField(
+        max_length=50,
+        choices=DesignationType.choices,
+        default=DesignationType.PROTECTED_AREA,
+    )
+
+    max_divers_per_site = models.PositiveIntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["code"]),
+            models.Index(fields=["is_active"]),
+        ]
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class ParkZone(BaseModel):
+    """Zone within a marine park with specific rules.
+
+    Parks are divided into zones with different use restrictions:
+    - Core (no-take): No extractive activities
+    - Buffer: Limited activities allowed
+    - Use: Recreational activities permitted
+    - Restoration: Areas under restoration
+    - Research: Scientific research zones
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class ZoneType(models.TextChoices):
+        CORE = "core", "Core Zone (No-Take)"
+        BUFFER = "buffer", "Buffer Zone"
+        USE = "use", "Use Zone (Recreational)"
+        RESTORATION = "restoration", "Restoration Zone"
+        RESEARCH = "research", "Research Zone"
+
+    marine_park = models.ForeignKey(
+        MarinePark,
+        on_delete=models.CASCADE,
+        related_name="zones",
+    )
+    name = models.CharField(max_length=100)
+    code = models.SlugField()
+    zone_type = models.CharField(
+        max_length=20,
+        choices=ZoneType.choices,
+        default=ZoneType.USE,
+    )
+
+    # Boundary (KML/KMZ for zone)
+    boundary_file = models.FileField(
+        upload_to="marine_parks/zones/%Y/",
+        blank=True,
+        null=True,
+    )
+
+    # GEOMETRY HOOK: For future PostGIS integration
+    # NOTE: KML parsing is NOT implemented - this is for manual entry or future use
+    boundary_geojson = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="GeoJSON geometry for zone boundary (optional, manual entry)",
+    )
+
+    # Zone-level limits
+    max_divers = models.PositiveIntegerField(null=True, blank=True)
+    diving_allowed = models.BooleanField(default=True)
+    anchoring_allowed = models.BooleanField(default=False)
+    fishing_allowed = models.BooleanField(default=False)
+    requires_guide = models.BooleanField(default=True)
+    requires_permit = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["marine_park", "code"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_zone_code_per_park",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["marine_park", "zone_type"]),
+        ]
+        ordering = ["marine_park", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.marine_park.name})"
+
+
+class ParkRule(BaseModel):
+    """Effective-dated enforceable rule for a marine park.
+
+    Rules define what activities are permitted/prohibited and under what
+    conditions. Rules can be park-wide or zone-specific, and have enforcement
+    levels (info, warn, block).
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class RuleType(models.TextChoices):
+        MAX_DEPTH = "max_depth", "Maximum Depth"
+        MAX_DIVERS = "max_divers", "Maximum Divers"
+        CERTIFICATION = "certification", "Certification Required"
+        EQUIPMENT = "equipment", "Equipment Requirement"
+        TIME = "time", "Time Restriction"
+        ACTIVITY = "activity", "Activity Restriction"
+        CONDUCT = "conduct", "Code of Conduct"
+
+    class EnforcementLevel(models.TextChoices):
+        INFO = "info", "Information Only"
+        WARN = "warn", "Warning (Allow Override)"
+        BLOCK = "block", "Block (Hard Enforcement)"
+
+    class AppliesTo(models.TextChoices):
+        DIVER = "diver", "Individual Diver"
+        GROUP = "group", "Dive Group"
+        VESSEL = "vessel", "Vessel"
+        OPERATOR = "operator", "Operator/Shop"
+
+    class Activity(models.TextChoices):
+        DIVING = "diving", "Diving"
+        SNORKELING = "snorkeling", "Snorkeling"
+        BOATING = "boating", "Boating"
+        TRAINING = "training", "Training"
+        ALL = "all", "All Activities"
+
+    class Operator(models.TextChoices):
+        """Normalized comparison operators."""
+        LTE = "lte", "Less than or equal (<=)"
+        GTE = "gte", "Greater than or equal (>=)"
+        EQ = "eq", "Equals (=)"
+        IN = "in", "In list"
+        CONTAINS = "contains", "Contains"
+        REQUIRED_TRUE = "required_true", "Must be true"
+
+    # Scope: park-wide or zone-specific
+    marine_park = models.ForeignKey(
+        MarinePark,
+        on_delete=models.CASCADE,
+        related_name="rules",
+    )
+    zone = models.ForeignKey(
+        ParkZone,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="rules",
+        help_text="Null = applies park-wide",
+    )
+
+    # Rule definition
+    rule_type = models.CharField(max_length=30, choices=RuleType.choices)
+    applies_to = models.CharField(max_length=20, choices=AppliesTo.choices)
+    activity = models.CharField(
+        max_length=20,
+        choices=Activity.choices,
+        default=Activity.ALL,
+        help_text="Which activity this rule applies to",
+    )
+    subject = models.CharField(
+        max_length=100,
+        help_text="What the rule governs (e.g., 'night diving', 'spearfishing')",
+    )
+    operator = models.CharField(
+        max_length=20,
+        choices=Operator.choices,
+        blank=True,
+        default="",
+        help_text="Comparison operator for rule evaluation",
+    )
+    value = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Value for comparison (e.g., '18' for max_depth lte 18)",
+    )
+    details = models.TextField(blank=True, help_text="Full rule text")
+
+    # Effective dating
+    effective_start = models.DateField()
+    effective_end = models.DateField(null=True, blank=True)
+
+    # Enforcement
+    enforcement_level = models.CharField(
+        max_length=10,
+        choices=EnforcementLevel.choices,
+        default=EnforcementLevel.WARN,
+    )
+
+    # Source document (optional FK to django_documents.Document)
+    source_document = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="park_rules",
+        help_text="Official document defining this rule",
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["marine_park", "effective_start"]),
+            models.Index(fields=["zone", "effective_start"]),
+            models.Index(fields=["rule_type"]),
+            models.Index(fields=["activity"]),
+        ]
+        ordering = ["-effective_start", "rule_type"]
+
+    def __str__(self):
+        zone_name = f" ({self.zone.name})" if self.zone else ""
+        return f"{self.marine_park.name}{zone_name}: {self.subject}"
+
+
+class ParkFeeSchedule(BaseModel):
+    """Fee schedule for a marine park with stratified tiers.
+
+    Fee schedules define categories of fees (diving, snorkeling, etc.)
+    and contain tiers for different diver categories.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class FeeType(models.TextChoices):
+        PER_PERSON = "per_person", "Per Person"
+        PER_BOAT = "per_boat", "Per Boat"
+        PER_TRIP = "per_trip", "Per Trip"
+        PER_DAY = "per_day", "Per Day"
+        PER_ACTIVITY = "per_activity", "Per Activity"
+
+    class AppliesTo(models.TextChoices):
+        DIVING = "diving", "Diving"
+        SNORKELING = "snorkeling", "Snorkeling"
+        KAYAKING = "kayaking", "Kayaking"
+        FISHING = "fishing", "Fishing"
+        ALL = "all", "All Activities"
+
+    # Scope
+    marine_park = models.ForeignKey(
+        MarinePark,
+        on_delete=models.CASCADE,
+        related_name="fee_schedules",
+    )
+    zone = models.ForeignKey(
+        ParkZone,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="fee_schedules",
+        help_text="Null = applies park-wide",
+    )
+
+    # Schedule identity
+    name = models.CharField(
+        max_length=100,
+        help_text="e.g., 'Diver Admission 2024'",
+    )
+    fee_type = models.CharField(max_length=20, choices=FeeType.choices)
+    applies_to = models.CharField(max_length=20, choices=AppliesTo.choices)
+
+    # Effective dating
+    effective_start = models.DateField()
+    effective_end = models.DateField(null=True, blank=True)
+
+    # Currency and collector
+    currency = models.CharField(max_length=3, default="MXN")
+    collector = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Who collects this fee (e.g., 'CONANP', 'Dive Shop')",
+    )
+
+    # Commerce linkage (optional)
+    catalog_item = models.ForeignKey(
+        "django_catalog.CatalogItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="park_fee_schedules",
+        help_text="Catalog item for auto-adding to pricing",
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["marine_park", "effective_start"]),
+            models.Index(fields=["applies_to"]),
+        ]
+        ordering = ["-effective_start", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.marine_park.name})"
+
+
+class ParkFeeTier(BaseModel):
+    """Stratified fee tier within a schedule.
+
+    Fee tiers define pricing for different diver categories:
+    - Tourist (foreign visitors)
+    - National (citizens)
+    - Local (residents)
+    - Student, Senior, Child, Infant
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class TierCode(models.TextChoices):
+        TOURIST = "tourist", "Tourist (Foreign)"
+        NATIONAL = "national", "National"
+        LOCAL = "local", "Local Resident"
+        STUDENT = "student", "Student"
+        SENIOR = "senior", "Senior"
+        CHILD = "child", "Child"
+        INFANT = "infant", "Infant (Free)"
+
+    schedule = models.ForeignKey(
+        ParkFeeSchedule,
+        on_delete=models.CASCADE,
+        related_name="tiers",
+    )
+    tier_code = models.CharField(max_length=20, choices=TierCode.choices)
+    label = models.CharField(max_length=50, help_text="Display label")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    # Age-based eligibility (optional)
+    age_min = models.PositiveSmallIntegerField(null=True, blank=True)
+    age_max = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    # Proof requirements
+    requires_proof = models.BooleanField(default=False)
+    proof_notes = models.TextField(
+        blank=True,
+        help_text="What proof is needed (e.g., 'INE card', 'Student ID')",
+    )
+
+    # Selection priority (lower = checked first)
+    priority = models.PositiveSmallIntegerField(default=100)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["schedule", "tier_code"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_fee_tier_per_schedule",
+            ),
+        ]
+        ordering = ["priority", "tier_code"]
+
+    def __str__(self):
+        return f"{self.label}: {self.amount} {self.schedule.currency}"
+
+
+class DiverEligibilityProof(BaseModel):
+    """Verified proof of diver eligibility for fee tiers.
+
+    Tracks documents that prove a diver's eligibility for discounted
+    fee tiers (national ID, student ID, senior ID, etc.).
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class ProofType(models.TextChoices):
+        STUDENT_ID = "student_id", "Student ID"
+        NATIONAL_ID = "national_id", "National ID (INE/IFE)"
+        RESIDENT_CARD = "resident_card", "Resident Card"
+        LOCAL_ADDRESS = "local_address", "Local Address Proof"
+        PASSPORT = "passport", "Passport"
+        BIRTH_CERT = "birth_cert", "Birth Certificate"
+        SENIOR_ID = "senior_id", "Senior ID (INAPAM)"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending Verification"
+        VERIFIED = "verified", "Verified"
+        REJECTED = "rejected", "Rejected"
+
+    diver = models.ForeignKey(
+        DiverProfile,
+        on_delete=models.CASCADE,
+        related_name="eligibility_proofs",
+    )
+    proof_type = models.CharField(max_length=20, choices=ProofType.choices)
+
+    # Document link
+    document = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="eligibility_proofs",
+    )
+
+    # Verification status
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="verified_eligibility_proofs",
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+
+    # Validity - VERIFIED is valid only if expires_at is null or >= as_of
+    expires_at = models.DateField(null=True, blank=True)
+
+    # Metadata
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["diver", "status"]),
+            models.Index(fields=["proof_type"]),
+            models.Index(fields=["expires_at"]),
+        ]
+        ordering = ["-verified_at", "-created_at"]
+
+    def __str__(self):
+        return f"{self.diver}: {self.get_proof_type_display()} ({self.get_status_display()})"
+
+    def is_valid_as_of(self, as_of: date | None = None) -> bool:
+        """Check if proof is valid as of a date.
+
+        A proof is valid if:
+        - status == VERIFIED
+        - expires_at is null OR expires_at >= as_of
+        """
+        if self.status != self.Status.VERIFIED:
+            return False
+        if as_of is None:
+            as_of = date.today()
+        if self.expires_at is None:
+            return True
+        return self.expires_at >= as_of
+
+
+class ParkGuideCredential(BaseModel):
+    """Credential/permission for a person to guide in a marine park.
+
+    This is NOT an employment relationship - it's a park-issued permission.
+    The person can be:
+    - A boat owner guiding on their own vessel
+    - An employee of a dive shop
+    - An independent contractor
+
+    Requirements:
+    - Divemaster (DM) or higher certification
+    - Signed carta evaluación from a boat owner (can be self)
+    - Park refresher course completion
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    marine_park = models.ForeignKey(
+        MarinePark,
+        on_delete=models.CASCADE,
+        related_name="guide_credentials",
+    )
+
+    # The person receiving the credential (must be DM or higher)
+    diver = models.ForeignKey(
+        DiverProfile,
+        on_delete=models.CASCADE,
+        related_name="park_guide_credentials",
+        help_text="Person receiving credential (must be DM or higher)",
+    )
+
+    # Park credential details
+    credential_number = models.CharField(max_length=50, blank=True)
+    issued_at = models.DateField()
+    expires_at = models.DateField(null=True, blank=True)
+
+    # Zone authorization (null = all zones, else specific zones)
+    authorized_zones = models.ManyToManyField(
+        ParkZone,
+        blank=True,
+        related_name="authorized_guides",
+        help_text="Zones this credential authorizes (empty = all zones)",
+    )
+
+    # Carta evaluación (signed by boat owner - can be self if owner)
+    carta_eval_agreement = models.ForeignKey(
+        "django_agreements.Agreement",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="guide_carta_evals",
+        help_text="Signed carta evaluación document",
+    )
+    carta_eval_signed_by = models.ForeignKey(
+        "django_parties.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="signed_carta_evals",
+        help_text="Boat owner who signed (can be the guide themselves)",
+    )
+    carta_eval_signed_at = models.DateField(null=True, blank=True)
+    is_owner = models.BooleanField(
+        default=False,
+        help_text="True if this guide is also the boat owner",
+    )
+
+    # Course refresher tracking
+    last_refresher_at = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date of last park refresher course",
+    )
+    next_refresher_due_at = models.DateField(
+        null=True,
+        blank=True,
+        help_text="When next refresher is due",
+    )
+
+    # Status
+    is_active = models.BooleanField(default=True)
+    suspended_at = models.DateTimeField(null=True, blank=True)
+    suspension_reason = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [
+            # One credential per person per park
+            models.UniqueConstraint(
+                fields=["marine_park", "diver"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_guide_credential_per_park",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["marine_park", "is_active"]),
+            models.Index(fields=["diver"]),
+            models.Index(fields=["next_refresher_due_at"]),
+        ]
+        ordering = ["marine_park", "diver"]
+
+    def __str__(self):
+        return f"{self.diver} - {self.marine_park.name} Guide"
+
+    def clean(self):
+        """Validate guide has DM or higher certification."""
+        super().clean()
+        min_rank = 5  # DM rank per DiverProfile.LEVEL_HIERARCHY
+        has_dm_or_higher = self.diver.certifications.filter(
+            level__rank__gte=min_rank,
+            deleted_at__isnull=True,
+        ).exists()
+        if not has_dm_or_higher:
+            raise ValidationError(
+                "Guide must have Divemaster (DM) or higher certification."
+            )
+
+    @property
+    def is_refresher_due(self) -> bool:
+        """Check if refresher course is overdue."""
+        if not self.next_refresher_due_at:
+            return False
+        return date.today() > self.next_refresher_due_at
+
+    def can_guide_in_zone(self, zone: "ParkZone") -> bool:
+        """Check if credential authorizes guiding in a specific zone."""
+        if not self.authorized_zones.exists():
+            return True  # No zone restriction = all zones
+        return self.authorized_zones.filter(pk=zone.pk).exists()
+
+
+class VesselPermit(BaseModel):
+    """Vessel permit to operate within a marine park.
+
+    Vessels operating in marine parks require permits issued by the
+    park authority. Permit numbers are unique PER PARK (not globally).
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    marine_park = models.ForeignKey(
+        MarinePark,
+        on_delete=models.CASCADE,
+        related_name="vessel_permits",
+    )
+    vessel_name = models.CharField(max_length=100)
+    vessel_registration = models.CharField(max_length=50, blank=True)
+    operator = models.ForeignKey(
+        "django_parties.Organization",
+        on_delete=models.PROTECT,
+        related_name="vessel_permits",
+    )
+
+    permit_number = models.CharField(max_length=50)
+    issued_at = models.DateField()
+    expires_at = models.DateField()
+    max_divers = models.PositiveIntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            # Permit number unique PER PARK (not globally)
+            models.UniqueConstraint(
+                fields=["marine_park", "permit_number"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_permit_per_park",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["marine_park", "is_active"]),
+            models.Index(fields=["operator"]),
+            models.Index(fields=["expires_at"]),
+        ]
+        ordering = ["marine_park", "vessel_name"]
+
+    def __str__(self):
+        return f"{self.vessel_name} ({self.marine_park.name})"
+
+
+# =============================================================================
 # Pricing Models (from diveops.pricing submodule)
 # =============================================================================
 
@@ -2459,6 +3291,15 @@ __all__ = [
     "DiveLog",
     "DiverEquipmentRental",
     "AgreementTemplate",
+    # Marine Park Models
+    "MarinePark",
+    "ParkZone",
+    "ParkRule",
+    "ParkFeeSchedule",
+    "ParkFeeTier",
+    "DiverEligibilityProof",
+    "ParkGuideCredential",
+    "VesselPermit",
 ]
 
 

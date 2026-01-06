@@ -7,11 +7,20 @@ from .models import (
     CertificationLevel,
     Dive,
     DiverCertification,
+    DiverEligibilityProof,
     DiverProfile,
+    DiveSegmentType,
     DiveSite,
     Excursion,
     ExcursionRoster,
+    MarinePark,
+    ParkFeeSchedule,
+    ParkFeeTier,
+    ParkGuideCredential,
+    ParkRule,
+    ParkZone,
     Trip,
+    VesselPermit,
 )
 
 # Backwards compatibility aliases
@@ -85,6 +94,42 @@ class DiverProfileAdmin(admin.ModelAdmin):
     raw_id_fields = ["person"]
     autocomplete_fields = ["certification_agency"]  # Search for certification agencies
     readonly_fields = ["id", "created_at", "updated_at"]
+
+
+@admin.register(DiveSegmentType)
+class DiveSegmentTypeAdmin(admin.ModelAdmin):
+    """Admin for DiveSegmentType model (dive profile segment types)."""
+
+    list_display = [
+        "name",
+        "display_name",
+        "is_depth_transition",
+        "color",
+        "sort_order",
+        "is_active",
+    ]
+    list_filter = ["is_active", "is_depth_transition"]
+    search_fields = ["name", "display_name", "description"]
+    ordering = ["sort_order", "display_name"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+    list_editable = ["sort_order", "is_active"]
+
+    fieldsets = (
+        (None, {
+            "fields": ("name", "display_name", "description")
+        }),
+        ("Display", {
+            "fields": ("color", "sort_order", "is_active")
+        }),
+        ("Behavior", {
+            "fields": ("is_depth_transition",),
+            "description": "Depth transition segments (descent/ascent) have from/to depth fields instead of a single depth."
+        }),
+        ("System", {
+            "fields": ("id", "created_at", "updated_at"),
+            "classes": ("collapse",)
+        }),
+    )
 
 
 @admin.register(DiveSite)
@@ -206,3 +251,177 @@ class ExcursionRosterAdmin(admin.ModelAdmin):
 
 # Backwards compatibility alias
 TripRosterAdmin = ExcursionRosterAdmin
+
+
+# =============================================================================
+# Marine Park Admin
+# =============================================================================
+
+
+@admin.register(MarinePark)
+class MarineParkAdmin(admin.ModelAdmin):
+    """Admin for MarinePark model."""
+
+    list_display = [
+        "name",
+        "code",
+        "designation_type",
+        "governing_authority",
+        "is_active",
+        "zone_count",
+    ]
+    list_filter = ["designation_type", "is_active"]
+    search_fields = ["name", "code", "governing_authority"]
+    prepopulated_fields = {"code": ("name",)}
+    raw_id_fields = ["place"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+
+    @admin.display(description="Zones")
+    def zone_count(self, obj):
+        return obj.zones.count()
+
+
+@admin.register(ParkZone)
+class ParkZoneAdmin(admin.ModelAdmin):
+    """Admin for ParkZone model."""
+
+    list_display = [
+        "name",
+        "code",
+        "marine_park",
+        "zone_type",
+        "diving_allowed",
+        "requires_guide",
+        "is_active",
+    ]
+    list_filter = ["zone_type", "diving_allowed", "requires_guide", "is_active", "marine_park"]
+    list_select_related = ["marine_park"]
+    search_fields = ["name", "code", "marine_park__name"]
+    prepopulated_fields = {"code": ("name",)}
+    raw_id_fields = ["marine_park"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+
+
+@admin.register(ParkRule)
+class ParkRuleAdmin(admin.ModelAdmin):
+    """Admin for ParkRule model."""
+
+    list_display = [
+        "subject",
+        "marine_park",
+        "zone",
+        "rule_type",
+        "activity",
+        "enforcement_level",
+        "effective_start",
+        "is_active",
+    ]
+    list_filter = ["rule_type", "activity", "enforcement_level", "is_active", "marine_park"]
+    list_select_related = ["marine_park", "zone"]
+    search_fields = ["subject", "details", "marine_park__name"]
+    raw_id_fields = ["marine_park", "zone", "source_document"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+    date_hierarchy = "effective_start"
+
+
+@admin.register(ParkFeeSchedule)
+class ParkFeeScheduleAdmin(admin.ModelAdmin):
+    """Admin for ParkFeeSchedule model."""
+
+    list_display = [
+        "name",
+        "marine_park",
+        "fee_type",
+        "applies_to",
+        "currency",
+        "effective_start",
+        "is_active",
+    ]
+    list_filter = ["fee_type", "applies_to", "is_active", "marine_park"]
+    list_select_related = ["marine_park", "zone"]
+    search_fields = ["name", "marine_park__name"]
+    raw_id_fields = ["marine_park", "zone", "catalog_item"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+    date_hierarchy = "effective_start"
+
+
+@admin.register(ParkFeeTier)
+class ParkFeeTierAdmin(admin.ModelAdmin):
+    """Admin for ParkFeeTier model."""
+
+    list_display = [
+        "label",
+        "tier_code",
+        "schedule",
+        "amount",
+        "priority",
+        "requires_proof",
+    ]
+    list_filter = ["tier_code", "requires_proof", "schedule__marine_park"]
+    list_select_related = ["schedule__marine_park"]
+    search_fields = ["label", "schedule__name"]
+    raw_id_fields = ["schedule"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+
+
+@admin.register(DiverEligibilityProof)
+class DiverEligibilityProofAdmin(admin.ModelAdmin):
+    """Admin for DiverEligibilityProof model."""
+
+    list_display = [
+        "diver",
+        "proof_type",
+        "status",
+        "verified_by",
+        "verified_at",
+        "expires_at",
+    ]
+    list_filter = ["proof_type", "status"]
+    list_select_related = ["diver__person", "verified_by"]
+    search_fields = ["diver__person__first_name", "diver__person__last_name"]
+    raw_id_fields = ["diver", "document", "verified_by"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+    date_hierarchy = "verified_at"
+
+
+@admin.register(ParkGuideCredential)
+class ParkGuideCredentialAdmin(admin.ModelAdmin):
+    """Admin for ParkGuideCredential model."""
+
+    list_display = [
+        "diver",
+        "marine_park",
+        "credential_number",
+        "issued_at",
+        "expires_at",
+        "is_active",
+        "is_refresher_due",
+    ]
+    list_filter = ["is_active", "is_owner", "marine_park"]
+    list_select_related = ["diver__person", "marine_park"]
+    search_fields = ["diver__person__first_name", "diver__person__last_name", "credential_number"]
+    raw_id_fields = ["diver", "marine_park", "carta_eval_agreement", "carta_eval_signed_by"]
+    filter_horizontal = ["authorized_zones"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+    date_hierarchy = "issued_at"
+
+
+@admin.register(VesselPermit)
+class VesselPermitAdmin(admin.ModelAdmin):
+    """Admin for VesselPermit model."""
+
+    list_display = [
+        "vessel_name",
+        "permit_number",
+        "marine_park",
+        "operator",
+        "issued_at",
+        "expires_at",
+        "is_active",
+    ]
+    list_filter = ["is_active", "marine_park"]
+    list_select_related = ["marine_park", "operator"]
+    search_fields = ["vessel_name", "permit_number", "operator__name"]
+    raw_id_fields = ["marine_park", "operator"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+    date_hierarchy = "issued_at"

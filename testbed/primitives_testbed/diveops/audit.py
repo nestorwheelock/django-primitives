@@ -249,6 +249,13 @@ class Actions:
     CATALOG_ITEM_DELETED = "catalog_item_deleted"
 
     # -------------------------------------------------------------------------
+    # Catalog Component Actions (Assembly/BOM)
+    # -------------------------------------------------------------------------
+    CATALOG_COMPONENT_ADDED = "catalog_component_added"
+    CATALOG_COMPONENT_UPDATED = "catalog_component_updated"
+    CATALOG_COMPONENT_REMOVED = "catalog_component_removed"
+
+    # -------------------------------------------------------------------------
     # Price Rule Actions
     # -------------------------------------------------------------------------
     PRICE_RULE_CREATED = "price_rule_created"
@@ -270,6 +277,61 @@ class Actions:
     ACCOUNT_DEACTIVATED = "account_deactivated"
     ACCOUNT_REACTIVATED = "account_reactivated"
     ACCOUNTS_SEEDED = "accounts_seeded"
+
+    # -------------------------------------------------------------------------
+    # Marine Park Actions
+    # -------------------------------------------------------------------------
+    PARK_CREATED = "park_created"
+    PARK_UPDATED = "park_updated"
+    PARK_DELETED = "park_deleted"
+
+    # -------------------------------------------------------------------------
+    # Park Zone Actions
+    # -------------------------------------------------------------------------
+    PARK_ZONE_CREATED = "park_zone_created"
+    PARK_ZONE_UPDATED = "park_zone_updated"
+    PARK_ZONE_DELETED = "park_zone_deleted"
+
+    # -------------------------------------------------------------------------
+    # Park Rule Actions
+    # -------------------------------------------------------------------------
+    PARK_RULE_CREATED = "park_rule_created"
+    PARK_RULE_UPDATED = "park_rule_updated"
+    PARK_RULE_DELETED = "park_rule_deleted"
+
+    # -------------------------------------------------------------------------
+    # Park Fee Actions
+    # -------------------------------------------------------------------------
+    PARK_FEE_SCHEDULE_CREATED = "park_fee_schedule_created"
+    PARK_FEE_SCHEDULE_UPDATED = "park_fee_schedule_updated"
+    PARK_FEE_SCHEDULE_DELETED = "park_fee_schedule_deleted"
+    PARK_FEE_TIER_CREATED = "park_fee_tier_created"
+    PARK_FEE_TIER_UPDATED = "park_fee_tier_updated"
+    PARK_FEE_TIER_DELETED = "park_fee_tier_deleted"
+
+    # -------------------------------------------------------------------------
+    # Park Guide Credential Actions
+    # -------------------------------------------------------------------------
+    PARK_GUIDE_CREDENTIAL_ISSUED = "park_guide_credential_issued"
+    PARK_GUIDE_CREDENTIAL_UPDATED = "park_guide_credential_updated"
+    PARK_GUIDE_CREDENTIAL_SUSPENDED = "park_guide_credential_suspended"
+    PARK_GUIDE_CREDENTIAL_REVOKED = "park_guide_credential_revoked"
+    PARK_GUIDE_REFRESHER_COMPLETED = "park_guide_refresher_completed"
+
+    # -------------------------------------------------------------------------
+    # Vessel Permit Actions
+    # -------------------------------------------------------------------------
+    VESSEL_PERMIT_ISSUED = "vessel_permit_issued"
+    VESSEL_PERMIT_UPDATED = "vessel_permit_updated"
+    VESSEL_PERMIT_REVOKED = "vessel_permit_revoked"
+    VESSEL_PERMIT_EXPIRED = "vessel_permit_expired"
+
+    # -------------------------------------------------------------------------
+    # Diver Eligibility Proof Actions
+    # -------------------------------------------------------------------------
+    DIVER_PROOF_SUBMITTED = "diver_proof_submitted"
+    DIVER_PROOF_VERIFIED = "diver_proof_verified"
+    DIVER_PROOF_REJECTED = "diver_proof_rejected"
 
 
 # =============================================================================
@@ -1047,10 +1109,11 @@ def _build_dive_template_metadata(dive_template, extra_data: dict | None = None)
         "name": dive_template.name,
     }
 
-    if dive_template.excursion_type_id:
-        metadata["excursion_type_id"] = str(dive_template.excursion_type_id)
-        if dive_template.excursion_type:
-            metadata["excursion_type_name"] = dive_template.excursion_type.name
+    # Record linked excursion types (M2M relationship)
+    excursion_types = list(dive_template.excursion_types.values_list("pk", "name"))
+    if excursion_types:
+        metadata["excursion_type_ids"] = [str(pk) for pk, _ in excursion_types]
+        metadata["excursion_type_names"] = [name for _, name in excursion_types]
 
     if dive_template.offset_minutes is not None:
         metadata["offset_minutes"] = dive_template.offset_minutes
@@ -1361,3 +1424,313 @@ def _build_agreement_metadata(agreement, extra_data: dict | None = None) -> dict
         metadata.update(extra_data)
 
     return metadata
+
+
+# =============================================================================
+# Marine Park Logging Functions
+# =============================================================================
+
+
+def log_marine_park_event(
+    action: str,
+    marine_park,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a marine park operation.
+
+    Args:
+        action: One of Actions.PARK_* constants
+        marine_park: MarinePark instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "park_id": str(marine_park.pk),
+        "park_name": marine_park.name,
+        "park_code": marine_park.code,
+        "designation_type": marine_park.designation_type,
+        "is_active": marine_park.is_active,
+    }
+
+    if marine_park.governing_authority:
+        metadata["governing_authority"] = marine_park.governing_authority
+
+    if marine_park.place_id:
+        metadata["place_id"] = str(marine_park.place_id)
+
+    if data:
+        metadata.update(data)
+
+    return audit_log(
+        action=action,
+        obj=marine_park,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_park_zone_event(
+    action: str,
+    zone,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a park zone operation.
+
+    Args:
+        action: One of Actions.PARK_ZONE_* constants
+        zone: ParkZone instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "zone_id": str(zone.pk),
+        "zone_name": zone.name,
+        "zone_code": zone.code,
+        "zone_type": zone.zone_type,
+        "marine_park_id": str(zone.marine_park_id),
+        "is_active": zone.is_active,
+    }
+
+    if zone.marine_park:
+        metadata["marine_park_name"] = zone.marine_park.name
+
+    if data:
+        metadata.update(data)
+
+    return audit_log(
+        action=action,
+        obj=zone,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_park_rule_event(
+    action: str,
+    rule,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a park rule operation.
+
+    Args:
+        action: One of Actions.PARK_RULE_* constants
+        rule: ParkRule instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "rule_id": str(rule.pk),
+        "rule_type": rule.rule_type,
+        "subject": rule.subject,
+        "activity": rule.activity,
+        "enforcement_level": rule.enforcement_level,
+        "marine_park_id": str(rule.marine_park_id),
+        "effective_start": rule.effective_start.isoformat() if rule.effective_start else None,
+    }
+
+    if rule.zone_id:
+        metadata["zone_id"] = str(rule.zone_id)
+
+    if rule.effective_end:
+        metadata["effective_end"] = rule.effective_end.isoformat()
+
+    if data:
+        metadata.update(data)
+
+    return audit_log(
+        action=action,
+        obj=rule,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_guide_credential_event(
+    action: str,
+    credential,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a park guide credential operation.
+
+    Args:
+        action: One of Actions.PARK_GUIDE_CREDENTIAL_* constants
+        credential: ParkGuideCredential instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "credential_id": str(credential.pk),
+        "diver_id": str(credential.diver_id),
+        "marine_park_id": str(credential.marine_park_id),
+        "is_active": credential.is_active,
+        "issued_at": credential.issued_at.isoformat() if credential.issued_at else None,
+    }
+
+    if credential.marine_park:
+        metadata["marine_park_name"] = credential.marine_park.name
+
+    if credential.credential_number:
+        metadata["credential_number"] = credential.credential_number
+
+    if credential.expires_at:
+        metadata["expires_at"] = credential.expires_at.isoformat()
+
+    if credential.diver and credential.diver.person:
+        metadata["diver_name"] = credential.diver.person.get_full_name()
+
+    if data:
+        metadata.update(data)
+
+    return audit_log(
+        action=action,
+        obj=credential,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_vessel_permit_event(
+    action: str,
+    permit,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a vessel permit operation.
+
+    Args:
+        action: One of Actions.VESSEL_PERMIT_* constants
+        permit: VesselPermit instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "permit_id": str(permit.pk),
+        "vessel_name": permit.vessel_name,
+        "permit_number": permit.permit_number,
+        "marine_park_id": str(permit.marine_park_id),
+        "operator_id": str(permit.operator_id),
+        "is_active": permit.is_active,
+        "issued_at": permit.issued_at.isoformat() if permit.issued_at else None,
+        "expires_at": permit.expires_at.isoformat() if permit.expires_at else None,
+    }
+
+    if permit.marine_park:
+        metadata["marine_park_name"] = permit.marine_park.name
+
+    if permit.operator:
+        metadata["operator_name"] = permit.operator.name
+
+    if data:
+        metadata.update(data)
+
+    return audit_log(
+        action=action,
+        obj=permit,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_eligibility_proof_event(
+    action: str,
+    proof,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a diver eligibility proof operation.
+
+    Args:
+        action: One of Actions.DIVER_PROOF_* constants
+        proof: DiverEligibilityProof instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "proof_id": str(proof.pk),
+        "diver_id": str(proof.diver_id),
+        "proof_type": proof.proof_type,
+        "status": proof.status,
+    }
+
+    if proof.diver and proof.diver.person:
+        metadata["diver_name"] = proof.diver.person.get_full_name()
+
+    if proof.verified_by_id:
+        metadata["verified_by_id"] = str(proof.verified_by_id)
+
+    if proof.verified_at:
+        metadata["verified_at"] = proof.verified_at.isoformat()
+
+    if proof.expires_at:
+        metadata["expires_at"] = proof.expires_at.isoformat()
+
+    if proof.rejection_reason:
+        metadata["rejection_reason"] = proof.rejection_reason
+
+    if data:
+        metadata.update(data)
+
+    return audit_log(
+        action=action,
+        obj=proof,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
