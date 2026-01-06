@@ -4146,7 +4146,7 @@ def calculate_excursion_tissue_loading(excursion_type) -> ExcursionTissueProfile
     """
     from .planning.segment_converter import segments_to_steps
 
-    dives = excursion_type.dives.order_by("sequence")
+    dives = excursion_type.dive_templates.order_by("sequence")
     dive_results = []
     surface_intervals = []
     current_tissue_state = TissueState()  # Start surface saturated
