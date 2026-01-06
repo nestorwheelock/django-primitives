@@ -2929,12 +2929,33 @@ class ExcursionTypeTissueCalculationView(StaffPortalMixin, View):
         """Calculate and return tissue loading profile."""
         from dataclasses import asdict
 
-        from .services import calculate_excursion_tissue_loading
+        from .services import DEFAULT_GF_HIGH, DEFAULT_GF_LOW, calculate_excursion_tissue_loading
 
         excursion_type = get_object_or_404(ExcursionType, pk=pk)
 
+        # Get gradient factors from query params (default to no conservatism)
+        try:
+            gf_low = int(request.GET.get("gf_low", DEFAULT_GF_LOW))
+            gf_low = max(30, min(100, gf_low))  # Clamp to valid range
+        except (ValueError, TypeError):
+            gf_low = DEFAULT_GF_LOW
+
+        try:
+            gf_high = int(request.GET.get("gf_high", DEFAULT_GF_HIGH))
+            gf_high = max(30, min(100, gf_high))  # Clamp to valid range
+        except (ValueError, TypeError):
+            gf_high = DEFAULT_GF_HIGH
+
+        # Ensure gf_low <= gf_high
+        if gf_low > gf_high:
+            gf_low = gf_high
+
         # Calculate tissue profile (EPHEMERAL - not stored)
-        profile = calculate_excursion_tissue_loading(excursion_type)
+        profile = calculate_excursion_tissue_loading(
+            excursion_type,
+            gf_low=gf_low,
+            gf_high=gf_high,
+        )
 
         # Convert dataclasses to dicts for JSON serialization
         result = {
@@ -2944,6 +2965,8 @@ class ExcursionTypeTissueCalculationView(StaffPortalMixin, View):
             "dive_results": [asdict(d) for d in profile.dive_results],
             "surface_intervals": [asdict(si) for si in profile.surface_intervals],
             "final_loading_percent": round(profile.final_loading_percent, 1),
+            "gf_low": profile.gf_low,
+            "gf_high": profile.gf_high,
         }
 
         return JsonResponse(result)

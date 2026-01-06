@@ -3998,11 +3998,73 @@ BUHLMANN_B_VALUES = [
     0.9092, 0.9222, 0.9319, 0.9403, 0.9477, 0.9544, 0.9602, 0.9653
 ]
 
+# Default gradient factors (GF Low / GF High)
+# GF 100/100 = Standard Bühlmann (no conservatism)
+# GF 30/85 = PADI-like conservatism (common recreational setting)
+# GF 30/70 = More conservative (common for technical diving)
+DEFAULT_GF_LOW = 100  # Percentage (0-100)
+DEFAULT_GF_HIGH = 100  # Percentage (0-100)
+
+
+def calculate_m_value_with_gf(
+    compartment_idx: int,
+    ambient_pressure: float,
+    gf_low: int = DEFAULT_GF_LOW,
+    gf_high: int = DEFAULT_GF_HIGH,
+    current_depth_m: float = 0.0,
+    max_depth_m: float = 0.0,
+) -> float:
+    """Calculate M-value adjusted for gradient factors.
+
+    Gradient factors reduce the allowed supersaturation to add conservatism:
+    - GF Low: Applied at the deepest point of the dive
+    - GF High: Applied at the surface (0m)
+    - Linear interpolation between depths
+
+    Args:
+        compartment_idx: Tissue compartment index (0-15)
+        ambient_pressure: Current ambient pressure (bar)
+        gf_low: Low gradient factor percentage (default 100)
+        gf_high: High gradient factor percentage (default 100)
+        current_depth_m: Current depth for GF interpolation
+        max_depth_m: Maximum depth for GF interpolation
+
+    Returns:
+        M-value adjusted by gradient factor
+    """
+    a = BUHLMANN_A_VALUES[compartment_idx]
+    b = BUHLMANN_B_VALUES[compartment_idx]
+
+    # Standard M-value (M0 = M-value at ambient pressure)
+    m_value = a + (ambient_pressure / b)
+
+    # Calculate M0 (the tissue's inert gas pressure at ambient, no supersaturation)
+    # This is the "floor" - we interpolate between M0 and M-value
+    m0 = ambient_pressure  # Simplified: ambient pressure is the no-supersaturation limit
+
+    # Interpolate GF based on depth
+    # At max_depth, use GF_low; at surface (0m), use GF_high
+    if max_depth_m > 0 and current_depth_m > 0:
+        # Linear interpolation
+        gf = gf_high + (gf_low - gf_high) * (current_depth_m / max_depth_m)
+    else:
+        # At surface or no depth info, use GF_high
+        gf = gf_high
+
+    gf_fraction = gf / 100.0
+
+    # Apply gradient factor: M_gf = M0 + (M - M0) * GF
+    m_value_gf = m0 + (m_value - m0) * gf_fraction
+
+    return m_value_gf
+
 
 def calculate_ndl(
     tissue_state: "TissueState",
     depth_m: float,
     gas_o2_fraction: float = 0.21,
+    gf_low: int = DEFAULT_GF_LOW,
+    gf_high: int = DEFAULT_GF_HIGH,
 ) -> int | None:
     """Calculate No Decompression Limit (NDL) at given depth.
 
@@ -4013,6 +4075,8 @@ def calculate_ndl(
         tissue_state: Current tissue state
         depth_m: Planned depth in meters
         gas_o2_fraction: O2 fraction (0.0-1.0)
+        gf_low: Low gradient factor percentage (default 100)
+        gf_high: High gradient factor percentage (default 100)
 
     Returns:
         NDL in minutes, or None if already in deco obligation
@@ -4030,8 +4094,16 @@ def calculate_ndl(
     for i, half_time in enumerate(BUHLMANN_N2_HALFTIMES):
         current_pp = tissue_state.n2_pressures[i]
 
-        # M-value at surface (max tolerable tissue pressure to ascend directly)
-        m_value = BUHLMANN_A_VALUES[i] + (surface_ambient / BUHLMANN_B_VALUES[i])
+        # M-value at surface with gradient factor
+        # For NDL, we care about surfacing directly, so use GF High at surface
+        m_value = calculate_m_value_with_gf(
+            compartment_idx=i,
+            ambient_pressure=surface_ambient,
+            gf_low=gf_low,
+            gf_high=gf_high,
+            current_depth_m=0.0,  # At surface
+            max_depth_m=depth_m,
+        )
 
         # If already over M-value, NDL is 0
         if current_pp >= m_value:
@@ -4285,9 +4357,15 @@ class ExcursionTissueProfile:
     dive_results: list[DiveResult]
     surface_intervals: list[SurfaceIntervalResult]
     final_loading_percent: float
+    gf_low: int  # Gradient factor low used for calculations
+    gf_high: int  # Gradient factor high used for calculations
 
 
-def calculate_excursion_tissue_loading(excursion_type) -> ExcursionTissueProfile:
+def calculate_excursion_tissue_loading(
+    excursion_type,
+    gf_low: int = DEFAULT_GF_LOW,
+    gf_high: int = DEFAULT_GF_HIGH,
+) -> ExcursionTissueProfile:
     """Calculate tissue loading for all dives in an excursion.
 
     WARNING: Returns EPHEMERAL data for planning/visualization only.
@@ -4295,6 +4373,8 @@ def calculate_excursion_tissue_loading(excursion_type) -> ExcursionTissueProfile
 
     Args:
         excursion_type: ExcursionType instance with related dives
+        gf_low: Low gradient factor (0-100), default 100 (no conservatism)
+        gf_high: High gradient factor (0-100), default 100 (no conservatism)
 
     Returns:
         ExcursionTissueProfile with dive results and surface intervals
@@ -4357,11 +4437,13 @@ def calculate_excursion_tissue_loading(excursion_type) -> ExcursionTissueProfile
         if hasattr(dive, "gas_o2_fraction") and dive.gas_o2_fraction:
             gas_o2 = float(dive.gas_o2_fraction)
 
-        # Calculate NDL at start of this dive
+        # Calculate NDL at start of this dive (with gradient factors)
         ndl_at_start = calculate_ndl(
             tissue_state=current_tissue_state,
             depth_m=float(max_depth),
             gas_o2_fraction=gas_o2,
+            gf_low=gf_low,
+            gf_high=gf_high,
         )
 
         # Pressure group before dive
@@ -4400,4 +4482,6 @@ def calculate_excursion_tissue_loading(excursion_type) -> ExcursionTissueProfile
         dive_results=dive_results,
         surface_intervals=surface_intervals,
         final_loading_percent=current_tissue_state.max_loading_percent(),
+        gf_low=gf_low,
+        gf_high=gf_high,
     )

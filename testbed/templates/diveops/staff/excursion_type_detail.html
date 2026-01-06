@@ -260,6 +260,43 @@
                         Calculate Profile
                     </button>
                 </div>
+
+                <!-- Gradient Factor Settings -->
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50/50">
+                    <div class="flex flex-wrap items-center gap-4">
+                        <div class="flex items-center">
+                            <label class="text-sm font-medium text-gray-700 mr-2">Gradient Factors:</label>
+                            <select id="gf-preset" class="text-sm border-gray-300 rounded-md shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                                <option value="100/100">100/100 - None (Standard)</option>
+                                <option value="85/100">85/100 - Light</option>
+                                <option value="70/85">70/85 - Moderate</option>
+                                <option value="50/70">50/70 - Conservative</option>
+                                <option value="40/70">40/70 - Very Conservative</option>
+                                <option value="30/85">30/85 - GUE Standard</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+                        </div>
+                        <div id="gf-custom-inputs" class="hidden flex items-center gap-3">
+                            <div class="flex items-center">
+                                <label for="gf-low-input" class="text-xs text-gray-500 mr-1">Low:</label>
+                                <input type="number" id="gf-low-input" min="30" max="100" value="100"
+                                       class="w-16 text-sm border-gray-300 rounded-md shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                            </div>
+                            <div class="flex items-center">
+                                <label for="gf-high-input" class="text-xs text-gray-500 mr-1">High:</label>
+                                <input type="number" id="gf-high-input" min="30" max="100" value="100"
+                                       class="w-16 text-sm border-gray-300 rounded-md shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-500">
+                            <span id="gf-display" class="font-mono bg-gray-100 px-1.5 py-0.5 rounded">GF 100/100</span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Lower values = more conservative (shorter NDL, earlier warnings). GF Low applies at depth, GF High at surface.
+                    </p>
+                </div>
+
                 <div class="p-4">
                     <!-- Loading State -->
                     <div id="profile-loading" class="hidden text-center py-8">
@@ -289,7 +326,7 @@
                         </div>
 
                         <!-- Summary Stats -->
-                        <div class="grid grid-cols-3 gap-4">
+                        <div class="grid grid-cols-4 gap-4">
                             <div class="bg-gray-50 rounded-lg p-3 text-center">
                                 <div class="text-2xl font-bold text-gray-900" id="stat-dives">-</div>
                                 <div class="text-xs text-gray-500 uppercase tracking-wide">Dives</div>
@@ -302,6 +339,11 @@
                             <div class="bg-gray-50 rounded-lg p-3 text-center">
                                 <div class="text-2xl font-bold text-gray-900" id="stat-total-time">-</div>
                                 <div class="text-xs text-gray-500 uppercase tracking-wide">Total Time</div>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-3 text-center">
+                                <div class="text-2xl font-bold text-purple-600 font-mono" id="stat-gf">-</div>
+                                <div class="text-xs text-gray-500 uppercase tracking-wide">GF Low/High</div>
+                                <div class="text-xs text-gray-400">(conservatism)</div>
                             </div>
                         </div>
 
@@ -467,6 +509,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const statFinalLoading = document.getElementById('stat-final-loading');
     const statMaxLoading = document.getElementById('stat-max-loading');
     const statTotalTime = document.getElementById('stat-total-time');
+    const statGf = document.getElementById('stat-gf');
 
     // Conservatism indicator elements
     const conservatismIndicator = document.getElementById('conservatism-indicator');
@@ -474,7 +517,64 @@ document.addEventListener('DOMContentLoaded', function() {
     const conservatismLabel = document.getElementById('conservatism-label');
     const conservatismDesc = document.getElementById('conservatism-desc');
 
+    // Gradient Factor elements
+    const gfPreset = document.getElementById('gf-preset');
+    const gfCustomInputs = document.getElementById('gf-custom-inputs');
+    const gfLowInput = document.getElementById('gf-low-input');
+    const gfHighInput = document.getElementById('gf-high-input');
+    const gfDisplay = document.getElementById('gf-display');
+
     let profileChart = null;
+    let currentGfLow = 100;
+    let currentGfHigh = 100;
+
+    // Gradient Factor handlers
+    function updateGfDisplay() {
+        gfDisplay.textContent = `GF ${currentGfLow}/${currentGfHigh}`;
+    }
+
+    function getGfValues() {
+        return { gfLow: currentGfLow, gfHigh: currentGfHigh };
+    }
+
+    gfPreset.addEventListener('change', function() {
+        const value = this.value;
+        if (value === 'custom') {
+            gfCustomInputs.classList.remove('hidden');
+            currentGfLow = parseInt(gfLowInput.value) || 100;
+            currentGfHigh = parseInt(gfHighInput.value) || 100;
+        } else {
+            gfCustomInputs.classList.add('hidden');
+            const [low, high] = value.split('/').map(Number);
+            currentGfLow = low;
+            currentGfHigh = high;
+            gfLowInput.value = low;
+            gfHighInput.value = high;
+        }
+        updateGfDisplay();
+    });
+
+    gfLowInput.addEventListener('change', function() {
+        currentGfLow = Math.max(30, Math.min(100, parseInt(this.value) || 100));
+        this.value = currentGfLow;
+        // Ensure low <= high
+        if (currentGfLow > currentGfHigh) {
+            currentGfHigh = currentGfLow;
+            gfHighInput.value = currentGfHigh;
+        }
+        updateGfDisplay();
+    });
+
+    gfHighInput.addEventListener('change', function() {
+        currentGfHigh = Math.max(30, Math.min(100, parseInt(this.value) || 100));
+        this.value = currentGfHigh;
+        // Ensure low <= high
+        if (currentGfLow > currentGfHigh) {
+            currentGfLow = currentGfHigh;
+            gfLowInput.value = currentGfLow;
+        }
+        updateGfDisplay();
+    });
 
     function showState(state) {
         loadingEl.classList.add('hidden');
@@ -737,7 +837,12 @@ document.addEventListener('DOMContentLoaded', function() {
         calculateBtn.disabled = true;
 
         try {
-            const response = await fetch('{% url "diveops:api-excursion-type-tissue-profile" pk=excursion_type.pk %}');
+            const { gfLow, gfHigh } = getGfValues();
+            const url = new URL('{% url "diveops:api-excursion-type-tissue-profile" pk=excursion_type.pk %}', window.location.origin);
+            url.searchParams.set('gf_low', gfLow);
+            url.searchParams.set('gf_high', gfHigh);
+
+            const response = await fetch(url);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -764,6 +869,7 @@ document.addEventListener('DOMContentLoaded', function() {
             statMaxLoading.textContent = formatLoading(maxLoading);
             statMaxLoading.className = 'text-xl font-mono ' + getLoadingColor(maxLoading);
             statTotalTime.textContent = totalTime + ' min';
+            statGf.textContent = `${data.gf_low}/${data.gf_high}`;
 
             // Render the dive profile chart
             renderChart(data);
