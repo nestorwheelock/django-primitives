@@ -2,6 +2,7 @@
 
 Provides:
 - CatalogItem: Definition layer for orderable items (services, stock items)
+- CatalogItemComponent: Assembly/BOM support (parent-child item relationships)
 - Basket: Encounter-scoped container for items before commit
 - BasketItem: Items in basket with snapshot on commit
 - WorkItem: Spawned executable tasks with board routing

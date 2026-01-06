@@ -161,6 +161,136 @@ if INVENTORY_ITEM_MODEL:
 
 
 # =============================================================================
+# CatalogItemComponent - Assembly/BOM Support
+# =============================================================================
+
+class CatalogItemComponent(CatalogBaseModel):
+    """Component relationship for assemblies (bill of materials).
+
+    Allows a CatalogItem to be composed of other CatalogItems.
+    When a parent item is added to a basket, its components can be
+    expanded (behavior determined by application layer).
+
+    Example: "Discover Scuba Package" contains:
+    - 1x Intro Course (service)
+    - 1x Equipment Rental (service)
+    - 1x Boat Fee (service)
+
+    Hard Rules:
+    - No circular references (parent cannot be its own component)
+    - Quantity must be positive
+
+    Invariants:
+    - A component relationship is immutable once created (soft delete to remove)
+    - sequence determines display/processing order
+    """
+
+    parent = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.CASCADE,
+        related_name='components',
+        verbose_name=_('parent item'),
+        help_text=_('The assembly/bundle that contains this component'),
+    )
+    component = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.PROTECT,
+        related_name='used_in_assemblies',
+        verbose_name=_('component item'),
+        help_text=_('The catalog item included in the assembly'),
+    )
+    quantity = models.PositiveIntegerField(
+        _('quantity'),
+        default=1,
+        help_text=_('Number of this component per parent item'),
+    )
+    sequence = models.PositiveSmallIntegerField(
+        _('sequence'),
+        default=0,
+        help_text=_('Display/processing order within the assembly'),
+    )
+    is_optional = models.BooleanField(
+        _('is optional'),
+        default=False,
+        help_text=_('If True, component can be excluded when ordering the parent'),
+    )
+    notes = models.CharField(
+        _('notes'),
+        max_length=200,
+        blank=True,
+        help_text=_('Optional notes about this component relationship'),
+    )
+
+    class Meta:
+        verbose_name = _('catalog item component')
+        verbose_name_plural = _('catalog item components')
+        ordering = ['parent', 'sequence', 'component__display_name']
+        indexes = [
+            models.Index(fields=['parent', 'sequence']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['parent', 'component'],
+                condition=models.Q(deleted_at__isnull=True),
+                name='unique_component_per_parent',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name='component_quantity_positive',
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(parent=models.F('component')),
+                name='component_no_self_reference',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.parent.display_name} -> {self.quantity}x {self.component.display_name}"
+
+    def clean(self):
+        """Validate component relationship."""
+        super().clean()
+        errors = {}
+
+        # Prevent self-reference
+        if self.parent_id and self.component_id and self.parent_id == self.component_id:
+            errors['component'] = _('An item cannot be a component of itself.')
+
+        # Check for circular references (component contains parent)
+        if self.component_id and self._would_create_cycle():
+            errors['component'] = _(
+                'This would create a circular reference. '
+                'The component already contains this parent item.'
+            )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def _would_create_cycle(self):
+        """Check if adding this component would create a circular reference."""
+        if not self.parent_id:
+            return False
+
+        visited = {self.parent_id}
+        to_check = [self.component_id]
+
+        while to_check:
+            current_id = to_check.pop()
+            if current_id in visited:
+                return True
+            visited.add(current_id)
+
+            # Get components of current item
+            child_ids = CatalogItemComponent.objects.filter(
+                parent_id=current_id,
+                deleted_at__isnull=True,
+            ).values_list('component_id', flat=True)
+            to_check.extend(child_ids)
+
+        return False
+
+
+# =============================================================================
 # Basket - Encounter-Scoped Container
 # =============================================================================
 
