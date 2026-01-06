@@ -4331,6 +4331,7 @@ class DiveResult:
     ndl_at_start: int | None  # No Deco Limit at start of dive (minutes)
     pressure_group_before: str  # PADI pressure group before dive
     pressure_group_after: str  # PADI pressure group after dive
+    segments: list[dict]  # Actual dive segments [{depth_m, duration_min}, ...]
 
 
 @dataclass
@@ -4476,6 +4477,7 @@ def calculate_excursion_tissue_loading(
                 ndl_at_start=ndl_at_start,
                 pressure_group_before=pg_before_dive,
                 pressure_group_after=pg_after_dive,
+                segments=steps,
             )
         )
 

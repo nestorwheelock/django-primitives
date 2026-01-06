@@ -673,29 +673,57 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadingPoints.push({ x: currentTime, y: si.loading_after_percent });
             }
 
-            // Dive profile: descent → bottom → ascent (simplified)
-            const diveStartTime = currentTime;
-            const descentTime = 2; // 2 min descent (simplified)
-            const ascentTime = Math.ceil(dive.max_depth_m / 9); // ~9m/min ascent
-            const bottomTime = dive.runtime_min - descentTime - ascentTime;
-
             // Loading before dive
             loadingPoints.push({ x: currentTime, y: dive.loading_before_percent });
 
-            // Surface at start
-            depthPoints.push({ x: currentTime, y: 0 });
+            // Use actual segments if available, otherwise fallback to simplified profile
+            if (dive.segments && dive.segments.length > 0) {
+                // Start at surface
+                depthPoints.push({ x: currentTime, y: 0 });
 
-            // Descent to max depth
-            currentTime += descentTime;
-            depthPoints.push({ x: currentTime, y: dive.max_depth_m });
+                // Add descent to first segment depth (assume 18m/min descent rate)
+                const firstDepth = dive.segments[0].depth_m;
+                const descentTime = firstDepth / 18; // ~18m/min descent
+                currentTime += descentTime;
+                depthPoints.push({ x: currentTime, y: firstDepth });
 
-            // Bottom time at max depth
-            currentTime += Math.max(bottomTime, 1);
-            depthPoints.push({ x: currentTime, y: dive.max_depth_m });
+                // Plot each segment
+                let prevDepth = firstDepth;
+                dive.segments.forEach((seg, segIndex) => {
+                    const segDepth = seg.depth_m;
+                    const segDuration = seg.duration_min;
 
-            // Ascent to surface
-            currentTime += ascentTime;
-            depthPoints.push({ x: currentTime, y: 0 });
+                    // If depth changed from previous segment, add transition
+                    if (segDepth !== prevDepth) {
+                        // Instant transition to new depth (or could calculate ascent/descent time)
+                        depthPoints.push({ x: currentTime, y: segDepth });
+                    }
+
+                    // Stay at this depth for segment duration
+                    currentTime += segDuration;
+                    depthPoints.push({ x: currentTime, y: segDepth });
+                    prevDepth = segDepth;
+                });
+
+                // Final ascent to surface (9m/min ascent rate)
+                const finalDepth = prevDepth;
+                const ascentTime = finalDepth / 9;
+                currentTime += ascentTime;
+                depthPoints.push({ x: currentTime, y: 0 });
+            } else {
+                // Fallback: simplified rectangular profile
+                const descentTime = 2;
+                const ascentTime = Math.ceil(dive.max_depth_m / 9);
+                const bottomTime = dive.runtime_min - descentTime - ascentTime;
+
+                depthPoints.push({ x: currentTime, y: 0 });
+                currentTime += descentTime;
+                depthPoints.push({ x: currentTime, y: dive.max_depth_m });
+                currentTime += Math.max(bottomTime, 1);
+                depthPoints.push({ x: currentTime, y: dive.max_depth_m });
+                currentTime += ascentTime;
+                depthPoints.push({ x: currentTime, y: 0 });
+            }
 
             // Loading after dive
             loadingPoints.push({ x: currentTime, y: dive.loading_after_percent });
