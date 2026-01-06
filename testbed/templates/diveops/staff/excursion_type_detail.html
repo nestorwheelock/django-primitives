@@ -335,13 +335,20 @@
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Dive</th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Depth</th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Loading Before</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Loading After</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">NDL</th>
+                                        <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">PG</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Loading</th>
                                     </tr>
                                 </thead>
                                 <tbody id="profile-table-body" class="bg-white divide-y divide-gray-200">
                                 </tbody>
                             </table>
+                        </div>
+
+                        <!-- Pressure Group Legend -->
+                        <div class="text-xs text-gray-500 mt-2">
+                            <span class="font-medium">PG</span> = Approximate PADI Pressure Group (A=surface, Z=limit).
+                            <span class="font-medium">NDL</span> = No Decompression Limit at start of dive.
                         </div>
 
                         <!-- Warning about data -->
@@ -787,14 +794,26 @@ document.addEventListener('DOMContentLoaded', function() {
                                 Surface Interval: ${si.duration_min} min
                             </span>
                         </td>
-                        <td class="px-3 py-2 text-sm ${getLoadingColor(si.loading_before_percent)}">${formatLoading(si.loading_before_percent)}</td>
-                        <td class="px-3 py-2 text-sm ${getLoadingColor(si.loading_after_percent)}">${formatLoading(si.loading_after_percent)}</td>
+                        <td class="px-3 py-2 text-sm text-cyan-600">-</td>
+                        <td class="px-3 py-2 text-center">
+                            <span class="inline-flex items-center text-sm font-mono">
+                                <span class="text-cyan-700">${si.pressure_group_before}</span>
+                                <span class="mx-1 text-gray-400">→</span>
+                                <span class="text-cyan-600 font-semibold">${si.pressure_group_after}</span>
+                            </span>
+                        </td>
+                        <td class="px-3 py-2 text-sm">
+                            <span class="${getLoadingColor(si.loading_before_percent)}">${formatLoading(si.loading_before_percent)}</span>
+                            <span class="mx-1 text-gray-400">→</span>
+                            <span class="${getLoadingColor(si.loading_after_percent)}">${formatLoading(si.loading_after_percent)}</span>
+                        </td>
                     `;
                     tableBody.appendChild(siRow);
                 }
 
                 // Add dive row
                 const diveRow = document.createElement('tr');
+                const ndlDisplay = dive.ndl_at_start !== null ? (dive.ndl_at_start >= 999 ? '∞' : dive.ndl_at_start + ' min') : '-';
                 diveRow.innerHTML = `
                     <td class="px-3 py-2">
                         <span class="inline-flex items-center">
@@ -806,8 +825,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     </td>
                     <td class="px-3 py-2 text-sm text-gray-900">${dive.max_depth_m.toFixed(1)}m</td>
                     <td class="px-3 py-2 text-sm text-gray-900">${dive.runtime_min.toFixed(0)} min</td>
-                    <td class="px-3 py-2 text-sm ${getLoadingColor(dive.loading_before_percent)}">${formatLoading(dive.loading_before_percent)}</td>
-                    <td class="px-3 py-2 text-sm font-medium ${getLoadingColor(dive.loading_after_percent)}">${formatLoading(dive.loading_after_percent)}</td>
+                    <td class="px-3 py-2 text-sm ${dive.ndl_at_start !== null && dive.ndl_at_start < dive.runtime_min ? 'text-red-600 font-semibold' : 'text-gray-600'}">${ndlDisplay}</td>
+                    <td class="px-3 py-2 text-center">
+                        <span class="inline-flex items-center text-sm font-mono">
+                            <span class="text-gray-500">${dive.pressure_group_before}</span>
+                            <span class="mx-1 text-gray-400">→</span>
+                            <span class="text-blue-700 font-semibold">${dive.pressure_group_after}</span>
+                        </span>
+                    </td>
+                    <td class="px-3 py-2 text-sm">
+                        <span class="${getLoadingColor(dive.loading_before_percent)}">${formatLoading(dive.loading_before_percent)}</span>
+                        <span class="mx-1 text-gray-400">→</span>
+                        <span class="font-medium ${getLoadingColor(dive.loading_after_percent)}">${formatLoading(dive.loading_after_percent)}</span>
+                    </td>
                 `;
                 tableBody.appendChild(diveRow);
             });

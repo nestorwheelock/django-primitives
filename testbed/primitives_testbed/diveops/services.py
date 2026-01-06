@@ -3986,6 +3986,156 @@ def _depth_to_ambient_n2_pp(depth_m: float, gas_n2_fraction: float) -> float:
     return (ambient_pressure - WATER_VAPOR_PP) * gas_n2_fraction
 
 
+# Bühlmann ZHL-16C M-values (a and b coefficients for each compartment)
+# M-value = a + (ambient_pressure / b)
+# These determine the maximum tolerable tissue pressure at a given ambient pressure
+BUHLMANN_A_VALUES = [
+    1.2599, 1.0000, 0.8618, 0.7562, 0.6667, 0.5933, 0.5282, 0.4701,
+    0.4187, 0.3798, 0.3497, 0.3223, 0.2971, 0.2737, 0.2523, 0.2327
+]
+BUHLMANN_B_VALUES = [
+    0.5050, 0.6514, 0.7222, 0.7825, 0.8126, 0.8434, 0.8693, 0.8910,
+    0.9092, 0.9222, 0.9319, 0.9403, 0.9477, 0.9544, 0.9602, 0.9653
+]
+
+
+def calculate_ndl(
+    tissue_state: "TissueState",
+    depth_m: float,
+    gas_o2_fraction: float = 0.21,
+) -> int | None:
+    """Calculate No Decompression Limit (NDL) at given depth.
+
+    NDL is the maximum time before any tissue compartment exceeds its
+    M-value at surface pressure (requiring decompression stops).
+
+    Args:
+        tissue_state: Current tissue state
+        depth_m: Planned depth in meters
+        gas_o2_fraction: O2 fraction (0.0-1.0)
+
+    Returns:
+        NDL in minutes, or None if already in deco obligation
+    """
+    import math
+
+    gas_n2_fraction = 1.0 - gas_o2_fraction
+    ambient_n2_pp = _depth_to_ambient_n2_pp(depth_m, gas_n2_fraction)
+
+    # Surface ambient pressure for M-value calculation
+    surface_ambient = SURFACE_PRESSURE
+
+    min_ndl = float("inf")
+
+    for i, half_time in enumerate(BUHLMANN_N2_HALFTIMES):
+        current_pp = tissue_state.n2_pressures[i]
+
+        # M-value at surface (max tolerable tissue pressure to ascend directly)
+        m_value = BUHLMANN_A_VALUES[i] + (surface_ambient / BUHLMANN_B_VALUES[i])
+
+        # If already over M-value, NDL is 0
+        if current_pp >= m_value:
+            return 0
+
+        # Time constant k = ln(2) / half_time
+        k = math.log(2) / half_time
+
+        # Solve for time when tissue_pp reaches m_value
+        # P(t) = P_ambient + (P_initial - P_ambient) * e^(-kt)
+        # m_value = ambient_n2_pp + (current_pp - ambient_n2_pp) * e^(-kt)
+        # (m_value - ambient_n2_pp) / (current_pp - ambient_n2_pp) = e^(-kt)
+
+        if ambient_n2_pp >= m_value:
+            # At this depth, this compartment will eventually exceed M-value
+            numerator = m_value - ambient_n2_pp
+            denominator = current_pp - ambient_n2_pp
+
+            if denominator == 0:
+                continue  # Already at ambient, won't change
+
+            ratio = numerator / denominator
+            if ratio <= 0:
+                # Already approaching limit
+                ndl = 0
+            else:
+                ndl = -math.log(ratio) / k
+        else:
+            # This compartment won't limit NDL at this depth
+            continue
+
+        if ndl < min_ndl:
+            min_ndl = ndl
+
+    if min_ndl == float("inf"):
+        return 999  # Very long NDL (effectively unlimited for rec diving)
+
+    return max(0, int(min_ndl))
+
+
+def loading_to_pressure_group(loading_percent: float) -> str:
+    """Map tissue loading percentage to approximate PADI pressure group.
+
+    This is an approximation since PADI RDP uses US Navy-derived tables,
+    not Bühlmann. But it gives divers a familiar reference point.
+
+    Args:
+        loading_percent: Tissue loading as percentage of surface saturation
+
+    Returns:
+        PADI pressure group letter (A-Z)
+    """
+    # Approximate mapping: 100% = A (surface), increasing to W/Z at limits
+    # Groups roughly correspond to 5-8% increments
+    if loading_percent <= 100:
+        return "A"
+    elif loading_percent <= 108:
+        return "B"
+    elif loading_percent <= 116:
+        return "C"
+    elif loading_percent <= 124:
+        return "D"
+    elif loading_percent <= 132:
+        return "E"
+    elif loading_percent <= 140:
+        return "F"
+    elif loading_percent <= 150:
+        return "G"
+    elif loading_percent <= 160:
+        return "H"
+    elif loading_percent <= 170:
+        return "I"
+    elif loading_percent <= 180:
+        return "J"
+    elif loading_percent <= 190:
+        return "K"
+    elif loading_percent <= 200:
+        return "L"
+    elif loading_percent <= 212:
+        return "M"
+    elif loading_percent <= 224:
+        return "N"
+    elif loading_percent <= 236:
+        return "O"
+    elif loading_percent <= 250:
+        return "P"
+    elif loading_percent <= 264:
+        return "Q"
+    elif loading_percent <= 280:
+        return "R"
+    elif loading_percent <= 296:
+        return "S"
+    elif loading_percent <= 312:
+        return "T"
+    elif loading_percent <= 330:
+        return "U"
+    elif loading_percent <= 350:
+        return "V"
+    elif loading_percent <= 370:
+        return "W"
+    else:
+        return "Z"
+
+
 def calculate_dive_tissue_loading(
     *,
     route_segments: list[dict],
@@ -4106,6 +4256,9 @@ class DiveResult:
     max_loading_percent: float
     loading_before_percent: float
     loading_after_percent: float
+    ndl_at_start: int | None  # No Deco Limit at start of dive (minutes)
+    pressure_group_before: str  # PADI pressure group before dive
+    pressure_group_after: str  # PADI pressure group after dive
 
 
 @dataclass
@@ -4116,6 +4269,8 @@ class SurfaceIntervalResult:
     duration_min: int
     loading_before_percent: float
     loading_after_percent: float
+    pressure_group_before: str  # PADI pressure group at start of SI
+    pressure_group_after: str  # PADI pressure group after SI
 
 
 @dataclass
@@ -4153,22 +4308,29 @@ def calculate_excursion_tissue_loading(excursion_type) -> ExcursionTissueProfile
 
     for dive in dives:
         loading_before = current_tissue_state.max_loading_percent()
+        pg_before_si = loading_to_pressure_group(loading_before)
 
         # Apply surface interval off-gassing if not first dive
         if dive.surface_interval_minutes and dive.sequence > 1:
             si_loading_before = current_tissue_state.max_loading_percent()
+            si_pg_before = loading_to_pressure_group(si_loading_before)
 
             current_tissue_state = calculate_surface_interval_offgassing(
                 tissue_state=current_tissue_state,
                 duration_min=float(dive.surface_interval_minutes),
             )
 
+            si_loading_after = current_tissue_state.max_loading_percent()
+            si_pg_after = loading_to_pressure_group(si_loading_after)
+
             surface_intervals.append(
                 SurfaceIntervalResult(
                     before_dive_sequence=dive.sequence,
                     duration_min=dive.surface_interval_minutes,
                     loading_before_percent=si_loading_before,
-                    loading_after_percent=current_tissue_state.max_loading_percent(),
+                    loading_after_percent=si_loading_after,
+                    pressure_group_before=si_pg_before,
+                    pressure_group_after=si_pg_after,
                 )
             )
 
@@ -4195,12 +4357,26 @@ def calculate_excursion_tissue_loading(excursion_type) -> ExcursionTissueProfile
         if hasattr(dive, "gas_o2_fraction") and dive.gas_o2_fraction:
             gas_o2 = float(dive.gas_o2_fraction)
 
+        # Calculate NDL at start of this dive
+        ndl_at_start = calculate_ndl(
+            tissue_state=current_tissue_state,
+            depth_m=float(max_depth),
+            gas_o2_fraction=gas_o2,
+        )
+
+        # Pressure group before dive
+        pg_before_dive = loading_to_pressure_group(loading_before)
+
         # Calculate dive tissue loading
         current_tissue_state, metrics = calculate_dive_tissue_loading(
             route_segments=steps,
             gas_o2_fraction=gas_o2,
             initial_tissue_state=current_tissue_state,
         )
+
+        # Pressure group after dive
+        loading_after = current_tissue_state.max_loading_percent()
+        pg_after_dive = loading_to_pressure_group(loading_after)
 
         dive_results.append(
             DiveResult(
@@ -4211,7 +4387,10 @@ def calculate_excursion_tissue_loading(excursion_type) -> ExcursionTissueProfile
                 runtime_min=metrics["runtime_min"],
                 max_loading_percent=metrics["max_loading_percent"],
                 loading_before_percent=loading_before,
-                loading_after_percent=current_tissue_state.max_loading_percent(),
+                loading_after_percent=loading_after,
+                ndl_at_start=ndl_at_start,
+                pressure_group_before=pg_before_dive,
+                pressure_group_after=pg_after_dive,
             )
         )
 
