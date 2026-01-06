@@ -1380,6 +1380,16 @@ class ExcursionTypeDive(BaseModel):
         related_name="dive_templates",
     )
 
+    # Site this plan is designed for (optional for generic templates)
+    dive_site = models.ForeignKey(
+        DiveSite,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="dive_plan_templates",
+        help_text="Specific site this plan is for (null = generic template)",
+    )
+
     # Sequence within excursion (1st dive, 2nd dive, etc.)
     sequence = models.PositiveSmallIntegerField(
         help_text="Dive number within the excursion (1, 2, 3...)",
@@ -1411,6 +1421,13 @@ class ExcursionTypeDive(BaseModel):
     offset_minutes = models.PositiveSmallIntegerField(
         default=0,
         help_text="Minutes after excursion departure that this dive starts",
+    )
+
+    # Surface interval BEFORE this dive (for repetitive dive planning)
+    surface_interval_minutes = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Surface interval before this dive (minutes). Null for first dive.",
     )
 
     # Optional: specific certification for this dive (may differ from excursion type)
@@ -2267,5 +2284,181 @@ class DiveLog(BaseModel):
     def is_verified(self) -> bool:
         """Check if log has been verified."""
         return self.verified_at is not None
+
+
+# =============================================================================
+# Agreement Template (Paperwork Templates)
+# =============================================================================
+
+
+class AgreementTemplate(BaseModel):
+    """Template for agreement paperwork (waivers, releases, questionnaires).
+
+    Agreement templates define the reusable content for standard forms that
+    divers sign. When a diver needs to sign paperwork, an Agreement is created
+    from this template using django_agreements.
+
+    Template types:
+    - waiver: Liability waivers/releases
+    - medical: Medical questionnaires (RSTC form)
+    - briefing: Briefing acknowledgment forms
+    - code_of_conduct: Diver code of conduct agreements
+    - rental: Equipment rental agreements
+    - training: Training/certification agreements
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class TemplateType(models.TextChoices):
+        WAIVER = "waiver", "Liability Waiver"
+        MEDICAL = "medical", "Medical Questionnaire"
+        BRIEFING = "briefing", "Briefing Acknowledgment"
+        CODE_OF_CONDUCT = "code_of_conduct", "Diver Code of Conduct"
+        RENTAL = "rental", "Equipment Rental Agreement"
+        TRAINING = "training", "Training Agreement"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        ARCHIVED = "archived", "Archived"
+
+    # Ownership
+    dive_shop = models.ForeignKey(
+        "django_parties.Organization",
+        on_delete=models.PROTECT,
+        related_name="agreement_templates",
+    )
+
+    # Identity
+    name = models.CharField(
+        max_length=100,
+        help_text="Template name (e.g., 'Standard Liability Release')",
+    )
+    template_type = models.CharField(
+        max_length=20,
+        choices=TemplateType.choices,
+        help_text="Type of agreement this template is for",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Internal description or notes about this template",
+    )
+
+    # Content
+    content = models.TextField(
+        help_text="The agreement text/content (supports HTML)",
+    )
+
+    # Requirements
+    requires_signature = models.BooleanField(
+        default=True,
+        help_text="Does this form require a signature?",
+    )
+    requires_initials = models.BooleanField(
+        default=False,
+        help_text="Does this form require initials on each page/section?",
+    )
+    is_required_for_booking = models.BooleanField(
+        default=False,
+        help_text="Must this form be signed before diving?",
+    )
+
+    # Validity
+    validity_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="How many days this agreement is valid (null = never expires)",
+    )
+
+    # Versioning
+    version = models.CharField(
+        max_length=20,
+        default="1.0",
+        help_text="Version number of this template",
+    )
+
+    # Lifecycle
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+    )
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    class Meta:
+        constraints = [
+            # Only one published template of each type per shop
+            models.UniqueConstraint(
+                fields=["dive_shop", "template_type"],
+                condition=Q(status="published") & Q(deleted_at__isnull=True),
+                name="diveops_unique_published_template_per_type",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["dive_shop", "template_type"]),
+            models.Index(fields=["status"]),
+        ]
+        ordering = ["dive_shop", "template_type", "-version"]
+
+    def __str__(self):
+        return f"{self.name} (v{self.version})"
+
+    def publish(self, user):
+        """Publish this template, archiving any previous published version."""
+        # Archive the currently published template of this type
+        AgreementTemplate.objects.filter(
+            dive_shop=self.dive_shop,
+            template_type=self.template_type,
+            status=self.Status.PUBLISHED,
+        ).exclude(pk=self.pk).update(status=self.Status.ARCHIVED)
+
+        self.status = self.Status.PUBLISHED
+        self.published_at = timezone.now()
+        self.published_by = user
+        self.save(update_fields=["status", "published_at", "published_by", "updated_at"])
+
+
+# =============================================================================
+# Pricing Models (from diveops.pricing submodule)
+# =============================================================================
+
+# Import pricing models to ensure Django discovers them
+from .pricing.models import DiverEquipmentRental
+
+__all__ = [
+    "CertificationLevel",
+    "DiverCertification",
+    "ExcursionRequirement",
+    "TripRequirement",
+    "DiverProfile",
+    "DiveSite",
+    "Trip",
+    "Excursion",
+    "DiveTrip",
+    "Dive",
+    "Booking",
+    "EligibilityOverride",
+    "ExcursionRoster",
+    "TripRoster",
+    "ExcursionType",
+    "ExcursionTypeDive",
+    "SitePriceAdjustment",
+    "SettlementRecord",
+    "CommissionRule",
+    "SettlementRun",
+    "DiveAssignment",
+    "DiveLog",
+    "DiverEquipmentRental",
+    "AgreementTemplate",
+]
 
 

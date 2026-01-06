@@ -213,7 +213,18 @@ class Actions:
     # Agreement Actions
     # -------------------------------------------------------------------------
     AGREEMENT_CREATED = "agreement_created"
+    AGREEMENT_SIGNED = "agreement_signed"
+    AGREEMENT_AMENDED = "agreement_amended"
     AGREEMENT_TERMINATED = "agreement_terminated"
+
+    # -------------------------------------------------------------------------
+    # Agreement Template Actions (Paperwork)
+    # -------------------------------------------------------------------------
+    AGREEMENT_TEMPLATE_CREATED = "agreement_template_created"
+    AGREEMENT_TEMPLATE_UPDATED = "agreement_template_updated"
+    AGREEMENT_TEMPLATE_PUBLISHED = "agreement_template_published"
+    AGREEMENT_TEMPLATE_ARCHIVED = "agreement_template_archived"
+    AGREEMENT_TEMPLATE_DELETED = "agreement_template_deleted"
 
     # -------------------------------------------------------------------------
     # Settlement Actions (INV-4)
@@ -221,6 +232,44 @@ class Actions:
     SETTLEMENT_POSTED = "settlement_posted"
     REFUND_SETTLEMENT_POSTED = "refund_settlement_posted"
     SETTLEMENT_RUN_COMPLETED = "settlement_run_completed"
+
+    # -------------------------------------------------------------------------
+    # Pricing Actions
+    # -------------------------------------------------------------------------
+    EXCURSION_QUOTE_GENERATED = "excursion_quote_generated"
+    BOOKING_PRICING_SNAPSHOTTED = "booking_pricing_snapshotted"
+    DIVER_EQUIPMENT_RENTED = "diver_equipment_rented"
+    PRICING_VALIDATION_FAILED = "pricing_validation_failed"
+
+    # -------------------------------------------------------------------------
+    # Catalog Item Actions
+    # -------------------------------------------------------------------------
+    CATALOG_ITEM_CREATED = "catalog_item_created"
+    CATALOG_ITEM_UPDATED = "catalog_item_updated"
+    CATALOG_ITEM_DELETED = "catalog_item_deleted"
+
+    # -------------------------------------------------------------------------
+    # Price Rule Actions
+    # -------------------------------------------------------------------------
+    PRICE_RULE_CREATED = "price_rule_created"
+    PRICE_RULE_UPDATED = "price_rule_updated"
+    PRICE_RULE_DELETED = "price_rule_deleted"
+
+    # -------------------------------------------------------------------------
+    # Payables Actions
+    # -------------------------------------------------------------------------
+    VENDOR_INVOICE_RECORDED = "vendor_invoice_recorded"
+    VENDOR_PAYMENT_RECORDED = "vendor_payment_recorded"
+
+    # -------------------------------------------------------------------------
+    # Account Actions
+    # Note: Accounts cannot be deleted, only deactivated (accounting standard)
+    # -------------------------------------------------------------------------
+    ACCOUNT_CREATED = "account_created"
+    ACCOUNT_UPDATED = "account_updated"
+    ACCOUNT_DEACTIVATED = "account_deactivated"
+    ACCOUNT_REACTIVATED = "account_reactivated"
+    ACCOUNTS_SEEDED = "accounts_seeded"
 
 
 # =============================================================================
@@ -1137,3 +1186,178 @@ def log_settlement_event(
         metadata=metadata,
         request=request,
     )
+
+
+def log_pricing_event(
+    action: str,
+    target,
+    actor=None,
+    data: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a pricing operation.
+
+    Args:
+        action: One of Actions.EXCURSION_QUOTE_GENERATED, BOOKING_PRICING_SNAPSHOTTED,
+                DIVER_EQUIPMENT_RENTED, or PRICING_VALIDATION_FAILED
+        target: Model instance (Excursion, Booking, or DiverEquipmentRental)
+        actor: Django User who performed the action
+        data: Optional additional context (pricing details, amounts, etc.)
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = data or {}
+
+    return audit_log(
+        action=action,
+        obj=target,
+        actor=actor,
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_price_rule_event(
+    action: str,
+    price,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a price rule operation.
+
+    Args:
+        action: One of Actions.PRICE_RULE_* constants
+        price: Price instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = _build_price_rule_metadata(price, data)
+
+    return audit_log(
+        action=action,
+        obj=price,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def _build_price_rule_metadata(price, extra_data: dict | None = None) -> dict:
+    """Build consistent metadata for price rule audit events."""
+    metadata = {
+        "price_id": str(price.pk),
+        "amount": str(price.amount),
+        "currency": price.currency,
+    }
+
+    if price.catalog_item_id:
+        metadata["catalog_item_id"] = str(price.catalog_item_id)
+        if price.catalog_item:
+            metadata["catalog_item_name"] = price.catalog_item.display_name
+
+    if price.cost_amount is not None:
+        metadata["cost_amount"] = str(price.cost_amount)
+        metadata["cost_currency"] = price.cost_currency
+
+    # Scope information
+    if price.organization_id:
+        metadata["scope_type"] = "organization"
+        metadata["organization_id"] = str(price.organization_id)
+        if price.organization:
+            metadata["organization_name"] = price.organization.name
+    elif price.party_id:
+        metadata["scope_type"] = "party"
+        metadata["party_id"] = str(price.party_id)
+    elif price.agreement_id:
+        metadata["scope_type"] = "agreement"
+        metadata["agreement_id"] = str(price.agreement_id)
+    else:
+        metadata["scope_type"] = "global"
+
+    if price.valid_from:
+        metadata["valid_from"] = price.valid_from.isoformat()
+
+    if price.valid_to:
+        metadata["valid_to"] = price.valid_to.isoformat()
+
+    metadata["priority"] = price.priority
+
+    if extra_data:
+        metadata.update(extra_data)
+
+    return metadata
+
+
+def log_agreement_event(
+    action: str,
+    agreement,
+    actor=None,
+    data: dict | None = None,
+    changes: dict | None = None,
+    request=None,
+):
+    """Log an audit event for an agreement operation.
+
+    Args:
+        action: One of Actions.AGREEMENT_* constants
+        agreement: Agreement instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        changes: Optional field changes
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = _build_agreement_metadata(agreement, data)
+
+    return audit_log(
+        action=action,
+        obj=agreement,
+        actor=actor,
+        changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def _build_agreement_metadata(agreement, extra_data: dict | None = None) -> dict:
+    """Build consistent metadata for agreement audit events."""
+    metadata = {
+        "agreement_id": str(agreement.pk),
+        "scope_type": agreement.scope_type,
+        "current_version": agreement.current_version,
+        "is_active": agreement.is_active,
+    }
+
+    if agreement.party_a_id:
+        metadata["party_a_id"] = str(agreement.party_a_id)
+        metadata["party_a_type"] = agreement.party_a_content_type.model if agreement.party_a_content_type else None
+
+    if agreement.party_b_id:
+        metadata["party_b_id"] = str(agreement.party_b_id)
+        metadata["party_b_type"] = agreement.party_b_content_type.model if agreement.party_b_content_type else None
+
+    if agreement.valid_from:
+        metadata["valid_from"] = agreement.valid_from.isoformat()
+
+    if agreement.valid_to:
+        metadata["valid_to"] = agreement.valid_to.isoformat()
+
+    if agreement.agreed_at:
+        metadata["agreed_at"] = agreement.agreed_at.isoformat()
+
+    if extra_data:
+        metadata.update(extra_data)
+
+    return metadata

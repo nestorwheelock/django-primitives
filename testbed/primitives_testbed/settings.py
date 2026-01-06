@@ -191,7 +191,7 @@ PORTAL_UI = {
     "STAFF_NAV": [
         {
             "section": "Dive Operations",
-            "label": "Trips",
+            "label": "Excursions",
             "url": "diveops:excursion-list",
             "icon": "anchor",
         },
@@ -202,10 +202,58 @@ PORTAL_UI = {
             "icon": "users",
         },
         {
+            "section": "Dive Operations",
+            "label": "Dive Sites",
+            "url": "diveops:staff-site-list",
+            "icon": "map-pin",
+        },
+        {
+            "section": "Dive Operations",
+            "label": "Excursion Types",
+            "url": "diveops:excursion-type-list",
+            "icon": "package",
+        },
+        {
+            "section": "Dive Operations",
+            "label": "Paperwork",
+            "url": "diveops:agreement-template-list",
+            "icon": "clipboard",
+        },
+        {
+            "section": "Planning",
+            "label": "Dive Plans",
+            "url": "diveops:dive-plan-list",
+            "icon": "compass",
+        },
+        {
+            "section": "Planning",
+            "label": "Dive Logs",
+            "url": "diveops:dive-log-list",
+            "icon": "book-open",
+        },
+        {
             "section": "System",
             "label": "Audit Log",
             "url": "diveops:audit-log",
             "icon": "file-text",
+        },
+        {
+            "section": "Configuration",
+            "label": "Catalog Items",
+            "url": "diveops:catalog-item-list",
+            "icon": "tag",
+        },
+        {
+            "section": "Finance",
+            "label": "Chart of Accounts",
+            "url": "diveops:account-list",
+            "icon": "book",
+        },
+        {
+            "section": "Finance",
+            "label": "Payables",
+            "url": "diveops:payables-summary",
+            "icon": "credit-card",
         },
     ],
 }

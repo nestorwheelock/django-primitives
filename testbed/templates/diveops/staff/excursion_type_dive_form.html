@@ -1,0 +1,442 @@
+{% extends "portal_ui/base_staff.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:excursion-type-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Excursion Types</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:excursion-type-detail' pk=excursion_type.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ excursion_type.name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">
+            {% if is_create %}
+            Add a dive template to "{{ excursion_type.name }}"
+            {% else %}
+            Edit dive template for "{{ excursion_type.name }}"
+            {% endif %}
+        </p>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <form method="post" class="p-6 space-y-6">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        {% icon "alert-circle" "h-5 w-5 text-red-400" %}
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                        <div class="mt-2 text-sm text-red-700">
+                            <ul class="list-disc pl-5 space-y-1">
+                                {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Basic Info -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Sequence -->
+                <div>
+                    <label for="id_sequence" class="block text-sm font-medium text-gray-700">Dive Number <span class="text-red-500">*</span></label>
+                    <input type="number" name="sequence" id="id_sequence"
+                           value="{{ form.sequence.value|default:'' }}" min="1" max="10"
+                           class="mt-1 block w-full px-3 py-2 border {% if form.sequence.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <p class="mt-1 text-xs text-gray-500">{{ form.fields.sequence.help_text }}</p>
+                    {% if form.sequence.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.sequence.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Name -->
+                <div>
+                    <label for="id_name" class="block text-sm font-medium text-gray-700">Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="name" id="id_name" value="{{ form.name.value|default:'' }}"
+                           class="mt-1 block w-full px-3 py-2 border {% if form.name.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="e.g., First Tank, Deep Dive">
+                    <p class="mt-1 text-xs text-gray-500">{{ form.fields.name.help_text }}</p>
+                    {% if form.name.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div>
+                <label for="id_description" class="block text-sm font-medium text-gray-700">Description</label>
+                <textarea name="description" id="id_description" rows="2"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Optional notes about this dive...">{{ form.description.value|default:'' }}</textarea>
+            </div>
+
+            <!-- Dive Specifications -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Dive Specifications</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Planned Depth -->
+                    <div>
+                        <label for="id_planned_depth_meters" class="block text-sm font-medium text-gray-700">Target Depth (m)</label>
+                        <input type="number" name="planned_depth_meters" id="id_planned_depth_meters"
+                               value="{{ form.planned_depth_meters.value|default:'' }}" min="1" max="100"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., 18">
+                        <p class="mt-1 text-xs text-gray-500">{{ form.fields.planned_depth_meters.help_text }}</p>
+                    </div>
+
+                    <!-- Duration -->
+                    <div>
+                        <label for="id_planned_duration_minutes" class="block text-sm font-medium text-gray-700">Duration (min)</label>
+                        <input type="number" name="planned_duration_minutes" id="id_planned_duration_minutes"
+                               value="{{ form.planned_duration_minutes.value|default:'' }}" min="10" max="180"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., 45">
+                        <p class="mt-1 text-xs text-gray-500">{{ form.fields.planned_duration_minutes.help_text }}</p>
+                    </div>
+
+                    <!-- Offset -->
+                    <div>
+                        <label for="id_offset_minutes" class="block text-sm font-medium text-gray-700">Offset (min)</label>
+                        <input type="number" name="offset_minutes" id="id_offset_minutes"
+                               value="{{ form.offset_minutes.value|default:'0' }}" min="0" max="480"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500">{{ form.fields.offset_minutes.help_text }}</p>
+                    </div>
+                </div>
+
+                <!-- Surface Interval (for repetitive dive planning) -->
+                <div id="surface-interval-section" class="mt-4" style="display: none;">
+                    <label for="id_surface_interval_minutes" class="block text-sm font-medium text-gray-700">
+                        Surface Interval (min) <span class="text-red-500">*</span>
+                    </label>
+                    <div class="flex items-center gap-2 mt-1">
+                        <input type="number" name="surface_interval_minutes" id="id_surface_interval_minutes"
+                               value="{{ form.surface_interval_minutes.value|default:'' }}" min="0" max="480"
+                               class="block w-32 px-3 py-2 border {% if form.surface_interval_minutes.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., 60">
+                        <span class="text-sm text-gray-500">minutes before this dive</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">{{ form.fields.surface_interval_minutes.help_text }}</p>
+                    <p class="mt-1 text-xs text-blue-600">
+                        {% icon "info" "w-3 h-3 inline mr-1" %}
+                        Used for Bühlmann tissue loading calculations between repetitive dives
+                    </p>
+                    {% if form.surface_interval_minutes.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.surface_interval_minutes.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Dive Planning -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Dive Planning</h3>
+                <div class="space-y-4">
+                    <!-- Gas Mix -->
+                    <div>
+                        <label for="id_gas" class="block text-sm font-medium text-gray-700">Gas Mix</label>
+                        <select name="gas" id="id_gas"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Not specified</option>
+                            <option value="air" {% if form.gas.value == 'air' %}selected{% endif %}>Air</option>
+                            <option value="ean32" {% if form.gas.value == 'ean32' %}selected{% endif %}>EAN32 (Nitrox 32%)</option>
+                            <option value="ean36" {% if form.gas.value == 'ean36' %}selected{% endif %}>EAN36 (Nitrox 36%)</option>
+                            <option value="trimix" {% if form.gas.value == 'trimix' %}selected{% endif %}>Trimix</option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">{{ form.fields.gas.help_text }}</p>
+                    </div>
+
+                    <!-- Route Description -->
+                    <div>
+                        <label for="id_route" class="block text-sm font-medium text-gray-700">Route Description</label>
+                        <textarea name="route" id="id_route" rows="3"
+                                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="e.g., Descend to wreck bow, swim along starboard side...">{{ form.route.value|default:'' }}</textarea>
+                        <p class="mt-1 text-xs text-gray-500">{{ form.fields.route.help_text }}</p>
+                    </div>
+
+                    <!-- Route Segments Builder -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Dive Profile Segments</label>
+                        <div id="route-segments-builder" class="space-y-2">
+                            <!-- Segments will be rendered here by JavaScript -->
+                        </div>
+                        <button type="button" id="add-segment-btn"
+                                class="mt-2 inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                            {% icon "plus" "w-4 h-4 mr-1" %}
+                            Add Segment
+                        </button>
+                        <p class="mt-1 text-sm text-gray-500">Define the dive profile: descent, level sections, safety stop, and ascent</p>
+                        <!-- Hidden field for actual JSON value -->
+                        <textarea name="route_segments" id="id_route_segments" class="hidden">{{ form.route_segments.value|default:'' }}</textarea>
+                        {% if form.route_segments.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.route_segments.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Hazards -->
+                    <div>
+                        <label for="id_hazards" class="block text-sm font-medium text-gray-700">Hazards</label>
+                        <textarea name="hazards" id="id_hazards" rows="2"
+                                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="e.g., Strong currents possible, sharp metal edges on wreck...">{{ form.hazards.value|default:'' }}</textarea>
+                        <p class="mt-1 text-xs text-gray-500">{{ form.fields.hazards.help_text }}</p>
+                    </div>
+
+                    <!-- Briefing Text -->
+                    <div>
+                        <label for="id_briefing_text" class="block text-sm font-medium text-gray-700">Briefing Text</label>
+                        <textarea name="briefing_text" id="id_briefing_text" rows="4"
+                                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="Full dive briefing content for communication to divers...">{{ form.briefing_text.value|default:'' }}</textarea>
+                        <p class="mt-1 text-xs text-gray-500">{{ form.fields.briefing_text.help_text }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dive Site -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Dive Site</h3>
+                <div>
+                    <label for="id_dive_site" class="block text-sm font-medium text-gray-700">{{ form.fields.dive_site.label }}</label>
+                    <select name="dive_site" id="id_dive_site"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">No specific site (generic template)</option>
+                        {% for site in form.fields.dive_site.queryset %}
+                        <option value="{{ site.pk }}" {% if form.dive_site.value|stringformat:'s' == site.pk|stringformat:'s' %}selected{% endif %}>
+                            {{ site.name }}{% if site.max_depth_meters %} (max {{ site.max_depth_meters }}m){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">{{ form.fields.dive_site.help_text }}</p>
+                    {% if preselected_site %}
+                    <p class="mt-2 text-sm text-blue-600">
+                        {% icon "info" "w-4 h-4 inline mr-1" %}
+                        Site pre-selected from "Add Sites" workflow. The site will be automatically added to suitable sites when you save.
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Certification Override -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Certification Override</h3>
+                <div>
+                    <label for="id_min_certification_level" class="block text-sm font-medium text-gray-700">{{ form.fields.min_certification_level.label }}</label>
+                    <select name="min_certification_level" id="id_min_certification_level"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Same as excursion type</option>
+                        {% for level in form.fields.min_certification_level.queryset %}
+                        <option value="{{ level.pk }}" {% if form.min_certification_level.value|stringformat:'s' == level.pk|stringformat:'s' %}selected{% endif %}>
+                            {{ level.agency.name }} - {{ level.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-sm text-gray-500">{{ form.fields.min_certification_level.help_text }}</p>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="border-t pt-6 flex items-center justify-end space-x-3">
+                <a href="{% url 'diveops:excursion-type-detail' pk=excursion_type.pk %}"
+                   class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    {% if is_create %}Add Dive Template{% else %}Save Changes{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const builder = document.getElementById('route-segments-builder');
+    const hiddenField = document.getElementById('id_route_segments');
+    const addBtn = document.getElementById('add-segment-btn');
+
+    // Parse existing segments or start empty
+    let segments = [];
+    try {
+        const existing = hiddenField.value.trim();
+        if (existing && existing !== '[]') {
+            segments = JSON.parse(existing);
+        }
+    } catch (e) {
+        console.error('Failed to parse route segments:', e);
+    }
+
+    function renderSegments() {
+        builder.innerHTML = '';
+        segments.forEach((seg, idx) => {
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-2 p-3 bg-gray-50 rounded-lg';
+            row.innerHTML = `
+                <select data-field="phase" class="px-2 py-1.5 border border-gray-300 rounded text-sm">
+                    <option value="descent" ${seg.phase === 'descent' ? 'selected' : ''}>Descent</option>
+                    <option value="level" ${seg.phase === 'level' ? 'selected' : ''}>Level</option>
+                    <option value="safety_stop" ${seg.phase === 'safety_stop' ? 'selected' : ''}>Safety Stop</option>
+                    <option value="ascent" ${seg.phase === 'ascent' ? 'selected' : ''}>Ascent</option>
+                </select>
+                <div class="flex items-center gap-1">
+                    <input type="number" data-field="depth_m" value="${seg.depth_m || seg.from_depth_m || ''}"
+                           class="w-16 px-2 py-1.5 border border-gray-300 rounded text-sm" placeholder="Depth">
+                    <span class="text-xs text-gray-500">m</span>
+                </div>
+                <div class="flex items-center gap-1" data-depth-range style="display: ${seg.phase === 'descent' || seg.phase === 'ascent' ? 'flex' : 'none'}">
+                    <span class="text-xs text-gray-500">to</span>
+                    <input type="number" data-field="to_depth_m" value="${seg.to_depth_m || ''}"
+                           class="w-16 px-2 py-1.5 border border-gray-300 rounded text-sm" placeholder="To">
+                    <span class="text-xs text-gray-500">m</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <input type="number" data-field="duration_min" value="${seg.duration_min || ''}"
+                           class="w-16 px-2 py-1.5 border border-gray-300 rounded text-sm" placeholder="Time">
+                    <span class="text-xs text-gray-500">min</span>
+                </div>
+                <button type="button" class="remove-segment p-1 text-red-500 hover:text-red-700" title="Remove">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            `;
+            row.dataset.idx = idx;
+            builder.appendChild(row);
+
+            // Phase change handler - show/hide to_depth field
+            const phaseSelect = row.querySelector('[data-field="phase"]');
+            const depthRange = row.querySelector('[data-depth-range]');
+            phaseSelect.addEventListener('change', function() {
+                const needsRange = this.value === 'descent' || this.value === 'ascent';
+                depthRange.style.display = needsRange ? 'flex' : 'none';
+                updateSegments();
+            });
+
+            // Input handlers
+            row.querySelectorAll('input, select').forEach(input => {
+                input.addEventListener('change', updateSegments);
+                input.addEventListener('input', updateSegments);
+            });
+
+            // Remove handler
+            row.querySelector('.remove-segment').addEventListener('click', function() {
+                segments.splice(idx, 1);
+                renderSegments();
+                updateHiddenField();
+            });
+        });
+    }
+
+    function updateSegments() {
+        segments = [];
+        builder.querySelectorAll('[data-idx]').forEach(row => {
+            const phase = row.querySelector('[data-field="phase"]').value;
+            const seg = { phase };
+
+            if (phase === 'descent' || phase === 'ascent') {
+                const fromDepth = row.querySelector('[data-field="depth_m"]').value;
+                const toDepth = row.querySelector('[data-field="to_depth_m"]').value;
+                if (fromDepth) seg.from_depth_m = parseInt(fromDepth);
+                if (toDepth) seg.to_depth_m = parseInt(toDepth);
+            } else {
+                const depth = row.querySelector('[data-field="depth_m"]').value;
+                if (depth) seg.depth_m = parseInt(depth);
+            }
+
+            const duration = row.querySelector('[data-field="duration_min"]').value;
+            if (duration) seg.duration_min = parseInt(duration);
+
+            segments.push(seg);
+        });
+        updateHiddenField();
+    }
+
+    function updateHiddenField() {
+        hiddenField.value = JSON.stringify(segments, null, 2);
+    }
+
+    addBtn.addEventListener('click', function() {
+        // Add new segment with sensible defaults
+        const lastSeg = segments[segments.length - 1];
+        let newSeg = { phase: 'level', depth_m: 18, duration_min: 10 };
+
+        if (!segments.length) {
+            // First segment: descent
+            newSeg = { phase: 'descent', from_depth_m: 0, to_depth_m: 18, duration_min: 2 };
+        } else if (lastSeg && lastSeg.phase !== 'ascent') {
+            // Suggest next logical phase
+            if (lastSeg.phase === 'descent') {
+                newSeg = { phase: 'level', depth_m: lastSeg.to_depth_m || 18, duration_min: 30 };
+            } else if (lastSeg.phase === 'level') {
+                newSeg = { phase: 'safety_stop', depth_m: 5, duration_min: 3 };
+            } else if (lastSeg.phase === 'safety_stop') {
+                newSeg = { phase: 'ascent', from_depth_m: 5, to_depth_m: 0, duration_min: 2 };
+            }
+        }
+
+        segments.push(newSeg);
+        renderSegments();
+        updateHiddenField();
+    });
+
+    // Initial render
+    renderSegments();
+
+    // Surface interval visibility based on sequence
+    const sequenceInput = document.getElementById('id_sequence');
+    const surfaceIntervalSection = document.getElementById('surface-interval-section');
+    const surfaceIntervalInput = document.getElementById('id_surface_interval_minutes');
+
+    function updateSurfaceIntervalVisibility() {
+        const sequence = parseInt(sequenceInput.value) || 1;
+        if (sequence > 1) {
+            surfaceIntervalSection.style.display = 'block';
+        } else {
+            surfaceIntervalSection.style.display = 'none';
+            // Clear the value for first dive
+            surfaceIntervalInput.value = '';
+        }
+    }
+
+    // Run on load
+    updateSurfaceIntervalVisibility();
+
+    // Run on change
+    sequenceInput.addEventListener('change', updateSurfaceIntervalVisibility);
+    sequenceInput.addEventListener('input', updateSurfaceIntervalVisibility);
+});
+</script>
+{% endblock %}

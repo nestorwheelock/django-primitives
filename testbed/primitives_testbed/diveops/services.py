@@ -43,6 +43,7 @@ from .audit import (
     log_event,
     log_excursion_event,
     log_excursion_type_event,
+    log_price_rule_event,
     log_roster_event,
     log_site_event,
     log_site_price_adjustment_event,
@@ -2230,10 +2231,18 @@ def create_dive_template(
     name: str,
     sequence: int,
     offset_minutes: int = 0,
+    surface_interval_minutes: int | None = None,
     planned_duration_minutes: int | None = None,
     description: str = "",
     planned_depth_meters: int | None = None,
     min_certification_level: CertificationLevel | None = None,
+    dive_site: "DiveSite | None" = None,
+    # Dive planning fields
+    gas: str = "",
+    route: str = "",
+    route_segments: list | None = None,
+    briefing_text: str = "",
+    hazards: str = "",
 ) -> ExcursionTypeDive:
     """Create a new dive template for an excursion type.
 
@@ -2247,22 +2256,41 @@ def create_dive_template(
         description: Optional description
         planned_depth_meters: Optional planned depth
         min_certification_level: Optional certification level override
+        dive_site: Optional specific dive site this plan is designed for
+        gas: Gas mix (air, ean32, ean36, trimix)
+        route: Route description text
+        route_segments: Structured dive profile as list of segments
+        briefing_text: Full briefing content
+        hazards: Known hazards and safety considerations
 
     Returns:
         Created ExcursionTypeDive
 
     Raises:
         IntegrityError: If constraints are violated
+        ValueError: If dive_site is not in excursion_type.suitable_sites
     """
+    # Auto-add dive_site to suitable_sites if not already there
+    if dive_site is not None:
+        if not excursion_type.suitable_sites.filter(pk=dive_site.pk).exists():
+            excursion_type.suitable_sites.add(dive_site)
+
     dive_template = ExcursionTypeDive.objects.create(
         excursion_type=excursion_type,
         name=name,
         sequence=sequence,
         offset_minutes=offset_minutes,
+        surface_interval_minutes=surface_interval_minutes,
         planned_duration_minutes=planned_duration_minutes,
         description=description,
         planned_depth_meters=planned_depth_meters,
         min_certification_level=min_certification_level,
+        dive_site=dive_site,
+        gas=gas,
+        route=route,
+        route_segments=route_segments or [],
+        briefing_text=briefing_text,
+        hazards=hazards,
     )
 
     log_dive_template_event(
@@ -2282,11 +2310,20 @@ def update_dive_template(
     name: str | None = None,
     sequence: int | None = None,
     offset_minutes: int | None = None,
+    surface_interval_minutes: int | None = None,
     planned_duration_minutes: int | None = None,
     description: str | None = None,
     planned_depth_meters: int | None = None,
     min_certification_level: CertificationLevel | None = None,
     clear_min_certification: bool = False,
+    dive_site: "DiveSite | None" = None,
+    clear_dive_site: bool = False,
+    # Dive planning fields
+    gas: str | None = None,
+    route: str | None = None,
+    route_segments: list | None = None,
+    briefing_text: str | None = None,
+    hazards: str | None = None,
 ) -> ExcursionTypeDive:
     """Update an existing dive template.
 
@@ -2301,6 +2338,13 @@ def update_dive_template(
         planned_depth_meters: New planned depth (None = no change)
         min_certification_level: New certification level (None = no change)
         clear_min_certification: If True, clear min_certification_level
+        dive_site: New dive site (None = no change)
+        clear_dive_site: If True, clear dive_site
+        gas: Gas mix (None = no change)
+        route: Route description (None = no change)
+        route_segments: Structured dive profile (None = no change)
+        briefing_text: Full briefing content (None = no change)
+        hazards: Known hazards (None = no change)
 
     Returns:
         Updated ExcursionTypeDive
@@ -2310,9 +2354,19 @@ def update_dive_template(
     _apply_tracked_update(dive_template, "name", name, changes)
     _apply_tracked_update(dive_template, "sequence", sequence, changes)
     _apply_tracked_update(dive_template, "offset_minutes", offset_minutes, changes)
+    _apply_tracked_update(dive_template, "surface_interval_minutes", surface_interval_minutes, changes)
     _apply_tracked_update(dive_template, "planned_duration_minutes", planned_duration_minutes, changes)
     _apply_tracked_update(dive_template, "description", description, changes)
     _apply_tracked_update(dive_template, "planned_depth_meters", planned_depth_meters, changes)
+    # Dive planning fields
+    _apply_tracked_update(dive_template, "gas", gas, changes)
+    _apply_tracked_update(dive_template, "route", route, changes)
+    _apply_tracked_update(dive_template, "briefing_text", briefing_text, changes)
+    _apply_tracked_update(dive_template, "hazards", hazards, changes)
+    # route_segments needs special handling for JSON comparison
+    if route_segments is not None and route_segments != dive_template.route_segments:
+        changes["route_segments"] = {"old": dive_template.route_segments, "new": route_segments}
+        dive_template.route_segments = route_segments
 
     # Handle min_certification_level FK specially
     if clear_min_certification:
@@ -2328,6 +2382,27 @@ def update_dive_template(
             "new": str(min_certification_level.pk),
         }
         dive_template.min_certification_level = min_certification_level
+
+    # Handle dive_site FK specially
+    # Auto-add dive_site to suitable_sites if not already there
+    if dive_site is not None and not clear_dive_site:
+        excursion_type = dive_template.excursion_type
+        if not excursion_type.suitable_sites.filter(pk=dive_site.pk).exists():
+            excursion_type.suitable_sites.add(dive_site)
+
+    if clear_dive_site:
+        if dive_template.dive_site_id is not None:
+            changes["dive_site"] = {
+                "old": str(dive_template.dive_site_id),
+                "new": None,
+            }
+            dive_template.dive_site = None
+    elif dive_site is not None and dive_site != dive_template.dive_site:
+        changes["dive_site"] = {
+            "old": str(dive_template.dive_site_id) if dive_template.dive_site_id else None,
+            "new": str(dive_site.pk),
+        }
+        dive_template.dive_site = dive_site
 
     if changes:
         dive_template.save()
@@ -3111,3 +3186,1034 @@ def validate_dive_plan(
         )
 
     return dive
+
+
+# =============================================================================
+# Catalog Item Services
+# =============================================================================
+
+
+@transaction.atomic
+def create_catalog_item(
+    *,
+    actor,
+    kind: str,
+    display_name: str,
+    display_name_es: str = "",
+    service_category: str = "",
+    default_stock_action: str = "",
+    is_billable: bool = True,
+    active: bool = True,
+):
+    """Create a new catalog item.
+
+    Args:
+        actor: User performing the action
+        kind: 'stock_item' or 'service'
+        display_name: Name shown to staff and on invoices
+        display_name_es: Spanish translation (optional)
+        service_category: For services only
+        default_stock_action: For stock items only
+        is_billable: Whether item appears on invoices
+        active: Whether item can be added to orders
+
+    Returns:
+        CatalogItem instance
+    """
+    from django_catalog.models import CatalogItem
+
+    item = CatalogItem.objects.create(
+        kind=kind,
+        display_name=display_name,
+        display_name_es=display_name_es,
+        service_category=service_category,
+        default_stock_action=default_stock_action,
+        is_billable=is_billable,
+        active=active,
+    )
+
+    # Emit audit event
+    log_event(
+        action=Actions.CATALOG_ITEM_CREATED,
+        target=item,
+        actor=actor,
+        data={
+            "kind": kind,
+            "display_name": display_name,
+            "is_billable": is_billable,
+            "active": active,
+        },
+    )
+
+    return item
+
+
+@transaction.atomic
+def update_catalog_item(
+    *,
+    actor,
+    item,
+    kind: str | None = None,
+    display_name: str | None = None,
+    display_name_es: str | None = None,
+    service_category: str | None = None,
+    default_stock_action: str | None = None,
+    is_billable: bool | None = None,
+    active: bool | None = None,
+):
+    """Update an existing catalog item.
+
+    Args:
+        actor: User performing the action
+        item: CatalogItem to update
+        kind: 'stock_item' or 'service' (optional)
+        display_name: Name shown to staff and on invoices (optional)
+        display_name_es: Spanish translation (optional)
+        service_category: For services only (optional)
+        default_stock_action: For stock items only (optional)
+        is_billable: Whether item appears on invoices (optional)
+        active: Whether item can be added to orders (optional)
+
+    Returns:
+        Updated CatalogItem instance
+    """
+    changes = {}
+
+    if kind is not None and item.kind != kind:
+        changes["kind"] = {"old": item.kind, "new": kind}
+        item.kind = kind
+    if display_name is not None and item.display_name != display_name:
+        changes["display_name"] = {"old": item.display_name, "new": display_name}
+        item.display_name = display_name
+    if display_name_es is not None and item.display_name_es != display_name_es:
+        changes["display_name_es"] = {"old": item.display_name_es, "new": display_name_es}
+        item.display_name_es = display_name_es
+    if service_category is not None and item.service_category != service_category:
+        changes["service_category"] = {"old": item.service_category, "new": service_category}
+        item.service_category = service_category
+    if default_stock_action is not None and item.default_stock_action != default_stock_action:
+        changes["default_stock_action"] = {"old": item.default_stock_action, "new": default_stock_action}
+        item.default_stock_action = default_stock_action
+    if is_billable is not None and item.is_billable != is_billable:
+        changes["is_billable"] = {"old": item.is_billable, "new": is_billable}
+        item.is_billable = is_billable
+    if active is not None and item.active != active:
+        changes["active"] = {"old": item.active, "new": active}
+        item.active = active
+
+    if changes:
+        item.save()
+
+        # Emit audit event
+        log_event(
+            action=Actions.CATALOG_ITEM_UPDATED,
+            target=item,
+            actor=actor,
+            data={"changes": changes},
+        )
+
+    return item
+
+
+@transaction.atomic
+def delete_catalog_item(*, actor, item):
+    """Soft delete a catalog item.
+
+    Args:
+        actor: User performing the action
+        item: CatalogItem to delete
+
+    Returns:
+        None
+    """
+    item.active = False
+    item.deleted_at = timezone.now()
+    item.save(update_fields=["active", "deleted_at", "updated_at"])
+
+    # Emit audit event
+    log_event(
+        action=Actions.CATALOG_ITEM_DELETED,
+        target=item,
+        actor=actor,
+        data={"display_name": item.display_name},
+    )
+
+
+# =============================================================================
+# Price Rule Services
+# =============================================================================
+
+
+@transaction.atomic
+def create_price_rule(
+    *,
+    actor,
+    catalog_item,
+    amount,
+    currency: str,
+    cost_amount=None,
+    cost_currency: str = "",
+    organization=None,
+    party=None,
+    agreement=None,
+    valid_from=None,
+    valid_to=None,
+    priority: int = 0,
+    reason: str = "",
+):
+    """Create a new price rule for a catalog item.
+
+    Args:
+        actor: User performing the action
+        catalog_item: CatalogItem this price applies to
+        amount: Customer charge amount
+        currency: Currency code (e.g., 'USD')
+        cost_amount: Shop cost amount (optional, for vendor pricing)
+        cost_currency: Cost currency code
+        organization: Organization scope (optional)
+        party: Party scope (optional)
+        agreement: Agreement scope (optional, for vendor pricing)
+        valid_from: Start of validity period
+        valid_to: End of validity period (optional)
+        priority: Higher priority wins ties
+        reason: Audit reason for creating this rule
+
+    Returns:
+        Price instance
+    """
+    from primitives_testbed.pricing.models import Price
+
+    if valid_from is None:
+        valid_from = timezone.now()
+
+    price = Price.objects.create(
+        catalog_item=catalog_item,
+        amount=amount,
+        currency=currency,
+        cost_amount=cost_amount,
+        cost_currency=cost_currency or currency,
+        organization=organization,
+        party=party,
+        agreement=agreement,
+        valid_from=valid_from,
+        valid_to=valid_to,
+        priority=priority,
+        created_by=actor,
+        reason=reason,
+    )
+
+    # Emit audit event
+    log_price_rule_event(
+        action=Actions.PRICE_RULE_CREATED,
+        price=price,
+        actor=actor,
+        data={"reason": reason},
+    )
+
+    return price
+
+
+@transaction.atomic
+def update_price_rule(
+    *,
+    actor,
+    price,
+    amount=None,
+    currency: str | None = None,
+    cost_amount=None,
+    cost_currency: str | None = None,
+    valid_from=None,
+    valid_to=None,
+    priority: int | None = None,
+    reason: str = "",
+):
+    """Update an existing price rule.
+
+    Note: Scope fields (organization, party, agreement) cannot be changed.
+    Create a new price rule if you need a different scope.
+
+    Args:
+        actor: User performing the action
+        price: Price instance to update
+        amount: New customer charge amount (optional)
+        currency: New currency code (optional)
+        cost_amount: New shop cost amount (optional)
+        cost_currency: New cost currency code (optional)
+        valid_from: New start of validity period (optional)
+        valid_to: New end of validity period (optional)
+        priority: New priority (optional)
+        reason: Audit reason for update
+
+    Returns:
+        Updated Price instance
+    """
+    changes = {}
+
+    if amount is not None and price.amount != amount:
+        changes["amount"] = {"old": str(price.amount), "new": str(amount)}
+        price.amount = amount
+    if currency is not None and price.currency != currency:
+        changes["currency"] = {"old": price.currency, "new": currency}
+        price.currency = currency
+    if cost_amount is not None and price.cost_amount != cost_amount:
+        changes["cost_amount"] = {
+            "old": str(price.cost_amount) if price.cost_amount else None,
+            "new": str(cost_amount),
+        }
+        price.cost_amount = cost_amount
+    if cost_currency is not None and price.cost_currency != cost_currency:
+        changes["cost_currency"] = {"old": price.cost_currency, "new": cost_currency}
+        price.cost_currency = cost_currency
+    if valid_from is not None and price.valid_from != valid_from:
+        changes["valid_from"] = {
+            "old": price.valid_from.isoformat() if price.valid_from else None,
+            "new": valid_from.isoformat(),
+        }
+        price.valid_from = valid_from
+    if valid_to is not None and price.valid_to != valid_to:
+        changes["valid_to"] = {
+            "old": price.valid_to.isoformat() if price.valid_to else None,
+            "new": valid_to.isoformat() if valid_to else None,
+        }
+        price.valid_to = valid_to
+    if priority is not None and price.priority != priority:
+        changes["priority"] = {"old": price.priority, "new": priority}
+        price.priority = priority
+
+    if changes:
+        price.save()
+
+        # Emit audit event
+        log_price_rule_event(
+            action=Actions.PRICE_RULE_UPDATED,
+            price=price,
+            actor=actor,
+            changes=changes,
+            data={"reason": reason},
+        )
+
+    return price
+
+
+@transaction.atomic
+def delete_price_rule(*, actor, price, reason: str = ""):
+    """Soft delete a price rule.
+
+    Args:
+        actor: User performing the action
+        price: Price instance to delete
+        reason: Audit reason for deletion
+
+    Returns:
+        None
+    """
+    price.deleted_at = timezone.now()
+    price.save(update_fields=["deleted_at", "updated_at"])
+
+    # Emit audit event
+    log_price_rule_event(
+        action=Actions.PRICE_RULE_DELETED,
+        price=price,
+        actor=actor,
+        data={"reason": reason},
+    )
+
+
+# =============================================================================
+# Payables Services (Vendor Invoice/Payment Management)
+# =============================================================================
+
+
+def get_or_create_vendor_payable_account(shop, vendor, currency: str):
+    """Get or create a vendor-specific payable account.
+
+    IMPORTANT: The account is owned by the shop (not the vendor), but named
+    for the vendor. This allows proper tracking of per-vendor liabilities
+    from the shop's perspective.
+
+    Args:
+        shop: Organization instance (dive shop) - the account owner
+        vendor: Organization instance (vendor) - for account naming
+        currency: Currency code (USD, MXN, etc.)
+
+    Returns:
+        Account instance
+    """
+    from .accounts import get_vendor_payable_account
+
+    return get_vendor_payable_account(shop, vendor, currency, auto_create=True)
+
+
+@transaction.atomic
+def record_vendor_invoice(
+    *,
+    actor,
+    shop,
+    vendor,
+    amount,
+    currency: str,
+    invoice_number: str = "",
+    invoice_date=None,
+    due_date=None,
+    source=None,
+    description: str = "",
+):
+    """Record a vendor invoice: DR Expense, CR Vendor Payables.
+
+    This creates a balanced ledger transaction recording the liability
+    to the vendor. The payable account is per-vendor for proper reconciliation.
+
+    Args:
+        actor: User recording the invoice
+        shop: Organization instance (dive shop) - owner of expense/payable accounts
+        vendor: Organization instance (vendor)
+        amount: Invoice amount
+        currency: Currency code
+        invoice_number: Vendor's invoice number
+        invoice_date: Date of the invoice (defaults to now)
+        due_date: When payment is due
+        source: Optional source model (Booking, Excursion, etc.)
+        description: Description for the ledger entry
+
+    Returns:
+        Transaction instance
+
+    Raises:
+        AccountConfigurationError: If required accounts are not seeded
+    """
+    from django.contrib.contenttypes.models import ContentType
+
+    from django_ledger.services import record_transaction
+
+    from .accounts import get_required_accounts, get_vendor_payable_account
+    from .audit import Actions, log_event
+
+    if invoice_date is None:
+        invoice_date = timezone.now()
+
+    # Get required accounts from seeded chart of accounts
+    # This will raise AccountConfigurationError if not seeded
+    accounts = get_required_accounts(shop, currency)
+
+    # Get vendor-specific payable account (or create if seeding)
+    payable_account = get_vendor_payable_account(shop, vendor, currency, auto_create=True)
+
+    # Use the excursion_costs account for vendor invoices (shop owns it)
+    expense_account = accounts.excursion_costs
+
+    # Build metadata
+    metadata = {
+        "type": "vendor_invoice",
+        "vendor_id": str(vendor.pk),
+        "vendor_name": vendor.name,
+        "shop_id": str(shop.pk),
+        "shop_name": shop.name,
+        "invoice_number": invoice_number,
+        "invoice_date": str(invoice_date.date()) if hasattr(invoice_date, "date") else str(invoice_date),
+    }
+    if due_date:
+        metadata["due_date"] = str(due_date.date()) if hasattr(due_date, "date") else str(due_date)
+    if source:
+        source_ct = ContentType.objects.get_for_model(source)
+        metadata["source_type"] = source_ct.model
+        metadata["source_id"] = str(source.pk)
+
+    # Create balanced transaction
+    tx = record_transaction(
+        description=description or f"Vendor invoice from {vendor.name}",
+        entries=[
+            {"account": expense_account, "entry_type": "debit", "amount": amount},
+            {"account": payable_account, "entry_type": "credit", "amount": amount},
+        ],
+        effective_at=invoice_date,
+        metadata=metadata,
+    )
+
+    # Audit event
+    log_event(
+        action=Actions.VENDOR_INVOICE_RECORDED,
+        target=vendor,
+        actor=actor,
+        data={
+            "transaction_id": str(tx.pk),
+            "shop_id": str(shop.pk),
+            "amount": str(amount),
+            "currency": currency,
+            "invoice_number": invoice_number,
+        },
+    )
+
+    return tx
+
+
+@transaction.atomic
+def record_vendor_payment(
+    *,
+    actor,
+    shop,
+    vendor,
+    amount,
+    currency: str,
+    payment_date=None,
+    reference: str = "",
+    description: str = "",
+):
+    """Record a payment to vendor: DR Vendor Payables, CR Cash/Bank.
+
+    This reduces the liability to the vendor and records the cash outflow.
+
+    Args:
+        actor: User recording the payment
+        shop: Organization instance (dive shop) - owner of cash/payable accounts
+        vendor: Organization instance (vendor)
+        amount: Payment amount
+        currency: Currency code
+        payment_date: When payment was made (defaults to now)
+        reference: Payment reference (check number, wire ref, etc.)
+        description: Description for the ledger entry
+
+    Returns:
+        Transaction instance
+
+    Raises:
+        AccountConfigurationError: If required accounts are not seeded
+    """
+    from django_ledger.services import record_transaction
+
+    from .accounts import get_required_accounts, get_vendor_payable_account
+    from .audit import Actions, log_event
+
+    if payment_date is None:
+        payment_date = timezone.now()
+
+    # Get required accounts from seeded chart of accounts
+    # This will raise AccountConfigurationError if not seeded
+    accounts = get_required_accounts(shop, currency)
+
+    # Get vendor-specific payable account
+    payable_account = get_vendor_payable_account(shop, vendor, currency, auto_create=True)
+
+    # Use the shop's cash/bank account
+    cash_account = accounts.cash_bank
+
+    # Build metadata
+    metadata = {
+        "type": "vendor_payment",
+        "vendor_id": str(vendor.pk),
+        "vendor_name": vendor.name,
+        "shop_id": str(shop.pk),
+        "shop_name": shop.name,
+        "reference": reference,
+    }
+
+    # Create balanced transaction
+    tx = record_transaction(
+        description=description or f"Payment to {vendor.name}",
+        entries=[
+            {"account": payable_account, "entry_type": "debit", "amount": amount},
+            {"account": cash_account, "entry_type": "credit", "amount": amount},
+        ],
+        effective_at=payment_date,
+        metadata=metadata,
+    )
+
+    # Audit event
+    log_event(
+        action=Actions.VENDOR_PAYMENT_RECORDED,
+        target=vendor,
+        actor=actor,
+        data={
+            "transaction_id": str(tx.pk),
+            "shop_id": str(shop.pk),
+            "amount": str(amount),
+            "currency": currency,
+            "reference": reference,
+        },
+    )
+
+    return tx
+
+
+def get_vendor_payables_summary(shop=None):
+    """Get open payable balances grouped by vendor and currency.
+
+    Queries payable accounts and returns non-zero balances.
+    Vendor payable accounts are named "Accounts Payable - {vendor_name}"
+    and owned by the shop.
+
+    Args:
+        shop: Organization instance (dive shop) - if None, queries all shops
+
+    Returns:
+        List of dicts with vendor_name, currency, balance, account_id, shop_id
+    """
+    from django.contrib.contenttypes.models import ContentType
+
+    from django_ledger.models import Account
+    from django_ledger.services import get_balance
+
+    # Find vendor payable accounts (named "Accounts Payable - {vendor}")
+    # These are per-vendor accounts owned by shops
+    queryset = Account.objects.filter(
+        account_type="payable",
+        name__startswith="Accounts Payable - ",
+    )
+
+    # Filter by shop owner if provided
+    if shop:
+        shop_ct = ContentType.objects.get_for_model(shop)
+        queryset = queryset.filter(
+            owner_content_type=shop_ct,
+            owner_id=str(shop.pk),
+        )
+
+    summary = []
+    for account in queryset:
+        balance = get_balance(account)
+        if balance != 0:
+            # Extract vendor name from account name
+            vendor_name = account.name.replace("Accounts Payable - ", "")
+            summary.append({
+                "vendor_name": vendor_name,
+                "currency": account.currency,
+                "balance": balance,
+                "account_id": str(account.pk),
+                "shop_id": account.owner_id,
+            })
+
+    return summary
+
+
+def get_vendor_transactions(vendor, shop=None, currency: str = None):
+    """Get all transactions for a vendor's payable account.
+
+    Vendor payable accounts are owned by the shop but named for the vendor.
+    This function finds entries on those accounts.
+
+    Args:
+        vendor: Organization instance (vendor)
+        shop: Organization instance (dive shop) - if None, searches all shops
+        currency: Optional currency filter
+
+    Returns:
+        QuerySet of Entry instances with related transaction and account
+    """
+    from django.contrib.contenttypes.models import ContentType
+
+    from django_ledger.models import Account, Entry
+
+    # Vendor payable accounts are named "Accounts Payable - {vendor.name}"
+    # and owned by the shop, not the vendor
+    account_name = f"Accounts Payable - {vendor.name}"
+
+    queryset = Account.objects.filter(
+        account_type="payable",
+        name=account_name,
+    )
+
+    # Filter by shop owner if provided
+    if shop:
+        shop_ct = ContentType.objects.get_for_model(shop)
+        queryset = queryset.filter(
+            owner_content_type=shop_ct,
+            owner_id=str(shop.pk),
+        )
+
+    if currency:
+        queryset = queryset.filter(currency=currency)
+
+    # Get all entries for these accounts
+    entries = Entry.objects.filter(
+        account__in=queryset
+    ).select_related("transaction", "account").order_by("-transaction__effective_at")
+
+    return entries
+
+
+# =============================================================================
+# Tissue Loading Calculator (EPHEMERAL - No Persistence)
+# =============================================================================
+#
+# CRITICAL: These functions return EPHEMERAL what-if planning data.
+# Do NOT persist any of these results to the database.
+# Recalculate fresh each time - tissue state should never be stored.
+#
+# Bühlmann ZHL-16C tissue model with 16 compartments.
+# Each compartment has a specific half-time for N2 (and He if using trimix).
+# For recreational diving with air/nitrox, we only track N2.
+
+import math
+from dataclasses import dataclass, field
+
+
+TISSUE_PAYLOAD_VERSION = "1.0"  # Version-tag for tissue state format
+
+# Bühlmann ZHL-16C N2 half-times in minutes
+# These are the standard tissue compartment half-times
+BUHLMANN_N2_HALFTIMES = [
+    4.0, 8.0, 12.5, 18.5, 27.0, 38.3, 54.3, 77.0,
+    109.0, 146.0, 187.0, 239.0, 305.0, 390.0, 498.0, 635.0
+]
+
+# Surface N2 partial pressure (bar) - air at sea level
+SURFACE_N2_PP = 0.79
+
+# Water vapor pressure (bar) at body temperature
+WATER_VAPOR_PP = 0.0627
+
+# Atmospheric pressure at sea level (bar)
+SURFACE_PRESSURE = 1.0
+
+
+@dataclass
+class TissueState:
+    """Represents tissue loading state for all 16 compartments.
+
+    WARNING: This is EPHEMERAL planning data. Do NOT persist.
+    """
+
+    version: str = TISSUE_PAYLOAD_VERSION
+    n2_pressures: list[float] = field(default_factory=list)
+
+    def __post_init__(self):
+        """Initialize with surface-saturated tissues if empty."""
+        if not self.n2_pressures:
+            # Start with tissues equilibrated to surface N2 pressure
+            self.n2_pressures = [SURFACE_N2_PP] * 16
+
+    def max_loading_percent(self) -> float:
+        """Return the maximum compartment loading as percentage of surface saturation."""
+        if not self.n2_pressures:
+            return 100.0
+        return max(p / SURFACE_N2_PP * 100.0 for p in self.n2_pressures)
+
+    def to_dict(self) -> dict:
+        """Serialize for transport (JSON-safe)."""
+        return {
+            "version": self.version,
+            "n2_pressures": self.n2_pressures.copy(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TissueState":
+        """Deserialize from dict."""
+        if data.get("version") != TISSUE_PAYLOAD_VERSION:
+            raise ValueError(
+                f"Tissue state version mismatch: {data.get('version')} != {TISSUE_PAYLOAD_VERSION}"
+            )
+        return cls(
+            version=data["version"],
+            n2_pressures=data["n2_pressures"].copy(),
+        )
+
+
+def validate_tissue_state(tissue_state: dict | None, expected_version: str = TISSUE_PAYLOAD_VERSION) -> bool:
+    """Validate tissue state structure before using.
+
+    Args:
+        tissue_state: Dict with tissue state or None for fresh start
+        expected_version: Expected version string
+
+    Returns:
+        True if valid
+
+    Raises:
+        ValueError: If tissue state is invalid
+    """
+    if tissue_state is None:
+        return True  # Fresh start
+
+    if not isinstance(tissue_state, dict):
+        raise ValueError("Invalid tissue state: expected dict")
+
+    if tissue_state.get("version") != expected_version:
+        raise ValueError(
+            f"Tissue state version mismatch: {tissue_state.get('version')} != {expected_version}"
+        )
+
+    # Validate 16 N2 compartments
+    n2_pressures = tissue_state.get("n2_pressures", [])
+    if len(n2_pressures) != 16:
+        raise ValueError(f"Expected 16 N2 compartments, got {len(n2_pressures)}")
+
+    return True
+
+
+def _calculate_compartment_loading(
+    initial_pp: float,
+    ambient_pp: float,
+    duration_min: float,
+    half_time_min: float,
+) -> float:
+    """Calculate tissue compartment N2 pressure after exposure.
+
+    Uses Haldane exponential equation:
+    P_tissue(t) = P_tissue(0) + (P_ambient - P_tissue(0)) * (1 - e^(-t*ln(2)/τ))
+
+    Args:
+        initial_pp: Initial tissue N2 partial pressure (bar)
+        ambient_pp: Ambient N2 partial pressure (bar)
+        duration_min: Exposure duration (minutes)
+        half_time_min: Compartment half-time (minutes)
+
+    Returns:
+        Final tissue N2 partial pressure (bar)
+    """
+    if duration_min <= 0:
+        return initial_pp
+
+    # Rate constant k = ln(2) / half_time
+    k = math.log(2) / half_time_min
+
+    # Exponential uptake/elimination
+    return initial_pp + (ambient_pp - initial_pp) * (1 - math.exp(-k * duration_min))
+
+
+def _depth_to_ambient_n2_pp(depth_m: float, gas_n2_fraction: float) -> float:
+    """Calculate ambient N2 partial pressure at depth.
+
+    Args:
+        depth_m: Depth in meters
+        gas_n2_fraction: N2 fraction in breathing gas (0.0-1.0)
+
+    Returns:
+        Ambient N2 partial pressure (bar)
+    """
+    # Absolute pressure at depth
+    ambient_pressure = SURFACE_PRESSURE + (depth_m / 10.0)
+
+    # Inspired N2 partial pressure (accounting for water vapor)
+    return (ambient_pressure - WATER_VAPOR_PP) * gas_n2_fraction
+
+
+def calculate_dive_tissue_loading(
+    *,
+    route_segments: list[dict],
+    gas_o2_fraction: float = 0.21,
+    initial_tissue_state: TissueState | None = None,
+) -> tuple[TissueState, dict]:
+    """Calculate tissue loading for a single dive.
+
+    WARNING: Returns EPHEMERAL data. Do NOT persist.
+
+    Args:
+        route_segments: List of dive segments with depth_m, duration_min
+        gas_o2_fraction: O2 fraction (0.0-1.0), N2 = 1 - O2 for air/nitrox
+        initial_tissue_state: Starting tissue state (None = surface saturated)
+
+    Returns:
+        Tuple of (final_tissue_state, dive_metrics)
+    """
+    # Start with provided state or fresh surface-saturated tissues
+    if initial_tissue_state is None:
+        tissue_state = TissueState()
+    else:
+        tissue_state = TissueState(n2_pressures=initial_tissue_state.n2_pressures.copy())
+
+    # Calculate N2 fraction (for air/nitrox, assume no He)
+    gas_n2_fraction = 1.0 - gas_o2_fraction
+
+    max_depth = 0.0
+    total_runtime = 0.0
+
+    # Process each segment
+    for segment in route_segments:
+        depth_m = float(segment.get("depth_m", 0))
+        duration_min = float(segment.get("duration_min", 0))
+
+        if duration_min <= 0:
+            continue
+
+        max_depth = max(max_depth, depth_m)
+        total_runtime += duration_min
+
+        # Calculate ambient N2 partial pressure at this depth
+        ambient_n2_pp = _depth_to_ambient_n2_pp(depth_m, gas_n2_fraction)
+
+        # Update each tissue compartment
+        new_pressures = []
+        for i, half_time in enumerate(BUHLMANN_N2_HALFTIMES):
+            new_pp = _calculate_compartment_loading(
+                initial_pp=tissue_state.n2_pressures[i],
+                ambient_pp=ambient_n2_pp,
+                duration_min=duration_min,
+                half_time_min=half_time,
+            )
+            new_pressures.append(new_pp)
+
+        tissue_state.n2_pressures = new_pressures
+
+    metrics = {
+        "max_depth_m": max_depth,
+        "runtime_min": total_runtime,
+        "max_loading_percent": tissue_state.max_loading_percent(),
+        "gas_o2_fraction": gas_o2_fraction,
+    }
+
+    return tissue_state, metrics
+
+
+def calculate_surface_interval_offgassing(
+    *,
+    tissue_state: TissueState,
+    duration_min: float,
+) -> TissueState:
+    """Calculate tissue off-gassing during surface interval.
+
+    At surface, tissues off-gas toward surface N2 saturation (0.79 bar).
+
+    WARNING: Returns EPHEMERAL data. Do NOT persist.
+
+    Args:
+        tissue_state: Current tissue state after previous dive
+        duration_min: Surface interval duration (minutes)
+
+    Returns:
+        New tissue state after off-gassing
+    """
+    if duration_min <= 0:
+        return tissue_state
+
+    new_state = TissueState(n2_pressures=tissue_state.n2_pressures.copy())
+
+    # At surface, ambient N2 pp is surface saturation level
+    surface_n2_pp = SURFACE_N2_PP
+
+    # Off-gas each compartment toward surface saturation
+    new_pressures = []
+    for i, half_time in enumerate(BUHLMANN_N2_HALFTIMES):
+        new_pp = _calculate_compartment_loading(
+            initial_pp=new_state.n2_pressures[i],
+            ambient_pp=surface_n2_pp,
+            duration_min=duration_min,
+            half_time_min=half_time,
+        )
+        new_pressures.append(new_pp)
+
+    new_state.n2_pressures = new_pressures
+    return new_state
+
+
+@dataclass
+class DiveResult:
+    """Result for a single dive in the excursion profile."""
+
+    dive_id: str
+    sequence: int
+    name: str
+    max_depth_m: float
+    runtime_min: float
+    max_loading_percent: float
+    loading_before_percent: float
+    loading_after_percent: float
+
+
+@dataclass
+class SurfaceIntervalResult:
+    """Result for a surface interval between dives."""
+
+    before_dive_sequence: int
+    duration_min: int
+    loading_before_percent: float
+    loading_after_percent: float
+
+
+@dataclass
+class ExcursionTissueProfile:
+    """Complete tissue profile for an excursion.
+
+    WARNING: This is EPHEMERAL planning data. Do NOT persist.
+    """
+
+    version: str
+    excursion_type_id: str
+    dive_results: list[DiveResult]
+    surface_intervals: list[SurfaceIntervalResult]
+    final_loading_percent: float
+
+
+def calculate_excursion_tissue_loading(excursion_type) -> ExcursionTissueProfile:
+    """Calculate tissue loading for all dives in an excursion.
+
+    WARNING: Returns EPHEMERAL data for planning/visualization only.
+    Do NOT store these results. Recalculate fresh each time.
+
+    Args:
+        excursion_type: ExcursionType instance with related dives
+
+    Returns:
+        ExcursionTissueProfile with dive results and surface intervals
+    """
+    from .planning.segment_converter import segments_to_steps
+
+    dives = excursion_type.dives.order_by("sequence")
+    dive_results = []
+    surface_intervals = []
+    current_tissue_state = TissueState()  # Start surface saturated
+
+    for dive in dives:
+        loading_before = current_tissue_state.max_loading_percent()
+
+        # Apply surface interval off-gassing if not first dive
+        if dive.surface_interval_minutes and dive.sequence > 1:
+            si_loading_before = current_tissue_state.max_loading_percent()
+
+            current_tissue_state = calculate_surface_interval_offgassing(
+                tissue_state=current_tissue_state,
+                duration_min=float(dive.surface_interval_minutes),
+            )
+
+            surface_intervals.append(
+                SurfaceIntervalResult(
+                    before_dive_sequence=dive.sequence,
+                    duration_min=dive.surface_interval_minutes,
+                    loading_before_percent=si_loading_before,
+                    loading_after_percent=current_tissue_state.max_loading_percent(),
+                )
+            )
+
+            # Update loading_before to reflect post-SI state
+            loading_before = current_tissue_state.max_loading_percent()
+
+        # Get dive segments from route_segments or use simple depth profile
+        if hasattr(dive, "route_segments") and dive.route_segments:
+            # Convert route_segments to flat steps for calculation
+            steps = segments_to_steps(dive.route_segments)
+        else:
+            # Simple rectangular profile based on max_depth and bottom_time
+            max_depth = getattr(dive, "max_depth_m", 18.0)
+            bottom_time = getattr(dive, "bottom_time_min", 30.0)
+            steps = [{"depth_m": max_depth, "duration_min": bottom_time}]
+
+        # Get gas mix (default to air)
+        gas_o2 = 0.21
+        if hasattr(dive, "gas_o2_fraction") and dive.gas_o2_fraction:
+            gas_o2 = float(dive.gas_o2_fraction)
+
+        # Calculate dive tissue loading
+        current_tissue_state, metrics = calculate_dive_tissue_loading(
+            route_segments=steps,
+            gas_o2_fraction=gas_o2,
+            initial_tissue_state=current_tissue_state,
+        )
+
+        dive_results.append(
+            DiveResult(
+                dive_id=str(dive.pk),
+                sequence=dive.sequence,
+                name=dive.name,
+                max_depth_m=metrics["max_depth_m"],
+                runtime_min=metrics["runtime_min"],
+                max_loading_percent=metrics["max_loading_percent"],
+                loading_before_percent=loading_before,
+                loading_after_percent=current_tissue_state.max_loading_percent(),
+            )
+        )
+
+    return ExcursionTissueProfile(
+        version=TISSUE_PAYLOAD_VERSION,
+        excursion_type_id=str(excursion_type.pk),
+        dive_results=dive_results,
+        surface_intervals=surface_intervals,
+        final_loading_percent=current_tissue_state.max_loading_percent(),
+    )

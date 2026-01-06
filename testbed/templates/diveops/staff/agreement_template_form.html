@@ -1,0 +1,225 @@
+{% extends "portal_ui/base_staff.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:agreement-template-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            Paperwork Templates
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">
+            {% if is_create %}
+            Create a new agreement template for divers to sign.
+            {% else %}
+            Update this agreement template.
+            {% endif %}
+        </p>
+    </div>
+
+    <!-- Form -->
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Basic Information Card -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h2 class="text-lg font-medium text-gray-900">Basic Information</h2>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <!-- Dive Shop -->
+                <div>
+                    <label for="id_dive_shop" class="block text-sm font-medium text-gray-700">
+                        Dive Shop <span class="text-red-500">*</span>
+                    </label>
+                    <select name="dive_shop" id="id_dive_shop"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                            required>
+                        <option value="">Select dive shop...</option>
+                        {% for shop in form.dive_shop.field.queryset %}
+                        <option value="{{ shop.pk }}" {% if form.dive_shop.value|stringformat:"s" == shop.pk|stringformat:"s" %}selected{% endif %}>{{ shop.name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.dive_shop.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.dive_shop.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Name -->
+                <div>
+                    <label for="id_name" class="block text-sm font-medium text-gray-700">
+                        Template Name <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" name="name" id="id_name"
+                           value="{{ form.name.value|default:'' }}"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="e.g., Standard Liability Waiver"
+                           required>
+                    {% if form.name.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Type and Version Row -->
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- Template Type -->
+                    <div>
+                        <label for="id_template_type" class="block text-sm font-medium text-gray-700">
+                            Template Type <span class="text-red-500">*</span>
+                        </label>
+                        <select name="template_type" id="id_template_type"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                required>
+                            {% for value, label in form.template_type.field.choices %}
+                            <option value="{{ value }}" {% if form.template_type.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.template_type.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.template_type.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Version -->
+                    <div>
+                        <label for="id_version" class="block text-sm font-medium text-gray-700">
+                            Version
+                        </label>
+                        <input type="text" name="version" id="id_version"
+                               value="{{ form.version.value|default:'1.0' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="1.0">
+                        {% if form.version.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.version.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label for="id_description" class="block text-sm font-medium text-gray-700">
+                        Internal Description
+                    </label>
+                    <textarea name="description" id="id_description" rows="2"
+                              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Internal notes about this template (not shown to divers)">{{ form.description.value|default:'' }}</textarea>
+                    {% if form.description.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.description.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Card -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h2 class="text-lg font-medium text-gray-900">Agreement Content</h2>
+                <p class="text-sm text-gray-500">The text that divers will see and agree to. HTML is supported.</p>
+            </div>
+            <div class="px-6 py-4">
+                <textarea name="content" id="id_content" rows="15"
+                          class="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                          placeholder="Enter the agreement content here..."
+                          required>{{ form.content.value|default:'' }}</textarea>
+                <p class="mt-2 text-sm text-gray-500">
+                    Supported placeholders: <code class="bg-gray-100 px-1 rounded">{% verbatim %}{{diver_name}}{% endverbatim %}</code>,
+                    <code class="bg-gray-100 px-1 rounded">{% verbatim %}{{date}}{% endverbatim %}</code>,
+                    <code class="bg-gray-100 px-1 rounded">{% verbatim %}{{dive_shop}}{% endverbatim %}</code>
+                </p>
+                {% if form.content.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ form.content.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Requirements Card -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h2 class="text-lg font-medium text-gray-900">Requirements & Validity</h2>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <!-- Checkboxes Row -->
+                <div class="grid grid-cols-3 gap-4">
+                    <!-- Requires Signature -->
+                    <div class="flex items-center">
+                        <input type="checkbox" name="requires_signature" id="id_requires_signature"
+                               {% if form.requires_signature.value %}checked{% endif %}
+                               class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <label for="id_requires_signature" class="ml-2 text-sm text-gray-700">
+                            Requires Signature
+                        </label>
+                    </div>
+
+                    <!-- Requires Initials -->
+                    <div class="flex items-center">
+                        <input type="checkbox" name="requires_initials" id="id_requires_initials"
+                               {% if form.requires_initials.value %}checked{% endif %}
+                               class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <label for="id_requires_initials" class="ml-2 text-sm text-gray-700">
+                            Requires Initials
+                        </label>
+                    </div>
+
+                    <!-- Required for Booking -->
+                    <div class="flex items-center">
+                        <input type="checkbox" name="is_required_for_booking" id="id_is_required_for_booking"
+                               {% if form.is_required_for_booking.value %}checked{% endif %}
+                               class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <label for="id_is_required_for_booking" class="ml-2 text-sm text-gray-700">
+                            Required for Booking
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Validity Days -->
+                <div>
+                    <label for="id_validity_days" class="block text-sm font-medium text-gray-700">
+                        Validity Period (days)
+                    </label>
+                    <div class="flex items-center gap-2 mt-1">
+                        <input type="number" name="validity_days" id="id_validity_days"
+                               value="{{ form.validity_days.value|default:'' }}"
+                               min="1" max="3650"
+                               class="block w-32 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="365">
+                        <span class="text-sm text-gray-500">Leave empty for agreements that never expire</span>
+                    </div>
+                    {% if form.validity_days.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.validity_days.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end space-x-3">
+            <a href="{% url 'diveops:agreement-template-list' %}"
+               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% if is_create %}Create Template{% else %}Save Changes{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

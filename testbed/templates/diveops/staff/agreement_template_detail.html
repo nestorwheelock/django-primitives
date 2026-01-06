@@ -1,0 +1,254 @@
+{% extends "portal_ui/base_staff.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:agreement-template-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            Paperwork Templates
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ template.name }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <div class="flex items-center space-x-3">
+                <h1 class="text-2xl font-bold text-gray-900">{{ template.name }}</h1>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                    {% if template.status == 'published' %}bg-green-100 text-green-800
+                    {% elif template.status == 'draft' %}bg-yellow-100 text-yellow-800
+                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                    {{ template.get_status_display }}
+                </span>
+            </div>
+            <p class="text-gray-600 mt-1">
+                {{ template.get_template_type_display }} &bull; Version {{ template.version }}
+            </p>
+        </div>
+        <div class="flex items-center space-x-3">
+            {% if template.status == 'draft' %}
+            <form method="post" action="{% url 'diveops:agreement-template-publish' pk=template.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit"
+                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700">
+                    {% icon "check" "w-4 h-4 mr-2" %}
+                    Publish
+                </button>
+            </form>
+            {% elif template.status == 'published' %}
+            <form method="post" action="{% url 'diveops:agreement-template-archive' pk=template.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit"
+                        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    {% icon "archive" "w-4 h-4 mr-2" %}
+                    Archive
+                </button>
+            </form>
+            {% endif %}
+            <a href="{% url 'diveops:agreement-template-edit' pk=template.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "edit" "w-4 h-4 mr-2" %}
+                Edit
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-6">
+        <!-- Main Content Column -->
+        <div class="col-span-2 space-y-6">
+            <!-- Content Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+                    <h2 class="text-lg font-medium text-gray-900">Agreement Content</h2>
+                    <button type="button" onclick="togglePreview()" class="text-sm text-blue-600 hover:text-blue-800">
+                        Toggle Preview
+                    </button>
+                </div>
+                <div class="px-6 py-4">
+                    <!-- Raw Content View -->
+                    <div id="content-raw">
+                        <pre class="whitespace-pre-wrap text-sm text-gray-800 font-mono bg-gray-50 p-4 rounded-lg overflow-x-auto">{{ template.content }}</pre>
+                    </div>
+                    <!-- Rendered Preview -->
+                    <div id="content-preview" class="hidden prose max-w-none">
+                        {{ template.content|safe }}
+                    </div>
+                </div>
+            </div>
+
+            {% if template.description %}
+            <!-- Internal Notes Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">Internal Notes</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <p class="text-gray-600">{{ template.description }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar Column -->
+        <div class="space-y-6">
+            <!-- Details Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">Details</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <dl class="space-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Dive Shop</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ template.dive_shop.name }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Type</dt>
+                            <dd class="mt-1">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                    {% if template.template_type == 'waiver' %}bg-red-100 text-red-800
+                                    {% elif template.template_type == 'medical' %}bg-pink-100 text-pink-800
+                                    {% elif template.template_type == 'briefing' %}bg-blue-100 text-blue-800
+                                    {% elif template.template_type == 'code_of_conduct' %}bg-purple-100 text-purple-800
+                                    {% elif template.template_type == 'rental' %}bg-orange-100 text-orange-800
+                                    {% elif template.template_type == 'training' %}bg-green-100 text-green-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ template.get_template_type_display }}
+                                </span>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Version</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ template.version }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Status</dt>
+                            <dd class="mt-1">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                    {% if template.status == 'published' %}bg-green-100 text-green-800
+                                    {% elif template.status == 'draft' %}bg-yellow-100 text-yellow-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ template.get_status_display }}
+                                </span>
+                            </dd>
+                        </div>
+                        {% if template.published_at %}
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Published</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ template.published_at|date:"M d, Y H:i" }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Requirements Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">Requirements</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <ul class="space-y-3">
+                        <li class="flex items-center">
+                            {% if template.requires_signature %}
+                            <span class="inline-flex items-center text-green-600">{% icon "check-circle" "w-5 h-5" %}</span>
+                            {% else %}
+                            <span class="inline-flex items-center text-gray-400">{% icon "x-circle" "w-5 h-5" %}</span>
+                            {% endif %}
+                            <span class="ml-2 text-sm text-gray-700">Requires Signature</span>
+                        </li>
+                        <li class="flex items-center">
+                            {% if template.requires_initials %}
+                            <span class="inline-flex items-center text-green-600">{% icon "check-circle" "w-5 h-5" %}</span>
+                            {% else %}
+                            <span class="inline-flex items-center text-gray-400">{% icon "x-circle" "w-5 h-5" %}</span>
+                            {% endif %}
+                            <span class="ml-2 text-sm text-gray-700">Requires Initials</span>
+                        </li>
+                        <li class="flex items-center">
+                            {% if template.is_required_for_booking %}
+                            <span class="inline-flex items-center text-green-600">{% icon "check-circle" "w-5 h-5" %}</span>
+                            {% else %}
+                            <span class="inline-flex items-center text-gray-400">{% icon "x-circle" "w-5 h-5" %}</span>
+                            {% endif %}
+                            <span class="ml-2 text-sm text-gray-700">Required for Booking</span>
+                        </li>
+                    </ul>
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <dt class="text-sm font-medium text-gray-500">Validity Period</dt>
+                        <dd class="mt-1 text-sm text-gray-900">
+                            {% if template.validity_days %}
+                            {{ template.validity_days }} days
+                            {% else %}
+                            Never expires
+                            {% endif %}
+                        </dd>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timestamps Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">History</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <dl class="space-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Created</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ template.created_at|date:"M d, Y H:i" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Last Updated</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ template.updated_at|date:"M d, Y H:i" }}</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Actions Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">Actions</h2>
+                </div>
+                <div class="px-6 py-4 space-y-3">
+                    <a href="{% url 'diveops:agreement-template-edit' pk=template.pk %}"
+                       class="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        {% icon "edit" "w-4 h-4 mr-2" %}
+                        Edit Template
+                    </a>
+                    <a href="{% url 'diveops:agreement-template-delete' pk=template.pk %}"
+                       class="w-full inline-flex justify-center items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-white hover:bg-red-50">
+                        {% icon "trash-2" "w-4 h-4 mr-2" %}
+                        Delete Template
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePreview() {
+    const raw = document.getElementById('content-raw');
+    const preview = document.getElementById('content-preview');
+    raw.classList.toggle('hidden');
+    preview.classList.toggle('hidden');
+}
+</script>
+{% endblock %}

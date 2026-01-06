@@ -1,0 +1,106 @@
+{% extends "portal_ui/base_staff.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:agreement-template-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            Paperwork Templates
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-xl mx-auto space-y-6">
+    <!-- Warning Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-red-200 overflow-hidden">
+        <div class="px-6 py-4 bg-red-50 border-b border-red-200">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    {% icon "alert-triangle" "w-6 h-6 text-red-600" %}
+                </div>
+                <h2 class="ml-3 text-lg font-medium text-red-900">Delete Agreement Template</h2>
+            </div>
+        </div>
+        <div class="px-6 py-4">
+            <p class="text-gray-700 mb-4">
+                Are you sure you want to delete the following agreement template?
+            </p>
+
+            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                <dl class="space-y-2">
+                    <div class="flex justify-between">
+                        <dt class="text-sm font-medium text-gray-500">Name</dt>
+                        <dd class="text-sm text-gray-900">{{ template.name }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-sm font-medium text-gray-500">Type</dt>
+                        <dd class="text-sm text-gray-900">{{ template.get_template_type_display }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-sm font-medium text-gray-500">Version</dt>
+                        <dd class="text-sm text-gray-900">{{ template.version }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-sm font-medium text-gray-500">Status</dt>
+                        <dd>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if template.status == 'published' %}bg-green-100 text-green-800
+                                {% elif template.status == 'draft' %}bg-yellow-100 text-yellow-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ template.get_status_display }}
+                            </span>
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+
+            {% if template.status == 'published' %}
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        {% icon "alert-circle" "w-5 h-5 text-amber-600" %}
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-amber-800">Published Template</h3>
+                        <p class="mt-1 text-sm text-amber-700">
+                            This template is currently published and may be in use.
+                            Consider archiving instead of deleting.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <p class="text-sm text-gray-500">
+                This action will soft-delete the template. It can be recovered by an administrator if needed.
+            </p>
+        </div>
+        <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
+            <a href="{% url 'diveops:agreement-template-detail' pk=template.pk %}"
+               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <form method="post" class="inline">
+                {% csrf_token %}
+                <button type="submit"
+                        class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700">
+                    Delete Template
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
