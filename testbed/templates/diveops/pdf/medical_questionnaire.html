@@ -393,13 +393,75 @@
 
     <!-- Verification Data -->
     <div class="verification-section">
-        <h4>Digital Verification Data</h4>
-        <p>
-            <strong>Screen:</strong> {{ fingerprint.screen_resolution|default:"N/A" }} |
-            <strong>Timezone:</strong> {{ fingerprint.timezone|default:"N/A" }} |
-            <strong>Platform:</strong> {{ fingerprint.platform|default:"N/A" }} |
-            <strong>Language:</strong> {{ fingerprint.language|default:"N/A" }}
-        </p>
+        <h4>Digital Signature Verification Data</h4>
+
+        <!-- Device Information -->
+        <div style="margin-bottom: 8px;">
+            <strong>Device Information:</strong>
+            <table style="width: 100%; font-size: 7pt; margin-top: 4px; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 2px 8px 2px 0; width: 25%;"><strong>Screen Resolution:</strong></td>
+                    <td style="padding: 2px 0;">{{ fingerprint.screen_resolution|default:"N/A" }}</td>
+                    <td style="padding: 2px 8px 2px 0; width: 25%;"><strong>Platform:</strong></td>
+                    <td style="padding: 2px 0;">{{ fingerprint.platform|default:"N/A" }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 2px 8px 2px 0;"><strong>Device Memory:</strong></td>
+                    <td style="padding: 2px 0;">{{ fingerprint.device_memory|default:"N/A" }}{% if fingerprint.device_memory %} GB{% endif %}</td>
+                    <td style="padding: 2px 8px 2px 0;"><strong>CPU Cores:</strong></td>
+                    <td style="padding: 2px 0;">{{ fingerprint.hardware_concurrency|default:"N/A" }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 2px 8px 2px 0;"><strong>Touch Support:</strong></td>
+                    <td style="padding: 2px 0;">{% if fingerprint.touch_support == True %}Yes{% elif fingerprint.touch_support == False %}No{% else %}N/A{% endif %}</td>
+                    <td style="padding: 2px 8px 2px 0;"><strong>Language:</strong></td>
+                    <td style="padding: 2px 0;">{{ fingerprint.language|default:"N/A" }}</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Timezone Information -->
+        <div style="margin-bottom: 8px;">
+            <strong>Timezone:</strong> {{ fingerprint.timezone|default:"N/A" }}
+            {% if fingerprint.timezone_offset is not None %}
+            (UTC{% if fingerprint.timezone_offset >= 0 %}+{% endif %}{{ fingerprint.timezone_offset|divisibleby:60|default:fingerprint.timezone_offset }} minutes)
+            {% endif %}
+        </div>
+
+        <!-- Geolocation Data -->
+        {% if fingerprint.geolocation %}
+        <div style="margin-bottom: 8px; background: #e8f5e9; padding: 6px 8px; border-radius: 3px;">
+            <strong>Location Verification:</strong>
+            <table style="width: 100%; font-size: 7pt; margin-top: 4px; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 2px 8px 2px 0; width: 20%;"><strong>Latitude:</strong></td>
+                    <td style="padding: 2px 0;">{{ fingerprint.geolocation.latitude|default:"N/A" }}</td>
+                    <td style="padding: 2px 8px 2px 0; width: 20%;"><strong>Longitude:</strong></td>
+                    <td style="padding: 2px 0;">{{ fingerprint.geolocation.longitude|default:"N/A" }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 2px 8px 2px 0;"><strong>Accuracy:</strong></td>
+                    <td style="padding: 2px 0;">{{ fingerprint.geolocation.accuracy|default:"N/A" }}{% if fingerprint.geolocation.accuracy %} meters{% endif %}</td>
+                    <td style="padding: 2px 8px 2px 0;"><strong>Timestamp:</strong></td>
+                    <td style="padding: 2px 0;">{{ fingerprint.geolocation.timestamp|default:"N/A" }}</td>
+                </tr>
+            </table>
+        </div>
+        {% else %}
+        <div style="margin-bottom: 8px; background: #fff3e0; padding: 6px 8px; border-radius: 3px;">
+            <strong>Location Verification:</strong> Not available
+        </div>
+        {% endif %}
+
+        <!-- Canvas Fingerprint -->
+        {% if fingerprint.canvas_fingerprint %}
+        <div style="margin-bottom: 8px;">
+            <strong>Canvas Fingerprint:</strong>
+            <span style="font-family: monospace; font-size: 6pt; background: #eee; padding: 2px 4px;">{{ fingerprint.canvas_fingerprint }}</span>
+        </div>
+        {% endif %}
+
+        <!-- Document Hash -->
         {% if document_hash %}
         <div class="hash-code">
             <strong>Document Hash (SHA-256):</strong> {{ document_hash }}
