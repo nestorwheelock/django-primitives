@@ -104,20 +104,29 @@ class TestAIService:
         config.is_enabled = True
         config.save()
 
-    @patch("django_ai_services.providers.OpenRouterProvider.chat")
-    def test_chat_logs_errors(self, mock_chat):
+    def test_chat_logs_errors(self):
         """AIService.chat() logs errors when provider fails."""
         from django_ai_services.services import AIService
-        from django_ai_services.models import AIUsageLog
+        from django_ai_services.models import AIServiceConfig, AIUsageLog
         from django_ai_services.exceptions import ProviderError
+        from unittest.mock import Mock, patch
 
-        mock_chat.side_effect = Exception("API Error")
+        config = AIServiceConfig.get_instance()
+        config.max_retries = 0
+        config.fallback_provider = ""
+        config.save()
 
         service = AIService()
         initial_count = AIUsageLog.objects.count()
 
-        with pytest.raises(ProviderError):
-            service.chat(messages=[{"role": "user", "content": "Hello"}])
+        with patch.object(service, "_get_provider") as mock_get:
+            mock_provider = Mock()
+            mock_provider.estimate_cost.return_value = 0.0
+            mock_provider.chat.side_effect = Exception("API Error")
+            mock_get.return_value = mock_provider
+
+            with pytest.raises(ProviderError):
+                service.chat(messages=[{"role": "user", "content": "Hello"}], skip_budget_check=True)
 
         # Should still log the failed attempt
         assert AIUsageLog.objects.count() == initial_count + 1

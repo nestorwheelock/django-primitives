@@ -17,7 +17,7 @@ from .exceptions import (
     ProviderError,
     ValidationFailed,
 )
-from .models import AIServiceConfig, AIUsageLog
+from .models import AIAnalysis, AIServiceConfig, AIUsageLog
 from .providers import AIProvider, AIResponse, OllamaProvider, OpenRouterProvider
 
 try:
@@ -242,6 +242,9 @@ class AIService:
                     self._update_circuit(provider_name, success=True)
                     break
 
+                except ValidationFailed:
+                    # Validation failures should not trigger retry logic
+                    raise
                 except Exception as e:
                     retry_count += 1  # Count failures (retries needed)
                     if attempt < self.config.max_retries:
@@ -275,7 +278,7 @@ class AIService:
                         self._update_circuit(provider_name, success=False)
                         raise ProviderError(error_message)
 
-        except ProviderError:
+        except (ProviderError, ValidationFailed):
             success = False
             raise
         except Exception as e:
@@ -358,6 +361,9 @@ class AIService:
                     )
                     self._update_circuit(provider_name, success=True)
                     break
+                except ValidationFailed:
+                    # Validation failures should not trigger retry logic
+                    raise
                 except Exception as e:
                     retry_count += 1  # Count failures (retries needed)
                     if attempt < self.config.max_retries:
@@ -389,7 +395,7 @@ class AIService:
                             error_message = str(e)
                         self._update_circuit(provider_name, success=False)
                         raise ProviderError(error_message)
-        except ProviderError:
+        except (ProviderError, ValidationFailed):
             success = False
             raise
         except Exception as e:
@@ -518,3 +524,119 @@ class AIService:
             log_kwargs["response_preview"] = response.content[:500]
 
         AIUsageLog.objects.create(**log_kwargs)
+
+    def analyze_object(
+        self,
+        obj,
+        analysis_type: str,
+        prompt: str,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        response_model: Type | None = None,
+        metadata: dict | None = None,
+        force: bool = False,
+    ) -> AIResponse:
+        """
+        Analyze an object with idempotency support.
+
+        Returns cached AIAnalysis result if same input_hash exists,
+        otherwise makes a new AI call and stores the result.
+
+        Args:
+            obj: The object to analyze (any Django model instance)
+            analysis_type: Type of analysis (e.g., "classification", "summary")
+            prompt: The analysis prompt
+            model: Model override
+            max_tokens: Max tokens override
+            temperature: Temperature override
+            response_model: Pydantic model for structured output
+            metadata: Additional metadata
+            force: If True, bypass cache and force new analysis
+
+        Returns:
+            AIResponse with the analysis result
+        """
+        from django.contrib.contenttypes.models import ContentType
+
+        content_type = ContentType.objects.get_for_model(obj)
+        object_id = str(obj.pk)
+
+        # Compute input hash for idempotency
+        input_data = {
+            "prompt": prompt,
+            "analysis_type": analysis_type,
+            "object_id": object_id,
+            "content_type": f"{content_type.app_label}.{content_type.model}",
+        }
+        input_hash = hashlib.sha256(str(input_data).encode()).hexdigest()
+
+        # Check for existing analysis (idempotency)
+        if not force:
+            existing = AIAnalysis.objects.filter(
+                target_content_type=content_type,
+                target_object_id=object_id,
+                analysis_type=analysis_type,
+                input_hash=input_hash,
+            ).first()
+
+            if existing:
+                # Return cached result as AIResponse
+                return AIResponse(
+                    content=str(existing.result),
+                    model=existing.model,
+                    input_tokens=0,
+                    output_tokens=0,
+                    cost_usd=0.0,
+                    raw_response=existing.result,
+                )
+
+        # Make new analysis call
+        messages = [{"role": "user", "content": prompt}]
+
+        response = self.chat(
+            messages=messages,
+            operation=f"analyze_{analysis_type}",
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            response_model=response_model,
+            target_obj=obj,
+            metadata=metadata,
+        )
+
+        # Parse result as JSON if possible
+        try:
+            import json
+            result = json.loads(response.content)
+        except (json.JSONDecodeError, TypeError):
+            result = {"raw_response": response.content}
+
+        # Get confidence from parsed result if available
+        confidence = None
+        if response.parsed and hasattr(response.parsed, "confidence"):
+            confidence = Decimal(str(response.parsed.confidence))
+
+        # Create AIAnalysis record
+        usage_log = AIUsageLog.objects.filter(
+            target_content_type=content_type,
+            target_object_id=object_id,
+        ).order_by("-created_at").first()
+
+        AIAnalysis.objects.create(
+            target_content_type=content_type,
+            target_object_id=object_id,
+            analysis_type=analysis_type,
+            provider=self.config.default_provider,
+            model=response.model,
+            input_data=input_data,
+            input_hash=input_hash,
+            result=result,
+            confidence=confidence,
+            validation_passed=response.validation_errors is None,
+            validation_errors=response.validation_errors or [],
+            triggered_by=self.user,
+            usage_log=usage_log,
+        )
+
+        return response
