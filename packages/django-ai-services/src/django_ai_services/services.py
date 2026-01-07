@@ -243,7 +243,7 @@ class AIService:
                     break
 
                 except Exception as e:
-                    retry_count = attempt
+                    retry_count += 1  # Count failures (retries needed)
                     if attempt < self.config.max_retries:
                         delay = self._calculate_delay(attempt)
                         time.sleep(delay)
@@ -359,7 +359,7 @@ class AIService:
                     self._update_circuit(provider_name, success=True)
                     break
                 except Exception as e:
-                    retry_count = attempt
+                    retry_count += 1  # Count failures (retries needed)
                     if attempt < self.config.max_retries:
                         delay = self._calculate_delay(attempt)
                         await asyncio.sleep(delay)
