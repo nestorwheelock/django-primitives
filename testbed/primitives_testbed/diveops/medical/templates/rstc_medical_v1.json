@@ -1,0 +1,268 @@
+{
+  "slug": "rstc-medical",
+  "name": "RSTC Medical Statement",
+  "description": "Recreational Scuba Training Council Medical Questionnaire. Required before diving activities.",
+  "version": "1.0.0",
+  "validity_days": 365,
+  "metadata": {
+    "standard": "RSTC",
+    "year": "2020",
+    "clearance_required_on_flag": true,
+    "instructions": "Please answer all questions honestly. A 'Yes' answer to any question does not necessarily disqualify you from diving but may require a physician's evaluation."
+  },
+  "categories": [
+    {"key": "general", "label": "General Health", "sequence": 1},
+    {"key": "cardiovascular", "label": "Cardiovascular", "sequence": 2},
+    {"key": "respiratory", "label": "Respiratory", "sequence": 3},
+    {"key": "neurological", "label": "Neurological", "sequence": 4},
+    {"key": "ent", "label": "Ear, Nose & Throat", "sequence": 5},
+    {"key": "gastrointestinal", "label": "Gastrointestinal", "sequence": 6},
+    {"key": "orthopedic", "label": "Orthopedic & Musculoskeletal", "sequence": 7},
+    {"key": "behavioral", "label": "Behavioral Health", "sequence": 8},
+    {"key": "medications", "label": "Medications", "sequence": 9},
+    {"key": "dive_history", "label": "Diving History", "sequence": 10}
+  ],
+  "questions": [
+    {
+      "sequence": 1,
+      "category": "general",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have any of the following: High blood pressure, angina, heart attack, heart surgery, or other cardiovascular problems?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 2,
+      "category": "general",
+      "question_type": "yes_no",
+      "question_text": "Are you over 45 and have one or more of the following: currently smoke, high cholesterol, family history of heart attack or stroke, currently receiving medical care?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 3,
+      "category": "cardiovascular",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have heart disease or heart attack?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 4,
+      "category": "cardiovascular",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have heart rhythm abnormalities (arrhythmias)?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 5,
+      "category": "cardiovascular",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have high blood pressure?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 6,
+      "category": "cardiovascular",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have a blood disorder or bleeding problems?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 7,
+      "category": "respiratory",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have asthma, wheezing, or difficulty breathing with exercise?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 8,
+      "category": "respiratory",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have collapsed lung (pneumothorax)?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 9,
+      "category": "respiratory",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have any lung disease (emphysema, COPD, bronchitis)?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 10,
+      "category": "respiratory",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have tuberculosis?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 11,
+      "category": "neurological",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have epilepsy, seizures, or convulsions?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 12,
+      "category": "neurological",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have recurring migraine headaches or take medication to prevent them?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 13,
+      "category": "neurological",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have blackouts, fainting, or loss of consciousness?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 14,
+      "category": "neurological",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have a head injury with loss of consciousness in the past 5 years?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 15,
+      "category": "neurological",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have stroke or transient ischemic attack (TIA)?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 16,
+      "category": "ent",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have recurring ear problems or ear surgery?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 17,
+      "category": "ent",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have hearing loss or balance problems?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 18,
+      "category": "ent",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have recurring sinus problems or sinus surgery?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 19,
+      "category": "gastrointestinal",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have recurring problems with stomach, intestines, or hernias?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 20,
+      "category": "gastrointestinal",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have diabetes?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 21,
+      "category": "orthopedic",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have back problems, back surgery, or spinal problems?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 22,
+      "category": "orthopedic",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have arm/leg/joint problems that could affect safe diving?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 23,
+      "category": "behavioral",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have a behavioral health, mental, or psychological problem requiring treatment?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 24,
+      "category": "behavioral",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have a fear of closed or open spaces (claustrophobia or agoraphobia)?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 25,
+      "category": "behavioral",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have a problem with drug or alcohol abuse?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 26,
+      "category": "medications",
+      "question_type": "yes_no",
+      "question_text": "Are you currently taking prescription medications (with the exception of birth control or anti-malarial drugs)?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 27,
+      "category": "dive_history",
+      "question_type": "yes_no",
+      "question_text": "Have you ever had or do you currently have decompression sickness (the bends)?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 28,
+      "category": "dive_history",
+      "question_type": "yes_no",
+      "question_text": "Have you ever been unable to complete a dive for medical or fitness reasons?",
+      "is_required": true,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 29,
+      "category": "general",
+      "question_type": "yes_no",
+      "question_text": "Are you pregnant or trying to become pregnant?",
+      "help_text": "This question applies to female participants only.",
+      "is_required": false,
+      "triggers_flag": true
+    },
+    {
+      "sequence": 30,
+      "category": "general",
+      "question_type": "yes_no",
+      "question_text": "Have you had any surgery or major illness in the past 12 months?",
+      "is_required": true,
+      "triggers_flag": true
+    }
+  ]
+}

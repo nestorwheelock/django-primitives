@@ -443,6 +443,47 @@ def _check_trip_eligibility(
     return True, ""
 
 
+def _check_medical_eligibility(
+    diver: DiverProfile,
+    as_of_date: date,
+) -> tuple[bool, str]:
+    """Check medical eligibility for a diver.
+
+    Uses the new django-questionnaires based medical system if available,
+    falling back to the legacy medical_clearance_valid_until field.
+
+    Returns:
+        Tuple of (eligible, reason)
+    """
+    # Try the new medical questionnaire system first
+    try:
+        from .medical.services import get_diver_medical_status, MedicalStatus
+
+        status = get_diver_medical_status(diver, as_of_date)
+
+        if status == MedicalStatus.CLEARED:
+            return True, ""
+        elif status == MedicalStatus.NOT_STARTED:
+            return False, "Medical questionnaire not completed"
+        elif status == MedicalStatus.PENDING:
+            return False, "Medical questionnaire pending submission"
+        elif status == MedicalStatus.REQUIRES_CLEARANCE:
+            return False, "Medical questionnaire requires physician clearance"
+        elif status == MedicalStatus.EXPIRED:
+            return False, "Medical clearance has expired"
+        else:
+            return False, f"Medical status: {status.label}"
+    except ImportError:
+        # Fall back to legacy medical field check
+        if hasattr(diver, 'is_medical_current_as_of'):
+            if not diver.is_medical_current_as_of(as_of_date):
+                if diver.medical_clearance_valid_until is None:
+                    return False, "No medical clearance on file"
+                else:
+                    return False, "Medical clearance has expired"
+        return True, ""
+
+
 def check_layered_eligibility(
     diver: DiverProfile,
     target: "ExcursionType | Excursion | Trip | Booking",
@@ -578,6 +619,26 @@ def check_layered_eligibility(
                 override_allowed=False,  # Trip-level issues can't be overridden
                 checked_layers=checked_layers,
             )
+
+    # Layer 4: Medical eligibility (questionnaire/clearance)
+    checked_layers.append("medical")
+    eligible, reason = _check_medical_eligibility(diver, as_of_date)
+    if not eligible:
+        # INV-1: Check if booking-level override permits eligibility for medical
+        if has_override:
+            return LayeredEligibilityResult(
+                eligible=True,
+                reason="",
+                override_allowed=False,
+                checked_layers=checked_layers,
+                override_used=True,
+            )
+        return LayeredEligibilityResult(
+            eligible=False,
+            reason=reason,
+            override_allowed=True,  # Medical issues can be overridden with clearance
+            checked_layers=checked_layers,
+        )
 
     # All layers passed
     return LayeredEligibilityResult(

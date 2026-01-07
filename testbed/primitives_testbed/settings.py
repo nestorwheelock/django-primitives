@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "django_documents",
     "django_notes",
     "django_agreements",
+    "django_questionnaires",
     # Django Primitives - Value Objects
     "django_money",
     # UI Framework

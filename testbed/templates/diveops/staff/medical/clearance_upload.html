@@ -1,0 +1,51 @@
+{% extends "diveops/staff/_base.html" %}
+
+{% block title %}Upload Physician Clearance - DiveOps{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'diveops:medical-list' %}">Medical Questionnaires</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'diveops:medical-detail' pk=instance.pk %}">{{ instance.definition.name }}</a></li>
+            <li class="breadcrumb-item active">Upload Clearance</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Upload Physician Clearance</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <strong>Respondent:</strong> {{ instance.respondent }}<br>
+                        <strong>Questionnaire:</strong> {{ instance.definition.name }} v{{ instance.definition_version }}
+                    </div>
+
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="clearance_document" class="form-label">Physician Clearance Document</label>
+                            <input type="file" class="form-control" id="clearance_document" name="clearance_document" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                            <div class="form-text">Upload a scanned copy of the physician's clearance letter (PDF, images, or Word documents)</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Clearance Notes</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="4" placeholder="Enter any notes about the clearance..."></textarea>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Clear Questionnaire</button>
+                            <a href="{% url 'diveops:medical-detail' pk=instance.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

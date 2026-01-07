@@ -5297,3 +5297,204 @@ class AISettingsView(StaffPortalMixin, TemplateView):
 
         messages.success(request, "AI settings saved successfully.")
         return redirect("diveops:ai-settings")
+
+
+# ============================================================================
+# Medical Questionnaire Views
+# ============================================================================
+
+
+class MedicalQuestionnaireListView(StaffPortalMixin, ListView):
+    """List all medical questionnaire instances."""
+
+    template_name = "diveops/staff/medical/questionnaire_list.html"
+    context_object_name = "instances"
+    paginate_by = 25
+
+    def get_queryset(self):
+        from django_questionnaires.models import QuestionnaireInstance, InstanceStatus
+
+        queryset = QuestionnaireInstance.objects.filter(
+            definition__slug="rstc-medical",
+            deleted_at__isnull=True,
+        ).select_related(
+            "definition",
+            "respondent_content_type",
+            "cleared_by",
+        ).order_by("-created_at")
+
+        # Filter by status
+        status = self.request.GET.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from django_questionnaires.models import InstanceStatus
+        context["status_choices"] = InstanceStatus.choices
+        context["current_status"] = self.request.GET.get("status", "")
+        return context
+
+
+class MedicalQuestionnaireDetailView(StaffPortalMixin, DetailView):
+    """View medical questionnaire details and responses."""
+
+    template_name = "diveops/staff/medical/questionnaire_detail.html"
+    context_object_name = "instance"
+
+    def get_object(self):
+        from django_questionnaires.models import QuestionnaireInstance
+        return get_object_or_404(
+            QuestionnaireInstance,
+            pk=self.kwargs["pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from django_questionnaires.services import get_flagged_questions
+
+        instance = self.object
+
+        # Get all questions with their responses
+        questions = list(instance.definition.questions.all())
+        responses = {r.question_id: r for r in instance.responses.all()}
+
+        # Build question-response pairs
+        context["questions_responses"] = [
+            {
+                "question": q,
+                "response": responses.get(q.id),
+            }
+            for q in questions
+        ]
+
+        # Get flagged questions
+        context["flagged_questions"] = get_flagged_questions(instance)
+
+        # Get diver if respondent is a DiverProfile
+        if instance.respondent_content_type.model == "diverprofile":
+            context["diver"] = instance.respondent
+
+        return context
+
+
+class MedicalClearanceUploadView(StaffPortalMixin, View):
+    """Upload physician clearance for a flagged questionnaire."""
+
+    template_name = "diveops/staff/medical/clearance_upload.html"
+
+    def get(self, request, pk):
+        from django_questionnaires.models import QuestionnaireInstance, InstanceStatus
+
+        instance = get_object_or_404(
+            QuestionnaireInstance,
+            pk=pk,
+            deleted_at__isnull=True,
+        )
+
+        if instance.status != InstanceStatus.FLAGGED:
+            messages.error(request, "This questionnaire is not flagged and cannot be cleared.")
+            return redirect("diveops:medical-detail", pk=pk)
+
+        return render(request, self.template_name, {"instance": instance})
+
+    def post(self, request, pk):
+        from django_questionnaires.models import QuestionnaireInstance, InstanceStatus
+        from .medical.services import upload_physician_clearance
+
+        instance = get_object_or_404(
+            QuestionnaireInstance,
+            pk=pk,
+            deleted_at__isnull=True,
+        )
+
+        if instance.status != InstanceStatus.FLAGGED:
+            messages.error(request, "This questionnaire is not flagged and cannot be cleared.")
+            return redirect("diveops:medical-detail", pk=pk)
+
+        notes = request.POST.get("notes", "")
+
+        # Handle file upload if provided
+        document = None
+        if "clearance_document" in request.FILES:
+            from django_documents.services import upload_document, get_or_create_folder
+
+            file = request.FILES["clearance_document"]
+            folder = get_or_create_folder("Medical Clearances")
+
+            document = upload_document(
+                file=file,
+                folder=folder,
+                title=f"Physician Clearance - {instance.respondent}",
+                actor=request.user,
+            )
+
+        # Clear the instance
+        upload_physician_clearance(
+            instance=instance,
+            document=document,
+            cleared_by=request.user,
+            notes=notes,
+        )
+
+        messages.success(request, "Medical questionnaire cleared successfully.")
+        return redirect("diveops:medical-detail", pk=pk)
+
+
+class DiverMedicalStatusView(StaffPortalMixin, DetailView):
+    """View a diver's medical status and history."""
+
+    template_name = "diveops/staff/medical/diver_medical_status.html"
+    model = DiverProfile
+    context_object_name = "diver"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from django_questionnaires.models import QuestionnaireInstance
+        from .medical.services import get_diver_medical_status, MedicalStatus
+
+        diver = self.object
+
+        # Get current medical status
+        context["medical_status"] = get_diver_medical_status(diver)
+        context["MedicalStatus"] = MedicalStatus
+
+        # Get all medical questionnaire instances for this diver
+        from django.contrib.contenttypes.models import ContentType
+        content_type = ContentType.objects.get_for_model(diver)
+
+        context["medical_instances"] = QuestionnaireInstance.objects.filter(
+            definition__slug="rstc-medical",
+            respondent_content_type=content_type,
+            respondent_object_id=str(diver.pk),
+            deleted_at__isnull=True,
+        ).select_related("definition", "cleared_by").order_by("-created_at")
+
+        return context
+
+
+class SendMedicalQuestionnaireView(StaffPortalMixin, View):
+    """Send a medical questionnaire to a diver."""
+
+    def post(self, request, diver_pk):
+        from .medical.services import send_medical_questionnaire
+
+        diver = get_object_or_404(DiverProfile, pk=diver_pk)
+
+        try:
+            instance = send_medical_questionnaire(
+                diver=diver,
+                expires_in_days=30,
+                actor=request.user,
+            )
+            messages.success(
+                request,
+                f"Medical questionnaire sent to {diver}. Expires in 30 days."
+            )
+        except Exception as e:
+            messages.error(request, f"Error sending questionnaire: {e}")
+
+        return redirect("diveops:diver-medical-status", pk=diver_pk)

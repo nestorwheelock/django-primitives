@@ -1,0 +1,182 @@
+{% extends "diveops/staff/_base.html" %}
+
+{% block title %}Medical Questionnaire - {{ instance.definition.name }} - DiveOps{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'diveops:medical-list' %}">Medical Questionnaires</a></li>
+            <li class="breadcrumb-item active">{{ instance.definition.name }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ instance.definition.name }} v{{ instance.definition_version }}</h5>
+                    {% if instance.status == 'pending' %}
+                    <span class="badge bg-warning text-dark">Pending</span>
+                    {% elif instance.status == 'completed' %}
+                    <span class="badge bg-success">Completed</span>
+                    {% elif instance.status == 'flagged' %}
+                    <span class="badge bg-danger">Requires Clearance</span>
+                    {% elif instance.status == 'cleared' %}
+                    <span class="badge bg-info">Cleared</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if instance.status == 'pending' %}
+                    <div class="alert alert-warning">
+                        This questionnaire has not been completed yet.
+                    </div>
+                    {% else %}
+                    <!-- Questions and Responses -->
+                    {% regroup questions_responses by question.category as category_list %}
+                    {% for category in category_list %}
+                    <h6 class="border-bottom pb-2 mt-4 mb-3">{{ category.grouper|default:"General"|title }}</h6>
+                    <div class="list-group mb-3">
+                        {% for item in category.list %}
+                        <div class="list-group-item {% if item.response.triggered_flag %}list-group-item-danger{% endif %}">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <strong>Q{{ item.question.sequence }}:</strong> {{ item.question.question_text }}
+                                </div>
+                                <div>
+                                    {% if item.response %}
+                                        {% if item.question.question_type == 'yes_no' %}
+                                            {% if item.response.answer_bool %}
+                                            <span class="badge {% if item.response.triggered_flag %}bg-danger{% else %}bg-success{% endif %}">Yes</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">No</span>
+                                            {% endif %}
+                                        {% elif item.question.question_type == 'text' %}
+                                            <span class="text-muted">{{ item.response.answer_text|default:"-" }}</span>
+                                        {% elif item.question.question_type == 'number' %}
+                                            <span>{{ item.response.answer_number|default:"-" }}</span>
+                                        {% elif item.question.question_type == 'date' %}
+                                            <span>{{ item.response.answer_date|date:"M d, Y"|default:"-" }}</span>
+                                        {% elif item.question.question_type == 'choice' or item.question.question_type == 'multi_choice' %}
+                                            <span>{{ item.response.answer_choices|join:", "|default:"-" }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">No response</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% if item.question.help_text %}
+                            <small class="text-muted">{{ item.question.help_text }}</small>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Flagged Questions Alert -->
+            {% if flagged_questions %}
+            <div class="card border-danger mb-4">
+                <div class="card-header bg-danger text-white">
+                    <strong>Flagged Responses Requiring Physician Clearance</strong>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        {% for question in flagged_questions %}
+                        <li>{{ question.question_text }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% if instance.status == 'flagged' %}
+                    <div class="mt-3">
+                        <a href="{% url 'diveops:medical-clearance' pk=instance.pk %}" class="btn btn-warning">
+                            Upload Physician Clearance
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Clearance Info -->
+            {% if instance.status == 'cleared' %}
+            <div class="card border-info mb-4">
+                <div class="card-header bg-info text-white">
+                    <strong>Clearance Information</strong>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">Cleared By:</dt>
+                        <dd class="col-sm-9">{{ instance.cleared_by }}</dd>
+                        <dt class="col-sm-3">Cleared On:</dt>
+                        <dd class="col-sm-9">{{ instance.cleared_at|date:"M d, Y H:i" }}</dd>
+                        {% if instance.clearance_notes %}
+                        <dt class="col-sm-3">Notes:</dt>
+                        <dd class="col-sm-9">{{ instance.clearance_notes }}</dd>
+                        {% endif %}
+                        {% if instance.clearance_document %}
+                        <dt class="col-sm-3">Document:</dt>
+                        <dd class="col-sm-9">
+                            <a href="#">{{ instance.clearance_document }}</a>
+                        </dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <strong>Details</strong>
+                </div>
+                <div class="card-body">
+                    <dl class="mb-0">
+                        {% if diver %}
+                        <dt>Diver</dt>
+                        <dd>
+                            <a href="{% url 'diveops:diver-detail' pk=diver.pk %}">{{ diver }}</a>
+                        </dd>
+                        {% endif %}
+                        <dt>Created</dt>
+                        <dd>{{ instance.created_at|date:"M d, Y H:i" }}</dd>
+                        <dt>Expires</dt>
+                        <dd>
+                            {{ instance.expires_at|date:"M d, Y H:i" }}
+                            {% if instance.is_expired %}
+                            <span class="badge bg-secondary">Expired</span>
+                            {% endif %}
+                        </dd>
+                        {% if instance.completed_at %}
+                        <dt>Completed</dt>
+                        <dd>{{ instance.completed_at|date:"M d, Y H:i" }}</dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <strong>Actions</strong>
+                </div>
+                <div class="card-body">
+                    {% if instance.status == 'flagged' %}
+                    <a href="{% url 'diveops:medical-clearance' pk=instance.pk %}" class="btn btn-warning w-100 mb-2">
+                        Upload Physician Clearance
+                    </a>
+                    {% endif %}
+                    {% if diver %}
+                    <a href="{% url 'diveops:diver-medical-status' pk=diver.pk %}" class="btn btn-outline-primary w-100">
+                        View Diver Medical History
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
