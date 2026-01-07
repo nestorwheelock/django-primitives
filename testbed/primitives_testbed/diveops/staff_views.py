@@ -5455,6 +5455,36 @@ class MedicalQuestionnaireDetailView(StaffPortalMixin, DetailView):
         return context
 
 
+class MedicalQuestionnairePDFDownloadView(StaffPortalMixin, View):
+    """Download or generate PDF for a completed medical questionnaire."""
+
+    def get(self, request, pk):
+        from django.http import HttpResponse
+        from django_questionnaires.models import QuestionnaireInstance
+        from .medical.pdf_service import MedicalQuestionnairePDFService
+
+        instance = get_object_or_404(
+            QuestionnaireInstance,
+            pk=pk,
+            deleted_at__isnull=True,
+        )
+
+        # Only allow PDF download for completed, flagged, or cleared questionnaires
+        if instance.status not in ('completed', 'flagged', 'cleared'):
+            from django.http import Http404
+            raise Http404("PDF not available for pending questionnaires")
+
+        # Generate PDF
+        service = MedicalQuestionnairePDFService(instance)
+        pdf_bytes = service.render_pdf()
+        filename = service.generate_filename()
+
+        # Return as downloadable PDF
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+
 class MedicalClearanceUploadView(StaffPortalMixin, View):
     """Upload physician clearance for a flagged questionnaire."""
 

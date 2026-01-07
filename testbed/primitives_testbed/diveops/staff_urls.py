@@ -214,6 +214,7 @@ urlpatterns = [
     path("medical/send/", staff_views.SendMedicalQuestionnaireCreateView.as_view(), name="medical-send-create"),
     path("medical/<uuid:pk>/", staff_views.MedicalQuestionnaireDetailView.as_view(), name="medical-detail"),
     path("medical/<uuid:pk>/clear/", staff_views.MedicalClearanceUploadView.as_view(), name="medical-clearance"),
+    path("medical/<uuid:pk>/pdf/", staff_views.MedicalQuestionnairePDFDownloadView.as_view(), name="medical-pdf-download"),
     path("divers/<uuid:pk>/medical/", staff_views.DiverMedicalStatusView.as_view(), name="diver-medical-status"),
     path("divers/<uuid:diver_pk>/medical/send/", staff_views.SendMedicalQuestionnaireView.as_view(), name="send-medical-questionnaire"),
 ]
