@@ -1,0 +1,117 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:protected-area-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Protected Areas</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:protected-area-detail' pk=protected_area.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ protected_area.name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">{% if is_create %}Issue a vessel permit for {{ protected_area.name }}{% else %}Update vessel permit{% endif %}</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+            <div class="flex">
+                <div class="flex-shrink-0">{% icon "alert-circle" "h-5 w-5 text-red-400" %}</div>
+                <div class="ml-3">
+                    <ul class="list-disc pl-5 space-y-1 text-sm text-red-700">
+                        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Vessel Permit</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_vessel_name" class="block text-sm font-medium text-gray-700">Vessel Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="vessel_name" id="id_vessel_name" value="{{ form.vessel_name.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.vessel_name.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., Sea Explorer">
+                        {% if form.vessel_name.errors %}<p class="mt-1 text-sm text-red-600">{{ form.vessel_name.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="id_permit_number" class="block text-sm font-medium text-gray-700">Permit Number <span class="text-red-500">*</span></label>
+                        <input type="text" name="permit_number" id="id_permit_number" value="{{ form.permit_number.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.permit_number.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., PNAPM-V-2024-001">
+                        {% if form.permit_number.errors %}<p class="mt-1 text-sm text-red-600">{{ form.permit_number.errors.0 }}</p>{% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="id_operator" class="block text-sm font-medium text-gray-700">Operator</label>
+                    <select name="operator" id="id_operator"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select an operator...</option>
+                        {% for party in form.fields.operator.queryset %}
+                        <option value="{{ party.pk }}" {% if form.operator.value|stringformat:'s' == party.pk|stringformat:'s' %}selected{% endif %}>{{ party.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_issued_at" class="block text-sm font-medium text-gray-700">Issued Date</label>
+                        <input type="date" name="issued_at" id="id_issued_at" value="{{ form.issued_at.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="id_expires_at" class="block text-sm font-medium text-gray-700">Expiry Date</label>
+                        <input type="date" name="expires_at" id="id_expires_at" value="{{ form.expires_at.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" name="is_active" id="id_is_active"
+                           class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                           {% if form.is_active.value %}checked{% endif %}>
+                    <label for="id_is_active" class="ml-2 block text-sm text-gray-900">Active</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-3">
+            <a href="{% url 'diveops:protected-area-detail' pk=protected_area.pk %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Cancel</a>
+            <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-teal-600 hover:bg-teal-700">
+                {% if is_create %}Issue Permit{% else %}Save Changes{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

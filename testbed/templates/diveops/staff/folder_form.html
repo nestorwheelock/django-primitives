@@ -1,0 +1,86 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:document-browser' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Documents</a>
+    </div>
+</li>
+{% if parent_folder %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:folder-detail' pk=parent_folder.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ parent_folder.name }}</a>
+    </div>
+</li>
+{% endif %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h1 class="text-xl font-semibold text-gray-900">{{ page_title }}</h1>
+            {% if parent_folder %}
+            <p class="text-sm text-gray-500 mt-1">Creating subfolder in: {{ parent_folder.name }}</p>
+            {% endif %}
+        </div>
+        <form method="post" class="p-6 space-y-6">
+            {% csrf_token %}
+
+            <div>
+                <label for="id_name" class="block text-sm font-medium text-gray-700">Folder Name</label>
+                <input type="text" name="name" id="id_name" required
+                       value="{{ form.name.value|default:'' }}"
+                       class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                       placeholder="Enter folder name">
+                {% if form.name.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label for="id_description" class="block text-sm font-medium text-gray-700">Description</label>
+                <textarea name="description" id="id_description" rows="3"
+                          class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          placeholder="Optional description">{{ form.description.value|default:'' }}</textarea>
+                {% if form.description.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ form.description.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                {% if parent_folder %}
+                <a href="{% url 'diveops:folder-detail' pk=parent_folder.pk %}"
+                   class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </a>
+                {% else %}
+                <a href="{% url 'diveops:document-browser' %}"
+                   class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </a>
+                {% endif %}
+                <button type="submit"
+                        class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    {% if is_create %}Create Folder{% else %}Save Changes{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

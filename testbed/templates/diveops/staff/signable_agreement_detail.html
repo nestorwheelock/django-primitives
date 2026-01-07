@@ -1,0 +1,401 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags diveops_filters %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:signable-agreement-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            Signable Agreements
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ agreement.template.name }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <div class="flex items-center space-x-3">
+                <h1 class="text-2xl font-bold text-gray-900">{{ agreement.template.name }}</h1>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                    {% if agreement.status == 'draft' %}bg-gray-100 text-gray-800
+                    {% elif agreement.status == 'sent' %}bg-blue-100 text-blue-800
+                    {% elif agreement.status == 'signed' %}bg-green-100 text-green-800
+                    {% elif agreement.status == 'void' %}bg-red-100 text-red-800
+                    {% elif agreement.status == 'expired' %}bg-yellow-100 text-yellow-800
+                    {% endif %}">
+                    {{ agreement.get_status_display }}
+                </span>
+            </div>
+            <p class="text-gray-600 mt-1">For: {{ party_name }}</p>
+        </div>
+        <div class="flex items-center space-x-3">
+            {% if agreement.status in 'draft,sent' %}
+            <a href="{% url 'diveops:signable-agreement-void' pk=agreement.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-white hover:bg-red-50">
+                {% icon "x-circle" "w-4 h-4 mr-2" %}
+                Void
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-6">
+        <!-- Main Content Column -->
+        <div class="col-span-2 space-y-6">
+            <!-- Content Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">Agreement Content</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <div class="prose max-w-none text-sm text-gray-800 bg-gray-50 p-4 rounded-lg overflow-x-auto">
+                        {{ agreement.content_snapshot|render_content }}
+                    </div>
+                    <div class="mt-4 text-xs text-gray-500">
+                        Content Hash: <code class="bg-gray-100 px-1 rounded">{{ agreement.content_hash|truncatechars:20 }}</code>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Revisions Card -->
+            {% if agreement.revisions.exists %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">Revision History</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <div class="space-y-4">
+                        {% for revision in agreement.revisions.all %}
+                        <div class="border-l-4 border-blue-400 pl-4">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-2">
+                                        <span class="text-sm font-medium text-gray-900">Revision {{ revision.revision_number }}</span>
+                                        {% if revision.content_before %}
+                                        <a href="{% url 'diveops:signable-agreement-revision-diff' pk=agreement.pk revision_pk=revision.pk %}"
+                                           class="inline-flex items-center px-2 py-0.5 text-xs font-medium text-blue-700 bg-blue-100 rounded hover:bg-blue-200">
+                                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                            </svg>
+                                            View Diff
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                    <p class="text-sm text-gray-600 mt-1">{{ revision.change_note }}</p>
+                                </div>
+                                <div class="text-right text-xs text-gray-500 ml-4">
+                                    <div>{{ revision.created_at|date:"M d, Y H:i" }}</div>
+                                    {% if revision.changed_by %}
+                                    <div>by {{ revision.changed_by.get_full_name|default:revision.changed_by.username }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar Column -->
+        <div class="space-y-6">
+            <!-- Signing URL Card (shown when status is sent) -->
+            {% if signing_url %}
+            <div class="bg-blue-50 rounded-lg shadow-sm border border-blue-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-blue-200 bg-blue-100">
+                    <h2 class="text-lg font-medium text-blue-900">Signing Link</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <p class="text-sm text-blue-800 mb-3">Share this link with the signer:</p>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="signing-url" value="{{ signing_url }}" readonly
+                               class="flex-1 px-3 py-2 text-sm border border-blue-300 rounded-lg bg-white text-gray-900 focus:ring-blue-500 focus:border-blue-500">
+                        <button type="button" onclick="copySigningUrl()"
+                                class="inline-flex items-center px-3 py-2 border border-blue-300 rounded-lg text-sm font-medium text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p id="copy-feedback" class="mt-2 text-sm text-green-600 hidden">Copied to clipboard!</p>
+                    <p class="mt-3 text-xs text-blue-600">
+                        Expires: {{ agreement.expires_at|date:"M d, Y H:i" }}
+                    </p>
+                </div>
+            </div>
+            <script>
+            function copySigningUrl() {
+                const urlInput = document.getElementById('signing-url');
+                urlInput.select();
+                document.execCommand('copy');
+                const feedback = document.getElementById('copy-feedback');
+                feedback.classList.remove('hidden');
+                setTimeout(() => feedback.classList.add('hidden'), 2000);
+            }
+            </script>
+            {% endif %}
+
+            <!-- Details Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">Details</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <dl class="space-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Template</dt>
+                            <dd class="mt-1 text-sm text-gray-900">
+                                <a href="{% url 'diveops:agreement-template-detail' pk=agreement.template.pk %}"
+                                   class="text-blue-600 hover:text-blue-800">
+                                    {{ agreement.template.name }}
+                                </a>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Template Version</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ agreement.template_version }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Party</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ party_name }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Status</dt>
+                            <dd class="mt-1">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                    {% if agreement.status == 'draft' %}bg-gray-100 text-gray-800
+                                    {% elif agreement.status == 'sent' %}bg-blue-100 text-blue-800
+                                    {% elif agreement.status == 'signed' %}bg-green-100 text-green-800
+                                    {% elif agreement.status == 'void' %}bg-red-100 text-red-800
+                                    {% elif agreement.status == 'expired' %}bg-yellow-100 text-yellow-800
+                                    {% endif %}">
+                                    {{ agreement.get_status_display }}
+                                </span>
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Timeline Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">Timeline</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <dl class="space-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Created</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ agreement.created_at|date:"M d, Y H:i" }}</dd>
+                        </div>
+                        {% if agreement.sent_at %}
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Sent</dt>
+                            <dd class="mt-1 text-sm text-gray-900">
+                                {{ agreement.sent_at|date:"M d, Y H:i" }}
+                                {% if agreement.sent_by %}
+                                <span class="text-gray-500">by {{ agreement.sent_by.get_full_name|default:agreement.sent_by.username }}</span>
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% endif %}
+                        {% if agreement.expires_at %}
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Expires</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ agreement.expires_at|date:"M d, Y H:i" }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if agreement.signed_at %}
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Signed</dt>
+                            <dd class="mt-1 text-sm text-gray-900">
+                                {{ agreement.signed_at|date:"M d, Y H:i" }}
+                                {% if agreement.signed_by_name %}
+                                <span class="text-gray-500">as "{{ agreement.signed_by_name }}"</span>
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Delivery Card -->
+            {% if agreement.delivery_method %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">Delivery</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <dl class="space-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Method</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ agreement.delivery_method|title }}</dd>
+                        </div>
+                        {% if agreement.signed_ip %}
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Signed From IP</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ agreement.signed_ip }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Digital Fingerprint Card (shown when signed) -->
+            {% if agreement.status == 'signed' %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">Digital Fingerprint</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <dl class="space-y-3 text-sm">
+                        {% if agreement.signed_geolocation %}
+                        <div>
+                            <dt class="font-medium text-gray-500">Location</dt>
+                            <dd class="mt-1 text-gray-900">
+                                {% if agreement.signed_geolocation.latitude and agreement.signed_geolocation.longitude %}
+                                <a href="https://www.google.com/maps?q={{ agreement.signed_geolocation.latitude }},{{ agreement.signed_geolocation.longitude }}"
+                                   target="_blank" class="text-blue-600 hover:text-blue-800">
+                                    {{ agreement.signed_geolocation.latitude|floatformat:6 }}, {{ agreement.signed_geolocation.longitude|floatformat:6 }}
+                                </a>
+                                {% if agreement.signed_geolocation.accuracy %}
+                                <span class="text-gray-500">(±{{ agreement.signed_geolocation.accuracy|floatformat:0 }}m)</span>
+                                {% endif %}
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% endif %}
+                        {% if agreement.signed_screen_resolution %}
+                        <div>
+                            <dt class="font-medium text-gray-500">Screen</dt>
+                            <dd class="mt-1 text-gray-900">{{ agreement.signed_screen_resolution }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if agreement.signed_timezone %}
+                        <div>
+                            <dt class="font-medium text-gray-500">Timezone</dt>
+                            <dd class="mt-1 text-gray-900">
+                                {{ agreement.signed_timezone }}
+                                {% if agreement.signed_timezone_offset is not None %}
+                                <span class="text-gray-500">(UTC{% if agreement.signed_timezone_offset >= 0 %}+{% endif %}{{ agreement.signed_timezone_offset|floatformat:0 }}min)</span>
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% endif %}
+                        {% if agreement.signed_platform %}
+                        <div>
+                            <dt class="font-medium text-gray-500">Platform</dt>
+                            <dd class="mt-1 text-gray-900">{{ agreement.signed_platform }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if agreement.signed_language %}
+                        <div>
+                            <dt class="font-medium text-gray-500">Language</dt>
+                            <dd class="mt-1 text-gray-900">{{ agreement.signed_language }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if agreement.signed_device_memory %}
+                        <div>
+                            <dt class="font-medium text-gray-500">Device Memory</dt>
+                            <dd class="mt-1 text-gray-900">{{ agreement.signed_device_memory }} GB</dd>
+                        </div>
+                        {% endif %}
+                        {% if agreement.signed_hardware_concurrency %}
+                        <div>
+                            <dt class="font-medium text-gray-500">CPU Cores</dt>
+                            <dd class="mt-1 text-gray-900">{{ agreement.signed_hardware_concurrency }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if agreement.signed_touch_support is not None %}
+                        <div>
+                            <dt class="font-medium text-gray-500">Touch Screen</dt>
+                            <dd class="mt-1 text-gray-900">{% if agreement.signed_touch_support %}Yes{% else %}No{% endif %}</dd>
+                        </div>
+                        {% endif %}
+                        {% if agreement.signed_canvas_fingerprint %}
+                        <div>
+                            <dt class="font-medium text-gray-500">Canvas Hash</dt>
+                            <dd class="mt-1 text-gray-900">
+                                <code class="bg-gray-100 px-1 rounded text-xs">{{ agreement.signed_canvas_fingerprint|truncatechars:20 }}</code>
+                            </dd>
+                        </div>
+                        {% endif %}
+                        {% if agreement.signed_user_agent %}
+                        <div>
+                            <dt class="font-medium text-gray-500">User Agent</dt>
+                            <dd class="mt-1 text-gray-900 text-xs break-all">{{ agreement.signed_user_agent|truncatechars:80 }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Actions Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-medium text-gray-900">Actions</h2>
+                </div>
+                <div class="px-6 py-4 space-y-3">
+                    <a href="{% url 'diveops:signable-agreement-print' pk=agreement.pk %}"
+                       target="_blank"
+                       class="w-full inline-flex justify-center items-center px-4 py-2 border border-blue-300 rounded-lg text-sm font-medium text-blue-700 bg-white hover:bg-blue-50">
+                        {% icon "printer" "w-4 h-4 mr-2" %}
+                        Print Agreement
+                    </a>
+                    <a href="{% url 'diveops:signable-agreement-list' %}"
+                       class="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        {% icon "arrow-left" "w-4 h-4 mr-2" %}
+                        Back to List
+                    </a>
+                    {% if agreement.signed_document %}
+                    <a href="{{ agreement.signed_document.file.url }}"
+                       download
+                       class="w-full inline-flex justify-center items-center px-4 py-2 border border-green-300 rounded-lg text-sm font-medium text-green-700 bg-white hover:bg-green-50">
+                        {% icon "download" "w-4 h-4 mr-2" %}
+                        Download Signed PDF
+                    </a>
+                    {% endif %}
+                    {% if agreement.status in 'draft,sent' %}
+                    <a href="{% url 'diveops:signable-agreement-edit' pk=agreement.pk %}"
+                       class="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        {% icon "edit" "w-4 h-4 mr-2" %}
+                        Edit Content
+                    </a>
+                    {% endif %}
+                    {% if agreement.status == 'sent' %}
+                    <a href="{% url 'diveops:signable-agreement-resend' pk=agreement.pk %}"
+                       class="w-full inline-flex justify-center items-center px-4 py-2 border border-blue-300 rounded-lg text-sm font-medium text-blue-700 bg-white hover:bg-blue-50">
+                        {% icon "send" "w-4 h-4 mr-2" %}
+                        Resend
+                    </a>
+                    {% endif %}
+                    {% if agreement.status in 'draft,sent' %}
+                    <a href="{% url 'diveops:signable-agreement-void' pk=agreement.pk %}"
+                       class="w-full inline-flex justify-center items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-white hover:bg-red-50">
+                        {% icon "x-circle" "w-4 h-4 mr-2" %}
+                        Void Agreement
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

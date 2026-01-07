@@ -1,19 +1,64 @@
 """Staff portal views for diveops."""
 
 from django.contrib import messages
-from django.db.models import Prefetch
+from django.db.models import Count, Prefetch, Q
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
-from django.views.generic import CreateView, DetailView, FormView, ListView, TemplateView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 
 from django_portal_ui.mixins import StaffPortalMixin
 
 from django_catalog.models import CatalogItem
 
-from .forms import AgreementForm, AgreementTemplateForm, AgreementTerminateForm, CatalogItemForm, DiverCertificationForm, DiverForm, DiveSiteForm, ExcursionTypeDiveForm, ExcursionTypeForm, PriceForm, SignatureForm, SitePriceAdjustmentForm, VendorInvoiceForm, VendorPaymentForm
-from .models import AgreementTemplate, Booking, CertificationLevel, DiverCertification, DiverProfile, DiveLog, DiveSite, Excursion, ExcursionType, ExcursionTypeDive, SitePriceAdjustment
+from .forms import (
+    AgreementForm,
+    AgreementTemplateForm,
+    AgreementTerminateForm,
+    CatalogItemComponentForm,
+    CatalogItemForm,
+    DiverCertificationForm,
+    DiverForm,
+    DiveSiteForm,
+    DivingPermitForm,
+    ExcursionTypeDiveForm,
+    ExcursionTypeForm,
+    GuidePermitForm,
+    PhotographyPermitForm,
+    PriceForm,
+    ProtectedAreaFeeScheduleForm,
+    ProtectedAreaFeeTierForm,
+    ProtectedAreaForm,
+    ProtectedAreaRuleForm,
+    ProtectedAreaZoneForm,
+    SignatureForm,
+    SitePriceAdjustmentForm,
+    VendorInvoiceForm,
+    VendorPaymentForm,
+    VesselPermitFormNew,
+)
+from .models import (
+    AgreementTemplate,
+    AISettings,
+    Booking,
+    CertificationLevel,
+    DiverCertification,
+    DiverProfile,
+    DiveLog,
+    DiveSite,
+    Excursion,
+    ExcursionType,
+    ExcursionTypeDive,
+    GuidePermitDetails,
+    ProtectedArea,
+    ProtectedAreaFeeSchedule,
+    ProtectedAreaFeeTier,
+    ProtectedAreaPermit,
+    ProtectedAreaRule,
+    ProtectedAreaZone,
+    SitePriceAdjustment,
+)
 from .selectors import get_diver_with_certifications, get_excursion_with_roster, list_upcoming_excursions
 
 
@@ -130,6 +175,12 @@ class EditDiverView(StaffPortalMixin, FormView):
         context["certifications"] = self.diver.certifications.filter(
             deleted_at__isnull=True
         ).select_related("level", "level__agency").order_by("-level__rank")
+        # Get guide permits for this diver (consistent with detail page)
+        context["permits"] = ProtectedAreaPermit.objects.filter(
+            diver=self.diver,
+            permit_type=ProtectedAreaPermit.PermitType.GUIDE,
+            deleted_at__isnull=True
+        ).select_related("protected_area").order_by("protected_area__name")
         return context
 
 
@@ -299,9 +350,17 @@ class DiverDetailView(StaffPortalMixin, DetailView):
         return diver
 
     def get_context_data(self, **kwargs):
-        """Add certifications to context."""
+        """Add certifications and permits to context."""
         context = super().get_context_data(**kwargs)
-        context["certifications"] = self.object.certifications.all()
+        context["certifications"] = self.object.certifications.filter(
+            deleted_at__isnull=True
+        ).select_related("level__agency")
+        # Add unified permits (guide permits for this diver)
+        context["permits"] = ProtectedAreaPermit.objects.filter(
+            diver=self.object,
+            permit_type=ProtectedAreaPermit.PermitType.GUIDE,
+            deleted_at__isnull=True
+        ).select_related("protected_area").prefetch_related("guide_details").order_by("protected_area__name")
         return context
 
 
@@ -496,10 +555,10 @@ class DivePlanListView(StaffPortalMixin, ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        """Return dive templates, grouped by excursion type."""
+        """Return dive templates (dive plans)."""
         return ExcursionTypeDive.objects.select_related(
-            "excursion_type", "dive_site"
-        ).order_by("excursion_type__name", "sequence")
+            "dive_site", "catalog_item", "min_certification_level"
+        ).prefetch_related("excursion_types").order_by("name", "sequence")
 
     def get_context_data(self, **kwargs):
         """Add page title to context."""
@@ -543,7 +602,13 @@ class DiveSiteDetailView(StaffPortalMixin, DetailView):
     def get_object(self, queryset=None):
         """Get site with related data."""
         return get_object_or_404(
-            DiveSite.objects.select_related("place", "min_certification_level"),
+            DiveSite.objects.select_related(
+                "place",
+                "min_certification_level",
+                "min_certification_level__agency",
+                "protected_area",
+                "protected_area_zone",
+            ),
             pk=self.kwargs["pk"],
         )
 
@@ -554,13 +619,34 @@ class DiveSiteDetailView(StaffPortalMixin, DetailView):
         # Get price adjustments for this site
         context["price_adjustments"] = self.object.price_adjustments.all().order_by("kind")
         # Get dive plans (ExcursionTypeDive) for this site
-        context["dive_plans"] = self.object.dive_plan_templates.select_related(
-            "excursion_type"
-        ).order_by("excursion_type__name", "sequence")
+        context["dive_plans"] = self.object.dive_plan_templates.prefetch_related(
+            "excursion_types"
+        ).order_by("name", "sequence")
         # Get excursion types where this site is in suitable_sites
         context["excursion_types"] = self.object.excursion_types.filter(
             is_active=True
         ).order_by("name")
+        # Get recent excursions to this site
+        context["recent_excursions"] = Excursion.objects.filter(
+            dive_site=self.object,
+            deleted_at__isnull=True,
+        ).select_related("dive_shop", "excursion_type").order_by("-departure_time")[:10]
+        # Get zone rules if site is in a protected area zone
+        if self.object.protected_area_zone:
+            context["zone_rules"] = ProtectedAreaRule.objects.filter(
+                Q(zone=self.object.protected_area_zone) | Q(zone__isnull=True, protected_area=self.object.protected_area),
+                protected_area=self.object.protected_area,
+                is_active=True,
+                deleted_at__isnull=True,
+            ).order_by("subject")
+        elif self.object.protected_area:
+            # Area-wide rules (no specific zone)
+            context["zone_rules"] = ProtectedAreaRule.objects.filter(
+                protected_area=self.object.protected_area,
+                zone__isnull=True,
+                is_active=True,
+                deleted_at__isnull=True,
+            ).order_by("subject")
         return context
 
 
@@ -586,6 +672,12 @@ class DiveSiteCreateView(StaffPortalMixin, FormView):
         context["certification_levels"] = CertificationLevel.objects.filter(
             is_active=True
         ).select_related("agency").order_by("agency__name", "rank")
+        context["protected_areas"] = ProtectedArea.objects.filter(
+            is_active=True
+        ).order_by("name")
+        context["protected_area_zones"] = ProtectedAreaZone.objects.filter(
+            is_active=True
+        ).select_related("protected_area").order_by("protected_area__name", "name")
         return context
 
 
@@ -624,6 +716,12 @@ class DiveSiteUpdateView(StaffPortalMixin, FormView):
         context["certification_levels"] = CertificationLevel.objects.filter(
             is_active=True
         ).select_related("agency").order_by("agency__name", "rank")
+        context["protected_areas"] = ProtectedArea.objects.filter(
+            is_active=True
+        ).order_by("name")
+        context["protected_area_zones"] = ProtectedAreaZone.objects.filter(
+            is_active=True
+        ).select_related("protected_area").order_by("protected_area__name", "name")
         return context
 
 
@@ -1127,6 +1225,13 @@ class ExcursionTypeDetailView(StaffPortalMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context["page_title"] = self.object.name
         context["dive_templates"] = self.object.dive_templates.all().order_by("sequence")
+        # Available dives that can be added (not already in this excursion type)
+        current_dive_ids = self.object.dive_templates.values_list("id", flat=True)
+        context["available_dives"] = (
+            ExcursionTypeDive.objects.exclude(id__in=current_dive_ids)
+            .select_related("dive_site")
+            .order_by("name")
+        )
         return context
 
 
@@ -1239,7 +1344,7 @@ class ExcursionTypeAddSiteView(StaffPortalMixin, View):
         ).prefetch_related(
             Prefetch(
                 "dive_plan_templates",
-                queryset=ExcursionTypeDive.objects.select_related("excursion_type").order_by("excursion_type__name"),
+                queryset=ExcursionTypeDive.objects.prefetch_related("excursion_types").order_by("name"),
             )
         ).order_by("name")
 
@@ -1358,11 +1463,12 @@ class ExcursionTypeDiveUpdateView(StaffPortalMixin, FormView):
     def dispatch(self, request, *args, **kwargs):
         self.dive_template = get_object_or_404(
             ExcursionTypeDive.objects.select_related(
-                "excursion_type", "min_certification_level", "min_certification_level__agency"
-            ),
+                "min_certification_level", "min_certification_level__agency"
+            ).prefetch_related("excursion_types"),
             pk=kwargs["pk"],
         )
-        self.excursion_type = self.dive_template.excursion_type
+        # Get first excursion type for backwards compat (dive plans can have multiple types)
+        self.excursion_type = self.dive_template.excursion_types.first()
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -1376,9 +1482,12 @@ class ExcursionTypeDiveUpdateView(StaffPortalMixin, FormView):
             self.request,
             f"Dive template '{dive_template.name}' has been updated.",
         )
-        return HttpResponseRedirect(
-            reverse("diveops:excursion-type-detail", kwargs={"pk": self.excursion_type.pk})
-        )
+        # Redirect to excursion type detail if one exists, else to dive plan list
+        if self.excursion_type:
+            return HttpResponseRedirect(
+                reverse("diveops:excursion-type-detail", kwargs={"pk": self.excursion_type.pk})
+            )
+        return HttpResponseRedirect(reverse("diveops:dive-plan-list"))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1389,6 +1498,28 @@ class ExcursionTypeDiveUpdateView(StaffPortalMixin, FormView):
         return context
 
 
+class ExcursionTypeLinkDiveView(StaffPortalMixin, View):
+    """Link an existing dive plan to an excursion type."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, type_pk, dive_pk):
+        """Add the dive to the excursion type."""
+        excursion_type = get_object_or_404(ExcursionType, pk=type_pk)
+        dive_template = get_object_or_404(ExcursionTypeDive, pk=dive_pk)
+
+        # Add to the excursion type
+        dive_template.excursion_types.add(excursion_type)
+
+        messages.success(
+            request,
+            f"Dive '{dive_template.name}' has been added to '{excursion_type.name}'.",
+        )
+        return HttpResponseRedirect(
+            reverse("diveops:excursion-type-detail", kwargs={"pk": type_pk})
+        )
+
+
 class ExcursionTypeDiveDeleteView(StaffPortalMixin, View):
     """Delete a dive template from an excursion type."""
 
@@ -1397,7 +1528,7 @@ class ExcursionTypeDiveDeleteView(StaffPortalMixin, View):
     def get(self, request, pk):
         """Show delete confirmation page."""
         dive_template = get_object_or_404(
-            ExcursionTypeDive.objects.select_related("excursion_type"),
+            ExcursionTypeDive.objects.prefetch_related("excursion_types"),
             pk=pk,
         )
         return self.render_confirmation(request, dive_template)
@@ -1407,18 +1538,20 @@ class ExcursionTypeDiveDeleteView(StaffPortalMixin, View):
         from .services import delete_dive_template
 
         dive_template = get_object_or_404(
-            ExcursionTypeDive.objects.select_related("excursion_type"),
+            ExcursionTypeDive.objects.prefetch_related("excursion_types"),
             pk=pk,
         )
-        excursion_type = dive_template.excursion_type
+        excursion_type = dive_template.excursion_types.first()
         template_name = dive_template.name
 
         delete_dive_template(actor=request.user, dive_template=dive_template)
 
         messages.success(request, f"Dive template '{template_name}' has been deleted.")
-        return HttpResponseRedirect(
-            reverse("diveops:excursion-type-detail", kwargs={"pk": excursion_type.pk})
-        )
+        if excursion_type:
+            return HttpResponseRedirect(
+                reverse("diveops:excursion-type-detail", kwargs={"pk": excursion_type.pk})
+            )
+        return HttpResponseRedirect(reverse("diveops:dive-plan-list"))
 
     def render_confirmation(self, request, dive_template):
         """Render delete confirmation template."""
@@ -1429,7 +1562,7 @@ class ExcursionTypeDiveDeleteView(StaffPortalMixin, View):
             "diveops/staff/excursion_type_dive_confirm_delete.html",
             {
                 "dive_template": dive_template,
-                "excursion_type": dive_template.excursion_type,
+                "excursion_type": dive_template.excursion_types.first(),
                 "page_title": f"Delete Dive {dive_template.sequence}",
             },
         )
@@ -1632,17 +1765,35 @@ class CatalogItemDetailView(StaffPortalMixin, DetailView):
         return get_object_or_404(CatalogItem, pk=self.kwargs["pk"])
 
     def get_context_data(self, **kwargs):
-        """Add page title and prices to context."""
+        """Add page title, prices, and components to context."""
         from primitives_testbed.pricing.models import Price
+        from django_catalog.models import CatalogItemComponent
 
         context = super().get_context_data(**kwargs)
         context["page_title"] = self.object.display_name
+
+        # Pricing
         context["prices"] = Price.objects.filter(
-            catalog_item=self.object, deleted_at__isnull=True
+            catalog_item=self.object
         ).order_by("-priority", "-valid_from")[:5]
         context["price_count"] = Price.objects.filter(
-            catalog_item=self.object, deleted_at__isnull=True
+            catalog_item=self.object
         ).count()
+
+        # Components (items in this assembly)
+        context["components"] = CatalogItemComponent.objects.filter(
+            parent=self.object,
+            deleted_at__isnull=True,
+        ).select_related("component").order_by("sequence", "component__display_name")
+        context["component_count"] = context["components"].count()
+
+        # Used in assemblies (where this item is a component)
+        context["used_in"] = CatalogItemComponent.objects.filter(
+            component=self.object,
+            deleted_at__isnull=True,
+        ).select_related("parent").order_by("parent__display_name")
+        context["used_in_count"] = context["used_in"].count()
+
         return context
 
 
@@ -1748,17 +1899,60 @@ class DivePlanDetailView(StaffPortalMixin, DetailView):
     def get_object(self, queryset=None):
         """Get dive plan with related data."""
         return get_object_or_404(
-            ExcursionTypeDive.objects.select_related(
-                "excursion_type", "dive_site", "min_certification_level"
+            ExcursionTypeDive.objects.prefetch_related(
+                "excursion_types",
+            ).select_related(
+                "dive_site",
+                "dive_site__place",
+                "dive_site__min_certification_level",
+                "dive_site__min_certification_level__agency",
+                "min_certification_level",
+                "min_certification_level__agency",
+                "catalog_item",
             ),
             pk=self.kwargs["pk"],
         )
 
     def get_context_data(self, **kwargs):
-        """Add page title to context."""
+        """Add page title and related excursions to context."""
         context = super().get_context_data(**kwargs)
         context["page_title"] = f"Dive Plan: {self.object.name}"
+
+        # Get excursions that use any of this dive plan's excursion types
+        # (the template can be used for multiple excursion types)
+        excursion_type_ids = self.object.excursion_types.values_list("pk", flat=True)
+        context["excursions"] = Excursion.objects.filter(
+            excursion_type_id__in=excursion_type_ids
+        ).select_related("dive_shop").order_by("-departure_time")[:10]
+
         return context
+
+
+class DiveSegmentTypesAPIView(StaffPortalMixin, View):
+    """Return segment types as JSON for the dive plan form."""
+
+    def get(self, request):
+        from .models import DiveSegmentType
+
+        segment_types = DiveSegmentType.objects.filter(is_active=True).order_by("sort_order")
+
+        # If no segment types exist, return defaults
+        if not segment_types.exists():
+            return JsonResponse({
+                "segment_types": DiveSegmentType.get_default_types()
+            })
+
+        return JsonResponse({
+            "segment_types": [
+                {
+                    "name": st.name,
+                    "display_name": st.display_name,
+                    "is_depth_transition": st.is_depth_transition,
+                    "color": st.color,
+                }
+                for st in segment_types
+            ]
+        })
 
 
 class DivePlanCreateView(StaffPortalMixin, FormView):
@@ -1856,7 +2050,7 @@ class DivePlanUpdateView(StaffPortalMixin, FormView):
 
     def dispatch(self, request, *args, **kwargs):
         self.dive_plan = get_object_or_404(
-            ExcursionTypeDive.objects.select_related("excursion_type"),
+            ExcursionTypeDive.objects.prefetch_related("excursion_types"),
             pk=kwargs["pk"],
         )
         return super().dispatch(request, *args, **kwargs)
@@ -1879,7 +2073,7 @@ class DivePlanUpdateView(StaffPortalMixin, FormView):
         context["is_create"] = False
         context["page_title"] = f"Edit {self.dive_plan.name}"
         context["dive_plan"] = self.dive_plan
-        context["excursion_type"] = self.dive_plan.excursion_type
+        context["excursion_types"] = self.dive_plan.excursion_types.all()
         return context
 
 
@@ -1891,7 +2085,7 @@ class DivePlanDeleteView(StaffPortalMixin, View):
     def get(self, request, pk):
         """Show delete confirmation page."""
         dive_plan = get_object_or_404(
-            ExcursionTypeDive.objects.select_related("excursion_type"),
+            ExcursionTypeDive.objects.prefetch_related("excursion_types"),
             pk=pk,
         )
         return self.render_confirmation(request, dive_plan)
@@ -1901,7 +2095,7 @@ class DivePlanDeleteView(StaffPortalMixin, View):
         from .services import delete_dive_template
 
         dive_plan = get_object_or_404(
-            ExcursionTypeDive.objects.select_related("excursion_type"),
+            ExcursionTypeDive.objects.prefetch_related("excursion_types"),
             pk=pk,
         )
         plan_name = dive_plan.name
@@ -1920,7 +2114,7 @@ class DivePlanDeleteView(StaffPortalMixin, View):
             "diveops/staff/dive_plan_confirm_delete.html",
             {
                 "dive_plan": dive_plan,
-                "excursion_type": dive_plan.excursion_type,
+                "excursion_types": dive_plan.excursion_types.all(),
                 "page_title": f"Delete {dive_plan.name}",
             },
         )
@@ -1946,7 +2140,6 @@ class PriceListView(StaffPortalMixin, ListView):
 
         return Price.objects.filter(
             catalog_item=self.catalog_item,
-            deleted_at__isnull=True,
         ).select_related(
             "organization", "party", "agreement", "created_by"
         ).order_by("-priority", "-valid_from")
@@ -2090,6 +2283,163 @@ class PriceDeleteView(StaffPortalMixin, View):
                 "price": price,
                 "catalog_item": price.catalog_item,
                 "page_title": f"Delete Price Rule",
+            },
+        )
+
+
+# =============================================================================
+# Catalog Item Component Views (Assembly/BOM Management)
+# =============================================================================
+
+
+class CatalogItemComponentCreateView(StaffPortalMixin, FormView):
+    """Add a component to a catalog item (assembly)."""
+
+    template_name = "diveops/staff/component_form.html"
+    form_class = CatalogItemComponentForm
+
+    def get_parent_item(self):
+        """Get the parent catalog item from URL."""
+        if not hasattr(self, "_parent_item"):
+            self._parent_item = get_object_or_404(CatalogItem, pk=self.kwargs["item_pk"])
+        return self._parent_item
+
+    def get_form_kwargs(self):
+        """Pass parent item to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["parent_item"] = self.get_parent_item()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add parent item to context."""
+        context = super().get_context_data(**kwargs)
+        context["catalog_item"] = self.get_parent_item()
+        context["page_title"] = f"Add Component: {self.get_parent_item().display_name}"
+        context["is_create"] = True
+        return context
+
+    def form_valid(self, form):
+        """Save component and redirect."""
+        component = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Added component: {component.component.display_name} (qty: {component.quantity})",
+        )
+        return HttpResponseRedirect(
+            reverse("diveops:catalog-item-detail", kwargs={"pk": self.get_parent_item().pk})
+        )
+
+
+class CatalogItemComponentUpdateView(StaffPortalMixin, FormView):
+    """Edit an existing component relationship."""
+
+    template_name = "diveops/staff/component_form.html"
+    form_class = CatalogItemComponentForm
+
+    def get_component(self):
+        """Get the component from URL."""
+        from django_catalog.models import CatalogItemComponent
+
+        if not hasattr(self, "_component"):
+            self._component = get_object_or_404(
+                CatalogItemComponent.objects.select_related("parent", "component"),
+                pk=self.kwargs["pk"],
+                deleted_at__isnull=True,
+            )
+        return self._component
+
+    def get_form_kwargs(self):
+        """Pass existing component to form."""
+        kwargs = super().get_form_kwargs()
+        component = self.get_component()
+        kwargs["parent_item"] = component.parent
+        kwargs["instance"] = component
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add component and catalog item to context."""
+        context = super().get_context_data(**kwargs)
+        component = self.get_component()
+        context["component"] = component
+        context["catalog_item"] = component.parent
+        context["page_title"] = f"Edit Component: {component.component.display_name}"
+        context["is_create"] = False
+        return context
+
+    def form_valid(self, form):
+        """Save component and redirect."""
+        component = form.save(actor=self.request.user)
+        messages.success(
+            self.request,
+            f"Updated component: {component.component.display_name}",
+        )
+        return HttpResponseRedirect(
+            reverse("diveops:catalog-item-detail", kwargs={"pk": component.parent.pk})
+        )
+
+
+class CatalogItemComponentDeleteView(StaffPortalMixin, View):
+    """Remove a component from an assembly (soft delete)."""
+
+    http_method_names = ["get", "post"]
+
+    def get_component(self):
+        """Get the component from URL."""
+        from django_catalog.models import CatalogItemComponent
+
+        if not hasattr(self, "_component"):
+            self._component = get_object_or_404(
+                CatalogItemComponent.objects.select_related("parent", "component"),
+                pk=self.kwargs["pk"],
+                deleted_at__isnull=True,
+            )
+        return self._component
+
+    def get(self, request, pk):
+        """Show delete confirmation page."""
+        component = self.get_component()
+        return self.render_confirmation(request, component)
+
+    def post(self, request, pk):
+        """Perform soft delete."""
+        from django.utils import timezone
+        from .audit import Actions, log_event
+
+        component = self.get_component()
+        parent_item = component.parent
+
+        # Soft delete
+        component.deleted_at = timezone.now()
+        component.save(update_fields=["deleted_at", "updated_at"])
+
+        log_event(
+            action=Actions.CATALOG_COMPONENT_REMOVED,
+            actor=request.user,
+            target=component,
+            data={
+                "parent": str(parent_item.pk),
+                "parent_name": parent_item.display_name,
+                "component": str(component.component.pk),
+                "component_name": component.component.display_name,
+            },
+        )
+
+        messages.success(request, f"Removed component: {component.component.display_name}")
+        return HttpResponseRedirect(
+            reverse("diveops:catalog-item-detail", kwargs={"pk": parent_item.pk})
+        )
+
+    def render_confirmation(self, request, component):
+        """Render delete confirmation template."""
+        from django.template.response import TemplateResponse
+
+        return TemplateResponse(
+            request,
+            "diveops/staff/component_confirm_delete.html",
+            {
+                "component": component,
+                "catalog_item": component.parent,
+                "page_title": f"Remove Component",
             },
         )
 
@@ -2706,12 +3056,12 @@ class AccountReactivateView(StaffPortalMixin, View):
 
 
 # =============================================================================
-# Agreement Template Management (Paperwork)
+# Agreement Template Management
 # =============================================================================
 
 
 class AgreementTemplateListView(StaffPortalMixin, ListView):
-    """List all agreement templates (paperwork forms)."""
+    """List all agreement templates for waivers, releases, and other documents."""
 
     model = AgreementTemplate
     template_name = "diveops/staff/agreement_template_list.html"
@@ -2742,7 +3092,7 @@ class AgreementTemplateListView(StaffPortalMixin, ListView):
     def get_context_data(self, **kwargs):
         """Add filter options to context."""
         context = super().get_context_data(**kwargs)
-        context["page_title"] = "Paperwork Templates"
+        context["page_title"] = "Agreement Templates"
         context["template_type_filter"] = self.request.GET.get("type", "")
         context["status_filter"] = self.request.GET.get("status", "")
         context["template_type_choices"] = AgreementTemplate.TemplateType.choices
@@ -2783,9 +3133,79 @@ class AgreementTemplateDetailView(StaffPortalMixin, DetailView):
     context_object_name = "template"
 
     def get_context_data(self, **kwargs):
-        """Add context data."""
+        """Add context data including rendered preview with sample variables."""
         context = super().get_context_data(**kwargs)
         context["page_title"] = f"Template: {self.object.name}"
+
+        # Provide sample data for template variable substitution in preview
+        today = timezone.now().date()
+        sample_variables = {
+            # Diver/Participant info
+            "{{ diver_name }}": "John Doe",
+            "{{ participant_name }}": "John Doe",
+            "{{ diver_full_name }}": "John Doe",
+            "{{ first_name }}": "John",
+            "{{ last_name }}": "Doe",
+            "{{ email }}": "john.doe@example.com",
+            # Dates
+            "{{ date }}": today.strftime("%B %d, %Y"),
+            "{{ current_date }}": today.strftime("%B %d, %Y"),
+            "{{ today }}": today.strftime("%B %d, %Y"),
+            # Dive shop info
+            "{{ dive_shop_name }}": self.object.dive_shop.name,
+            "{{ shop_name }}": self.object.dive_shop.name,
+            "{{ operator_name }}": self.object.dive_shop.name,
+        }
+
+        # Render the preview by substituting variables
+        rendered_content = self.object.content
+        for placeholder, value in sample_variables.items():
+            rendered_content = rendered_content.replace(placeholder, value)
+
+        context["rendered_content"] = rendered_content
+        context["sample_variables"] = sample_variables
+        return context
+
+
+class AgreementTemplatePreviewView(StaffPortalMixin, DetailView):
+    """Preview agreement template in a clean, printable format."""
+
+    model = AgreementTemplate
+    template_name = "diveops/staff/agreement_template_preview.html"
+    context_object_name = "template"
+
+    def get_context_data(self, **kwargs):
+        """Add context data with rendered content using sample variables."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Preview: {self.object.name}"
+
+        # Sample data for template variable substitution
+        today = timezone.now().date()
+        sample_variables = {
+            # Diver/Participant info
+            "{{ diver_name }}": "John Doe",
+            "{{ participant_name }}": "John Doe",
+            "{{ diver_full_name }}": "John Doe",
+            "{{ first_name }}": "John",
+            "{{ last_name }}": "Doe",
+            "{{ email }}": "john.doe@example.com",
+            # Dates
+            "{{ date }}": today.strftime("%B %d, %Y"),
+            "{{ current_date }}": today.strftime("%B %d, %Y"),
+            "{{ today }}": today.strftime("%B %d, %Y"),
+            # Dive shop info
+            "{{ dive_shop_name }}": self.object.dive_shop.name,
+            "{{ shop_name }}": self.object.dive_shop.name,
+            "{{ operator_name }}": self.object.dive_shop.name,
+        }
+
+        # Render the preview by substituting variables
+        rendered_content = self.object.content
+        for placeholder, value in sample_variables.items():
+            rendered_content = rendered_content.replace(placeholder, value)
+
+        context["rendered_content"] = rendered_content
+        context["sample_variables"] = sample_variables
         return context
 
 
@@ -2866,6 +3286,177 @@ class AgreementTemplateArchiveView(StaffPortalMixin, View):
         return redirect("diveops:agreement-template-list")
 
 
+class AgreementTemplateSendView(StaffPortalMixin, View):
+    """Send an agreement template to a party for signing."""
+
+    def _get_parties_for_template(self, template):
+        """Get appropriate parties based on template's target_party_type."""
+        from django_parties.models import Organization, PartyRelationship, Person
+
+        target_type = template.target_party_type
+        dive_shop = template.dive_shop
+
+        if target_type == AgreementTemplate.TargetPartyType.DIVER:
+            # Divers: Persons who have a DiverProfile
+            diver_person_ids = DiverProfile.objects.filter(
+                deleted_at__isnull=True
+            ).values_list("person_id", flat=True)
+            parties = Person.objects.filter(
+                pk__in=diver_person_ids,
+                deleted_at__isnull=True,
+            ).order_by("last_name", "first_name")[:100]
+            party_type_label = "Diver"
+            is_organization = False
+
+        elif target_type == AgreementTemplate.TargetPartyType.EMPLOYEE:
+            # Employees: Persons with employee relationship to dive shop
+            employee_person_ids = PartyRelationship.objects.filter(
+                to_organization=dive_shop,
+                relationship_type="employee",
+                is_active=True,
+                deleted_at__isnull=True,
+            ).values_list("from_person_id", flat=True)
+            parties = Person.objects.filter(
+                pk__in=employee_person_ids,
+                deleted_at__isnull=True,
+            ).order_by("last_name", "first_name")[:100]
+            party_type_label = "Employee"
+            is_organization = False
+
+        elif target_type == AgreementTemplate.TargetPartyType.VENDOR:
+            # Vendors: Organizations with vendor relationship to dive shop
+            vendor_org_ids = PartyRelationship.objects.filter(
+                to_organization=dive_shop,
+                relationship_type="vendor",
+                is_active=True,
+                deleted_at__isnull=True,
+            ).values_list("from_organization_id", flat=True)
+            parties = Organization.objects.filter(
+                pk__in=vendor_org_ids,
+                deleted_at__isnull=True,
+            ).order_by("name")[:100]
+            party_type_label = "Vendor"
+            is_organization = True
+
+        else:  # ANY - show all persons
+            parties = Person.objects.filter(
+                deleted_at__isnull=True
+            ).order_by("last_name", "first_name")[:100]
+            party_type_label = "Person"
+            is_organization = False
+
+        return parties, party_type_label, is_organization
+
+    def get(self, request, pk):
+        """Show form to select party and delivery method."""
+        template = get_object_or_404(AgreementTemplate, pk=pk)
+
+        # Only published templates can be sent
+        if template.status != AgreementTemplate.Status.PUBLISHED:
+            messages.error(request, "Only published templates can be sent.")
+            return redirect("diveops:agreement-template-detail", pk=pk)
+
+        # Get filtered parties based on template's target_party_type
+        parties, party_type_label, is_organization = self._get_parties_for_template(template)
+
+        return render(
+            request,
+            "diveops/staff/agreement_template_send.html",
+            {
+                "page_title": f"Send: {template.name}",
+                "template": template,
+                "parties": parties,
+                "party_type_label": party_type_label,
+                "is_organization": is_organization,
+                "delivery_methods": [
+                    ("email", "Send via Email"),
+                    ("link", "Generate Link"),
+                    ("in_person", "In-Person Signing"),
+                ],
+            },
+        )
+
+    def post(self, request, pk):
+        """Create SignableAgreement and send to party."""
+        from django_parties.models import Organization, Person
+
+        from .services import create_agreement_from_template, send_agreement
+
+        template = get_object_or_404(AgreementTemplate, pk=pk)
+
+        # Only published templates can be sent
+        if template.status != AgreementTemplate.Status.PUBLISHED:
+            messages.error(request, "Only published templates can be sent.")
+            return redirect("diveops:agreement-template-detail", pk=pk)
+
+        # Get selected party
+        party_id = request.POST.get("party_id")
+        if not party_id:
+            messages.error(request, "Please select a party to send the agreement to.")
+            return redirect("diveops:agreement-template-send", pk=pk)
+
+        # Fetch the party - Organization for vendors, Person for others
+        target_type = template.target_party_type
+        if target_type == AgreementTemplate.TargetPartyType.VENDOR:
+            party = get_object_or_404(Organization, pk=party_id)
+            party_display_name = party.name
+        else:
+            party = get_object_or_404(Person, pk=party_id)
+            party_display_name = f"{party.first_name} {party.last_name}"
+
+        # Get delivery method
+        delivery_method = request.POST.get("delivery_method", "link")
+        if delivery_method not in ("email", "link", "in_person"):
+            delivery_method = "link"
+
+        # Get expiration days
+        try:
+            expires_in_days = int(request.POST.get("expires_in_days", 30))
+        except ValueError:
+            expires_in_days = 30
+
+        # Create the SignableAgreement
+        agreement = create_agreement_from_template(
+            template=template,
+            party_a=party,
+            actor=request.user,
+        )
+
+        # Send it (generates token)
+        agreement, token = send_agreement(
+            agreement=agreement,
+            delivery_method=delivery_method,
+            expires_in_days=expires_in_days,
+            actor=request.user,
+        )
+
+        # Build the signing URL
+        signing_url = request.build_absolute_uri(f"/sign/{token}/")
+
+        if delivery_method == "email":
+            # In production, this would send an email
+            # For now, show the link to the user
+            messages.success(
+                request,
+                f"Agreement sent to {party_display_name}. "
+                f"(Email sending not yet implemented - use this link: {signing_url})"
+            )
+        elif delivery_method == "link":
+            messages.success(
+                request,
+                f"Signing link generated for {party_display_name}. "
+                f"Share this link: {signing_url}"
+            )
+        else:  # in_person
+            messages.success(
+                request,
+                f"Agreement ready for in-person signing with {party_display_name}. "
+                f"Use this link: {signing_url}"
+            )
+
+        return redirect("diveops:signable-agreement-detail", pk=agreement.pk)
+
+
 class AgreementTemplateDeleteView(StaffPortalMixin, View):
     """Delete an agreement template (soft delete)."""
 
@@ -2904,6 +3495,137 @@ class AgreementTemplateDeleteView(StaffPortalMixin, View):
             f"Template '{template_name}' has been deleted.",
         )
         return redirect("diveops:agreement-template-list")
+
+
+class AgreementTemplateExtractTextView(StaffPortalMixin, View):
+    """Extract text from uploaded document for agreement template content.
+
+    Accepts PDF, Word documents, or images and extracts text using OCR/parsing.
+    Returns JSON with extracted text to pre-populate the template content field.
+    """
+
+    def post(self, request):
+        """Handle file upload and extract text."""
+        import json
+        import mimetypes
+        import tempfile
+        import os
+        from django.http import JsonResponse
+        from django_documents.extraction import extract_text, extract_text_from_pdf
+
+        file = request.FILES.get("file")
+        if not file:
+            return JsonResponse({"success": False, "error": "No file uploaded"}, status=400)
+
+        # Determine content type
+        content_type = file.content_type
+        if not content_type or content_type == "application/octet-stream":
+            # Try to guess from filename
+            guessed_type, _ = mimetypes.guess_type(file.name)
+            if guessed_type:
+                content_type = guessed_type
+
+        # Check supported types
+        supported_types = {
+            "application/pdf",
+            "image/png", "image/jpeg", "image/jpg", "image/tiff",
+            "text/plain", "text/html",
+            # Word documents - will need special handling
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }
+
+        if content_type not in supported_types:
+            return JsonResponse({
+                "success": False,
+                "error": f"Unsupported file type: {content_type}. Supported: PDF, images, text, Word documents."
+            }, status=400)
+
+        # Save to temp file for processing
+        try:
+            suffix = os.path.splitext(file.name)[1] if file.name else ""
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                for chunk in file.chunks():
+                    tmp.write(chunk)
+                tmp_path = tmp.name
+
+            extracted_text = ""
+            method = ""
+
+            # Handle Word documents
+            if content_type in (
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ):
+                try:
+                    import docx
+                    doc = docx.Document(tmp_path)
+                    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+                    extracted_text = "\n\n".join(paragraphs)
+                    method = "python-docx"
+                except ImportError:
+                    # Fall back to textract if docx not available
+                    try:
+                        import textract
+                        extracted_text = textract.process(tmp_path).decode("utf-8")
+                        method = "textract"
+                    except ImportError:
+                        return JsonResponse({
+                            "success": False,
+                            "error": "Word document support requires python-docx. Install with: pip install python-docx"
+                        }, status=500)
+                except Exception as e:
+                    return JsonResponse({
+                        "success": False,
+                        "error": f"Failed to extract text from Word document: {str(e)}"
+                    }, status=500)
+            else:
+                # Use django-documents extraction for PDF, images, text
+                result = extract_text(tmp_path, content_type)
+                if result.success:
+                    extracted_text = result.text
+                    method = result.method
+                else:
+                    # Clean up temp file
+                    os.unlink(tmp_path)
+                    return JsonResponse({
+                        "success": False,
+                        "error": result.error or "Failed to extract text from document"
+                    }, status=500)
+
+            # Clean up temp file
+            os.unlink(tmp_path)
+
+            if not extracted_text.strip():
+                return JsonResponse({
+                    "success": False,
+                    "error": "No text could be extracted from the document. It may be a scanned image - try uploading a higher quality scan."
+                }, status=400)
+
+            # AI Enhancement: Use service layer for clean separation
+            from .services import enhance_extracted_text
+            enhanced = enhance_extracted_text(extracted_text, method)
+
+            return JsonResponse({
+                "success": True,
+                "text": enhanced.content,
+                "method": enhanced.method,
+                "word_count": len(enhanced.content.split()),
+                "filename": file.name,
+                "suggested_title": enhanced.suggested_title,
+            })
+
+        except Exception as e:
+            # Clean up temp file if it exists
+            if "tmp_path" in locals():
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+            return JsonResponse({
+                "success": False,
+                "error": f"Error processing file: {str(e)}"
+            }, status=500)
 
 
 # =============================================================================
@@ -2970,3 +3692,1608 @@ class ExcursionTypeTissueCalculationView(StaffPortalMixin, View):
         }
 
         return JsonResponse(result)
+
+
+# =============================================================================
+# Protected Area Views
+# =============================================================================
+
+
+class AreaScopedMixin:
+    """Mixin for views that require area_pk in URL."""
+
+    def get_protected_area(self):
+        """Get the protected area from URL kwargs."""
+        if not hasattr(self, "_protected_area"):
+            self._protected_area = get_object_or_404(
+                ProtectedArea, pk=self.kwargs["area_pk"]
+            )
+        return self._protected_area
+
+    def get_context_data(self, **kwargs):
+        """Add protected area to context."""
+        context = super().get_context_data(**kwargs)
+        context["protected_area"] = self.get_protected_area()
+        return context
+
+    def get_success_url(self):
+        """Redirect to protected area detail after success."""
+        return reverse(
+            "diveops:protected-area-detail", kwargs={"pk": self.kwargs["area_pk"]}
+        )
+
+
+class ProtectedAreaListView(StaffPortalMixin, ListView):
+    """List all protected areas with hierarchy."""
+
+    model = ProtectedArea
+    template_name = "diveops/staff/protected_area_list.html"
+    context_object_name = "areas"
+
+    def get_queryset(self):
+        """Return areas ordered for hierarchy display."""
+        return ProtectedArea.objects.select_related("parent", "place").prefetch_related(
+            "zones", "rules", "fee_schedules"
+        ).order_by("parent__name", "name")
+
+    def get_context_data(self, **kwargs):
+        """Add hierarchy-aware areas to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Protected Areas"
+        return context
+
+
+class ProtectedAreaDetailView(StaffPortalMixin, DetailView):
+    """Detail view for a protected area - the hub for all nested entities."""
+
+    model = ProtectedArea
+    template_name = "diveops/staff/protected_area_detail.html"
+    context_object_name = "area"
+
+    def get_queryset(self):
+        """Prefetch related data for performance."""
+        return ProtectedArea.objects.select_related("parent", "place").prefetch_related(
+            "children",
+            "zones__dive_sites",
+            "rules__zone",
+            "fee_schedules__zone",
+            "fee_schedules__tiers",
+            "permits__diver__person",
+            "permits__organization",
+            "permits__guide_details",
+            "dive_sites",
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add nested entities to context."""
+        context = super().get_context_data(**kwargs)
+        area = self.object
+        context["page_title"] = area.name
+        # Annotate zones with rule counts for display
+        context["zones"] = area.zones.filter(deleted_at__isnull=True).annotate(
+            rule_count=Count("rules", filter=Q(rules__deleted_at__isnull=True))
+        ).order_by("name")
+        context["rules"] = area.rules.filter(deleted_at__isnull=True).order_by(
+            "-effective_start", "subject"
+        )
+        context["fee_schedules"] = area.fee_schedules.filter(
+            deleted_at__isnull=True
+        ).prefetch_related("tiers").order_by("-effective_start", "name")
+        # Get all permits (unified: guide + vessel) using ProtectedAreaPermit model
+        all_permits = area.permits.filter(deleted_at__isnull=True).select_related(
+            "diver__person", "organization"
+        ).prefetch_related("guide_details").order_by("permit_type", "permit_number")
+        context["permits"] = all_permits
+        # Split by type for template convenience
+        context["guide_permits"] = [p for p in all_permits if p.permit_type == ProtectedAreaPermit.PermitType.GUIDE]
+        context["vessel_permits"] = [p for p in all_permits if p.permit_type == ProtectedAreaPermit.PermitType.VESSEL]
+        context["photography_permits"] = [p for p in all_permits if p.permit_type == ProtectedAreaPermit.PermitType.PHOTOGRAPHY]
+        context["diving_permits"] = [p for p in all_permits if p.permit_type == ProtectedAreaPermit.PermitType.DIVING]
+        context["children"] = area.children.filter(deleted_at__isnull=True).order_by("name")
+        context["dive_sites"] = area.dive_sites.filter(deleted_at__isnull=True).order_by("name")
+        return context
+
+
+class ProtectedAreaCreateView(StaffPortalMixin, CreateView):
+    """Create a new protected area."""
+
+    model = ProtectedArea
+    form_class = ProtectedAreaForm
+    template_name = "diveops/staff/protected_area_form.html"
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Protected Area"
+        context["is_create"] = True
+        return context
+
+    def form_valid(self, form):
+        """Save and show success message."""
+        response = super().form_valid(form)
+        messages.success(self.request, f"Protected area '{self.object.name}' created.")
+        return response
+
+    def get_success_url(self):
+        """Redirect to the new area's detail page."""
+        return reverse("diveops:protected-area-detail", kwargs={"pk": self.object.pk})
+
+
+class ProtectedAreaUpdateView(StaffPortalMixin, UpdateView):
+    """Update an existing protected area."""
+
+    model = ProtectedArea
+    form_class = ProtectedAreaForm
+    template_name = "diveops/staff/protected_area_form.html"
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Edit {self.object.name}"
+        context["is_create"] = False
+        return context
+
+    def form_valid(self, form):
+        """Save and show success message."""
+        response = super().form_valid(form)
+        messages.success(self.request, f"Protected area '{self.object.name}' updated.")
+        return response
+
+    def get_success_url(self):
+        """Redirect to the area's detail page."""
+        return reverse("diveops:protected-area-detail", kwargs={"pk": self.object.pk})
+
+
+class ProtectedAreaDeleteView(StaffPortalMixin, DeleteView):
+    """Delete a protected area."""
+
+    model = ProtectedArea
+    template_name = "diveops/staff/protected_area_confirm_delete.html"
+    success_url = reverse_lazy("diveops:protected-area-list")
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Delete {self.object.name}"
+        return context
+
+    def form_valid(self, form):
+        """Soft delete and show success message."""
+        area = self.object
+        area.deleted_at = timezone.now()
+        area.save(update_fields=["deleted_at", "updated_at"])
+        messages.success(self.request, f"Protected area '{area.name}' deleted.")
+        return HttpResponseRedirect(self.get_success_url())
+
+
+# =============================================================================
+# Protected Area Zone Views (Area-Scoped)
+# =============================================================================
+
+
+class ProtectedAreaZoneCreateView(StaffPortalMixin, AreaScopedMixin, CreateView):
+    """Create a new zone within a protected area."""
+
+    model = ProtectedAreaZone
+    form_class = ProtectedAreaZoneForm
+    template_name = "diveops/staff/protected_area_zone_form.html"
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Zone"
+        context["is_create"] = True
+        return context
+
+    def form_valid(self, form):
+        """Set protected area before saving."""
+        form.instance.protected_area = self.get_protected_area()
+        response = super().form_valid(form)
+        messages.success(self.request, f"Zone '{self.object.name}' created.")
+        return response
+
+
+class ProtectedAreaZoneDetailView(StaffPortalMixin, AreaScopedMixin, DetailView):
+    """Detail view for a zone showing its rules."""
+
+    model = ProtectedAreaZone
+    template_name = "diveops/staff/protected_area_zone_detail.html"
+    context_object_name = "zone"
+
+    def get_queryset(self):
+        """Filter to zones belonging to the area."""
+        return ProtectedAreaZone.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add rules for this zone to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = self.object.name
+        # Get rules specific to this zone
+        context["zone_rules"] = ProtectedAreaRule.objects.filter(
+            zone=self.object,
+            deleted_at__isnull=True,
+        ).order_by("rule_type", "subject")
+        # Get area-wide rules (that also apply to this zone)
+        context["area_rules"] = ProtectedAreaRule.objects.filter(
+            protected_area=self.object.protected_area,
+            zone__isnull=True,
+            deleted_at__isnull=True,
+        ).order_by("rule_type", "subject")
+        return context
+
+
+class ProtectedAreaZoneUpdateView(StaffPortalMixin, AreaScopedMixin, UpdateView):
+    """Update an existing zone."""
+
+    model = ProtectedAreaZone
+    form_class = ProtectedAreaZoneForm
+    template_name = "diveops/staff/protected_area_zone_form.html"
+
+    def get_queryset(self):
+        """Filter to zones belonging to the area."""
+        return ProtectedAreaZone.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Edit Zone: {self.object.name}"
+        context["is_create"] = False
+        return context
+
+    def form_valid(self, form):
+        """Save and show success message."""
+        response = super().form_valid(form)
+        messages.success(self.request, f"Zone '{self.object.name}' updated.")
+        return response
+
+
+class ProtectedAreaZoneDeleteView(StaffPortalMixin, AreaScopedMixin, DeleteView):
+    """Delete a zone."""
+
+    model = ProtectedAreaZone
+    template_name = "diveops/staff/protected_area_zone_confirm_delete.html"
+
+    def get_queryset(self):
+        """Filter to zones belonging to the area."""
+        return ProtectedAreaZone.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Delete Zone: {self.object.name}"
+        return context
+
+    def form_valid(self, form):
+        """Soft delete and show success message."""
+        zone = self.object
+        zone.deleted_at = timezone.now()
+        zone.save(update_fields=["deleted_at", "updated_at"])
+        messages.success(self.request, f"Zone '{zone.name}' deleted.")
+        return HttpResponseRedirect(self.get_success_url())
+
+
+# =============================================================================
+# Protected Area Rule Views (Area-Scoped)
+# =============================================================================
+
+
+class ProtectedAreaRuleCreateView(StaffPortalMixin, AreaScopedMixin, CreateView):
+    """Create a new rule within a protected area."""
+
+    model = ProtectedAreaRule
+    form_class = ProtectedAreaRuleForm
+    template_name = "diveops/staff/protected_area_rule_form.html"
+
+    def get_form_kwargs(self):
+        """Pass protected area to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["protected_area"] = self.get_protected_area()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Rule"
+        context["is_create"] = True
+        return context
+
+    def form_valid(self, form):
+        """Set protected area before saving."""
+        form.instance.protected_area = self.get_protected_area()
+        response = super().form_valid(form)
+        messages.success(self.request, f"Rule '{self.object.subject}' created.")
+        return response
+
+
+class ZoneRuleCreateView(StaffPortalMixin, AreaScopedMixin, CreateView):
+    """Create a new rule for a specific zone."""
+
+    model = ProtectedAreaRule
+    form_class = ProtectedAreaRuleForm
+    template_name = "diveops/staff/protected_area_rule_form.html"
+
+    def get_zone(self):
+        """Get the zone from URL."""
+        return get_object_or_404(
+            ProtectedAreaZone,
+            pk=self.kwargs["zone_pk"],
+            protected_area_id=self.kwargs["area_pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_form_kwargs(self):
+        """Pass protected area to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["protected_area"] = self.get_protected_area()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add page title and zone to context."""
+        context = super().get_context_data(**kwargs)
+        zone = self.get_zone()
+        context["zone"] = zone
+        context["page_title"] = f"Add Rule for {zone.name}"
+        context["is_create"] = True
+        return context
+
+    def get_initial(self):
+        """Pre-select the zone."""
+        initial = super().get_initial()
+        initial["zone"] = self.get_zone()
+        return initial
+
+    def form_valid(self, form):
+        """Set protected area and zone before saving."""
+        form.instance.protected_area = self.get_protected_area()
+        form.instance.zone = self.get_zone()
+        response = super().form_valid(form)
+        messages.success(self.request, f"Rule '{self.object.subject}' created for {self.get_zone().name}.")
+        return response
+
+    def get_success_url(self):
+        """Return to zone detail page."""
+        return reverse("diveops:protected-area-zone-detail", kwargs={
+            "area_pk": self.kwargs["area_pk"],
+            "pk": self.kwargs["zone_pk"],
+        })
+
+
+class ProtectedAreaRuleUpdateView(StaffPortalMixin, AreaScopedMixin, UpdateView):
+    """Update an existing rule."""
+
+    model = ProtectedAreaRule
+    form_class = ProtectedAreaRuleForm
+    template_name = "diveops/staff/protected_area_rule_form.html"
+
+    def get_queryset(self):
+        """Filter to rules belonging to the area."""
+        return ProtectedAreaRule.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_form_kwargs(self):
+        """Pass protected area to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["protected_area"] = self.get_protected_area()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Edit Rule: {self.object.subject}"
+        context["is_create"] = False
+        return context
+
+    def form_valid(self, form):
+        """Save and show success message."""
+        response = super().form_valid(form)
+        messages.success(self.request, f"Rule '{self.object.subject}' updated.")
+        return response
+
+
+class ProtectedAreaRuleDeleteView(StaffPortalMixin, AreaScopedMixin, DeleteView):
+    """Delete a rule."""
+
+    model = ProtectedAreaRule
+    template_name = "diveops/staff/protected_area_rule_confirm_delete.html"
+
+    def get_queryset(self):
+        """Filter to rules belonging to the area."""
+        return ProtectedAreaRule.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Delete Rule: {self.object.subject}"
+        return context
+
+    def form_valid(self, form):
+        """Soft delete and show success message."""
+        rule = self.object
+        rule.deleted_at = timezone.now()
+        rule.save(update_fields=["deleted_at", "updated_at"])
+        messages.success(self.request, f"Rule '{rule.subject}' deleted.")
+        return HttpResponseRedirect(self.get_success_url())
+
+
+# =============================================================================
+# Protected Area Fee Schedule Views (Area-Scoped)
+# =============================================================================
+
+
+class ProtectedAreaFeeScheduleCreateView(StaffPortalMixin, AreaScopedMixin, CreateView):
+    """Create a new fee schedule within a protected area."""
+
+    model = ProtectedAreaFeeSchedule
+    form_class = ProtectedAreaFeeScheduleForm
+    template_name = "diveops/staff/protected_area_fee_form.html"
+
+    def get_form_kwargs(self):
+        """Pass protected area to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["protected_area"] = self.get_protected_area()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Fee Schedule"
+        context["is_create"] = True
+        return context
+
+    def form_valid(self, form):
+        """Set protected area before saving."""
+        form.instance.protected_area = self.get_protected_area()
+        response = super().form_valid(form)
+        messages.success(self.request, f"Fee schedule '{self.object.name}' created.")
+        return response
+
+
+class ProtectedAreaFeeScheduleUpdateView(StaffPortalMixin, AreaScopedMixin, UpdateView):
+    """Update an existing fee schedule."""
+
+    model = ProtectedAreaFeeSchedule
+    form_class = ProtectedAreaFeeScheduleForm
+    template_name = "diveops/staff/protected_area_fee_form.html"
+
+    def get_queryset(self):
+        """Filter to fee schedules belonging to the area."""
+        return ProtectedAreaFeeSchedule.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_form_kwargs(self):
+        """Pass protected area to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["protected_area"] = self.get_protected_area()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Edit Fee Schedule: {self.object.name}"
+        context["is_create"] = False
+        return context
+
+    def form_valid(self, form):
+        """Save and show success message."""
+        response = super().form_valid(form)
+        messages.success(self.request, f"Fee schedule '{self.object.name}' updated.")
+        return response
+
+
+class ProtectedAreaFeeScheduleDeleteView(StaffPortalMixin, AreaScopedMixin, DeleteView):
+    """Delete a fee schedule."""
+
+    model = ProtectedAreaFeeSchedule
+    template_name = "diveops/staff/protected_area_fee_confirm_delete.html"
+
+    def get_queryset(self):
+        """Filter to fee schedules belonging to the area."""
+        return ProtectedAreaFeeSchedule.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Delete Fee Schedule: {self.object.name}"
+        return context
+
+    def form_valid(self, form):
+        """Soft delete and show success message."""
+        schedule = self.object
+        schedule.deleted_at = timezone.now()
+        schedule.save(update_fields=["deleted_at", "updated_at"])
+        messages.success(self.request, f"Fee schedule '{schedule.name}' deleted.")
+        return HttpResponseRedirect(self.get_success_url())
+
+
+# =============================================================================
+# Protected Area Fee Tier Views (Area + Schedule Scoped)
+# =============================================================================
+
+
+class ScheduleScopedMixin(AreaScopedMixin):
+    """Mixin for views that require both area_pk and schedule_pk."""
+
+    def get_fee_schedule(self):
+        """Get the fee schedule, ensuring it belongs to the area."""
+        if not hasattr(self, "_fee_schedule"):
+            self._fee_schedule = get_object_or_404(
+                ProtectedAreaFeeSchedule,
+                pk=self.kwargs["schedule_pk"],
+                protected_area_id=self.kwargs["area_pk"],
+                deleted_at__isnull=True,
+            )
+        return self._fee_schedule
+
+    def get_context_data(self, **kwargs):
+        """Add fee schedule to context."""
+        context = super().get_context_data(**kwargs)
+        context["fee_schedule"] = self.get_fee_schedule()
+        return context
+
+
+class ProtectedAreaFeeTierCreateView(StaffPortalMixin, ScheduleScopedMixin, CreateView):
+    """Create a new fee tier within a fee schedule."""
+
+    model = ProtectedAreaFeeTier
+    form_class = ProtectedAreaFeeTierForm
+    template_name = "diveops/staff/protected_area_tier_form.html"
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Fee Tier"
+        context["is_create"] = True
+        return context
+
+    def form_valid(self, form):
+        """Set fee schedule before saving."""
+        form.instance.schedule = self.get_fee_schedule()
+        response = super().form_valid(form)
+        messages.success(self.request, f"Fee tier '{self.object.label}' created.")
+        return response
+
+
+class ProtectedAreaFeeTierUpdateView(StaffPortalMixin, ScheduleScopedMixin, UpdateView):
+    """Update an existing fee tier."""
+
+    model = ProtectedAreaFeeTier
+    form_class = ProtectedAreaFeeTierForm
+    template_name = "diveops/staff/protected_area_tier_form.html"
+
+    def get_queryset(self):
+        """Filter to tiers belonging to the schedule within the area."""
+        return ProtectedAreaFeeTier.objects.filter(
+            schedule_id=self.kwargs["schedule_pk"],
+            schedule__protected_area_id=self.kwargs["area_pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Edit Fee Tier: {self.object.label}"
+        context["is_create"] = False
+        return context
+
+    def form_valid(self, form):
+        """Save and show success message."""
+        response = super().form_valid(form)
+        messages.success(self.request, f"Fee tier '{self.object.label}' updated.")
+        return response
+
+
+class ProtectedAreaFeeTierDeleteView(StaffPortalMixin, ScheduleScopedMixin, DeleteView):
+    """Delete a fee tier."""
+
+    model = ProtectedAreaFeeTier
+    template_name = "diveops/staff/protected_area_tier_confirm_delete.html"
+
+    def get_queryset(self):
+        """Filter to tiers belonging to the schedule within the area."""
+        return ProtectedAreaFeeTier.objects.filter(
+            schedule_id=self.kwargs["schedule_pk"],
+            schedule__protected_area_id=self.kwargs["area_pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Delete Fee Tier: {self.object.label}"
+        return context
+
+    def form_valid(self, form):
+        """Soft delete and show success message."""
+        tier = self.object
+        tier.deleted_at = timezone.now()
+        tier.save(update_fields=["deleted_at", "updated_at"])
+        messages.success(self.request, f"Fee tier '{tier.label}' deleted.")
+        return HttpResponseRedirect(self.get_success_url())
+
+
+# =============================================================================
+# Unified Permit Views (Area-Scoped) - Using ProtectedAreaPermit
+# =============================================================================
+
+
+class GuidePermitCreateView(StaffPortalMixin, AreaScopedMixin, CreateView):
+    """Create a new guide permit within a protected area."""
+
+    model = ProtectedAreaPermit
+    form_class = GuidePermitForm
+    template_name = "diveops/staff/permit_form.html"
+
+    def get_form_kwargs(self):
+        """Pass protected area to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["protected_area"] = self.get_protected_area()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Guide Permit"
+        context["permit_type"] = "guide"
+        context["is_create"] = True
+        return context
+
+    def form_valid(self, form):
+        """Set protected area before saving."""
+        form.instance.protected_area = self.get_protected_area()
+        response = super().form_valid(form)
+        diver_name = self.object.diver.person.get_full_name() if self.object.diver else "Unknown"
+        messages.success(self.request, f"Guide permit for '{diver_name}' created.")
+        return response
+
+
+class GuidePermitUpdateView(StaffPortalMixin, AreaScopedMixin, UpdateView):
+    """Update an existing guide permit."""
+
+    model = ProtectedAreaPermit
+    form_class = GuidePermitForm
+    template_name = "diveops/staff/permit_form.html"
+
+    def get_queryset(self):
+        """Filter to guide permits belonging to the area."""
+        return ProtectedAreaPermit.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            permit_type=ProtectedAreaPermit.PermitType.GUIDE,
+            deleted_at__isnull=True,
+        )
+
+    def get_form_kwargs(self):
+        """Pass protected area to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["protected_area"] = self.get_protected_area()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        diver_name = self.object.diver.person.get_full_name() if self.object.diver else "Unknown"
+        context["page_title"] = f"Edit Guide Permit: {diver_name}"
+        context["permit_type"] = "guide"
+        context["is_create"] = False
+        return context
+
+    def form_valid(self, form):
+        """Save and show success message."""
+        response = super().form_valid(form)
+        diver_name = self.object.diver.person.get_full_name() if self.object.diver else "Unknown"
+        messages.success(self.request, f"Guide permit for '{diver_name}' updated.")
+        return response
+
+
+class VesselPermitCreateViewNew(StaffPortalMixin, AreaScopedMixin, CreateView):
+    """Create a new vessel permit within a protected area (using unified model)."""
+
+    model = ProtectedAreaPermit
+    form_class = VesselPermitFormNew
+    template_name = "diveops/staff/permit_form.html"
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Vessel Permit"
+        context["permit_type"] = "vessel"
+        context["is_create"] = True
+        return context
+
+    def form_valid(self, form):
+        """Set protected area before saving."""
+        form.instance.protected_area = self.get_protected_area()
+        response = super().form_valid(form)
+        messages.success(self.request, f"Vessel permit for '{self.object.vessel_name}' created.")
+        return response
+
+
+class VesselPermitUpdateViewNew(StaffPortalMixin, AreaScopedMixin, UpdateView):
+    """Update an existing vessel permit (using unified model)."""
+
+    model = ProtectedAreaPermit
+    form_class = VesselPermitFormNew
+    template_name = "diveops/staff/permit_form.html"
+
+    def get_queryset(self):
+        """Filter to vessel permits belonging to the area."""
+        return ProtectedAreaPermit.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            permit_type=ProtectedAreaPermit.PermitType.VESSEL,
+            deleted_at__isnull=True,
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Edit Vessel Permit: {self.object.vessel_name}"
+        context["permit_type"] = "vessel"
+        context["is_create"] = False
+        return context
+
+    def form_valid(self, form):
+        """Save and show success message."""
+        response = super().form_valid(form)
+        messages.success(self.request, f"Vessel permit for '{self.object.vessel_name}' updated.")
+        return response
+
+
+class PermitDeleteView(StaffPortalMixin, AreaScopedMixin, DeleteView):
+    """Delete any permit (guide or vessel)."""
+
+    model = ProtectedAreaPermit
+    template_name = "diveops/staff/permit_confirm_delete.html"
+
+    def get_queryset(self):
+        """Filter to permits belonging to the area."""
+        return ProtectedAreaPermit.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            deleted_at__isnull=True,
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        permit = self.object
+        if permit.permit_type == ProtectedAreaPermit.PermitType.GUIDE:
+            diver_name = permit.diver.person.get_full_name() if permit.diver else "Unknown"
+            context["page_title"] = f"Delete Guide Permit: {diver_name}"
+            context["permit_description"] = f"Guide permit for {diver_name}"
+        elif permit.permit_type == ProtectedAreaPermit.PermitType.VESSEL:
+            context["page_title"] = f"Delete Vessel Permit: {permit.vessel_name}"
+            context["permit_description"] = f"Vessel permit for {permit.vessel_name}"
+        elif permit.permit_type == ProtectedAreaPermit.PermitType.PHOTOGRAPHY:
+            diver_name = permit.diver.person.get_full_name() if permit.diver else "Unknown"
+            context["page_title"] = f"Delete Photography Permit: {diver_name}"
+            context["permit_description"] = f"Photography permit for {diver_name}"
+        elif permit.permit_type == ProtectedAreaPermit.PermitType.DIVING:
+            holder = permit.diver.person.get_full_name() if permit.diver else (permit.organization.name if permit.organization else "Unknown")
+            context["page_title"] = f"Delete Ojo de Agua Permit: {holder}"
+            context["permit_description"] = f"Ojo de Agua permit for {holder}"
+        else:
+            context["page_title"] = f"Delete Permit: {permit.permit_number}"
+            context["permit_description"] = f"Permit {permit.permit_number}"
+        context["permit_type"] = permit.permit_type
+        return context
+
+    def form_valid(self, form):
+        """Soft delete and show success message."""
+        permit = self.object
+        permit.deleted_at = timezone.now()
+        permit.save(update_fields=["deleted_at", "updated_at"])
+        if permit.permit_type == ProtectedAreaPermit.PermitType.GUIDE:
+            diver_name = permit.diver.person.get_full_name() if permit.diver else "Unknown"
+            messages.success(self.request, f"Guide permit for '{diver_name}' deleted.")
+        elif permit.permit_type == ProtectedAreaPermit.PermitType.VESSEL:
+            messages.success(self.request, f"Vessel permit for '{permit.vessel_name}' deleted.")
+        elif permit.permit_type == ProtectedAreaPermit.PermitType.PHOTOGRAPHY:
+            diver_name = permit.diver.person.get_full_name() if permit.diver else "Unknown"
+            messages.success(self.request, f"Photography permit for '{diver_name}' deleted.")
+        elif permit.permit_type == ProtectedAreaPermit.PermitType.DIVING:
+            holder = permit.diver.person.get_full_name() if permit.diver else (permit.organization.name if permit.organization else "Unknown")
+            messages.success(self.request, f"Ojo de Agua permit for '{holder}' deleted.")
+        else:
+            messages.success(self.request, f"Permit '{permit.permit_number}' deleted.")
+        return HttpResponseRedirect(self.get_success_url())
+
+
+class PhotographyPermitCreateView(StaffPortalMixin, AreaScopedMixin, CreateView):
+    """Create a new photography permit within a protected area."""
+
+    model = ProtectedAreaPermit
+    form_class = PhotographyPermitForm
+    template_name = "diveops/staff/permit_form.html"
+
+    def get_form_kwargs(self):
+        """Pass protected area to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["protected_area"] = self.get_protected_area()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Photography Permit"
+        context["permit_type"] = "photography"
+        context["is_create"] = True
+        return context
+
+    def form_valid(self, form):
+        """Set protected area before saving."""
+        form.instance.protected_area = self.get_protected_area()
+        response = super().form_valid(form)
+        diver_name = self.object.diver.person.get_full_name() if self.object.diver else "Unknown"
+        messages.success(self.request, f"Photography permit for '{diver_name}' created.")
+        return response
+
+
+class PhotographyPermitUpdateView(StaffPortalMixin, AreaScopedMixin, UpdateView):
+    """Update an existing photography permit."""
+
+    model = ProtectedAreaPermit
+    form_class = PhotographyPermitForm
+    template_name = "diveops/staff/permit_form.html"
+
+    def get_queryset(self):
+        """Filter to photography permits belonging to the area."""
+        return ProtectedAreaPermit.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            permit_type=ProtectedAreaPermit.PermitType.PHOTOGRAPHY,
+            deleted_at__isnull=True,
+        )
+
+    def get_form_kwargs(self):
+        """Pass protected area to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["protected_area"] = self.get_protected_area()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        diver_name = self.object.diver.person.get_full_name() if self.object.diver else "Unknown"
+        context["page_title"] = f"Edit Photography Permit: {diver_name}"
+        context["permit_type"] = "photography"
+        context["is_create"] = False
+        return context
+
+    def form_valid(self, form):
+        """Save and show success message."""
+        response = super().form_valid(form)
+        diver_name = self.object.diver.person.get_full_name() if self.object.diver else "Unknown"
+        messages.success(self.request, f"Photography permit for '{diver_name}' updated.")
+        return response
+
+
+class DivingPermitCreateView(StaffPortalMixin, AreaScopedMixin, CreateView):
+    """Create a new diving permit within a protected area."""
+
+    model = ProtectedAreaPermit
+    form_class = DivingPermitForm
+    template_name = "diveops/staff/permit_form.html"
+
+    def get_form_kwargs(self):
+        """Pass protected area to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["protected_area"] = self.get_protected_area()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Ojo de Agua Permit"
+        context["permit_type"] = "diving"
+        context["is_create"] = True
+        return context
+
+    def form_valid(self, form):
+        """Set protected area before saving."""
+        form.instance.protected_area = self.get_protected_area()
+        response = super().form_valid(form)
+        if self.object.diver:
+            holder = self.object.diver.person.get_full_name()
+        elif self.object.organization:
+            holder = self.object.organization.name
+        else:
+            holder = "Unknown"
+        messages.success(self.request, f"Ojo de Agua permit for '{holder}' created.")
+        return response
+
+
+class DivingPermitUpdateView(StaffPortalMixin, AreaScopedMixin, UpdateView):
+    """Update an existing diving permit."""
+
+    model = ProtectedAreaPermit
+    form_class = DivingPermitForm
+    template_name = "diveops/staff/permit_form.html"
+
+    def get_queryset(self):
+        """Filter to diving permits belonging to the area."""
+        return ProtectedAreaPermit.objects.filter(
+            protected_area_id=self.kwargs["area_pk"],
+            permit_type=ProtectedAreaPermit.PermitType.DIVING,
+            deleted_at__isnull=True,
+        )
+
+    def get_form_kwargs(self):
+        """Pass protected area to form."""
+        kwargs = super().get_form_kwargs()
+        kwargs["protected_area"] = self.get_protected_area()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add page title to context."""
+        context = super().get_context_data(**kwargs)
+        if self.object.diver:
+            holder = self.object.diver.person.get_full_name()
+        elif self.object.organization:
+            holder = self.object.organization.name
+        else:
+            holder = "Unknown"
+        context["page_title"] = f"Edit Ojo de Agua Permit: {holder}"
+        context["permit_type"] = "diving"
+        context["is_create"] = False
+        return context
+
+    def form_valid(self, form):
+        """Save and show success message."""
+        response = super().form_valid(form)
+        if self.object.diver:
+            holder = self.object.diver.person.get_full_name()
+        elif self.object.organization:
+            holder = self.object.organization.name
+        else:
+            holder = "Unknown"
+        messages.success(self.request, f"Ojo de Agua permit for '{holder}' updated.")
+        return response
+
+
+# =============================================================================
+# SignableAgreement Views (Waiver Signing Workflow)
+# =============================================================================
+
+
+class SignableAgreementListView(StaffPortalMixin, ListView):
+    """List all signable agreements with filtering by status."""
+
+    template_name = "diveops/staff/signable_agreement_list.html"
+    context_object_name = "agreements"
+    paginate_by = 25
+
+    def get_queryset(self):
+        """Get signable agreements with filtering."""
+        from .models import SignableAgreement
+
+        queryset = SignableAgreement.objects.select_related(
+            "template",
+            "party_a_content_type",
+            "sent_by",
+            "signed_document",
+        ).order_by("-created_at")
+
+        # Filter by status if provided
+        status = self.request.GET.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # Filter by template if provided
+        template_id = self.request.GET.get("template")
+        if template_id:
+            queryset = queryset.filter(template_id=template_id)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        """Add filter options to context."""
+        from .models import AgreementTemplate, SignableAgreement
+
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Signable Agreements"
+        context["status_filter"] = self.request.GET.get("status", "")
+        context["template_filter"] = self.request.GET.get("template", "")
+        context["status_choices"] = SignableAgreement.Status.choices
+        context["templates"] = AgreementTemplate.objects.filter(
+            deleted_at__isnull=True
+        ).order_by("name")
+        return context
+
+
+class SignableAgreementCreateView(StaffPortalMixin, View):
+    """Create a new signable agreement from a template."""
+
+    template_name = "diveops/staff/signable_agreement_create.html"
+
+    def get(self, request):
+        """Show the create form with template and party selection."""
+        from .models import AgreementTemplate, DiverProfile
+
+        templates = AgreementTemplate.objects.filter(
+            deleted_at__isnull=True,
+            status=AgreementTemplate.Status.PUBLISHED,
+        ).order_by("name")
+
+        divers = DiverProfile.objects.select_related("person").order_by(
+            "person__last_name", "person__first_name"
+        )
+
+        # Check for pre-selected values from query params
+        selected_template = request.GET.get("template")
+        selected_diver = request.GET.get("diver")
+
+        context = {
+            "page_title": "New Agreement",
+            "templates": templates,
+            "divers": divers,
+            "selected_template": selected_template,
+            "selected_diver": selected_diver,
+        }
+        return render(request, self.template_name, context)
+
+    def post(self, request):
+        """Create the agreement and optionally send it."""
+        from . import services
+        from .models import AgreementTemplate, DiverProfile
+
+        template_id = request.POST.get("template")
+        diver_id = request.POST.get("diver")
+        action = request.POST.get("action", "draft")  # draft or send
+        delivery_method = request.POST.get("delivery_method", "link")
+        expires_in_days = int(request.POST.get("expires_in_days", 30))
+
+        errors = []
+
+        if not template_id:
+            errors.append("Please select an agreement template.")
+        if not diver_id:
+            errors.append("Please select a diver.")
+
+        if errors:
+            templates = AgreementTemplate.objects.filter(
+                deleted_at__isnull=True,
+                status=AgreementTemplate.Status.PUBLISHED,
+            ).order_by("name")
+            divers = DiverProfile.objects.select_related("person").order_by(
+                "person__last_name", "person__first_name"
+            )
+            context = {
+                "page_title": "New Agreement",
+                "templates": templates,
+                "divers": divers,
+                "errors": errors,
+                "selected_template": template_id,
+                "selected_diver": diver_id,
+            }
+            return render(request, self.template_name, context)
+
+        try:
+            template = AgreementTemplate.objects.get(pk=template_id)
+            diver = DiverProfile.objects.select_related("person").get(pk=diver_id)
+
+            # Create the agreement - pass the person as party_a
+            agreement = services.create_agreement_from_template(
+                template=template,
+                party_a=diver.person,
+                actor=request.user,
+            )
+
+            # If action is send, send it immediately
+            if action == "send":
+                agreement, raw_token = services.send_agreement(
+                    agreement=agreement,
+                    delivery_method=delivery_method,
+                    expires_in_days=expires_in_days,
+                    actor=request.user,
+                )
+                signing_url = request.build_absolute_uri(f"/sign/{raw_token}/")
+                messages.success(
+                    request,
+                    f"Agreement created and sent. Signing URL: {signing_url}",
+                )
+            else:
+                messages.success(request, "Agreement created as draft.")
+
+            return redirect("diveops:signable-agreement-detail", pk=agreement.pk)
+
+        except AgreementTemplate.DoesNotExist:
+            errors.append("Selected template not found.")
+        except DiverProfile.DoesNotExist:
+            errors.append("Selected diver not found.")
+        except Exception as e:
+            errors.append(str(e))
+
+        templates = AgreementTemplate.objects.filter(
+            deleted_at__isnull=True,
+            status=AgreementTemplate.Status.PUBLISHED,
+        ).order_by("name")
+        divers = DiverProfile.objects.select_related("person").order_by(
+            "person__last_name", "person__first_name"
+        )
+        context = {
+            "page_title": "New Agreement",
+            "templates": templates,
+            "divers": divers,
+            "errors": errors,
+            "selected_template": template_id,
+            "selected_diver": diver_id,
+        }
+        return render(request, self.template_name, context)
+
+
+class SignableAgreementDetailView(StaffPortalMixin, DetailView):
+    """View details of a signable agreement."""
+
+    template_name = "diveops/staff/signable_agreement_detail.html"
+    context_object_name = "agreement"
+
+    def get_queryset(self):
+        """Get signable agreement with related data."""
+        from .models import SignableAgreement
+
+        return SignableAgreement.objects.select_related(
+            "template",
+            "party_a_content_type",
+            "sent_by",
+            "ledger_agreement",
+            "signed_document",
+        ).prefetch_related("revisions")
+
+    def get_context_data(self, **kwargs):
+        """Add context data."""
+        context = super().get_context_data(**kwargs)
+        agreement = self.object
+
+        # Get party_a display name
+        party_a = agreement.party_a
+        if party_a:
+            if hasattr(party_a, "first_name") and hasattr(party_a, "last_name"):
+                party_name = f"{party_a.first_name} {party_a.last_name}"
+            elif hasattr(party_a, "name"):
+                party_name = party_a.name
+            else:
+                party_name = str(party_a)
+        else:
+            party_name = "Unknown"
+
+        context["page_title"] = f"Agreement: {agreement.template.name}"
+        context["party_name"] = party_name
+
+        # Build signing URL if token is available
+        if agreement.access_token and agreement.status == "sent":
+            context["signing_url"] = self.request.build_absolute_uri(
+                f"/sign/{agreement.access_token}/"
+            )
+
+        return context
+
+
+class SignableAgreementPrintView(StaffPortalMixin, DetailView):
+    """Printable view of a signable agreement.
+
+    For signed agreements with a PDF, redirects to the PDF.
+    For unsigned agreements, shows HTML print view.
+    """
+
+    template_name = "diveops/staff/signable_agreement_print.html"
+    context_object_name = "agreement"
+
+    def get_queryset(self):
+        """Get signable agreement with related data."""
+        from .models import SignableAgreement
+
+        return SignableAgreement.objects.select_related(
+            "template",
+            "party_a_content_type",
+            "signed_document",
+        )
+
+    def get(self, request, *args, **kwargs):
+        """Redirect to signed PDF if available, otherwise show HTML print view."""
+        self.object = self.get_object()
+
+        # If signed and has PDF, redirect to it
+        if (self.object.status == "signed" and
+            self.object.signed_document and
+            self.object.signed_document.file):
+            return redirect(self.object.signed_document.file.url)
+
+        # Otherwise show HTML print view
+        context = self.get_context_data(object=self.object)
+        return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs):
+        """Add context data for printing."""
+        context = super().get_context_data(**kwargs)
+        agreement = self.object
+
+        # Get party_a display name
+        party_a = agreement.party_a
+        if party_a:
+            if hasattr(party_a, "first_name") and hasattr(party_a, "last_name"):
+                party_name = f"{party_a.first_name} {party_a.last_name}"
+            elif hasattr(party_a, "name"):
+                party_name = party_a.name
+            else:
+                party_name = str(party_a)
+        else:
+            party_name = "Unknown"
+
+        context["party_name"] = party_name
+
+        return context
+
+
+class SignableAgreementEditView(StaffPortalMixin, View):
+    """Edit a signable agreement's content."""
+
+    def _get_party_name(self, agreement):
+        """Get display name for party_a."""
+        party_a = agreement.party_a
+        if party_a:
+            if hasattr(party_a, "first_name") and hasattr(party_a, "last_name"):
+                return f"{party_a.first_name} {party_a.last_name}"
+            elif hasattr(party_a, "name"):
+                return party_a.name
+            else:
+                return str(party_a)
+        return "Unknown"
+
+    def get(self, request, pk):
+        """Show edit form."""
+        from .models import SignableAgreement
+
+        agreement = get_object_or_404(SignableAgreement, pk=pk)
+
+        # Can only edit draft or sent agreements
+        if agreement.status not in ("draft", "sent"):
+            messages.error(
+                request,
+                "Only draft or sent agreements can be edited.",
+            )
+            return redirect("diveops:signable-agreement-detail", pk=pk)
+
+        return render(
+            request,
+            "diveops/staff/signable_agreement_edit.html",
+            {
+                "agreement": agreement,
+                "party_name": self._get_party_name(agreement),
+                "page_title": f"Edit: {agreement.template.name}",
+            },
+        )
+
+    def post(self, request, pk):
+        """Save edited agreement."""
+        from .models import SignableAgreement
+        from .services import edit_agreement
+
+        agreement = get_object_or_404(SignableAgreement, pk=pk)
+
+        # Can only edit draft or sent agreements
+        if agreement.status not in ("draft", "sent"):
+            messages.error(
+                request,
+                "Only draft or sent agreements can be edited.",
+            )
+            return redirect("diveops:signable-agreement-detail", pk=pk)
+
+        new_content = request.POST.get("content", "").strip()
+        change_note = request.POST.get("change_note", "").strip()
+
+        if not change_note:
+            messages.error(request, "Change note is required when editing an agreement.")
+            return render(
+                request,
+                "diveops/staff/signable_agreement_edit.html",
+                {
+                    "agreement": agreement,
+                    "party_name": self._get_party_name(agreement),
+                    "page_title": f"Edit: {agreement.template.name}",
+                    "content": new_content,
+                    "error": "Change note is required.",
+                },
+            )
+
+        try:
+            edit_agreement(
+                agreement=agreement,
+                new_content=new_content,
+                change_note=change_note,
+                actor=request.user,
+            )
+            messages.success(request, "Agreement updated successfully.")
+        except Exception as e:
+            messages.error(request, f"Failed to update agreement: {e}")
+
+        return redirect("diveops:signable-agreement-detail", pk=pk)
+
+
+class SignableAgreementResendView(StaffPortalMixin, View):
+    """Resend a signable agreement (generates new token)."""
+
+    def _get_party_name(self, agreement):
+        """Get display name for party_a."""
+        party_a = agreement.party_a
+        if party_a:
+            if hasattr(party_a, "first_name") and hasattr(party_a, "last_name"):
+                return f"{party_a.first_name} {party_a.last_name}"
+            elif hasattr(party_a, "name"):
+                return party_a.name
+            else:
+                return str(party_a)
+        return "Unknown"
+
+    def get(self, request, pk):
+        """Show confirmation page."""
+        from .models import SignableAgreement
+
+        agreement = get_object_or_404(SignableAgreement, pk=pk)
+
+        # Can only resend sent agreements
+        if agreement.status != "sent":
+            messages.error(
+                request,
+                "Only sent agreements can be resent.",
+            )
+            return redirect("diveops:signable-agreement-detail", pk=pk)
+
+        return render(
+            request,
+            "diveops/staff/signable_agreement_resend.html",
+            {
+                "agreement": agreement,
+                "party_name": self._get_party_name(agreement),
+                "page_title": f"Resend: {agreement.template.name}",
+                "delivery_methods": [
+                    ("email", "Send via Email"),
+                    ("link", "Generate Link"),
+                    ("in_person", "In-Person Signing"),
+                ],
+            },
+        )
+
+    def post(self, request, pk):
+        """Resend the agreement with a new token."""
+        from .models import SignableAgreement
+        from .services import resend_agreement
+
+        agreement = get_object_or_404(SignableAgreement, pk=pk)
+
+        # Can only resend sent agreements
+        if agreement.status != "sent":
+            messages.error(
+                request,
+                "Only sent agreements can be resent.",
+            )
+            return redirect("diveops:signable-agreement-detail", pk=pk)
+
+        # Get delivery method
+        delivery_method = request.POST.get("delivery_method", "link")
+        if delivery_method not in ("email", "link", "in_person"):
+            delivery_method = "link"
+
+        # Get expiration days
+        try:
+            expires_in_days = int(request.POST.get("expires_in_days", 30))
+        except ValueError:
+            expires_in_days = 30
+
+        try:
+            agreement, token = resend_agreement(
+                agreement=agreement,
+                delivery_method=delivery_method,
+                expires_in_days=expires_in_days,
+                actor=request.user,
+            )
+
+            # Build the signing URL
+            signing_url = request.build_absolute_uri(f"/sign/{token}/")
+            party_name = self._get_party_name(agreement)
+
+            messages.success(
+                request,
+                f"Agreement resent to {party_name}. New signing link: {signing_url}"
+            )
+        except Exception as e:
+            messages.error(request, f"Failed to resend agreement: {e}")
+
+        return redirect("diveops:signable-agreement-detail", pk=pk)
+
+
+class SignableAgreementVoidView(StaffPortalMixin, View):
+    """Void a signable agreement."""
+
+    def get(self, request, pk):
+        """Show confirmation page."""
+        from .models import SignableAgreement
+
+        agreement = get_object_or_404(SignableAgreement, pk=pk)
+
+        # Get party name for display
+        party_a = agreement.party_a
+        if party_a:
+            if hasattr(party_a, "first_name") and hasattr(party_a, "last_name"):
+                party_name = f"{party_a.first_name} {party_a.last_name}"
+            elif hasattr(party_a, "name"):
+                party_name = party_a.name
+            else:
+                party_name = str(party_a)
+        else:
+            party_name = "Unknown"
+
+        return render(
+            request,
+            "diveops/staff/signable_agreement_void.html",
+            {
+                "agreement": agreement,
+                "party_name": party_name,
+                "page_title": f"Void Agreement: {agreement.template.name}",
+            },
+        )
+
+    def post(self, request, pk):
+        """Void the agreement."""
+        from .models import SignableAgreement
+        from .services import void_agreement
+
+        agreement = get_object_or_404(SignableAgreement, pk=pk)
+        reason = request.POST.get("reason", "").strip()
+
+        if not reason:
+            messages.error(request, "Reason is required to void an agreement.")
+            return HttpResponseRedirect(
+                reverse("diveops:signable-agreement-void", kwargs={"pk": pk})
+            )
+
+        try:
+            void_agreement(agreement=agreement, reason=reason, actor=request.user)
+            messages.success(request, f"Agreement voided: {agreement.template.name}")
+        except Exception as e:
+            messages.error(request, f"Error voiding agreement: {e}")
+            return HttpResponseRedirect(
+                reverse("diveops:signable-agreement-void", kwargs={"pk": pk})
+            )
+
+        return HttpResponseRedirect(reverse("diveops:signable-agreement-list"))
+
+
+class SignableAgreementRevisionDiffView(StaffPortalMixin, View):
+    """View the diff between agreement revisions."""
+
+    def get(self, request, pk, revision_pk):
+        """Return diff HTML for a specific revision."""
+        import difflib
+
+        from .models import SignableAgreement, SignableAgreementRevision
+
+        agreement = get_object_or_404(SignableAgreement, pk=pk)
+        revision = get_object_or_404(
+            SignableAgreementRevision,
+            pk=revision_pk,
+            agreement=agreement,
+        )
+
+        # Get the "before" content
+        content_before = revision.content_before or ""
+
+        # Get the "after" content
+        # If this is the latest revision, use current content_snapshot
+        # Otherwise, use the next revision's content_before
+        next_revision = agreement.revisions.filter(
+            revision_number__gt=revision.revision_number
+        ).order_by("revision_number").first()
+
+        if next_revision and next_revision.content_before:
+            content_after = next_revision.content_before
+        else:
+            # This is the latest revision, use current content
+            content_after = agreement.content_snapshot or ""
+
+        # Generate unified diff
+        before_lines = content_before.splitlines(keepends=True)
+        after_lines = content_after.splitlines(keepends=True)
+
+        diff = difflib.unified_diff(
+            before_lines,
+            after_lines,
+            fromfile=f"Revision {revision.revision_number - 1}" if revision.revision_number > 1 else "Original",
+            tofile=f"Revision {revision.revision_number}",
+            lineterm="",
+        )
+        diff_text = "".join(diff)
+
+        # Also generate HTML diff for side-by-side view
+        differ = difflib.HtmlDiff(wrapcolumn=80)
+        html_diff = differ.make_table(
+            before_lines,
+            after_lines,
+            fromdesc=f"Before (Rev {revision.revision_number - 1})" if revision.revision_number > 1 else "Original",
+            todesc=f"After (Rev {revision.revision_number})",
+            context=True,
+            numlines=3,
+        )
+
+        return render(
+            request,
+            "diveops/staff/signable_agreement_revision_diff.html",
+            {
+                "agreement": agreement,
+                "revision": revision,
+                "diff_text": diff_text,
+                "html_diff": html_diff,
+                "page_title": f"Revision {revision.revision_number} Diff",
+            },
+        )
+
+
+# =============================================================================
+# AI Settings Configuration
+# =============================================================================
+
+
+class AISettingsView(StaffPortalMixin, TemplateView):
+    """View and edit AI settings configuration."""
+
+    template_name = "diveops/staff/ai_settings.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        settings = AISettings.get_instance()
+        context["settings"] = settings
+        context["page_title"] = "AI Settings"
+
+        # Get value sources for display
+        context["openrouter_source"] = settings.get_value_source("openrouter_api_key")
+        context["openai_source"] = settings.get_value_source("openai_api_key")
+
+        # Check if AI is configured
+        context["is_configured"] = settings.is_configured()
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        settings = AISettings.get_instance()
+
+        # Update API keys (only if provided, preserves existing if blank)
+        openrouter_key = request.POST.get("openrouter_api_key", "").strip()
+        openai_key = request.POST.get("openai_api_key", "").strip()
+
+        # Allow clearing by sending empty string with explicit clear flag
+        if request.POST.get("clear_openrouter"):
+            settings.openrouter_api_key = ""
+        elif openrouter_key:
+            settings.openrouter_api_key = openrouter_key
+
+        if request.POST.get("clear_openai"):
+            settings.openai_api_key = ""
+        elif openai_key:
+            settings.openai_api_key = openai_key
+
+        # Update model settings
+        settings.default_model = request.POST.get("default_model", settings.default_model)
+
+        # Update feature flags
+        settings.ocr_enhancement_enabled = request.POST.get("ocr_enhancement_enabled") == "on"
+        settings.auto_extract_enabled = request.POST.get("auto_extract_enabled") == "on"
+
+        settings.save()
+
+        messages.success(request, "AI settings saved successfully.")
+        return redirect("diveops:ai-settings")

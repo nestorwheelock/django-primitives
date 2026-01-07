@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from . import staff_views
+from . import document_views, staff_views
 
 app_name = "diveops"
 
@@ -58,6 +58,7 @@ urlpatterns = [
     path("excursion-types/<uuid:pk>/sites/<uuid:site_pk>/remove/", staff_views.ExcursionTypeRemoveSiteView.as_view(), name="excursion-type-remove-site"),
     # Excursion Type Dive Templates (nested under excursion types)
     path("excursion-types/<uuid:type_pk>/dives/add/", staff_views.ExcursionTypeDiveCreateView.as_view(), name="excursion-type-dive-create"),
+    path("excursion-types/<uuid:type_pk>/dives/<uuid:dive_pk>/link/", staff_views.ExcursionTypeLinkDiveView.as_view(), name="excursion-type-dive-link"),
     path("excursion-type-dives/<uuid:pk>/edit/", staff_views.ExcursionTypeDiveUpdateView.as_view(), name="excursion-type-dive-edit"),
     path("excursion-type-dives/<uuid:pk>/delete/", staff_views.ExcursionTypeDiveDeleteView.as_view(), name="excursion-type-dive-delete"),
     # Site Price Adjustment management (nested under sites)
@@ -75,11 +76,17 @@ urlpatterns = [
     path("dive-plans/<uuid:pk>/", staff_views.DivePlanDetailView.as_view(), name="dive-plan-detail"),
     path("dive-plans/<uuid:pk>/edit/", staff_views.DivePlanUpdateView.as_view(), name="dive-plan-edit"),
     path("dive-plans/<uuid:pk>/delete/", staff_views.DivePlanDeleteView.as_view(), name="dive-plan-delete"),
+    # Segment types API (for dive plan form)
+    path("api/segment-types/", staff_views.DiveSegmentTypesAPIView.as_view(), name="segment-types-api"),
     # Price management (nested under catalog items)
     path("catalog/<uuid:item_pk>/prices/", staff_views.PriceListView.as_view(), name="price-list"),
     path("catalog/<uuid:item_pk>/prices/add/", staff_views.PriceCreateView.as_view(), name="price-create"),
     path("prices/<uuid:pk>/edit/", staff_views.PriceUpdateView.as_view(), name="price-edit"),
     path("prices/<uuid:pk>/delete/", staff_views.PriceDeleteView.as_view(), name="price-delete"),
+    # Component management (nested under catalog items for assemblies)
+    path("catalog/<uuid:item_pk>/components/add/", staff_views.CatalogItemComponentCreateView.as_view(), name="component-create"),
+    path("components/<uuid:pk>/edit/", staff_views.CatalogItemComponentUpdateView.as_view(), name="component-edit"),
+    path("components/<uuid:pk>/delete/", staff_views.CatalogItemComponentDeleteView.as_view(), name="component-delete"),
     # Agreement management
     path("agreements/", staff_views.AgreementListView.as_view(), name="agreement-list"),
     path("agreements/add/", staff_views.AgreementCreateView.as_view(), name="agreement-create"),
@@ -101,12 +108,105 @@ urlpatterns = [
     # API endpoints
     path("api/compatible-sites/", staff_views.CompatibleSitesAPIView.as_view(), name="api-compatible-sites"),
     path("api/excursion-types/<uuid:pk>/tissue-profile/", staff_views.ExcursionTypeTissueCalculationView.as_view(), name="api-excursion-type-tissue-profile"),
-    # Agreement Template management (Paperwork)
-    path("paperwork/", staff_views.AgreementTemplateListView.as_view(), name="agreement-template-list"),
-    path("paperwork/add/", staff_views.AgreementTemplateCreateView.as_view(), name="agreement-template-create"),
-    path("paperwork/<uuid:pk>/", staff_views.AgreementTemplateDetailView.as_view(), name="agreement-template-detail"),
-    path("paperwork/<uuid:pk>/edit/", staff_views.AgreementTemplateUpdateView.as_view(), name="agreement-template-edit"),
-    path("paperwork/<uuid:pk>/publish/", staff_views.AgreementTemplatePublishView.as_view(), name="agreement-template-publish"),
-    path("paperwork/<uuid:pk>/archive/", staff_views.AgreementTemplateArchiveView.as_view(), name="agreement-template-archive"),
-    path("paperwork/<uuid:pk>/delete/", staff_views.AgreementTemplateDeleteView.as_view(), name="agreement-template-delete"),
+    # SignableAgreement management (waiver signing workflow)
+    path("signable-agreements/", staff_views.SignableAgreementListView.as_view(), name="signable-agreement-list"),
+    path("signable-agreements/create/", staff_views.SignableAgreementCreateView.as_view(), name="signable-agreement-create"),
+    path("signable-agreements/<uuid:pk>/", staff_views.SignableAgreementDetailView.as_view(), name="signable-agreement-detail"),
+    path("signable-agreements/<uuid:pk>/print/", staff_views.SignableAgreementPrintView.as_view(), name="signable-agreement-print"),
+    path("signable-agreements/<uuid:pk>/edit/", staff_views.SignableAgreementEditView.as_view(), name="signable-agreement-edit"),
+    path("signable-agreements/<uuid:pk>/resend/", staff_views.SignableAgreementResendView.as_view(), name="signable-agreement-resend"),
+    path("signable-agreements/<uuid:pk>/void/", staff_views.SignableAgreementVoidView.as_view(), name="signable-agreement-void"),
+    path("signable-agreements/<uuid:pk>/revisions/<uuid:revision_pk>/diff/", staff_views.SignableAgreementRevisionDiffView.as_view(), name="signable-agreement-revision-diff"),
+    # Agreement Template management (formerly Paperwork)
+    path("agreements/templates/", staff_views.AgreementTemplateListView.as_view(), name="agreement-template-list"),
+    path("agreements/templates/add/", staff_views.AgreementTemplateCreateView.as_view(), name="agreement-template-create"),
+    path("agreements/templates/<uuid:pk>/", staff_views.AgreementTemplateDetailView.as_view(), name="agreement-template-detail"),
+    path("agreements/templates/<uuid:pk>/preview/", staff_views.AgreementTemplatePreviewView.as_view(), name="agreement-template-preview"),
+    path("agreements/templates/<uuid:pk>/edit/", staff_views.AgreementTemplateUpdateView.as_view(), name="agreement-template-edit"),
+    path("agreements/templates/<uuid:pk>/publish/", staff_views.AgreementTemplatePublishView.as_view(), name="agreement-template-publish"),
+    path("agreements/templates/<uuid:pk>/archive/", staff_views.AgreementTemplateArchiveView.as_view(), name="agreement-template-archive"),
+    path("agreements/templates/<uuid:pk>/send/", staff_views.AgreementTemplateSendView.as_view(), name="agreement-template-send"),
+    path("agreements/templates/<uuid:pk>/delete/", staff_views.AgreementTemplateDeleteView.as_view(), name="agreement-template-delete"),
+    path("agreements/templates/extract-text/", staff_views.AgreementTemplateExtractTextView.as_view(), name="agreement-template-extract-text"),
+    # Protected Area Management
+    path("protected-areas/", staff_views.ProtectedAreaListView.as_view(), name="protected-area-list"),
+    path("protected-areas/add/", staff_views.ProtectedAreaCreateView.as_view(), name="protected-area-create"),
+    path("protected-areas/<uuid:pk>/", staff_views.ProtectedAreaDetailView.as_view(), name="protected-area-detail"),
+    path("protected-areas/<uuid:pk>/edit/", staff_views.ProtectedAreaUpdateView.as_view(), name="protected-area-edit"),
+    path("protected-areas/<uuid:pk>/delete/", staff_views.ProtectedAreaDeleteView.as_view(), name="protected-area-delete"),
+    # Protected Area Zones (area-scoped)
+    path("protected-areas/<uuid:area_pk>/zones/add/", staff_views.ProtectedAreaZoneCreateView.as_view(), name="protected-area-zone-create"),
+    path("protected-areas/<uuid:area_pk>/zones/<uuid:pk>/", staff_views.ProtectedAreaZoneDetailView.as_view(), name="protected-area-zone-detail"),
+    path("protected-areas/<uuid:area_pk>/zones/<uuid:pk>/edit/", staff_views.ProtectedAreaZoneUpdateView.as_view(), name="protected-area-zone-edit"),
+    path("protected-areas/<uuid:area_pk>/zones/<uuid:pk>/delete/", staff_views.ProtectedAreaZoneDeleteView.as_view(), name="protected-area-zone-delete"),
+    # Zone-scoped rules (create rule for specific zone)
+    path("protected-areas/<uuid:area_pk>/zones/<uuid:zone_pk>/rules/add/", staff_views.ZoneRuleCreateView.as_view(), name="zone-rule-create"),
+    # Protected Area Rules (area-scoped)
+    path("protected-areas/<uuid:area_pk>/rules/add/", staff_views.ProtectedAreaRuleCreateView.as_view(), name="protected-area-rule-create"),
+    path("protected-areas/<uuid:area_pk>/rules/<uuid:pk>/edit/", staff_views.ProtectedAreaRuleUpdateView.as_view(), name="protected-area-rule-edit"),
+    path("protected-areas/<uuid:area_pk>/rules/<uuid:pk>/delete/", staff_views.ProtectedAreaRuleDeleteView.as_view(), name="protected-area-rule-delete"),
+    # Protected Area Fee Schedules (area-scoped)
+    path("protected-areas/<uuid:area_pk>/fees/add/", staff_views.ProtectedAreaFeeScheduleCreateView.as_view(), name="protected-area-fee-create"),
+    path("protected-areas/<uuid:area_pk>/fees/<uuid:pk>/edit/", staff_views.ProtectedAreaFeeScheduleUpdateView.as_view(), name="protected-area-fee-edit"),
+    path("protected-areas/<uuid:area_pk>/fees/<uuid:pk>/delete/", staff_views.ProtectedAreaFeeScheduleDeleteView.as_view(), name="protected-area-fee-delete"),
+    # Protected Area Fee Tiers (area + schedule scoped)
+    path("protected-areas/<uuid:area_pk>/fees/<uuid:schedule_pk>/tiers/add/", staff_views.ProtectedAreaFeeTierCreateView.as_view(), name="protected-area-tier-create"),
+    path("protected-areas/<uuid:area_pk>/fees/<uuid:schedule_pk>/tiers/<uuid:pk>/edit/", staff_views.ProtectedAreaFeeTierUpdateView.as_view(), name="protected-area-tier-edit"),
+    path("protected-areas/<uuid:area_pk>/fees/<uuid:schedule_pk>/tiers/<uuid:pk>/delete/", staff_views.ProtectedAreaFeeTierDeleteView.as_view(), name="protected-area-tier-delete"),
+    # Unified Permits (area-scoped) - NEW using ProtectedAreaPermit model
+    path("protected-areas/<uuid:area_pk>/permits/guide/add/", staff_views.GuidePermitCreateView.as_view(), name="guide-permit-create"),
+    path("protected-areas/<uuid:area_pk>/permits/guide/<uuid:pk>/edit/", staff_views.GuidePermitUpdateView.as_view(), name="guide-permit-edit"),
+    path("protected-areas/<uuid:area_pk>/permits/vessel/add/", staff_views.VesselPermitCreateViewNew.as_view(), name="vessel-permit-create-new"),
+    path("protected-areas/<uuid:area_pk>/permits/vessel/<uuid:pk>/edit/", staff_views.VesselPermitUpdateViewNew.as_view(), name="vessel-permit-edit-new"),
+    path("protected-areas/<uuid:area_pk>/permits/photography/add/", staff_views.PhotographyPermitCreateView.as_view(), name="photography-permit-create"),
+    path("protected-areas/<uuid:area_pk>/permits/photography/<uuid:pk>/edit/", staff_views.PhotographyPermitUpdateView.as_view(), name="photography-permit-edit"),
+    path("protected-areas/<uuid:area_pk>/permits/diving/add/", staff_views.DivingPermitCreateView.as_view(), name="diving-permit-create"),
+    path("protected-areas/<uuid:area_pk>/permits/diving/<uuid:pk>/edit/", staff_views.DivingPermitUpdateView.as_view(), name="diving-permit-edit"),
+    path("protected-areas/<uuid:area_pk>/permits/<uuid:pk>/delete/", staff_views.PermitDeleteView.as_view(), name="permit-delete"),
+    # Document Management
+    path("documents/", document_views.DocumentBrowserView.as_view(), name="document-browser"),
+    path("documents/folders/<uuid:pk>/", document_views.FolderDetailView.as_view(), name="folder-detail"),
+    path("documents/folders/add/", document_views.FolderCreateView.as_view(), name="folder-create"),
+    path("documents/folders/<uuid:parent_pk>/add/", document_views.FolderCreateView.as_view(), name="subfolder-create"),
+    path("documents/folders/<uuid:pk>/edit/", document_views.FolderUpdateView.as_view(), name="folder-edit"),
+    path("documents/folders/<uuid:pk>/delete/", document_views.FolderDeleteView.as_view(), name="folder-delete"),
+    path("documents/folders/<uuid:pk>/upload/", document_views.DocumentUploadView.as_view(), name="document-upload"),
+    path("documents/<uuid:pk>/", document_views.DocumentDetailView.as_view(), name="document-detail"),
+    path("documents/<uuid:pk>/download/", document_views.DocumentDownloadView.as_view(), name="document-download"),
+    path("documents/<uuid:pk>/preview/", document_views.DocumentPreviewView.as_view(), name="document-preview"),
+    path("documents/<uuid:pk>/move/", document_views.DocumentMoveView.as_view(), name="document-move"),
+    path("documents/<uuid:pk>/delete/", document_views.DocumentDeleteView.as_view(), name="document-delete"),
+    path("documents/<uuid:pk>/restore/", document_views.DocumentRestoreView.as_view(), name="document-restore"),
+    path("documents/<uuid:pk>/permanent-delete/", document_views.DocumentPermanentDeleteView.as_view(), name="document-permanent-delete"),
+    path("documents/<uuid:pk>/extract/", document_views.DocumentExtractView.as_view(), name="document-extract"),
+    path("documents/trash/empty/", document_views.EmptyTrashView.as_view(), name="empty-trash"),
+    path("documents/folders/<uuid:pk>/permissions/", document_views.FolderPermissionListView.as_view(), name="folder-permissions"),
+    path("documents/folders/<uuid:pk>/permissions/add/", document_views.FolderPermissionCreateView.as_view(), name="folder-permission-add"),
+    path("documents/permissions/<uuid:pk>/delete/", document_views.FolderPermissionDeleteView.as_view(), name="folder-permission-delete"),
+    path("documents/access-logs/", document_views.DocumentAccessLogView.as_view(), name="document-access-logs"),
+    # Retention Policies
+    path("documents/retention-policies/", document_views.RetentionPolicyListView.as_view(), name="retention-policy-list"),
+    path("documents/retention-policies/add/", document_views.RetentionPolicyCreateView.as_view(), name="retention-policy-create"),
+    path("documents/retention-policies/<uuid:pk>/edit/", document_views.RetentionPolicyUpdateView.as_view(), name="retention-policy-edit"),
+    path("documents/retention-policies/<uuid:pk>/delete/", document_views.RetentionPolicyDeleteView.as_view(), name="retention-policy-delete"),
+    # Legal Holds
+    path("documents/legal-holds/", document_views.LegalHoldListView.as_view(), name="legal-hold-list"),
+    path("documents/legal-holds/<uuid:pk>/", document_views.LegalHoldDetailView.as_view(), name="legal-hold-detail"),
+    path("documents/legal-holds/<uuid:pk>/release/", document_views.LegalHoldReleaseView.as_view(), name="legal-hold-release"),
+    path("documents/<uuid:document_pk>/legal-hold/", document_views.LegalHoldCreateView.as_view(), name="legal-hold-create"),
+    # Backup / Export
+    path("documents/backup/", document_views.DocumentBackupView.as_view(), name="document-backup"),
+    path("documents/backup/download/", document_views.DocumentBackupDownloadView.as_view(), name="document-backup-download"),
+    path("documents/backup/s3-sync/", document_views.DocumentS3SyncView.as_view(), name="document-s3-sync"),
+    # Notes and Metadata
+    path("documents/<uuid:pk>/add-note/", document_views.DocumentAddNoteView.as_view(), name="document-add-note"),
+    path("documents/<uuid:pk>/notes/<uuid:note_pk>/delete/", document_views.DocumentDeleteNoteView.as_view(), name="document-delete-note"),
+    path("documents/<uuid:pk>/extract-metadata/", document_views.DocumentExtractMetadataView.as_view(), name="document-extract-metadata"),
+    path("documents/<uuid:pk>/convert-pdf/", document_views.DocumentConvertToPdfView.as_view(), name="document-convert-pdf"),
+    path("documents/<uuid:pk>/preview-pdf/", document_views.DocumentPreviewPdfView.as_view(), name="document-preview-pdf"),
+    # Photo Tagging
+    path("documents/<uuid:pk>/tag-diver/", document_views.PhotoTagAddView.as_view(), name="photo-tag-add"),
+    path("documents/<uuid:pk>/untag/<uuid:tag_pk>/", document_views.PhotoTagRemoveView.as_view(), name="photo-tag-remove"),
+    # Configuration
+    path("settings/ai/", staff_views.AISettingsView.as_view(), name="ai-settings"),
 ]

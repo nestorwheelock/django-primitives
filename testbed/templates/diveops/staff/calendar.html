@@ -1,0 +1,220 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Calendar</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Excursion Calendar</h1>
+            <p class="text-gray-600">{{ period_label }}</p>
+        </div>
+        <a href="{% url 'diveops:excursion-create' %}?date={{ current_date|date:'Y-m-d' }}"
+           class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+            {% icon "plus" "w-4 h-4 mr-2" %}
+            Add Excursion
+        </a>
+    </div>
+
+    <!-- View Mode Tabs & Navigation -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <!-- View Mode Tabs -->
+            <div class="inline-flex rounded-lg border border-gray-200 p-1 bg-gray-50">
+                <a href="?view=daily&date={{ current_date|date:'Y-m-d' }}"
+                   class="px-4 py-2 text-sm font-medium rounded-md {% if view_mode == 'daily' %}bg-white shadow text-gray-900{% else %}text-gray-600 hover:text-gray-900{% endif %}">
+                    Daily
+                </a>
+                <a href="?view=weekly&date={{ current_date|date:'Y-m-d' }}"
+                   class="px-4 py-2 text-sm font-medium rounded-md {% if view_mode == 'weekly' %}bg-white shadow text-gray-900{% else %}text-gray-600 hover:text-gray-900{% endif %}">
+                    Weekly
+                </a>
+                <a href="?view=monthly&date={{ current_date|date:'Y-m-d' }}"
+                   class="px-4 py-2 text-sm font-medium rounded-md {% if view_mode == 'monthly' %}bg-white shadow text-gray-900{% else %}text-gray-600 hover:text-gray-900{% endif %}">
+                    Monthly
+                </a>
+            </div>
+
+            <!-- Date Navigation -->
+            <div class="flex items-center space-x-4">
+                <a href="?view={{ view_mode }}&date={{ prev_date|date:'Y-m-d' }}"
+                   class="p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </a>
+                <span class="text-lg font-medium text-gray-900 min-w-[200px] text-center">{{ period_label }}</span>
+                <a href="?view={{ view_mode }}&date={{ next_date|date:'Y-m-d' }}"
+                   class="p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                <a href="?view={{ view_mode }}"
+                   class="px-3 py-1 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">
+                    Today
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if view_mode == 'daily' %}
+    <!-- Daily View -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="p-4 border-b border-gray-200 bg-gray-50">
+            <h2 class="text-lg font-medium text-gray-900">{{ current_date|date:"l, F j, Y" }}</h2>
+        </div>
+        <div class="divide-y divide-gray-200">
+            {% for excursion in excursions %}
+            <div class="p-4 hover:bg-gray-50">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start space-x-4">
+                        <div class="flex-shrink-0 w-16 text-center">
+                            <span class="text-lg font-medium text-gray-900">{{ excursion.departure_time|time:"g:i" }}</span>
+                            <span class="text-sm text-gray-500">{{ excursion.departure_time|time:"A" }}</span>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-medium text-gray-900">{{ excursion.dive_site.name }}</h3>
+                            <p class="text-sm text-gray-500">{{ excursion.dive_shop.name }}</p>
+                            <div class="mt-2 flex items-center space-x-4 text-sm text-gray-600">
+                                <span class="flex items-center">
+                                    {% icon "users" "w-4 h-4 mr-1" %}
+                                    {{ excursion.bookings.count }} / {{ excursion.max_divers }}
+                                </span>
+                                <span class="flex items-center">
+                                    {% icon "clock" "w-4 h-4 mr-1" %}
+                                    {{ excursion.departure_time|time:"g:i A" }} - {{ excursion.return_time|time:"g:i A" }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {% if excursion.status == 'scheduled' %}bg-blue-100 text-blue-800
+                            {% elif excursion.status == 'boarding' %}bg-yellow-100 text-yellow-800
+                            {% elif excursion.status == 'departed' %}bg-green-100 text-green-800
+                            {% elif excursion.status == 'completed' %}bg-gray-100 text-gray-800
+                            {% elif excursion.status == 'cancelled' %}bg-red-100 text-red-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ excursion.status|title }}
+                        </span>
+                        <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}"
+                           class="p-1 rounded hover:bg-gray-100" title="View Details">
+                            {% icon "eye" "w-5 h-5 text-gray-400" %}
+                        </a>
+                        <a href="{% url 'diveops:excursion-edit' pk=excursion.pk %}"
+                           class="p-1 rounded hover:bg-gray-100" title="Edit">
+                            {% icon "edit" "w-5 h-5 text-gray-400" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="p-12 text-center">
+                <div class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                    {% icon "calendar" "w-6 h-6 text-gray-400" %}
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-1">No excursions scheduled</h3>
+                <p class="text-gray-500 mb-4">There are no dive excursions scheduled for this day.</p>
+                <a href="{% url 'diveops:excursion-create' %}?date={{ current_date|date:'Y-m-d' }}"
+                   class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    {% icon "plus" "w-4 h-4 mr-2" %}
+                    Schedule Excursion
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% elif view_mode == 'weekly' %}
+    <!-- Weekly View -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
+            {% for day in week_days %}
+            <div class="p-3 text-center border-r border-gray-200 last:border-r-0">
+                <span class="text-xs font-medium text-gray-500 uppercase">{{ day.date|date:"D" }}</span>
+                <span class="block text-lg font-medium {% if day.is_today %}text-blue-600{% else %}text-gray-900{% endif %}">{{ day.date|date:"j" }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="grid grid-cols-7 min-h-[400px]">
+            {% for day in week_days %}
+            <div class="border-r border-gray-200 last:border-r-0 {% if day.is_today %}bg-blue-50{% endif %}">
+                <div class="p-2 space-y-2">
+                    {% for excursion in day.excursions %}
+                    <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}"
+                       class="block p-2 rounded-lg text-xs
+                           {% if excursion.status == 'scheduled' %}bg-blue-100 hover:bg-blue-200
+                           {% elif excursion.status == 'cancelled' %}bg-red-100 hover:bg-red-200
+                           {% elif excursion.status == 'completed' %}bg-gray-100 hover:bg-gray-200
+                           {% else %}bg-green-100 hover:bg-green-200{% endif %}">
+                        <span class="font-medium block truncate">{{ excursion.departure_time|time:"g:i A" }}</span>
+                        <span class="block truncate text-gray-600">{{ excursion.dive_site.name }}</span>
+                    </a>
+                    {% endfor %}
+                    <a href="{% url 'diveops:excursion-create' %}?date={{ day.date|date:'Y-m-d' }}"
+                       class="block p-1 text-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">
+                        {% icon "plus" "w-4 h-4 mx-auto" %}
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% elif view_mode == 'monthly' %}
+    <!-- Monthly View -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <!-- Day Headers -->
+        <div class="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
+            <div class="p-3 text-center text-xs font-medium text-gray-500 uppercase">Sun</div>
+            <div class="p-3 text-center text-xs font-medium text-gray-500 uppercase">Mon</div>
+            <div class="p-3 text-center text-xs font-medium text-gray-500 uppercase">Tue</div>
+            <div class="p-3 text-center text-xs font-medium text-gray-500 uppercase">Wed</div>
+            <div class="p-3 text-center text-xs font-medium text-gray-500 uppercase">Thu</div>
+            <div class="p-3 text-center text-xs font-medium text-gray-500 uppercase">Fri</div>
+            <div class="p-3 text-center text-xs font-medium text-gray-500 uppercase">Sat</div>
+        </div>
+        <!-- Calendar Grid -->
+        <div class="grid grid-cols-7">
+            {% for week in calendar_weeks %}
+                {% for day in week %}
+                <div class="min-h-[120px] border-b border-r border-gray-200 p-2
+                    {% if not day.in_month %}bg-gray-50{% elif day.is_today %}bg-blue-50{% endif %}">
+                    <span class="text-sm {% if not day.in_month %}text-gray-400{% elif day.is_today %}text-blue-600 font-bold{% else %}text-gray-700{% endif %}">
+                        {{ day.date|date:"j" }}
+                    </span>
+                    <div class="mt-1 space-y-1">
+                        {% for excursion in day.excursions|slice:":3" %}
+                        <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}"
+                           class="block px-2 py-1 rounded text-xs truncate
+                               {% if excursion.status == 'scheduled' %}bg-blue-100 text-blue-800 hover:bg-blue-200
+                               {% elif excursion.status == 'cancelled' %}bg-red-100 text-red-800 hover:bg-red-200
+                               {% elif excursion.status == 'completed' %}bg-gray-100 text-gray-800 hover:bg-gray-200
+                               {% else %}bg-green-100 text-green-800 hover:bg-green-200{% endif %}">
+                            {{ excursion.departure_time|time:"g:i A" }} {{ excursion.dive_site.name }}
+                        </a>
+                        {% endfor %}
+                        {% if day.excursions|length > 3 %}
+                        <span class="block text-xs text-gray-500 px-2">+{{ day.excursions|length|add:"-3" }} more</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

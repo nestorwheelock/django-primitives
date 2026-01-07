@@ -13,15 +13,20 @@ from .models import (
     DiveSite,
     Excursion,
     ExcursionRoster,
-    MarinePark,
-    ParkFeeSchedule,
-    ParkFeeTier,
-    ParkGuideCredential,
-    ParkRule,
-    ParkZone,
+    ProtectedArea,
+    ProtectedAreaFeeSchedule,
+    ProtectedAreaFeeTier,
+    ProtectedAreaRule,
+    ProtectedAreaZone,
     Trip,
-    VesselPermit,
 )
+
+# Backwards compatibility aliases for admin class names
+MarinePark = ProtectedArea
+ParkZone = ProtectedAreaZone
+ParkRule = ProtectedAreaRule
+ParkFeeSchedule = ProtectedAreaFeeSchedule
+ParkFeeTier = ProtectedAreaFeeTier
 
 # Backwards compatibility aliases
 DiveTrip = Excursion
@@ -288,17 +293,17 @@ class ParkZoneAdmin(admin.ModelAdmin):
     list_display = [
         "name",
         "code",
-        "marine_park",
+        "protected_area",
         "zone_type",
         "diving_allowed",
         "requires_guide",
         "is_active",
     ]
-    list_filter = ["zone_type", "diving_allowed", "requires_guide", "is_active", "marine_park"]
-    list_select_related = ["marine_park"]
-    search_fields = ["name", "code", "marine_park__name"]
+    list_filter = ["zone_type", "diving_allowed", "requires_guide", "is_active", "protected_area"]
+    list_select_related = ["protected_area"]
+    search_fields = ["name", "code", "protected_area__name"]
     prepopulated_fields = {"code": ("name",)}
-    raw_id_fields = ["marine_park"]
+    raw_id_fields = ["protected_area"]
     readonly_fields = ["id", "created_at", "updated_at"]
 
 
@@ -308,7 +313,7 @@ class ParkRuleAdmin(admin.ModelAdmin):
 
     list_display = [
         "subject",
-        "marine_park",
+        "protected_area",
         "zone",
         "rule_type",
         "activity",
@@ -316,10 +321,10 @@ class ParkRuleAdmin(admin.ModelAdmin):
         "effective_start",
         "is_active",
     ]
-    list_filter = ["rule_type", "activity", "enforcement_level", "is_active", "marine_park"]
-    list_select_related = ["marine_park", "zone"]
-    search_fields = ["subject", "details", "marine_park__name"]
-    raw_id_fields = ["marine_park", "zone", "source_document"]
+    list_filter = ["rule_type", "activity", "enforcement_level", "is_active", "protected_area"]
+    list_select_related = ["protected_area", "zone"]
+    search_fields = ["subject", "details", "protected_area__name"]
+    raw_id_fields = ["protected_area", "zone", "source_document"]
     readonly_fields = ["id", "created_at", "updated_at"]
     date_hierarchy = "effective_start"
 
@@ -330,17 +335,17 @@ class ParkFeeScheduleAdmin(admin.ModelAdmin):
 
     list_display = [
         "name",
-        "marine_park",
+        "protected_area",
         "fee_type",
         "applies_to",
         "currency",
         "effective_start",
         "is_active",
     ]
-    list_filter = ["fee_type", "applies_to", "is_active", "marine_park"]
-    list_select_related = ["marine_park", "zone"]
-    search_fields = ["name", "marine_park__name"]
-    raw_id_fields = ["marine_park", "zone", "catalog_item"]
+    list_filter = ["fee_type", "applies_to", "is_active", "protected_area"]
+    list_select_related = ["protected_area", "zone"]
+    search_fields = ["name", "protected_area__name"]
+    raw_id_fields = ["protected_area", "zone", "catalog_item"]
     readonly_fields = ["id", "created_at", "updated_at"]
     date_hierarchy = "effective_start"
 
@@ -357,8 +362,8 @@ class ParkFeeTierAdmin(admin.ModelAdmin):
         "priority",
         "requires_proof",
     ]
-    list_filter = ["tier_code", "requires_proof", "schedule__marine_park"]
-    list_select_related = ["schedule__marine_park"]
+    list_filter = ["tier_code", "requires_proof", "schedule__protected_area"]
+    list_select_related = ["schedule__protected_area"]
     search_fields = ["label", "schedule__name"]
     raw_id_fields = ["schedule"]
     readonly_fields = ["id", "created_at", "updated_at"]
@@ -382,46 +387,3 @@ class DiverEligibilityProofAdmin(admin.ModelAdmin):
     raw_id_fields = ["diver", "document", "verified_by"]
     readonly_fields = ["id", "created_at", "updated_at"]
     date_hierarchy = "verified_at"
-
-
-@admin.register(ParkGuideCredential)
-class ParkGuideCredentialAdmin(admin.ModelAdmin):
-    """Admin for ParkGuideCredential model."""
-
-    list_display = [
-        "diver",
-        "marine_park",
-        "credential_number",
-        "issued_at",
-        "expires_at",
-        "is_active",
-        "is_refresher_due",
-    ]
-    list_filter = ["is_active", "is_owner", "marine_park"]
-    list_select_related = ["diver__person", "marine_park"]
-    search_fields = ["diver__person__first_name", "diver__person__last_name", "credential_number"]
-    raw_id_fields = ["diver", "marine_park", "carta_eval_agreement", "carta_eval_signed_by"]
-    filter_horizontal = ["authorized_zones"]
-    readonly_fields = ["id", "created_at", "updated_at"]
-    date_hierarchy = "issued_at"
-
-
-@admin.register(VesselPermit)
-class VesselPermitAdmin(admin.ModelAdmin):
-    """Admin for VesselPermit model."""
-
-    list_display = [
-        "vessel_name",
-        "permit_number",
-        "marine_park",
-        "operator",
-        "issued_at",
-        "expires_at",
-        "is_active",
-    ]
-    list_filter = ["is_active", "marine_park"]
-    list_select_related = ["marine_park", "operator"]
-    search_fields = ["vessel_name", "permit_number", "operator__name"]
-    raw_id_fields = ["marine_park", "operator"]
-    readonly_fields = ["id", "created_at", "updated_at"]
-    date_hierarchy = "issued_at"

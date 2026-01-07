@@ -1,0 +1,169 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:excursion-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Excursions</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ excursion.site_names|default:"Excursion" }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">
+            {% if is_create %}
+            Add a dive to the excursion on {{ excursion.departure_time|date:"l, F j, Y" }}
+            {% else %}
+            Update dive details
+            {% endif %}
+        </p>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <form method="post" class="p-6 space-y-6">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        {% icon "alert-circle" "h-5 w-5 text-red-400" %}
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                        <div class="mt-2 text-sm text-red-700">
+                            <ul class="list-disc pl-5 space-y-1">
+                                {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Dive Site Section -->
+            <div>
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Location</h3>
+                <div>
+                    <label for="id_dive_site" class="block text-sm font-medium text-gray-700">Dive Site <span class="text-red-500">*</span></label>
+                    <select name="dive_site" id="id_dive_site"
+                            class="mt-1 block w-full px-3 py-2 border {% if form.dive_site.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select a dive site...</option>
+                        {% for site in form.fields.dive_site.queryset %}
+                        <option value="{{ site.pk }}" {% if form.dive_site.value|stringformat:'s' == site.pk|stringformat:'s' %}selected{% endif %}>{{ site.name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.dive_site.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.dive_site.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Schedule Section -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Schedule</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Dive Number -->
+                    <div>
+                        <label for="id_sequence" class="block text-sm font-medium text-gray-700">Dive Number <span class="text-red-500">*</span></label>
+                        <input type="number" name="sequence" id="id_sequence"
+                               value="{{ form.sequence.value|default:1 }}" min="1" max="10"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.sequence.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        {% if form.sequence.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.sequence.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-1 text-sm text-gray-500">Order of this dive in the excursion (1st, 2nd, etc.)</p>
+                    </div>
+
+                    <!-- Planned Start Time -->
+                    <div>
+                        <label for="id_planned_start" class="block text-sm font-medium text-gray-700">Planned Start Time <span class="text-red-500">*</span></label>
+                        <input type="datetime-local" name="planned_start" id="id_planned_start"
+                               value="{{ form.planned_start.value|date:'Y-m-d\TH:i'|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.planned_start.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        {% if form.planned_start.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.planned_start.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Planned Duration -->
+                    <div>
+                        <label for="id_planned_duration_minutes" class="block text-sm font-medium text-gray-700">Planned Duration (minutes)</label>
+                        <input type="number" name="planned_duration_minutes" id="id_planned_duration_minutes"
+                               value="{{ form.planned_duration_minutes.value|default:'' }}" min="1" max="180"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.planned_duration_minutes.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="45">
+                        {% if form.planned_duration_minutes.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.planned_duration_minutes.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-1 text-sm text-gray-500">Optional - expected dive duration</p>
+                    </div>
+
+                    <!-- Max Depth -->
+                    <div>
+                        <label for="id_max_depth_meters" class="block text-sm font-medium text-gray-700">Max Depth (meters)</label>
+                        <input type="number" name="max_depth_meters" id="id_max_depth_meters"
+                               value="{{ form.max_depth_meters.value|default:'' }}" min="1" max="60"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.max_depth_meters.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="18">
+                        {% if form.max_depth_meters.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.max_depth_meters.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-1 text-sm text-gray-500">Optional - maximum planned depth</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notes Section -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Notes</h3>
+                <div>
+                    <label for="id_notes" class="block text-sm font-medium text-gray-700">Notes</label>
+                    <textarea name="notes" id="id_notes" rows="3"
+                              class="mt-1 block w-full px-3 py-2 border {% if form.notes.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Any special instructions or notes for this dive...">{{ form.notes.value|default:'' }}</textarea>
+                    {% if form.notes.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.notes.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="border-t pt-6 flex items-center justify-end space-x-3">
+                <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </a>
+                <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    {% if is_create %}Add Dive{% else %}Save Changes{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

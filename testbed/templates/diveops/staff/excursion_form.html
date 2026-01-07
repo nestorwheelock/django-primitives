@@ -1,0 +1,320 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:calendar' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Calendar</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">{% if is_create %}Schedule a new dive excursion{% else %}Update excursion details{% endif %}</p>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <form method="post" class="p-6 space-y-6">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        {% icon "alert-circle" "h-5 w-5 text-red-400" %}
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                        <div class="mt-2 text-sm text-red-700">
+                            <ul class="list-disc pl-5 space-y-1">
+                                {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Excursion Type Section -->
+            <div>
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Product Type</h3>
+                <div>
+                    <label for="id_excursion_type" class="block text-sm font-medium text-gray-700">Excursion Type</label>
+                    <select name="excursion_type" id="id_excursion_type"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">-- No template (manual pricing) --</option>
+                        {% for type in excursion_types %}
+                        <option value="{{ type.pk }}"
+                                data-base-price="{{ type.base_price }}"
+                                data-currency="{{ type.currency }}"
+                                data-dive-mode="{{ type.dive_mode }}"
+                                data-time-of-day="{{ type.time_of_day }}"
+                                {% if form.excursion_type.value == type.pk|stringformat:"s" or form.excursion_type.value == type %}selected{% endif %}>
+                            {{ type.name }} ({{ type.currency }} {{ type.base_price }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-sm text-gray-500">Select a product template for automatic pricing, or leave blank to set price manually</p>
+                    {% if form.excursion_type.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.excursion_type.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Location Section -->
+            <div>
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Location</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Dive Site -->
+                    <div>
+                        <label for="id_dive_site" class="block text-sm font-medium text-gray-700">Dive Site <span class="text-red-500">*</span></label>
+                        <select name="dive_site" id="id_dive_site"
+                                class="mt-1 block w-full px-3 py-2 border {% if form.dive_site.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Select a dive site...</option>
+                            {% for site in form.fields.dive_site.queryset %}
+                            <option value="{{ site.pk }}" {% if form.dive_site.value|stringformat:'s' == site.pk|stringformat:'s' %}selected{% endif %}>{{ site.name }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.dive_site.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.dive_site.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Dive Shop -->
+                    <div>
+                        <label for="id_dive_shop" class="block text-sm font-medium text-gray-700">Dive Shop <span class="text-red-500">*</span></label>
+                        <select name="dive_shop" id="id_dive_shop"
+                                class="mt-1 block w-full px-3 py-2 border {% if form.dive_shop.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Select a dive shop...</option>
+                            {% for shop in form.fields.dive_shop.queryset %}
+                            <option value="{{ shop.pk }}" {% if form.dive_shop.value|stringformat:'s' == shop.pk|stringformat:'s' %}selected{% endif %}>{{ shop.name }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.dive_shop.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.dive_shop.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Schedule Section -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Schedule</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Departure Time -->
+                    <div>
+                        <label for="id_departure_time" class="block text-sm font-medium text-gray-700">Departure Time <span class="text-red-500">*</span></label>
+                        <input type="datetime-local" name="departure_time" id="id_departure_time"
+                               value="{{ form.departure_time.value|date:'Y-m-d\TH:i'|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.departure_time.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        {% if form.departure_time.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.departure_time.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Return Time -->
+                    <div>
+                        <label for="id_return_time" class="block text-sm font-medium text-gray-700">Return Time <span class="text-red-500">*</span></label>
+                        <input type="datetime-local" name="return_time" id="id_return_time"
+                               value="{{ form.return_time.value|date:'Y-m-d\TH:i'|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.return_time.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        {% if form.return_time.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.return_time.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Capacity Section -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Capacity</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Max Divers -->
+                    <div>
+                        <label for="id_max_divers" class="block text-sm font-medium text-gray-700">Maximum Divers <span class="text-red-500">*</span></label>
+                        <input type="number" name="max_divers" id="id_max_divers"
+                               value="{{ form.max_divers.value|default:8 }}" min="1" max="100"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.max_divers.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        {% if form.max_divers.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.max_divers.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-1 text-sm text-gray-500">Maximum number of divers allowed on this excursion</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pricing Section -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Pricing</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Price Per Diver -->
+                    <div>
+                        <label for="id_price_per_diver" class="block text-sm font-medium text-gray-700">Price Per Diver</label>
+                        <div class="mt-1 relative rounded-lg shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" name="price_per_diver" id="id_price_per_diver"
+                                   value="{{ form.price_per_diver.value|default:'' }}" step="0.01" min="0"
+                                   class="block w-full pl-7 pr-12 px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="0.00">
+                            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">{{ form.currency.value|default:'USD' }}</span>
+                            </div>
+                        </div>
+                        <p class="mt-1 text-sm text-gray-500">Leave blank if pricing is determined per-booking</p>
+                    </div>
+
+                    <!-- Currency -->
+                    <div>
+                        <label for="id_currency" class="block text-sm font-medium text-gray-700">Currency</label>
+                        <select name="currency" id="id_currency"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for code, label in form.fields.currency.choices %}
+                            <option value="{{ code }}" {% if form.currency.value == code %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="border-t pt-6 flex items-center justify-between">
+                {% if not is_create %}
+                <a href="{% url 'diveops:excursion-cancel' pk=excursion.pk %}"
+                   class="text-sm font-medium text-red-600 hover:text-red-700">
+                    Cancel this excursion
+                </a>
+                {% else %}
+                <div></div>
+                {% endif %}
+                <div class="flex items-center space-x-3">
+                    <a href="{% url 'diveops:calendar' %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        Cancel
+                    </a>
+                    <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                        {% if is_create %}Create Excursion{% else %}Save Changes{% endif %}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const typeSelect = document.getElementById('id_excursion_type');
+    const siteSelect = document.getElementById('id_dive_site');
+    const priceInput = document.getElementById('id_price_per_diver');
+    const currencySelect = document.getElementById('id_currency');
+
+    // Store the initially selected site value (for edit mode)
+    const initialSiteValue = siteSelect.value;
+
+    // Store all original site options for fallback
+    const allSiteOptions = Array.from(siteSelect.options).map(opt => ({
+        value: opt.value,
+        text: opt.text
+    }));
+
+    async function updateSiteOptions(excursionTypeId) {
+        const currentSiteValue = siteSelect.value;
+
+        // Build the API URL
+        let url = '{% url "diveops:api-compatible-sites" %}';
+        if (excursionTypeId) {
+            url += '?excursion_type=' + excursionTypeId;
+        }
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+
+            // Clear current options
+            siteSelect.innerHTML = '<option value="">Select a dive site...</option>';
+
+            // Add filtered sites
+            data.sites.forEach(site => {
+                const option = document.createElement('option');
+                option.value = site.id;
+                option.textContent = site.name + ' (' + site.dive_mode + ', ' + site.max_depth_meters + 'm)';
+
+                // Restore selection if the site is still valid
+                if (site.id === currentSiteValue || site.id === initialSiteValue) {
+                    option.selected = true;
+                }
+
+                siteSelect.appendChild(option);
+            });
+
+            // Show a message if no compatible sites
+            if (data.sites.length === 0 && excursionTypeId) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = '-- No compatible sites for this excursion type --';
+                option.disabled = true;
+                siteSelect.appendChild(option);
+            }
+        } catch (error) {
+            console.error('Error fetching compatible sites:', error);
+            // Fall back to showing all sites
+            siteSelect.innerHTML = '<option value="">Select a dive site...</option>';
+            allSiteOptions.forEach(opt => {
+                if (opt.value) {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = opt.text;
+                    if (opt.value === currentSiteValue) {
+                        option.selected = true;
+                    }
+                    siteSelect.appendChild(option);
+                }
+            });
+        }
+    }
+
+    function updatePricing() {
+        const selectedOption = typeSelect.options[typeSelect.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+            const basePrice = selectedOption.dataset.basePrice;
+            const currency = selectedOption.dataset.currency;
+
+            // Auto-fill currency from type if price is empty
+            if (!priceInput.value) {
+                currencySelect.value = currency;
+            }
+        }
+    }
+
+    // Listen for excursion type changes
+    typeSelect.addEventListener('change', function() {
+        updateSiteOptions(this.value);
+        updatePricing();
+    });
+
+    // Initial load: filter sites if an excursion type is already selected
+    if (typeSelect.value) {
+        updateSiteOptions(typeSelect.value);
+    }
+    updatePricing();
+});
+</script>
+{% endblock %}

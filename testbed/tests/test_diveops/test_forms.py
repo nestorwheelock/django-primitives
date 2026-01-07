@@ -152,14 +152,14 @@ class TestBookDiverForm:
         """BookDiverForm has a diver selection field."""
         from primitives_testbed.diveops.forms import BookDiverForm
 
-        form = BookDiverForm(trip=dive_trip)
+        form = BookDiverForm(excursion=dive_trip)
         assert "diver" in form.fields
 
     def test_form_shows_available_divers(self, dive_trip, diver_profile, beginner_diver):
         """Form shows divers who are not already booked."""
         from primitives_testbed.diveops.forms import BookDiverForm
 
-        form = BookDiverForm(trip=dive_trip)
+        form = BookDiverForm(excursion=dive_trip)
         diver_pks = [d.pk for d in form.fields["diver"].queryset]
 
         assert diver_profile.pk in diver_pks
@@ -171,13 +171,13 @@ class TestBookDiverForm:
         from primitives_testbed.diveops.models import Booking
 
         Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="confirmed",
             booked_by=user,
         )
 
-        form = BookDiverForm(trip=dive_trip)
+        form = BookDiverForm(excursion=dive_trip)
         diver_pks = [d.pk for d in form.fields["diver"].queryset]
 
         assert diver_profile.pk not in diver_pks
@@ -188,13 +188,13 @@ class TestBookDiverForm:
         from primitives_testbed.diveops.models import Booking
 
         Booking.objects.create(
-            trip=dive_trip,
+            excursion=dive_trip,
             diver=diver_profile,
             status="cancelled",
             booked_by=user,
         )
 
-        form = BookDiverForm(trip=dive_trip)
+        form = BookDiverForm(excursion=dive_trip)
         diver_pks = [d.pk for d in form.fields["diver"].queryset]
 
         assert diver_profile.pk in diver_pks
@@ -203,14 +203,14 @@ class TestBookDiverForm:
         """Form is valid when selecting an eligible diver."""
         from primitives_testbed.diveops.forms import BookDiverForm
 
-        form = BookDiverForm(trip=dive_trip, data={"diver": diver_profile.pk})
+        form = BookDiverForm(excursion=dive_trip, data={"diver": diver_profile.pk})
         assert form.is_valid()
 
     def test_form_displays_diver_name_and_cert(self, dive_trip, diver_profile):
         """Form displays diver name and certification level."""
         from primitives_testbed.diveops.forms import BookDiverForm
 
-        form = BookDiverForm(trip=dive_trip)
+        form = BookDiverForm(excursion=dive_trip)
         choices = list(form.fields["diver"].queryset)
 
         # Should have at least one choice

@@ -1,0 +1,140 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:staff-site-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Dive Sites</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:staff-site-detail' pk=site.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ site.name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{% if is_create %}Add{% else %}Edit{% endif %} Price Adjustment</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{% if is_create %}Add Price Adjustment{% else %}Edit Price Adjustment{% endif %}</h1>
+        <p class="text-gray-600">{% if is_create %}Add a new price adjustment for {{ site.name }}{% else %}Update price adjustment for {{ site.name }}{% endif %}</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <div class="max-w-2xl">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Adjustment Details</h2>
+
+                <!-- Type -->
+                <div>
+                    <label for="id_kind" class="block text-sm font-medium text-gray-700">Adjustment Type <span class="text-red-500">*</span></label>
+                    <select name="kind" id="id_kind"
+                            class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            required>
+                        <option value="">Select type...</option>
+                        <option value="distance" {% if form.kind.value == 'distance' %}selected{% endif %}>Distance/Fuel Surcharge</option>
+                        <option value="park_fee" {% if form.kind.value == 'park_fee' %}selected{% endif %}>Park Entry Fee</option>
+                        <option value="night" {% if form.kind.value == 'night' %}selected{% endif %}>Night Dive Surcharge</option>
+                        <option value="boat" {% if form.kind.value == 'boat' %}selected{% endif %}>Boat Charter Fee</option>
+                    </select>
+                    {% if form.kind.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.kind.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Amount -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_amount" class="block text-sm font-medium text-gray-700">Amount <span class="text-red-500">*</span></label>
+                        <input type="number" name="amount" id="id_amount" value="{{ form.amount.value|default:'' }}"
+                               step="0.01" min="0"
+                               class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                               required>
+                        {% if form.amount.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.amount.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="id_currency" class="block text-sm font-medium text-gray-700">Currency <span class="text-red-500">*</span></label>
+                        <select name="currency" id="id_currency"
+                                class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                required>
+                            <option value="USD" {% if form.currency.value == 'USD' %}selected{% endif %}>USD</option>
+                            <option value="EUR" {% if form.currency.value == 'EUR' %}selected{% endif %}>EUR</option>
+                            <option value="GBP" {% if form.currency.value == 'GBP' %}selected{% endif %}>GBP</option>
+                            <option value="AUD" {% if form.currency.value == 'AUD' %}selected{% endif %}>AUD</option>
+                        </select>
+                        {% if form.currency.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.currency.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Applies To Mode -->
+                <div>
+                    <label for="id_applies_to_mode" class="block text-sm font-medium text-gray-700">Applies To Mode</label>
+                    <select name="applies_to_mode" id="id_applies_to_mode"
+                            class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <option value="" {% if not form.applies_to_mode.value %}selected{% endif %}>All modes</option>
+                        <option value="boat" {% if form.applies_to_mode.value == 'boat' %}selected{% endif %}>Boat dives only</option>
+                        <option value="shore" {% if form.applies_to_mode.value == 'shore' %}selected{% endif %}>Shore dives only</option>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">If set, this adjustment only applies to the selected dive mode</p>
+                    {% if form.applies_to_mode.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.applies_to_mode.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Checkboxes -->
+                <div class="space-y-3">
+                    <div class="flex items-center">
+                        <input type="checkbox" name="is_per_diver" id="id_is_per_diver"
+                               class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                               {% if form.is_per_diver.value %}checked{% endif %}>
+                        <label for="id_is_per_diver" class="ml-2 block text-sm text-gray-900">Per Diver</label>
+                    </div>
+                    <p class="text-xs text-gray-500 ml-6">If checked, this amount is added per diver. Otherwise it's per trip.</p>
+
+                    <div class="flex items-center">
+                        <input type="checkbox" name="is_active" id="id_is_active"
+                               class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                               {% if form.is_active.value %}checked{% endif %}>
+                        <label for="id_is_active" class="ml-2 block text-sm text-gray-900">Active</label>
+                    </div>
+                    <p class="text-xs text-gray-500 ml-6">If unchecked, this adjustment will not be applied to prices</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end space-x-3 max-w-2xl">
+            <a href="{% url 'diveops:staff-site-detail' pk=site.pk %}"
+               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% if is_create %}Add Adjustment{% else %}Update Adjustment{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

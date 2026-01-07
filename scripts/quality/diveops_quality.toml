@@ -2,7 +2,7 @@
 # All thresholds are FAIL thresholds (below = fail)
 
 [thresholds]
-coverage_percent = 90  # Target: 95%, current: 90.4% (see coverage debt below)
+coverage_percent = 95
 max_complexity = 10  # McCabe complexity per function
 max_maintainability_index = 20  # Radon MI (A=100-20, B=19-10, C=9-0)
 

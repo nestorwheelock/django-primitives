@@ -489,10 +489,11 @@ def snapshot_booking_pricing(
     booking.price_currency = currency
     booking.save(update_fields=["price_snapshot", "price_amount", "price_currency", "updated_at"])
 
-    # Create ledger entries
+    # Create ledger entries with per-vendor payable accounts
     ledger_tx = _create_ledger_entries(
         booking=booking,
         totals=totals,
+        lines=lines,
         actor=actor,
     )
 
@@ -748,6 +749,7 @@ def _calculate_totals(
 def _create_ledger_entries(
     booking: "Booking",
     totals: PricingTotalsSnapshot,
+    lines: list[PricingLineSnapshot],
     actor,
 ) -> Transaction | None:
     """Create balanced ledger entries for a booking snapshot.
@@ -760,26 +762,34 @@ def _create_ledger_entries(
 
     Expense side (shop costs):
     - Debit Expense/COGS (our cost)
-    - Credit Vendor Payables (we owe vendors)
+    - Credit Per-Vendor Payables (we owe each vendor)
+
+    Uses per-vendor payable accounts for proper reconciliation:
+    - Lines with vendor_agreement_id → vendor-specific payable account
+    - Lines without vendor info → generic shop payables (fallback)
 
     Invariant: Total debits = Total credits (balanced transaction)
 
     Args:
         booking: Booking with pricing
         totals: Calculated totals
+        lines: Pricing lines with vendor refs for per-vendor accounting
         actor: User creating entries
 
     Returns:
         Transaction if created, None if both charge and cost are zero
     """
+    from django_agreements.models import Agreement
+
     charge = Decimal(totals.total_charge_per_diver.amount)
     cost = Decimal(totals.total_cost_per_diver.amount)
     currency = totals.total_charge_per_diver.currency
+    diver_count = totals.diver_count
 
     if charge == 0 and cost == 0:
         return None
 
-    # Get or create accounts
+    # Get or create shop-level accounts
     dive_shop = booking.excursion.dive_shop
     shop_content_type = ContentType.objects.get_for_model(dive_shop)
 
@@ -807,12 +817,13 @@ def _create_ledger_entries(
         defaults={"name": f"COGS - {dive_shop.name}"},
     )
 
-    payables_account, _ = Account.objects.get_or_create(
+    # Fallback payables account for lines without vendor info
+    fallback_payables_account, _ = Account.objects.get_or_create(
         owner_content_type=shop_content_type,
         owner_id=str(dive_shop.pk),
         account_type="payable",
         currency=currency,
-        defaults={"name": f"Vendor Payables - {dive_shop.name}"},
+        defaults={"name": f"Unattributed Payables - {dive_shop.name}"},
     )
 
     # Create transaction
@@ -845,9 +856,40 @@ def _create_ledger_entries(
             description=f"Excursion revenue for {booking.excursion}",
         )
 
-    # Expense entries (shop cost)
+    # Expense entries - per-vendor payable accounts
+    # Group costs by vendor for proper reconciliation
+    vendor_costs: dict[str, Decimal] = {}  # vendor_id -> cost amount
+    unattributed_cost = Decimal("0")
+
+    for line in lines:
+        line_cost = Decimal(line.shop_cost.amount)
+        if line_cost == 0:
+            continue
+
+        # Calculate this diver's share of the line cost
+        if line.allocation == "shared":
+            diver_share = round_money(line_cost / diver_count) if diver_count > 0 else Decimal("0")
+        else:  # per_diver
+            diver_share = line_cost
+
+        # Check for vendor agreement
+        vendor_agreement_id = line.refs.get("vendor_agreement_id")
+        if vendor_agreement_id:
+            try:
+                agreement = Agreement.objects.select_related("party_b").get(pk=vendor_agreement_id)
+                vendor = agreement.party_b
+                if vendor:
+                    vendor_id = str(vendor.pk)
+                    vendor_costs[vendor_id] = vendor_costs.get(vendor_id, Decimal("0")) + diver_share
+                    continue
+            except Agreement.DoesNotExist:
+                pass  # Fall through to unattributed
+
+        # No vendor info - add to unattributed
+        unattributed_cost += diver_share
+
+    # Create expense debit entries (total shop cost)
     if cost > 0:
-        # Debit expense (our cost)
         Entry.objects.create(
             transaction=tx,
             account=expense_account,
@@ -855,13 +897,46 @@ def _create_ledger_entries(
             amount=cost,
             description=f"Excursion costs for {booking.excursion}",
         )
-        # Credit payables (we owe vendors)
+
+    # Create per-vendor payable credit entries
+    from django_parties.models import Organization
+
+    for vendor_id, vendor_cost in vendor_costs.items():
+        if vendor_cost == 0:
+            continue
+
+        try:
+            vendor = Organization.objects.get(pk=vendor_id)
+            vendor_content_type = ContentType.objects.get_for_model(vendor)
+
+            # Get or create vendor-specific payable account
+            vendor_payables_account, _ = Account.objects.get_or_create(
+                owner_content_type=vendor_content_type,
+                owner_id=str(vendor.pk),
+                account_type="payable",
+                currency=currency,
+                defaults={"name": f"Payables - {vendor.name}"},
+            )
+
+            Entry.objects.create(
+                transaction=tx,
+                account=vendor_payables_account,
+                entry_type="credit",
+                amount=vendor_cost,
+                description=f"Owed to {vendor.name} for {booking.excursion}",
+            )
+        except Organization.DoesNotExist:
+            # If vendor not found, add to unattributed
+            unattributed_cost += vendor_cost
+
+    # Credit unattributed payables (fallback)
+    if unattributed_cost > 0:
         Entry.objects.create(
             transaction=tx,
-            account=payables_account,
+            account=fallback_payables_account,
             entry_type="credit",
-            amount=cost,
-            description=f"Owed to vendors for {booking.excursion}",
+            amount=unattributed_cost,
+            description=f"Unattributed vendor costs for {booking.excursion}",
         )
 
     # Post the transaction

@@ -1,0 +1,191 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:agreement-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Agreements</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:agreement-detail' pk=agreement.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ agreement.scope_type }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Sign</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+    </div>
+
+    <!-- Agreement Summary -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                {% icon "file-text" "h-5 w-5 text-blue-400" %}
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">Agreement Summary</h3>
+                <div class="mt-2 text-sm text-blue-700">
+                    <p><strong>Type:</strong> {{ agreement.scope_type }}</p>
+                    <p><strong>Party A:</strong> {{ agreement.party_a }}</p>
+                    <p><strong>Party B:</strong> {{ agreement.party_b }}</p>
+                    <p><strong>Valid From:</strong> {{ agreement.valid_from|date:"M d, Y" }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" id="signature-form" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Signer Information -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Signer Information</h3>
+                <p class="text-sm text-gray-500 mt-1">{{ party_label }}</p>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <div>
+                    <label for="signer_name" class="block text-sm font-medium text-gray-700 mb-1">Full Legal Name *</label>
+                    <input type="text" name="signer_name" id="signer_name" required
+                           class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                           placeholder="Enter full legal name">
+                    {% if form.signer_name.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.signer_name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <label for="signer_title" class="block text-sm font-medium text-gray-700 mb-1">Title/Position</label>
+                    <input type="text" name="signer_title" id="signer_title"
+                           class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                           placeholder="e.g., Manager, Owner, Dive Instructor">
+                    <p class="mt-1 text-xs text-gray-500">For vendor representatives, include your title</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Signature Capture -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Signature *</h3>
+                <p class="text-sm text-gray-500 mt-1">Sign using your mouse or finger on touch devices</p>
+            </div>
+            <div class="px-6 py-4">
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-2 bg-white">
+                    <canvas id="signature_pad" class="signature-canvas w-full" width="560" height="200" style="touch-action: none;"></canvas>
+                </div>
+                <div class="mt-3 flex justify-between items-center">
+                    <button type="button" onclick="clearSignature()" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md">
+                        Clear Signature
+                    </button>
+                    <span class="text-xs text-gray-500">Draw your signature in the box above</span>
+                </div>
+                <input type="hidden" name="signature" id="signature_input">
+                {% if form.signature.errors %}
+                <p class="mt-2 text-sm text-red-600">{{ form.signature.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Legal Acknowledgment -->
+        <div class="bg-gray-50 rounded-lg p-4">
+            <label class="flex items-start">
+                <input type="checkbox" id="acknowledge" required
+                       class="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                <span class="ml-2 text-sm text-gray-600">
+                    I acknowledge that by signing this document electronically, I am providing my legally binding signature
+                    and I agree to the terms of this agreement.
+                </span>
+            </label>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-end space-x-3">
+            <a href="{% url 'diveops:agreement-detail' pk=agreement.pk %}"
+               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit" id="submit-btn"
+                    class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                Submit Signature
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- signature_pad library from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+
+<script>
+    let signaturePad;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const canvas = document.getElementById('signature_pad');
+        signaturePad = new SignaturePad(canvas, {
+            backgroundColor: 'rgb(255, 255, 255)',
+            penColor: 'rgb(0, 0, 0)'
+        });
+
+        // Resize canvas to fit container properly
+        function resizeCanvas() {
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth - 16;  // Account for padding
+            canvas.height = 200;
+            canvas.getContext('2d').scale(ratio, ratio);
+            signaturePad.clear();  // Clear after resize
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Form submission
+        document.getElementById('signature-form').addEventListener('submit', function(e) {
+            if (signaturePad.isEmpty()) {
+                e.preventDefault();
+                alert('Please provide your signature before submitting.');
+                return false;
+            }
+
+            if (!document.getElementById('acknowledge').checked) {
+                e.preventDefault();
+                alert('Please acknowledge the terms before submitting.');
+                return false;
+            }
+
+            // Save signature to hidden input
+            document.getElementById('signature_input').value = signaturePad.toDataURL();
+        });
+    });
+
+    function clearSignature() {
+        signaturePad.clear();
+    }
+</script>
+
+<style>
+    .signature-canvas {
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        background-color: white;
+        cursor: crosshair;
+    }
+</style>
+{% endblock %}

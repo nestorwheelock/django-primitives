@@ -22,6 +22,8 @@ urlpatterns = [
     # Staff portal - redirect /staff/ to /staff/diveops/
     path("staff/", RedirectView.as_view(url="/staff/diveops/", permanent=False), name="staff-index"),
     path("staff/diveops/", include("primitives_testbed.diveops.staff_urls")),
+    # Public agreement signing (no login required)
+    path("sign/", include("primitives_testbed.diveops.public_urls")),
 ]
 
 # Serve media/document files in development

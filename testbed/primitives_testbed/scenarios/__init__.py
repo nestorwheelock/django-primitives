@@ -19,6 +19,7 @@ from .agreements import seed as seed_agreements, verify as verify_agreements
 from .pricing import seed as seed_pricing, verify as verify_pricing
 from .invoicing import seed as seed_invoicing, verify as verify_invoicing
 from .clinic import seed as seed_clinic, verify as verify_clinic
+from .diveops import seed as seed_diveops, verify as verify_diveops
 
 # Order matters: dependencies first
 SCENARIOS = [
@@ -36,6 +37,7 @@ SCENARIOS = [
     ("pricing", seed_pricing, verify_pricing),
     ("invoicing", seed_invoicing, verify_invoicing),
     ("clinic", seed_clinic, verify_clinic),
+    ("diveops", seed_diveops, verify_diveops),
 ]
 
 

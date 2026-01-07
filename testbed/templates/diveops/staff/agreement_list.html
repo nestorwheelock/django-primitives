@@ -1,0 +1,172 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+            <p class="text-gray-600">Manage vendor agreements, waivers, and training agreements.</p>
+        </div>
+        <a href="{% url 'diveops:agreement-create' %}"
+           class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+            {% icon "plus" "w-4 h-4 mr-2" %}
+            New Agreement
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <form method="get" class="flex flex-wrap gap-4 items-center">
+            <div>
+                <label for="type" class="block text-xs font-medium text-gray-500 mb-1">Agreement Type</label>
+                <select name="type" id="type" class="rounded-md border-gray-300 text-sm">
+                    <option value="">All Types</option>
+                    {% for value, label in scope_type_choices %}
+                    <option value="{{ value }}" {% if scope_type_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex items-center">
+                <input type="checkbox" name="show_all" id="show_all" value="1" {% if show_all %}checked{% endif %} class="rounded border-gray-300 text-blue-600">
+                <label for="show_all" class="ml-2 text-sm text-gray-600">Include expired/terminated</label>
+            </div>
+            <button type="submit" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200">
+                Apply Filters
+            </button>
+        </form>
+    </div>
+
+    <!-- Agreements Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parties</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valid Period</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Signatures</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for agreement in agreements %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            {% if agreement.scope_type == "vendor_agreement" %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                Vendor Agreement
+                            </span>
+                            {% elif agreement.scope_type == "waiver" %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                Waiver
+                            </span>
+                            {% elif agreement.scope_type == "training_agreement" %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Training
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                {{ agreement.scope_type }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="text-sm text-gray-900">{{ agreement.party_a }}</div>
+                            <div class="text-xs text-gray-500">with {{ agreement.party_b }}</div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">
+                            <div class="text-gray-900">{{ agreement.valid_from|date:"M d, Y" }}</div>
+                            {% if agreement.valid_to %}
+                            <div class="text-gray-500">to {{ agreement.valid_to|date:"M d, Y" }}</div>
+                            {% else %}
+                            <div class="text-gray-400">No expiration</div>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            {% if agreement.is_active %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Active
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                Inactive
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            {% with terms=agreement.terms %}
+                            <div class="flex items-center space-x-1">
+                                {% if terms.signature_party_a %}
+                                <span class="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-xs" title="Party A Signed">A</span>
+                                {% else %}
+                                <span class="w-5 h-5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs" title="Party A Not Signed">A</span>
+                                {% endif %}
+                                {% if terms.signature_party_b %}
+                                <span class="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-xs" title="Party B Signed">B</span>
+                                {% else %}
+                                <span class="w-5 h-5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs" title="Party B Not Signed">B</span>
+                                {% endif %}
+                            </div>
+                            {% endwith %}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-right text-sm">
+                            <a href="{% url 'diveops:agreement-detail' pk=agreement.pk %}"
+                               class="text-blue-600 hover:text-blue-800">View</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-4 py-12 text-center">
+                            <div class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                                {% icon "file-text" "w-6 h-6 text-gray-400" %}
+                            </div>
+                            <h3 class="text-lg font-medium text-gray-900 mb-1">No agreements found</h3>
+                            <p class="text-gray-500 mb-4">Get started by creating your first agreement.</p>
+                            <a href="{% url 'diveops:agreement-create' %}"
+                               class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                                {% icon "plus" "w-4 h-4 mr-2" %}
+                                New Agreement
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if page_obj.has_other_pages %}
+    <div class="flex justify-center">
+        <nav class="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}{% if scope_type_filter %}&type={{ scope_type_filter }}{% endif %}{% if show_all %}&show_all=1{% endif %}"
+               class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                Previous
+            </a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if scope_type_filter %}&type={{ scope_type_filter }}{% endif %}{% if show_all %}&show_all=1{% endif %}"
+               class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                Next
+            </a>
+            {% endif %}
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

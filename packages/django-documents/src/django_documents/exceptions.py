@@ -35,3 +35,15 @@ class ImmutableChecksumError(DocumentError):
             f"Cannot modify checksum of document {document_id} - checksums are immutable. "
             "Checksums verify document integrity and cannot be changed once set."
         )
+
+
+class FolderNotEmpty(DocumentError):
+    """Raised when attempting to delete a folder that has contents."""
+
+    def __init__(self, folder_id, child_count=None):
+        self.folder_id = folder_id
+        self.child_count = child_count
+        msg = f"Cannot delete folder {folder_id} - folder is not empty"
+        if child_count is not None:
+            msg += f" ({child_count} children)"
+        super().__init__(msg)

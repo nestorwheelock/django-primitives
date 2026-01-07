@@ -35,3 +35,36 @@ class CertificationError(DiveOpsError):
 
 class DiverError(DiveOpsError):
     """Error related to diver operations."""
+
+
+# =============================================================================
+# Agreement Exceptions
+# =============================================================================
+
+
+class AgreementError(DiveOpsError):
+    """Base exception for agreement operations."""
+
+
+class AgreementNotEditable(AgreementError):
+    """Agreement cannot be edited (wrong status)."""
+
+
+class ChangeNoteRequired(AgreementError):
+    """Change note is required for editing an agreement."""
+
+
+class VoidReasonRequired(AgreementError):
+    """Reason is required for voiding an agreement."""
+
+
+class InvalidToken(AgreementError):
+    """Token is invalid or expired."""
+
+
+class AgreementExpired(AgreementError):
+    """Agreement has expired and cannot be signed."""
+
+
+class AgreementAlreadySigned(AgreementError):
+    """Agreement has already been signed."""

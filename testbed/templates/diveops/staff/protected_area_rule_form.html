@@ -1,0 +1,173 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:protected-area-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Protected Areas</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:protected-area-detail' pk=protected_area.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ protected_area.name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">{% if is_create %}Add a new rule to {{ protected_area.name }}{% else %}Update rule{% endif %}</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+            <div class="flex">
+                <div class="flex-shrink-0">{% icon "alert-circle" "h-5 w-5 text-red-400" %}</div>
+                <div class="ml-3">
+                    <ul class="list-disc pl-5 space-y-1 text-sm text-red-700">
+                        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Rule Information</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_rule_type" class="block text-sm font-medium text-gray-700">Rule Type <span class="text-red-500">*</span></label>
+                        <select name="rule_type" id="id_rule_type"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.rule_type.choices %}
+                            <option value="{{ value }}" {% if form.rule_type.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_applies_to" class="block text-sm font-medium text-gray-700">Applies To <span class="text-red-500">*</span></label>
+                        <select name="applies_to" id="id_applies_to"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.applies_to.choices %}
+                            <option value="{{ value }}" {% if form.applies_to.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="id_zone" class="block text-sm font-medium text-gray-700">Zone</label>
+                    <select name="zone" id="id_zone"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Zones (Area-wide)</option>
+                        {% for zone in form.fields.zone.queryset %}
+                        <option value="{{ zone.pk }}" {% if form.zone.value|stringformat:'s' == zone.pk|stringformat:'s' %}selected{% endif %}>{{ zone.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-sm text-gray-500">Leave empty to apply rule area-wide</p>
+                </div>
+
+                <div>
+                    <label for="id_subject" class="block text-sm font-medium text-gray-700">Subject <span class="text-red-500">*</span></label>
+                    <input type="text" name="subject" id="id_subject" value="{{ form.subject.value|default:'' }}"
+                           class="mt-1 block w-full px-3 py-2 border {% if form.subject.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="e.g., Maximum divers per group">
+                    {% if form.subject.errors %}<p class="mt-1 text-sm text-red-600">{{ form.subject.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label for="id_activity" class="block text-sm font-medium text-gray-700">Activity</label>
+                        <input type="text" name="activity" id="id_activity" value="{{ form.activity.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., diving">
+                    </div>
+                    <div>
+                        <label for="id_operator" class="block text-sm font-medium text-gray-700">Operator</label>
+                        <select name="operator" id="id_operator"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">None</option>
+                            <option value="=" {% if form.operator.value == '=' %}selected{% endif %}>=</option>
+                            <option value="<" {% if form.operator.value == '<' %}selected{% endif %}>&lt;</option>
+                            <option value="<=" {% if form.operator.value == '<=' %}selected{% endif %}>&lt;=</option>
+                            <option value=">" {% if form.operator.value == '>' %}selected{% endif %}>&gt;</option>
+                            <option value=">=" {% if form.operator.value == '>=' %}selected{% endif %}>&gt;=</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_value" class="block text-sm font-medium text-gray-700">Value</label>
+                        <input type="text" name="value" id="id_value" value="{{ form.value.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., 8">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_enforcement_level" class="block text-sm font-medium text-gray-700">Enforcement Level <span class="text-red-500">*</span></label>
+                        <select name="enforcement_level" id="id_enforcement_level"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.enforcement_level.choices %}
+                            <option value="{{ value }}" {% if form.enforcement_level.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <div class="flex items-center">
+                            <input type="checkbox" name="is_active" id="id_is_active"
+                                   class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                   {% if form.is_active.value %}checked{% endif %}>
+                            <label for="id_is_active" class="ml-2 block text-sm text-gray-900">Active</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_effective_start" class="block text-sm font-medium text-gray-700">Effective Start <span class="text-red-500">*</span></label>
+                        <input type="date" name="effective_start" id="id_effective_start" value="{{ form.effective_start.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.effective_start.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               required>
+                        {% if form.effective_start.errors %}<p class="mt-1 text-sm text-red-600">{{ form.effective_start.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="id_effective_end" class="block text-sm font-medium text-gray-700">Effective End</label>
+                        <input type="date" name="effective_end" id="id_effective_end" value="{{ form.effective_end.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-sm text-gray-500">Leave blank for no end date</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-3">
+            <a href="{% url 'diveops:protected-area-detail' pk=protected_area.pk %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Cancel</a>
+            <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-purple-600 hover:bg-purple-700">
+                {% if is_create %}Create Rule{% else %}Save Changes{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,5 +1,5 @@
-{% extends "portal_ui/base_staff.html" %}
-{% load portal_ui_tags %}
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags diveops_filters %}
 
 {% block breadcrumb %}
 <li>
@@ -8,7 +8,7 @@
             <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
         </svg>
         <a href="{% url 'diveops:agreement-template-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
-            Paperwork Templates
+            Agreement Templates
         </a>
     </div>
 </li>
@@ -51,6 +51,11 @@
                 </button>
             </form>
             {% elif template.status == 'published' %}
+            <a href="{% url 'diveops:agreement-template-send' pk=template.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700">
+                {% icon "send" "w-4 h-4 mr-2" %}
+                Send to Party
+            </a>
             <form method="post" action="{% url 'diveops:agreement-template-archive' pk=template.pk %}" class="inline">
                 {% csrf_token %}
                 <button type="submit"
@@ -75,18 +80,70 @@
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
                     <h2 class="text-lg font-medium text-gray-900">Agreement Content</h2>
-                    <button type="button" onclick="togglePreview()" class="text-sm text-blue-600 hover:text-blue-800">
-                        Toggle Preview
-                    </button>
+                    <a href="{% url 'diveops:agreement-template-preview' pk=template.pk %}" target="_blank"
+                       class="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-50">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                        Preview with Signature
+                    </a>
                 </div>
                 <div class="px-6 py-4">
-                    <!-- Raw Content View -->
-                    <div id="content-raw">
-                        <pre class="whitespace-pre-wrap text-sm text-gray-800 font-mono bg-gray-50 p-4 rounded-lg overflow-x-auto">{{ template.content }}</pre>
+                    <!-- View Toggle -->
+                    <div class="flex space-x-2 mb-4">
+                        <button onclick="toggleContentView('rendered')" id="btn-rendered"
+                                class="px-3 py-1 text-sm font-medium rounded-lg bg-blue-600 text-white">
+                            Rendered
+                        </button>
+                        <button onclick="toggleContentView('raw')" id="btn-raw"
+                                class="px-3 py-1 text-sm font-medium rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300">
+                            Raw HTML
+                        </button>
                     </div>
-                    <!-- Rendered Preview -->
-                    <div id="content-preview" class="hidden prose max-w-none">
-                        {{ template.content|safe }}
+
+                    <!-- Rendered View (default) -->
+                    <div id="content-rendered" class="prose max-w-none bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        {{ template.content|render_content }}
+                    </div>
+
+                    <!-- Raw HTML View (hidden by default) -->
+                    <pre id="content-raw" class="hidden whitespace-pre-wrap text-sm text-gray-800 font-mono bg-gray-50 p-4 rounded-lg overflow-x-auto">{{ template.content }}</pre>
+
+                    <script>
+                    function toggleContentView(view) {
+                        const rendered = document.getElementById('content-rendered');
+                        const raw = document.getElementById('content-raw');
+                        const btnRendered = document.getElementById('btn-rendered');
+                        const btnRaw = document.getElementById('btn-raw');
+
+                        if (view === 'rendered') {
+                            rendered.classList.remove('hidden');
+                            raw.classList.add('hidden');
+                            btnRendered.classList.remove('bg-gray-200', 'text-gray-700');
+                            btnRendered.classList.add('bg-blue-600', 'text-white');
+                            btnRaw.classList.remove('bg-blue-600', 'text-white');
+                            btnRaw.classList.add('bg-gray-200', 'text-gray-700');
+                        } else {
+                            rendered.classList.add('hidden');
+                            raw.classList.remove('hidden');
+                            btnRaw.classList.remove('bg-gray-200', 'text-gray-700');
+                            btnRaw.classList.add('bg-blue-600', 'text-white');
+                            btnRendered.classList.remove('bg-blue-600', 'text-white');
+                            btnRendered.classList.add('bg-gray-200', 'text-gray-700');
+                        }
+                    }
+                    </script>
+
+                    <!-- Available Template Variables -->
+                    <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <h4 class="text-sm font-medium text-blue-900 mb-2">Available Template Variables</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div><code class="bg-blue-100 px-1 rounded">{% templatetag openvariable %} diver_name {% templatetag closevariable %}</code> - Diver's full name</div>
+                            <div><code class="bg-blue-100 px-1 rounded">{% templatetag openvariable %} date {% templatetag closevariable %}</code> - Current date</div>
+                            <div><code class="bg-blue-100 px-1 rounded">{% templatetag openvariable %} dive_shop_name {% templatetag closevariable %}</code> - Shop name</div>
+                            <div><code class="bg-blue-100 px-1 rounded">{% templatetag openvariable %} email {% templatetag closevariable %}</code> - Diver's email</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -227,6 +284,13 @@
                     <h2 class="text-lg font-medium text-gray-900">Actions</h2>
                 </div>
                 <div class="px-6 py-4 space-y-3">
+                    {% if template.status == 'published' %}
+                    <a href="{% url 'diveops:agreement-template-send' pk=template.pk %}"
+                       class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700">
+                        {% icon "send" "w-4 h-4 mr-2" %}
+                        Send to Party
+                    </a>
+                    {% endif %}
                     <a href="{% url 'diveops:agreement-template-edit' pk=template.pk %}"
                        class="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                         {% icon "edit" "w-4 h-4 mr-2" %}
@@ -242,13 +306,4 @@
         </div>
     </div>
 </div>
-
-<script>
-function togglePreview() {
-    const raw = document.getElementById('content-raw');
-    const preview = document.getElementById('content-preview');
-    raw.classList.toggle('hidden');
-    preview.classList.toggle('hidden');
-}
-</script>
 {% endblock %}

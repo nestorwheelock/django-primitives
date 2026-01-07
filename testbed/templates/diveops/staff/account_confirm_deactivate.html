@@ -1,0 +1,100 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:account-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Accounts</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Deactivate</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-amber-50">
+            <div class="flex items-center">
+                {% icon "alert-triangle" "w-6 h-6 text-amber-600 mr-3" %}
+                <h1 class="text-xl font-semibold text-gray-900">{{ page_title }}</h1>
+            </div>
+        </div>
+
+        <div class="p-6">
+            <div class="mb-6">
+                <h3 class="text-sm font-medium text-gray-500 mb-2">Account Details</h3>
+                <dl class="grid grid-cols-2 gap-4">
+                    {% if account.account_number %}
+                    <div>
+                        <dt class="text-xs text-gray-500">Account Number</dt>
+                        <dd class="text-sm font-mono font-medium text-gray-900">{{ account.account_number }}</dd>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <dt class="text-xs text-gray-500">Name</dt>
+                        <dd class="text-sm font-medium text-gray-900">{{ account.name }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-gray-500">Type</dt>
+                        <dd class="text-sm text-gray-900 capitalize">{{ account.account_type }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-gray-500">Currency</dt>
+                        <dd class="text-sm text-gray-900">{{ account.currency }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            {% if warning %}
+            <div class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div class="flex">
+                    {% icon "alert-triangle" "w-5 h-5 text-amber-600 mr-2 flex-shrink-0" %}
+                    <p class="text-sm text-amber-800">{{ warning }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <h4 class="text-sm font-medium text-gray-900 mb-2">What happens when you deactivate?</h4>
+                <ul class="text-sm text-gray-600 space-y-1">
+                    <li>- The account will no longer accept new ledger entries</li>
+                    <li>- All existing transactions and history are preserved</li>
+                    <li>- The account will appear as "Inactive" in the Chart of Accounts</li>
+                    <li>- You can reactivate the account at any time</li>
+                </ul>
+            </div>
+
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                <p class="text-sm text-amber-800">
+                    <strong>Note:</strong> Accounts cannot be deleted per accounting standards.
+                    Deactivating is the proper way to close an account.
+                </p>
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="flex justify-end space-x-3">
+                    <a href="{% url 'diveops:account-list' %}"
+                       class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        Cancel
+                    </a>
+                    <button type="submit"
+                            class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-amber-600 hover:bg-amber-700">
+                        Deactivate Account
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

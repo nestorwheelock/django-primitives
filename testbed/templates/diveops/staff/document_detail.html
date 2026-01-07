@@ -1,0 +1,903 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags diveops_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:document-browser' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Documents</a>
+    </div>
+</li>
+{% if breadcrumbs %}
+{% for crumb in breadcrumbs %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:folder-detail' pk=crumb.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ crumb.name }}</a>
+    </div>
+</li>
+{% endfor %}
+{% endif %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    {% if has_legal_hold %}
+    <!-- Legal Hold Banner -->
+    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-lg">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/>
+                </svg>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-yellow-800">Legal Hold Active</h3>
+                <div class="mt-1 text-sm text-yellow-700">
+                    This document cannot be deleted while under legal hold.
+                    {% for hold in active_holds %}
+                    <div class="mt-1"><strong>{{ hold.reason }}</strong> ({{ hold.placed_by.username }}, {{ hold.placed_at|date:"M d, Y" }})</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if document.folder and document.folder.slug == "trash" %}
+    <!-- Trash Warning Banner -->
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-yellow-800">This document is in the Trash</h3>
+                <div class="mt-1 text-sm text-yellow-700">
+                    {% if document.metadata.deleted_at %}
+                    Deleted on {{ document.metadata.deleted_at|slice:":10" }}
+                    {% if document.metadata.deleted_by %} by {{ document.metadata.deleted_by }}{% endif %}
+                    {% if document.metadata.original_folder_name %} from "{{ document.metadata.original_folder_name }}"{% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center">
+            {% if document.category == "image" %}
+            <svg class="w-10 h-10 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/>
+            </svg>
+            {% elif document.category == "video" %}
+            <svg class="w-10 h-10 text-purple-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
+                <path d="M14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
+            </svg>
+            {% elif document.category == "audio" %}
+            <svg class="w-10 h-10 text-pink-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z"/>
+            </svg>
+            {% else %}
+            <svg class="w-10 h-10 text-blue-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+            </svg>
+            {% endif %}
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">{{ document.filename }}</h1>
+                <p class="text-gray-600">{{ document.document_type }}</p>
+            </div>
+        </div>
+        <div class="flex space-x-3">
+            {% if document.content_type == "application/pdf" or document.category == "image" or document.content_type == "text/plain" or document.content_type == "text/csv" %}
+            <a href="{% url 'diveops:document-preview' pk=document.pk %}" target="_blank"
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "eye" "w-4 h-4 mr-2" %}
+                Preview
+            </a>
+            {% endif %}
+            <a href="{% url 'diveops:document-download' pk=document.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700">
+                {% icon "download" "w-4 h-4 mr-2" %}
+                Download
+            </a>
+            {% if document.folder and document.folder.slug == "trash" %}
+            <!-- Trash actions -->
+            <form method="post" action="{% url 'diveops:document-restore' pk=document.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit"
+                   class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700">
+                    {% icon "refresh" "w-4 h-4 mr-2" %}
+                    Restore
+                </button>
+            </form>
+            <a href="{% url 'diveops:document-permanent-delete' pk=document.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-white hover:bg-red-50">
+                {% icon "trash" "w-4 h-4 mr-2" %}
+                Delete Forever
+            </a>
+            {% else %}
+            <!-- Normal actions -->
+            <a href="{% url 'diveops:document-move' pk=document.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "folder" "w-4 h-4 mr-2" %}
+                Move
+            </a>
+            <a href="{% url 'diveops:document-delete' pk=document.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-white hover:bg-red-50">
+                {% icon "trash" "w-4 h-4 mr-2" %}
+                Delete
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Content -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Preview -->
+            {% if document.category == "image" %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">Preview</h2>
+                    <button onclick="toggleFullscreen('image-preview')" class="text-xs text-blue-600 hover:text-blue-800 flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                        </svg>
+                        Fullscreen
+                    </button>
+                </div>
+                <div id="image-preview" class="p-4 flex justify-center bg-gray-100">
+                    {% thumbnail_url document "large" as preview_large %}
+                    {% thumbnail_url document "xlarge" as preview_xlarge %}
+                    <img src="{% if preview_large %}{{ preview_large }}{% else %}{{ document.file.url }}{% endif %}"
+                         srcset="{% if preview_large %}{{ preview_large }} 600w,{% endif %}{% if preview_xlarge %}{{ preview_xlarge }} 1200w,{% endif %}{{ document.file.url }} 2400w"
+                         sizes="(max-width: 768px) 100vw, 600px"
+                         alt="{{ document.filename }}"
+                         class="max-w-full max-h-96 object-contain rounded cursor-zoom-in"
+                         onclick="toggleFullscreen('image-preview')"
+                         loading="lazy">
+                </div>
+            </div>
+            {% elif document.category == "video" %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">Video Player</h2>
+                    <button onclick="toggleFullscreen('video-preview')" class="text-xs text-blue-600 hover:text-blue-800 flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                        </svg>
+                        Fullscreen
+                    </button>
+                </div>
+                <div id="video-preview" class="bg-black">
+                    <video controls class="w-full max-h-[600px]" preload="metadata">
+                        <source src="{{ document.file.url }}" type="{{ document.content_type }}">
+                        Your browser does not support the video element.
+                        <a href="{% url 'diveops:document-download' pk=document.pk %}">Download the video</a> instead.
+                    </video>
+                </div>
+            </div>
+            {% elif document.category == "audio" %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-sm font-medium text-gray-900">Audio Player</h2>
+                </div>
+                <div class="p-6 bg-gradient-to-br from-purple-50 to-pink-50 flex flex-col items-center justify-center">
+                    <div class="w-32 h-32 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center mb-4 shadow-lg">
+                        <svg class="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z"/>
+                        </svg>
+                    </div>
+                    <p class="text-sm font-medium text-gray-700 mb-4">{{ document.filename }}</p>
+                    <audio controls class="w-full max-w-md" preload="metadata">
+                        <source src="{{ document.file.url }}" type="{{ document.content_type }}">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+            </div>
+            {% elif document.content_type == "application/pdf" %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">Preview</h2>
+                    <a href="{% url 'diveops:document-preview' pk=document.pk %}" target="_blank" class="text-xs text-blue-600 hover:text-blue-800">
+                        Open in new tab
+                    </a>
+                </div>
+                <div class="bg-gray-100">
+                    <iframe src="{% url 'diveops:document-preview' pk=document.pk %}"
+                            class="w-full" style="height: 600px;"
+                            title="{{ document.filename }}">
+                        <p>Your browser does not support embedded PDFs.
+                           <a href="{% url 'diveops:document-download' pk=document.pk %}">Download the PDF</a> instead.</p>
+                    </iframe>
+                </div>
+            </div>
+            {% elif document.content_type == "text/plain" or document.content_type == "text/csv" or document.content_type == "text/html" or document.content_type == "application/json" or document.content_type == "application/xml" %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">Preview</h2>
+                    <a href="{% url 'diveops:document-preview' pk=document.pk %}" target="_blank" class="text-xs text-blue-600 hover:text-blue-800">
+                        Open in new tab
+                    </a>
+                </div>
+                <div class="bg-gray-50 p-4">
+                    <iframe src="{% url 'diveops:document-preview' pk=document.pk %}"
+                            class="w-full bg-white border border-gray-200 rounded font-mono text-sm" style="height: 400px;"
+                            title="{{ document.filename }}">
+                    </iframe>
+                </div>
+            </div>
+            {% elif office_preview_url %}
+            <!-- Office Document Preview (Word, Excel, PowerPoint, LibreOffice) -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">Document Preview</h2>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-xs text-gray-500">Rendered from {{ document.content_type|truncatechars:30 }}</span>
+                        <a href="{% url 'diveops:document-download' pk=document.pk %}" class="text-xs text-blue-600 hover:text-blue-800">
+                            Download Original
+                        </a>
+                    </div>
+                </div>
+                <div class="bg-gray-100">
+                    <iframe src="{{ office_preview_url }}"
+                            class="w-full" style="height: 700px;"
+                            title="{{ document.filename }}">
+                        <p>Preview not available.
+                           <a href="{% url 'diveops:document-download' pk=document.pk %}">Download the document</a> instead.</p>
+                    </iframe>
+                </div>
+            </div>
+            {% elif is_office_document %}
+            <!-- Office Document Without Preview -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-sm font-medium text-gray-900">Document Preview</h2>
+                </div>
+                <div class="p-8 text-center">
+                    <div class="w-24 h-24 mx-auto mb-4 rounded-lg bg-blue-50 flex items-center justify-center">
+                        {% if "word" in document.content_type or document.filename|lower|slice:"-4:" == ".doc" or document.filename|lower|slice:"-5:" == ".docx" %}
+                        <svg class="w-12 h-12 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M9.5,17L9,15H7.5V12H9V13.5L9.5,13L10,13.5V12H11.5V15H10L9.5,17M13,12V17H15C15.85,17 16.5,16.35 16.5,15.5V13.5C16.5,12.65 15.85,12 15,12H13M15,15.5H14.5V13.5H15V15.5Z"/>
+                        </svg>
+                        {% elif "excel" in document.content_type or "spreadsheet" in document.content_type or document.filename|lower|slice:"-4:" == ".xls" or document.filename|lower|slice:"-5:" == ".xlsx" %}
+                        <svg class="w-12 h-12 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M9,13V17H7V13H9M13,13V17H11V13H13M17,13V17H15V13H17Z"/>
+                        </svg>
+                        {% elif "powerpoint" in document.content_type or "presentation" in document.content_type or document.filename|lower|slice:"-4:" == ".ppt" or document.filename|lower|slice:"-5:" == ".pptx" %}
+                        <svg class="w-12 h-12 text-orange-600" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M9,13V17H7V13H9M11,13V17H13V14.5L14,14L14.5,14.5V17H16.5V13H14L11,13Z"/>
+                        </svg>
+                        {% else %}
+                        <svg class="w-12 h-12 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+                        </svg>
+                        {% endif %}
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">{{ document.filename }}</h3>
+                    <p class="text-sm text-gray-500 mb-6">
+                        Browser preview not available for this document type.<br>
+                        Download the file to view it in your preferred application.
+                    </p>
+                    <div class="flex justify-center space-x-4">
+                        <a href="{% url 'diveops:document-download' pk=document.pk %}"
+                           class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                            <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            Download
+                        </a>
+                        {% if can_convert_to_pdf %}
+                        <form method="post" action="{% url 'diveops:document-convert-pdf' pk=document.pk %}" class="inline">
+                            {% csrf_token %}
+                            <button type="submit"
+                               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                                <svg class="w-4 h-4 mr-2 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+                                </svg>
+                                Convert to PDF
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Extracted Content -->
+            {% if can_extract %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">Extracted Text</h2>
+                    {% if content and content.status == "completed" %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                        {{ content.word_count|default:0 }} words
+                    </span>
+                    {% elif content and content.status == "processing" %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                        Processing...
+                    </span>
+                    {% elif content and content.status == "failed" %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                        Failed
+                    </span>
+                    {% else %}
+                    <form method="post" action="{% url 'diveops:document-extract' pk=document.pk %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                            Extract Text
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% if content and content.status == "completed" and content.extracted_text %}
+                <div class="p-4">
+                    <div class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+                        <pre class="text-sm text-gray-800 whitespace-pre-wrap font-mono">{{ content.extracted_text }}</pre>
+                    </div>
+                    <div class="mt-3 flex items-center justify-between text-xs text-gray-500">
+                        <div class="flex items-center space-x-4">
+                            <span>Method: {{ content.extraction_method }}</span>
+                            {% if content.page_count %}
+                            <span>Pages: {{ content.page_count }}</span>
+                            {% endif %}
+                            {% if content.processing_time_ms %}
+                            <span>Time: {{ content.processing_time_ms }}ms</span>
+                            {% endif %}
+                        </div>
+                        <form method="post" action="{% url 'diveops:document-extract' pk=document.pk %}" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="text-blue-600 hover:text-blue-800 font-medium">
+                                Re-extract
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% elif content and content.status == "failed" %}
+                <div class="p-4">
+                    <div class="bg-red-50 rounded-lg p-4">
+                        <p class="text-sm text-red-800">{{ content.error_message }}</p>
+                    </div>
+                    <div class="mt-3">
+                        <form method="post" action="{% url 'diveops:document-extract' pk=document.pk %}" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                Retry Extraction
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% elif content and content.status == "completed" and not content.extracted_text %}
+                <div class="px-4 py-8 text-center text-gray-500">
+                    <p class="text-sm">No text content found in this document</p>
+                    <p class="text-xs mt-1">(This could be an image-only PDF or scanned document)</p>
+                </div>
+                {% elif not content %}
+                <div class="px-4 py-8 text-center text-gray-500">
+                    <p class="text-sm">Text has not been extracted yet</p>
+                    <form method="post" action="{% url 'diveops:document-extract' pk=document.pk %}" class="mt-3">
+                        {% csrf_token %}
+                        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                            Extract Text Now
+                        </button>
+                    </form>
+                </div>
+                {% else %}
+                <div class="px-4 py-8 text-center text-gray-500">
+                    <p class="text-sm">Status: {{ content.get_status_display }}</p>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Version History -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-sm font-medium text-gray-900">Version History</h2>
+                </div>
+                {% if versions %}
+                <div class="divide-y divide-gray-200">
+                    {% for version in versions %}
+                    <div class="px-4 py-3 flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-900">{{ version.original_filename }}</p>
+                            <p class="text-xs text-gray-500">
+                                {{ version.created_at|date:"M d, Y H:i" }} -
+                                {{ version.size_bytes|filesizeformat }}
+                            </p>
+                        </div>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                            SHA: {{ version.sha256|truncatechars:12 }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="px-4 py-8 text-center text-gray-500">
+                    <p class="text-sm">No version history available</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Recent Activity Log -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">Recent Activity</h2>
+                    <a href="{% url 'diveops:document-access-logs' %}?document={{ document.pk }}" class="text-xs text-blue-600 hover:text-blue-800">View All Access</a>
+                </div>
+                {% if activity_log %}
+                <div class="divide-y divide-gray-200">
+                    {% for log in activity_log %}
+                    <div class="px-4 py-3 flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-900">
+                                {{ log.actor_display }}
+                                <span class="text-gray-500">{{ log.action_display }}</span>
+                                {% if log.details %}<span class="text-blue-600">{{ log.details }}</span>{% endif %}
+                            </p>
+                            <p class="text-xs text-gray-500">{{ log.timestamp|date:"M d, Y H:i" }}</p>
+                        </div>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                            {% if log.action == 'download' %}bg-green-100 text-green-800
+                            {% elif log.action == 'delete' %}bg-red-100 text-red-800
+                            {% elif log.source == 'audit' %}bg-purple-100 text-purple-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {% if log.source == 'audit' %}action{% else %}{{ log.action }}{% endif %}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="px-4 py-8 text-center text-gray-500">
+                    <p class="text-sm">No activity yet</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Legal Hold Section -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">Legal Hold</h2>
+                    {% if has_legal_hold %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                        Active
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="p-4">
+                    {% if has_legal_hold %}
+                    <div class="space-y-3">
+                        {% for hold in active_holds %}
+                        <div class="border-l-2 border-yellow-400 pl-3">
+                            <p class="text-sm font-medium text-gray-900">{{ hold.reason }}</p>
+                            {% if hold.reference %}
+                            <p class="text-xs text-gray-500">Ref: {{ hold.reference }}</p>
+                            {% endif %}
+                            <p class="text-xs text-gray-500">By {{ hold.placed_by.username }} on {{ hold.placed_at|date:"M d, Y" }}</p>
+                            <a href="{% url 'diveops:legal-hold-release' pk=hold.pk %}" class="text-xs text-green-600 hover:text-green-800">
+                                Release hold
+                            </a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-gray-500 mb-3">No legal holds on this document.</p>
+                    <a href="{% url 'diveops:legal-hold-create' document_pk=document.pk %}"
+                       class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/>
+                        </svg>
+                        Place Legal Hold
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if can_tag_divers %}
+            <!-- Photo Tags (Divers) Section -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">Tagged Divers</h2>
+                    <span class="text-xs text-gray-500">{{ photo_tags.count }} tagged</span>
+                </div>
+                <div class="p-4">
+                    <!-- Tagged Divers List -->
+                    {% if photo_tags %}
+                    <div class="space-y-2 mb-4">
+                        {% for tag in photo_tags %}
+                        <div class="flex items-center justify-between py-1.5 px-2 bg-blue-50 rounded-lg">
+                            <a href="{% url 'diveops:diver-detail' pk=tag.diver.pk %}" class="flex items-center hover:text-blue-700">
+                                <div class="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-medium text-sm mr-2">
+                                    {{ tag.diver.person.first_name|slice:":1" }}{{ tag.diver.person.last_name|slice:":1" }}
+                                </div>
+                                <span class="text-sm font-medium text-gray-900">{{ tag.diver.person.get_full_name }}</span>
+                            </a>
+                            <form method="post" action="{% url 'diveops:photo-tag-remove' pk=document.pk tag_pk=tag.pk %}" class="inline">
+                                {% csrf_token %}
+                                <button type="submit" class="text-gray-400 hover:text-red-500" title="Remove tag">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Add Tag Form -->
+                    {% if available_divers %}
+                    <form method="post" action="{% url 'diveops:photo-tag-add' pk=document.pk %}" class="flex space-x-2">
+                        {% csrf_token %}
+                        <select name="diver_id" class="flex-1 text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                            <option value="">Select diver...</option>
+                            {% for diver in available_divers %}
+                            <option value="{{ diver.pk }}">{{ diver.person.get_full_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                            Tag
+                        </button>
+                    </form>
+                    {% else %}
+                    <p class="text-sm text-gray-500 text-center">All divers have been tagged</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Notes Section -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">Notes</h2>
+                    <button onclick="toggleNoteForm()" class="text-xs text-blue-600 hover:text-blue-800">
+                        + Add Note
+                    </button>
+                </div>
+                <div class="p-4">
+                    <!-- Add Note Form (hidden by default) -->
+                    <form id="note-form" method="post" action="{% url 'diveops:document-add-note' pk=document.pk %}" class="hidden mb-4">
+                        {% csrf_token %}
+                        <textarea name="note_text" rows="3"
+                                  class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                                  placeholder="Add a note about this document..."></textarea>
+                        <div class="mt-2 flex justify-end space-x-2">
+                            <button type="button" onclick="toggleNoteForm()"
+                                    class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                    class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                                Save Note
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Notes List -->
+                    {% if notes %}
+                    <div class="space-y-3">
+                        {% for note in notes %}
+                        <div class="border-l-2 border-gray-200 pl-3 py-1">
+                            <p class="text-sm text-gray-800">{{ note.text }}</p>
+                            <p class="text-xs text-gray-500 mt-1">
+                                {{ note.created_by.username|default:"System" }} - {{ note.created_at|date:"M d, Y H:i" }}
+                                {% if note.created_by == request.user %}
+                                <form method="post" action="{% url 'diveops:document-delete-note' pk=document.pk note_pk=note.pk %}" class="inline ml-2">
+                                    {% csrf_token %}
+                                    <button type="submit" class="text-red-500 hover:text-red-700">Delete</button>
+                                </form>
+                                {% endif %}
+                            </p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-gray-500">No notes yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- File Metadata -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">Details</h2>
+                    {% if not file_metadata %}
+                    <form method="post" action="{% url 'diveops:document-extract-metadata' pk=document.pk %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="text-xs text-blue-600 hover:text-blue-800">
+                            Extract Metadata
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                <dl class="divide-y divide-gray-200">
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Filename</dt>
+                        <dd class="text-sm text-gray-900 col-span-2 truncate">{{ document.filename }}</dd>
+                    </div>
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Type</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ document.content_type }}</dd>
+                    </div>
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Category</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                {% if document.category == 'image' %}bg-green-100 text-green-800
+                                {% elif document.category == 'video' %}bg-purple-100 text-purple-800
+                                {% elif document.category == 'audio' %}bg-pink-100 text-pink-800
+                                {% else %}bg-blue-100 text-blue-800{% endif %}">
+                                {{ document.get_category_display|default:document.category|title }}
+                            </span>
+                        </dd>
+                    </div>
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Size</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ document.file_size|filesizeformat }}</dd>
+                    </div>
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Uploaded</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ document.created_at|date:"M d, Y H:i" }}</dd>
+                    </div>
+                    {% if document.folder %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Folder</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">
+                            <a href="{% url 'diveops:folder-detail' pk=document.folder.pk %}" class="text-blue-600 hover:text-blue-800">
+                                {{ document.folder.name }}
+                            </a>
+                        </dd>
+                    </div>
+                    {% endif %}
+                    {% if document.checksum %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Checksum</dt>
+                        <dd class="text-sm text-gray-900 col-span-2 font-mono text-xs truncate" title="{{ document.checksum }}">
+                            {{ document.checksum|truncatechars:16 }}
+                        </dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+
+            {% if file_metadata %}
+            <!-- Extended File Metadata -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h2 class="text-sm font-medium text-gray-900">
+                        {% if document.category == "image" %}Image Metadata (EXIF)
+                        {% elif document.category == "video" %}Video Metadata
+                        {% elif document.category == "audio" %}Audio Metadata
+                        {% else %}Extended Metadata{% endif %}
+                    </h2>
+                    <form method="post" action="{% url 'diveops:document-extract-metadata' pk=document.pk %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="text-xs text-blue-600 hover:text-blue-800">
+                            Refresh
+                        </button>
+                    </form>
+                </div>
+                <dl class="divide-y divide-gray-200 max-h-80 overflow-y-auto">
+                    {% for key, value in file_metadata.items %}
+                    <div class="px-4 py-2 grid grid-cols-3 gap-2">
+                        <dt class="text-xs font-medium text-gray-500 truncate" title="{{ key }}">{{ key }}</dt>
+                        <dd class="text-xs text-gray-900 col-span-2 truncate" title="{{ value }}">{{ value }}</dd>
+                    </div>
+                    {% endfor %}
+                </dl>
+            </div>
+            {% endif %}
+
+            {% if image_metadata %}
+            <!-- Image-Specific Metadata Summary -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-sm font-medium text-gray-900">Image Info</h2>
+                </div>
+                <dl class="divide-y divide-gray-200">
+                    {% if image_metadata.dimensions %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Dimensions</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ image_metadata.dimensions }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if image_metadata.camera %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Camera</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ image_metadata.camera }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if image_metadata.date_taken %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Date Taken</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ image_metadata.date_taken }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if image_metadata.exposure %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Exposure</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ image_metadata.exposure }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if image_metadata.aperture %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Aperture</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ image_metadata.aperture }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if image_metadata.iso %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">ISO</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ image_metadata.iso }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if image_metadata.focal_length %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Focal Length</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ image_metadata.focal_length }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if image_metadata.gps %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">GPS Location</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">
+                            <a href="https://maps.google.com/?q={{ image_metadata.gps }}" target="_blank" class="text-blue-600 hover:text-blue-800">
+                                {{ image_metadata.gps }}
+                            </a>
+                        </dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+            {% endif %}
+
+            {% if video_metadata %}
+            <!-- Video-Specific Metadata Summary -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-sm font-medium text-gray-900">Video Info</h2>
+                </div>
+                <dl class="divide-y divide-gray-200">
+                    {% if video_metadata.duration %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Duration</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ video_metadata.duration }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if video_metadata.resolution %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Resolution</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ video_metadata.resolution }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if video_metadata.codec %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Codec</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ video_metadata.codec }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if video_metadata.framerate %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Frame Rate</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ video_metadata.framerate }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if video_metadata.bitrate %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Bitrate</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ video_metadata.bitrate }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+            {% endif %}
+
+            {% if audio_metadata %}
+            <!-- Audio-Specific Metadata Summary -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-sm font-medium text-gray-900">Audio Info</h2>
+                </div>
+                <dl class="divide-y divide-gray-200">
+                    {% if audio_metadata.duration %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Duration</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ audio_metadata.duration }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if audio_metadata.title %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Title</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ audio_metadata.title }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if audio_metadata.artist %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Artist</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ audio_metadata.artist }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if audio_metadata.album %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Album</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ audio_metadata.album }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if audio_metadata.bitrate %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Bitrate</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ audio_metadata.bitrate }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if audio_metadata.sample_rate %}
+                    <div class="px-4 py-3 grid grid-cols-3 gap-2">
+                        <dt class="text-sm font-medium text-gray-500">Sample Rate</dt>
+                        <dd class="text-sm text-gray-900 col-span-2">{{ audio_metadata.sample_rate }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleNoteForm() {
+    const form = document.getElementById('note-form');
+    form.classList.toggle('hidden');
+    if (!form.classList.contains('hidden')) {
+        form.querySelector('textarea').focus();
+    }
+}
+
+function toggleFullscreen(elementId) {
+    const element = document.getElementById(elementId);
+    if (!document.fullscreenElement) {
+        element.requestFullscreen().catch(err => {
+            console.log(`Error attempting to enable fullscreen: ${err.message}`);
+        });
+    } else {
+        document.exitFullscreen();
+    }
+}
+
+// Add fullscreen styles
+document.addEventListener('fullscreenchange', function() {
+    const fsElement = document.fullscreenElement;
+    if (fsElement) {
+        fsElement.style.backgroundColor = '#000';
+        fsElement.style.display = 'flex';
+        fsElement.style.alignItems = 'center';
+        fsElement.style.justifyContent = 'center';
+        const img = fsElement.querySelector('img');
+        if (img) {
+            img.style.maxHeight = '100vh';
+            img.style.maxWidth = '100vw';
+            img.style.objectFit = 'contain';
+        }
+    }
+});
+</script>
+{% endblock %}

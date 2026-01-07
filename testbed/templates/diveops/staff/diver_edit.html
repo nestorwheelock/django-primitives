@@ -1,0 +1,223 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:diver-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Divers</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">Update diver information</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Form Card -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <form method="post" class="p-6 space-y-6">
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                    <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                {% icon "alert-circle" "h-5 w-5 text-red-400" %}
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                                <div class="mt-2 text-sm text-red-700">
+                                    <ul class="list-disc pl-5 space-y-1">
+                                        {% for error in form.non_field_errors %}
+                                        <li>{{ error }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Personal Information Section -->
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Personal Information</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- First Name -->
+                            <div>
+                                <label for="id_first_name" class="block text-sm font-medium text-gray-700">First Name <span class="text-red-500">*</span></label>
+                                <input type="text" name="first_name" id="id_first_name" value="{{ form.first_name.value|default:'' }}"
+                                       class="mt-1 block w-full px-3 py-2 border {% if form.first_name.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                {% if form.first_name.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.first_name.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+
+                            <!-- Last Name -->
+                            <div>
+                                <label for="id_last_name" class="block text-sm font-medium text-gray-700">Last Name <span class="text-red-500">*</span></label>
+                                <input type="text" name="last_name" id="id_last_name" value="{{ form.last_name.value|default:'' }}"
+                                       class="mt-1 block w-full px-3 py-2 border {% if form.last_name.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                {% if form.last_name.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.last_name.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+
+                            <!-- Email -->
+                            <div class="md:col-span-2">
+                                <label for="id_email" class="block text-sm font-medium text-gray-700">Email <span class="text-red-500">*</span></label>
+                                <input type="email" name="email" id="id_email" value="{{ form.email.value|default:'' }}"
+                                       class="mt-1 block w-full px-3 py-2 border {% if form.email.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                {% if form.email.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.email.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Experience Section -->
+                    <div class="border-t pt-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Experience</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Total Dives -->
+                            <div>
+                                <label for="id_total_dives" class="block text-sm font-medium text-gray-700">Total Dives</label>
+                                <input type="number" name="total_dives" id="id_total_dives" value="{{ form.total_dives.value|default:0 }}" min="0"
+                                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Medical Section -->
+                    <div class="border-t pt-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Medical Clearance</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Medical Clearance Date -->
+                            <div>
+                                <label for="id_medical_clearance_date" class="block text-sm font-medium text-gray-700">Clearance Date</label>
+                                <input type="date" name="medical_clearance_date" id="id_medical_clearance_date" value="{{ form.medical_clearance_date.value|date:'Y-m-d'|default:'' }}"
+                                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+
+                            <!-- Medical Valid Until -->
+                            <div>
+                                <label for="id_medical_clearance_valid_until" class="block text-sm font-medium text-gray-700">Valid Until</label>
+                                <input type="date" name="medical_clearance_valid_until" id="id_medical_clearance_valid_until" value="{{ form.medical_clearance_valid_until.value|date:'Y-m-d'|default:'' }}"
+                                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="border-t pt-6 flex items-center justify-end space-x-3">
+                        <a href="{% url 'diveops:diver-detail' pk=diver.pk %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                            Cancel
+                        </a>
+                        <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sidebar: Certifications + Permits -->
+        <div class="lg:col-span-1 space-y-6">
+            <!-- Certifications -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+                    <h3 class="text-lg font-medium text-gray-900">Certifications</h3>
+                    <a href="{% url 'diveops:certification-add' diver_pk=diver.pk %}"
+                       class="inline-flex items-center px-2 py-1 border border-transparent rounded text-xs font-medium text-white bg-blue-600 hover:bg-blue-700">
+                        {% icon "plus" "w-3 h-3 mr-1" %}
+                        Add
+                    </a>
+                </div>
+                <div class="divide-y divide-gray-200">
+                    {% for cert in certifications %}
+                    <div class="p-3">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">{{ cert.level.name }}</p>
+                                <p class="text-xs text-gray-500">{{ cert.level.agency.name }}</p>
+                                {% if cert.is_verified %}
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 mt-1">
+                                    Verified
+                                </span>
+                                {% endif %}
+                            </div>
+                            <a href="{% url 'diveops:certification-edit' pk=cert.pk %}" class="text-gray-400 hover:text-gray-600">
+                                {% icon "edit" "w-4 h-4" %}
+                            </a>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-4 text-center text-sm text-gray-500">
+                        No certifications on file
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Protected Area Permits -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center">
+                    {% icon "shield" "w-4 h-4 text-gray-400 mr-2" %}
+                    <h3 class="text-lg font-medium text-gray-900">Permits</h3>
+                    {% if permits %}
+                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                        {{ permits|length }}
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="divide-y divide-gray-200">
+                    {% for permit in permits %}
+                    <div class="p-3">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <a href="{% url 'diveops:protected-area-detail' pk=permit.protected_area.pk %}" class="text-sm font-medium text-blue-600 hover:text-blue-800">
+                                    {{ permit.protected_area.name }}
+                                </a>
+                                <p class="text-xs text-gray-500 font-mono">{{ permit.permit_number }}</p>
+                                {% if permit.is_active %}
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 mt-1">
+                                    Active
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 mt-1">
+                                    Inactive
+                                </span>
+                                {% endif %}
+                            </div>
+                            <a href="{% url 'diveops:guide-permit-edit' area_pk=permit.protected_area.pk pk=permit.pk %}" class="text-gray-400 hover:text-gray-600">
+                                {% icon "edit" "w-4 h-4" %}
+                            </a>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-4 text-center text-sm text-gray-500">
+                        No permits on file
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

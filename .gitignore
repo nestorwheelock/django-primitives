@@ -33,6 +33,9 @@ db.sqlite3
 *.pot
 *.mo
 
+# Uploaded documents (content-addressed storage)
+documents/
+
 # OS
 .DS_Store
 Thumbs.db

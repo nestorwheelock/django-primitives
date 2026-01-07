@@ -1,0 +1,139 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+            <p class="text-gray-600">Individual dive templates with route segments for decompression planning</p>
+        </div>
+        <a href="{% url 'diveops:dive-plan-create' %}"
+           class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+            {% icon "plus" "w-4 h-4 mr-2" %}
+            New Dive Plan
+        </a>
+    </div>
+
+    <!-- Dive Plan Templates -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {% if dive_plans %}
+        <div class="divide-y divide-gray-200">
+            {% for plan in dive_plans %}
+            <div class="p-4 hover:bg-gray-50">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start space-x-4">
+                        <div class="flex-shrink-0 w-16 h-16 bg-blue-600 text-white rounded-lg flex flex-col items-center justify-center">
+                            <span class="text-2xl font-bold">{{ plan.sequence }}</span>
+                            <span class="text-xs uppercase tracking-wide">Dive</span>
+                        </div>
+                        <div>
+                            <h4 class="text-base font-semibold text-gray-900">
+                                <a href="{% url 'diveops:dive-plan-detail' pk=plan.pk %}" class="hover:text-blue-600">
+                                    {{ plan.name }}
+                                </a>
+                            </h4>
+                            {% if plan.dive_site %}
+                            <p class="text-sm text-gray-500">
+                                <a href="{% url 'diveops:staff-site-detail' pk=plan.dive_site.pk %}" class="text-blue-600 hover:text-blue-800">
+                                    {{ plan.dive_site.name }}
+                                </a>
+                            </p>
+                            {% endif %}
+                            {% if plan.description %}
+                            <p class="text-sm text-gray-500 mt-1">{{ plan.description }}</p>
+                            {% endif %}
+                            <div class="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                                {% if plan.planned_depth_meters %}
+                                <span class="inline-flex items-center">
+                                    {% icon "arrow-down" "w-3 h-3 mr-1" %}
+                                    {{ plan.planned_depth_meters }}m depth
+                                </span>
+                                {% endif %}
+                                {% if plan.planned_duration_minutes %}
+                                <span class="inline-flex items-center">
+                                    {% icon "clock" "w-3 h-3 mr-1" %}
+                                    {{ plan.planned_duration_minutes }} min
+                                </span>
+                                {% endif %}
+                                {% if plan.offset_minutes > 0 %}
+                                <span class="inline-flex items-center">
+                                    {% icon "fast-forward" "w-3 h-3 mr-1" %}
+                                    +{{ plan.offset_minutes }} min offset
+                                </span>
+                                {% endif %}
+                                {% if plan.min_certification_level %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">
+                                    {{ plan.min_certification_level.name }}
+                                </span>
+                                {% endif %}
+                                {% if plan.catalog_item %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded bg-green-100 text-green-800">
+                                    {{ plan.catalog_item.display_name }}
+                                </span>
+                                {% endif %}
+                                {% if plan.route_segments %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded bg-purple-100 text-purple-800">
+                                    {{ plan.route_segments|length }} segments
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                            {% if plan.status == 'published' %}bg-green-100 text-green-800
+                            {% elif plan.status == 'draft' %}bg-yellow-100 text-yellow-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ plan.status|title }}
+                        </span>
+                        <a href="{% url 'diveops:excursion-type-dive-edit' pk=plan.pk %}"
+                           class="text-blue-600 hover:text-blue-900 text-sm">Edit</a>
+                        <a href="{% url 'diveops:excursion-type-dive-delete' pk=plan.pk %}"
+                           class="text-red-600 hover:text-red-900 text-sm">Delete</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+            <div class="text-sm text-gray-700">
+                Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ paginator.count }} dive plans
+            </div>
+            <div class="flex space-x-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50">Previous</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="p-8 text-center">
+            <div class="text-gray-400 mb-2">
+                {% icon "layers" "w-12 h-12 mx-auto" %}
+            </div>
+            <p class="text-gray-500">No dive plan templates created yet</p>
+            <p class="text-sm text-gray-400 mt-1">Create dive templates from an excursion type's detail page</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

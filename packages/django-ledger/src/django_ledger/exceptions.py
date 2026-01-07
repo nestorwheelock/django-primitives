@@ -21,6 +21,11 @@ class ImmutableEntryError(LedgerError):
     pass
 
 
+class InactiveAccountError(LedgerError):
+    """Raised when attempting to create an entry on an inactive account."""
+    pass
+
+
 class TransactionNotPostedError(LedgerError):
     """Raised when operating on an unposted transaction."""
     pass

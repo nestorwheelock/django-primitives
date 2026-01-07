@@ -1,0 +1,157 @@
+{
+  "source": "Public dive guides (Cozumel), non-authoritative",
+  "notes": "Depths and site characteristics are typical ranges. Coordinates are approximate or null and should be verified by staff using the map UI.",
+  "region": "Cozumel, Quintana Roo, Mexico",
+  "dive_sites": [
+    {
+      "name": "Paradise Reef",
+      "place": {
+        "latitude": 20.5115,
+        "longitude": -86.9470,
+        "precision": "approximate"
+      },
+      "depth_min_m": 9,
+      "depth_max_m": 12,
+      "difficulty": "beginner",
+      "rating": 4,
+      "min_certification": "Open Water",
+      "tags": ["shallow", "training", "reef"],
+      "description": "Shallow reef with mild current, commonly used for training dives and checkouts."
+    },
+    {
+      "name": "Chankanaab Shallow",
+      "place": {
+        "latitude": 20.4840,
+        "longitude": -86.9745,
+        "precision": "approximate"
+      },
+      "depth_min_m": 12,
+      "depth_max_m": 15,
+      "difficulty": "beginner",
+      "rating": 4,
+      "min_certification": "Open Water",
+      "tags": ["reef", "marine-park", "easy"],
+      "description": "Reef inside the Chankanaab Marine Park with good coral and fish life."
+    },
+    {
+      "name": "Yucab Reef",
+      "place": {
+        "latitude": 20.4585,
+        "longitude": -86.9785,
+        "precision": "approximate"
+      },
+      "depth_min_m": 12,
+      "depth_max_m": 21,
+      "difficulty": "beginner",
+      "rating": 4,
+      "min_certification": "Open Water",
+      "tags": ["reef", "drift", "turtles"],
+      "description": "Gentle drift dive with sand channels, turtles, and coral heads."
+    },
+    {
+      "name": "Palancar Gardens",
+      "place": {
+        "latitude": 20.4045,
+        "longitude": -87.0030,
+        "precision": "approximate"
+      },
+      "depth_min_m": 10,
+      "depth_max_m": 18,
+      "difficulty": "intermediate",
+      "rating": 5,
+      "min_certification": "Open Water",
+      "tags": ["reef", "swim-throughs", "coral"],
+      "description": "Large coral buttresses with swim-throughs and abundant marine life."
+    },
+    {
+      "name": "Palancar Caves",
+      "place": {
+        "latitude": 20.3990,
+        "longitude": -87.0070,
+        "precision": "approximate"
+      },
+      "depth_min_m": 18,
+      "depth_max_m": 24,
+      "difficulty": "intermediate",
+      "rating": 5,
+      "min_certification": "Advanced Open Water",
+      "tags": ["caves", "swim-throughs", "reef"],
+      "description": "Deeper Palancar section with cavern-like swim-throughs and dramatic formations."
+    },
+    {
+      "name": "Santa Rosa Wall",
+      "place": {
+        "latitude": 20.4200,
+        "longitude": -86.9900,
+        "precision": "approximate"
+      },
+      "depth_min_m": 15,
+      "depth_max_m": 40,
+      "difficulty": "intermediate",
+      "rating": 5,
+      "min_certification": "Advanced Open Water",
+      "tags": ["wall", "drift", "deep"],
+      "description": "Classic wall dive with strong currents and deep drop-offs."
+    },
+    {
+      "name": "Colombia Shallow",
+      "place": {
+        "latitude": 20.3610,
+        "longitude": -87.0240,
+        "precision": "approximate"
+      },
+      "depth_min_m": 6,
+      "depth_max_m": 9,
+      "difficulty": "beginner",
+      "rating": 4,
+      "min_certification": "Open Water",
+      "tags": ["shallow", "reef", "photography"],
+      "description": "Very shallow reef with excellent light and coral structure."
+    },
+    {
+      "name": "Colombia Deep",
+      "place": {
+        "latitude": 20.3580,
+        "longitude": -87.0280,
+        "precision": "approximate"
+      },
+      "depth_min_m": 18,
+      "depth_max_m": 36,
+      "difficulty": "advanced",
+      "rating": 5,
+      "min_certification": "Advanced Open Water",
+      "tags": ["wall", "deep", "current"],
+      "description": "Deep wall dive with swim-throughs and pelagic sightings."
+    },
+    {
+      "name": "Devil's Throat (Punta Sur)",
+      "place": {
+        "latitude": 20.3035,
+        "longitude": -87.0305,
+        "precision": "approximate"
+      },
+      "depth_min_m": 24,
+      "depth_max_m": 38,
+      "difficulty": "advanced",
+      "rating": 5,
+      "min_certification": "Advanced Open Water",
+      "tags": ["overhead", "deep", "advanced"],
+      "description": "Famous deep overhead swim-through requiring advanced skills and planning."
+    },
+    {
+      "name": "Barracuda Reef",
+      "place": {
+        "latitude": 20.5750,
+        "longitude": -86.8720,
+        "precision": "approximate"
+      },
+      "depth_min_m": 24,
+      "depth_max_m": 36,
+      "difficulty": "advanced",
+      "rating": 4,
+      "min_certification": "Advanced Open Water",
+      "tags": ["current", "pelagic", "challenging"],
+      "description": "High-current northern site with pelagic fish and challenging conditions."
+    }
+  ]
+}

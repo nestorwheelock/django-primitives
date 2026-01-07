@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agreement Signed - {{ agreement.template.name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div class="max-w-md mx-auto py-8 px-4">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-8 text-center">
+                <!-- Success Icon -->
+                <div class="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                    <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+
+                <!-- Message -->
+                <h1 class="text-xl font-bold text-gray-900 mb-2">Agreement Signed Successfully</h1>
+                <p class="text-gray-600 mb-6">
+                    Thank you, {{ signed_by_name }}! Your signature has been recorded.
+                </p>
+
+                <!-- Agreement Info -->
+                <div class="bg-gray-50 rounded-lg p-4 text-left mb-6">
+                    <dl class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">Agreement</dt>
+                            <dd class="text-gray-900 font-medium">{{ agreement.template.name }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">Signed As</dt>
+                            <dd class="text-gray-900">{{ signed_by_name }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">Date & Time</dt>
+                            <dd class="text-gray-900">{{ agreement.signed_at|date:"M d, Y H:i" }}</dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- Download/Print Signed PDF -->
+                {% if agreement.signed_document and agreement.signed_document.file %}
+                <div class="space-y-3 mb-6">
+                    <a href="{{ agreement.signed_document.file.url }}"
+                       target="_blank"
+                       class="w-full inline-flex justify-center items-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                        </svg>
+                        View & Print Signed Copy
+                    </a>
+                    <a href="{{ agreement.signed_document.file.url }}"
+                       download
+                       class="w-full inline-flex justify-center items-center px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        Download PDF
+                    </a>
+                </div>
+                {% endif %}
+
+                <!-- Next Steps -->
+                <div class="text-sm text-gray-600">
+                    <p>A copy of the signed agreement will be retained for records. You may close this window.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-4 text-center text-xs text-gray-500">
+            <p>Reference ID: {{ agreement.pk }}</p>
+        </div>
+    </div>
+</body>
+</html>

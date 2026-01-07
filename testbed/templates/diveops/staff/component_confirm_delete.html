@@ -1,0 +1,74 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:catalog-item-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Catalog Items</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:catalog-item-detail' pk=catalog_item.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ catalog_item.display_name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-lg">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-red-50">
+            <h3 class="text-lg font-medium text-red-900">{{ page_title }}</h3>
+        </div>
+        <div class="p-6">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    {% icon "alert-triangle" "h-6 w-6 text-red-600" %}
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-gray-700">
+                        Are you sure you want to remove <strong>{{ component.component.display_name }}</strong> from the assembly <strong>{{ catalog_item.display_name }}</strong>?
+                    </p>
+                    <div class="mt-3 text-sm text-gray-600">
+                        <p><strong>Component Details:</strong></p>
+                        <ul class="list-disc ml-5 mt-1 space-y-1">
+                            <li>Quantity: {{ component.quantity }}</li>
+                            {% if component.is_optional %}<li>Optional component</li>{% endif %}
+                            {% if component.notes %}<li>Notes: {{ component.notes }}</li>{% endif %}
+                        </ul>
+                    </div>
+                    <p class="mt-3 text-sm text-gray-500">
+                        This action will remove the component relationship but will not delete the component item itself.
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-6 flex items-center justify-end space-x-3">
+                <a href="{% url 'diveops:catalog-item-detail' pk=catalog_item.pk %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </a>
+                <form method="post" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700">
+                        Remove Component
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

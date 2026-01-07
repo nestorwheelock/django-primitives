@@ -1,0 +1,201 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+            <p class="text-gray-600">Manage ledger accounts for revenue, expenses, assets, and liabilities.</p>
+        </div>
+        <div class="flex space-x-3">
+            <a href="{% url 'diveops:account-seed' %}"
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "settings" "w-4 h-4 mr-2" %}
+                Seed Accounts
+            </a>
+            <a href="{% url 'diveops:account-create' %}"
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "plus" "w-4 h-4 mr-2" %}
+                New Account
+            </a>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <form method="get" class="space-y-4">
+            <!-- Search Row -->
+            <div class="flex gap-4">
+                <div class="flex-1">
+                    <label for="q" class="block text-xs font-medium text-gray-500 mb-1">Search</label>
+                    <input type="text" name="q" id="q" value="{{ search_query }}"
+                           placeholder="Search by name or account number..."
+                           class="w-full rounded-md border-gray-300 text-sm">
+                </div>
+                <div>
+                    <label for="sort" class="block text-xs font-medium text-gray-500 mb-1">Sort By</label>
+                    <select name="sort" id="sort" class="rounded-md border-gray-300 text-sm">
+                        <option value="number" {% if current_sort == "number" %}selected{% endif %}>Account # (Asc)</option>
+                        <option value="-number" {% if current_sort == "-number" %}selected{% endif %}>Account # (Desc)</option>
+                        <option value="name" {% if current_sort == "name" %}selected{% endif %}>Name (A-Z)</option>
+                        <option value="-name" {% if current_sort == "-name" %}selected{% endif %}>Name (Z-A)</option>
+                        <option value="type" {% if current_sort == "type" %}selected{% endif %}>Type (Asc)</option>
+                        <option value="-type" {% if current_sort == "-type" %}selected{% endif %}>Type (Desc)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Filters Row -->
+            <div class="flex flex-wrap gap-4 items-end">
+                <div>
+                    <label for="shop" class="block text-xs font-medium text-gray-500 mb-1">Dive Shop</label>
+                    <select name="shop" id="shop" class="rounded-md border-gray-300 text-sm">
+                        <option value="">All Shops</option>
+                        {% for shop in shops %}
+                        <option value="{{ shop.pk }}" {% if selected_shop and selected_shop.pk == shop.pk %}selected{% endif %}>{{ shop.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="currency" class="block text-xs font-medium text-gray-500 mb-1">Currency</label>
+                    <select name="currency" id="currency" class="rounded-md border-gray-300 text-sm">
+                        <option value="">All Currencies</option>
+                        <option value="USD" {% if selected_currency == "USD" %}selected{% endif %}>USD</option>
+                        <option value="MXN" {% if selected_currency == "MXN" %}selected{% endif %}>MXN</option>
+                        <option value="EUR" {% if selected_currency == "EUR" %}selected{% endif %}>EUR</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="type" class="block text-xs font-medium text-gray-500 mb-1">Account Type</label>
+                    <select name="type" id="type" class="rounded-md border-gray-300 text-sm">
+                        <option value="">All Types</option>
+                        <option value="revenue" {% if selected_type == "revenue" %}selected{% endif %}>Revenue</option>
+                        <option value="expense" {% if selected_type == "expense" %}selected{% endif %}>Expense</option>
+                        <option value="asset" {% if selected_type == "asset" %}selected{% endif %}>Asset</option>
+                        <option value="receivable" {% if selected_type == "receivable" %}selected{% endif %}>Receivable</option>
+                        <option value="payable" {% if selected_type == "payable" %}selected{% endif %}>Payable</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="status" class="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                    <select name="status" id="status" class="rounded-md border-gray-300 text-sm">
+                        <option value="" {% if not selected_status %}selected{% endif %}>All</option>
+                        <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active Only</option>
+                        <option value="inactive" {% if selected_status == "inactive" %}selected{% endif %}>Inactive Only</option>
+                    </select>
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">
+                        Search
+                    </button>
+                    <a href="{% url 'diveops:account-list' %}" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200">
+                        Clear
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Results Summary -->
+    {% if search_query or selected_shop or selected_currency or selected_type or selected_status %}
+    <div class="text-sm text-gray-600">
+        Showing {{ total_count }} account{{ total_count|pluralize }}
+        {% if search_query %}matching "{{ search_query }}"{% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Accounts by Type -->
+    {% for account_type, type_accounts in accounts_by_type.items %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h3 class="text-lg font-medium text-gray-900 capitalize">{{ account_type }} Accounts</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account #</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Currency</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for account in type_accounts %}
+                    <tr class="hover:bg-gray-50 {% if not account.is_active %}bg-gray-50 opacity-60{% endif %}">
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            {% if account.account_number %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded text-sm font-mono font-medium bg-gray-100 text-gray-800">
+                                {{ account.account_number }}
+                            </span>
+                            {% else %}
+                            <span class="text-gray-400 text-sm">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="text-sm font-medium text-gray-900">{{ account.name }}</div>
+                            <div class="text-xs text-gray-500">ID: {{ account.pk|truncatechars:12 }}</div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {{ account.currency }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            {% if account.is_active %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Active
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                Inactive
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-right text-sm space-x-2">
+                            <a href="{% url 'diveops:account-edit' pk=account.pk %}"
+                               class="text-blue-600 hover:text-blue-800">Edit</a>
+                            {% if account.is_active %}
+                            <a href="{% url 'diveops:account-deactivate' pk=account.pk %}"
+                               class="text-amber-600 hover:text-amber-800">Deactivate</a>
+                            {% else %}
+                            <a href="{% url 'diveops:account-reactivate' pk=account.pk %}"
+                               class="text-green-600 hover:text-green-800">Reactivate</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% empty %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+        <div class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+            {% icon "credit-card" "w-6 h-6 text-gray-400" %}
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 mb-1">No accounts found</h3>
+        <p class="text-gray-500 mb-4">Seed the chart of accounts to get started with standard dive shop accounts.</p>
+        <a href="{% url 'diveops:account-seed' %}"
+           class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+            {% icon "settings" "w-4 h-4 mr-2" %}
+            Seed Accounts
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

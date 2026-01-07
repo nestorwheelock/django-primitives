@@ -1,0 +1,253 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:excursion-type-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Excursion Types</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">{% if is_create %}Create a new excursion product template{% else %}Update excursion type details{% endif %}</p>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <form method="post" class="p-6 space-y-6">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        {% icon "alert-circle" "h-5 w-5 text-red-400" %}
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                        <div class="mt-2 text-sm text-red-700">
+                            <ul class="list-disc pl-5 space-y-1">
+                                {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Basic Info -->
+            <div>
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Name -->
+                    <div>
+                        <label for="id_name" class="block text-sm font-medium text-gray-700">Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="name" id="id_name" value="{{ form.name.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.name.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., Morning 2-Tank Boat Dive">
+                        {% if form.name.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Slug -->
+                    <div>
+                        <label for="id_slug" class="block text-sm font-medium text-gray-700">Slug <span class="text-red-500">*</span></label>
+                        <input type="text" name="slug" id="id_slug" value="{{ form.slug.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.slug.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., morning-2-tank-boat">
+                        <p class="mt-1 text-xs text-gray-500">URL-friendly identifier (lowercase, no spaces)</p>
+                        {% if form.slug.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.slug.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div class="mt-4">
+                    <label for="id_description" class="block text-sm font-medium text-gray-700">Description</label>
+                    <textarea name="description" id="id_description" rows="3"
+                              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Describe this excursion type...">{{ form.description.value|default:'' }}</textarea>
+                </div>
+            </div>
+
+            <!-- Dive Characteristics -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Dive Characteristics</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Dive Mode -->
+                    <div>
+                        <label for="id_dive_mode" class="block text-sm font-medium text-gray-700">Dive Mode <span class="text-red-500">*</span></label>
+                        <select name="dive_mode" id="id_dive_mode"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.dive_mode.choices %}
+                            <option value="{{ value }}" {% if form.dive_mode.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Time of Day -->
+                    <div>
+                        <label for="id_time_of_day" class="block text-sm font-medium text-gray-700">Time of Day <span class="text-red-500">*</span></label>
+                        <select name="time_of_day" id="id_time_of_day"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.time_of_day.choices %}
+                            <option value="{{ value }}" {% if form.time_of_day.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Typical Duration -->
+                    <div>
+                        <label for="id_typical_duration_minutes" class="block text-sm font-medium text-gray-700">Typical Duration (min)</label>
+                        <input type="number" name="typical_duration_minutes" id="id_typical_duration_minutes"
+                               value="{{ form.typical_duration_minutes.value|default:'60' }}" min="1"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Dives per Excursion -->
+                    <div>
+                        <label for="id_dives_per_excursion" class="block text-sm font-medium text-gray-700">Dives per Excursion</label>
+                        <input type="number" name="dives_per_excursion" id="id_dives_per_excursion"
+                               value="{{ form.dives_per_excursion.value|default:'2' }}" min="1" max="10"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500">Number of dives included (e.g., 2 for a 2-tank dive)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Requirements -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Requirements</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Min Certification -->
+                    <div>
+                        <label for="id_min_certification_level" class="block text-sm font-medium text-gray-700">Minimum Certification</label>
+                        <select name="min_certification_level" id="id_min_certification_level"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">None required</option>
+                            {% for level in form.fields.min_certification_level.queryset %}
+                            <option value="{{ level.pk }}" {% if form.min_certification_level.value|stringformat:'s' == level.pk|stringformat:'s' %}selected{% endif %}>
+                                {{ level.agency.name }} - {{ level.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mt-4 space-y-3">
+                    <!-- Requires Cert -->
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input type="checkbox" name="requires_cert" id="id_requires_cert"
+                                   {% if form.requires_cert.value %}checked{% endif %}
+                                   class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        </div>
+                        <div class="ml-3">
+                            <label for="id_requires_cert" class="text-sm font-medium text-gray-700">Requires certification check</label>
+                            <p class="text-xs text-gray-500">Uncheck for DSD (Discover Scuba Diving) or similar intro dives</p>
+                        </div>
+                    </div>
+
+                    <!-- Is Training -->
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input type="checkbox" name="is_training" id="id_is_training"
+                                   {% if form.is_training.value %}checked{% endif %}
+                                   class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        </div>
+                        <div class="ml-3">
+                            <label for="id_is_training" class="text-sm font-medium text-gray-700">Training dive</label>
+                            <p class="text-xs text-gray-500">Check for intro/training dives like DSD</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pricing -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Pricing</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Base Price -->
+                    <div>
+                        <label for="id_base_price" class="block text-sm font-medium text-gray-700">Base Price <span class="text-red-500">*</span></label>
+                        <div class="mt-1 relative rounded-lg shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" name="base_price" id="id_base_price"
+                                   value="{{ form.base_price.value|default:'' }}" step="0.01" min="0"
+                                   class="block w-full pl-7 pr-12 px-3 py-2 border {% if form.base_price.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="0.00">
+                            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">{{ form.currency.value|default:'USD' }}</span>
+                            </div>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">Starting price before site adjustments</p>
+                        {% if form.base_price.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.base_price.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Currency -->
+                    <div>
+                        <label for="id_currency" class="block text-sm font-medium text-gray-700">Currency</label>
+                        <select name="currency" id="id_currency"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for code, label in form.fields.currency.choices %}
+                            <option value="{{ code }}" {% if form.currency.value == code %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status -->
+            <div class="border-t pt-6">
+                <div class="flex items-start">
+                    <div class="flex items-center h-5">
+                        <input type="checkbox" name="is_active" id="id_is_active"
+                               {% if form.is_active.value %}checked{% endif %}
+                               class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    </div>
+                    <div class="ml-3">
+                        <label for="id_is_active" class="text-sm font-medium text-gray-700">Active</label>
+                        <p class="text-xs text-gray-500">Only active types can be used for new excursions</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="border-t pt-6 flex items-center justify-end space-x-3">
+                <a href="{% url 'diveops:excursion-type-list' %}"
+                   class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    {% if is_create %}Create Excursion Type{% else %}Save Changes{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

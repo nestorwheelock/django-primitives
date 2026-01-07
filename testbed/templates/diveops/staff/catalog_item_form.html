@@ -1,0 +1,166 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:catalog-item-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Catalog Items</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">{% if is_create %}Add a new catalog item{% else %}Update catalog item information{% endif %}</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    {% icon "alert-circle" "h-5 w-5 text-red-400" %}
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                        <ul class="list-disc pl-5 space-y-1">
+                            {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Form Fields -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Item Information</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Item Type -->
+                <div>
+                    <label for="id_kind" class="block text-sm font-medium text-gray-700">Item Type <span class="text-red-500">*</span></label>
+                    <select name="kind" id="id_kind"
+                            class="mt-1 block w-full px-3 py-2 border {% if form.kind.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        {% for value, label in form.fields.kind.choices %}
+                        <option value="{{ value }}" {% if form.kind.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-sm text-gray-500">{{ form.fields.kind.help_text }}</p>
+                    {% if form.kind.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.kind.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Name -->
+                <div>
+                    <label for="id_display_name" class="block text-sm font-medium text-gray-700">Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="display_name" id="id_display_name" value="{{ form.display_name.value|default:'' }}"
+                           class="mt-1 block w-full px-3 py-2 border {% if form.display_name.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="e.g., Tank Rental, Guide Fee">
+                    <p class="mt-1 text-sm text-gray-500">{{ form.fields.display_name.help_text }}</p>
+                    {% if form.display_name.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.display_name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Name (Spanish) -->
+                <div>
+                    <label for="id_display_name_es" class="block text-sm font-medium text-gray-700">Name (Spanish)</label>
+                    <input type="text" name="display_name_es" id="id_display_name_es" value="{{ form.display_name_es.value|default:'' }}"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="e.g., Alquiler de Tanque, Tarifa de Guia">
+                    <p class="mt-1 text-sm text-gray-500">{{ form.fields.display_name_es.help_text }}</p>
+                </div>
+
+                <!-- Conditional Fields Container (Equipment only) -->
+                <div id="stock-fields" class="space-y-6" style="display: none;">
+                    <!-- Usage Type -->
+                    <div>
+                        <label for="id_default_stock_action" class="block text-sm font-medium text-gray-700">Usage Type</label>
+                        <select name="default_stock_action" id="id_default_stock_action"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.default_stock_action.choices %}
+                            <option value="{{ value }}" {% if form.default_stock_action.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-sm text-gray-500">{{ form.fields.default_stock_action.help_text }}</p>
+                    </div>
+                </div>
+
+                <!-- Checkboxes -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input type="checkbox" name="is_billable" id="id_is_billable" value="true"
+                                   {% if form.is_billable.value %}checked{% endif %}
+                                   class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        </div>
+                        <div class="ml-3">
+                            <label for="id_is_billable" class="text-sm font-medium text-gray-700">{{ form.fields.is_billable.label }}</label>
+                            <p class="text-sm text-gray-500">{{ form.fields.is_billable.help_text }}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input type="checkbox" name="active" id="id_active" value="true"
+                                   {% if form.active.value %}checked{% endif %}
+                                   class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        </div>
+                        <div class="ml-3">
+                            <label for="id_active" class="text-sm font-medium text-gray-700">{{ form.fields.active.label }}</label>
+                            <p class="text-sm text-gray-500">{{ form.fields.active.help_text }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end space-x-3">
+            <a href="{% url 'diveops:catalog-item-list' %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% if is_create %}Create Catalog Item{% else %}Save Changes{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var kindSelect = document.getElementById('id_kind');
+    var stockFields = document.getElementById('stock-fields');
+
+    function toggleFields() {
+        var kind = kindSelect.value;
+        // Show usage type only for equipment (stock_item)
+        stockFields.style.display = (kind === 'stock_item') ? 'block' : 'none';
+    }
+
+    kindSelect.addEventListener('change', toggleFields);
+    toggleFields(); // Run on page load
+});
+</script>
+{% endblock %}

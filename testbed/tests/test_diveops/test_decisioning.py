@@ -18,7 +18,7 @@ class TestCanDiverJoinTrip:
 
         result = can_diver_join_trip(
             diver=diver_profile,
-            excursion=dive_trip,
+            trip=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -101,7 +101,7 @@ class TestCanDiverJoinTrip:
 
         result = can_diver_join_trip(
             diver=diver,
-            excursion=dive_trip,
+            trip=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -127,7 +127,7 @@ class TestCanDiverJoinTrip:
 
         result = can_diver_join_trip(
             diver=diver,
-            excursion=dive_trip,
+            trip=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -156,7 +156,7 @@ class TestCanDiverJoinTrip:
 
         result = can_diver_join_trip(
             diver=diver_profile,
-            excursion=dive_trip,
+            trip=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -268,14 +268,14 @@ class TestCanDiverJoinTrip:
         # Check eligibility today (should be allowed)
         result_today = can_diver_join_trip(
             diver=diver,
-            excursion=dive_trip,
+            trip=dive_trip,
             as_of=timezone.now(),
         )
 
         # Check eligibility in 2 days (should not be allowed)
         result_future = can_diver_join_trip(
             diver=diver,
-            excursion=dive_trip,
+            trip=dive_trip,
             as_of=timezone.now() + timedelta(days=2),
         )
 
@@ -293,7 +293,7 @@ class TestEligibilityResult:
 
         result = can_diver_join_trip(
             diver=diver_profile,
-            excursion=dive_trip,
+            trip=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -523,7 +523,7 @@ class TestExcursionRequirementDecisioning:
         # Diver has only default dives (from fixture)
         result = can_diver_join_trip(
             diver=diver_profile,
-            excursion=dive_trip,
+            trip=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -549,7 +549,7 @@ class TestExcursionRequirementDecisioning:
 
         result = can_diver_join_trip(
             diver=diver_profile,
-            excursion=dive_trip,
+            trip=dive_trip,
             as_of=timezone.now(),
         )
 
@@ -580,7 +580,7 @@ class TestExcursionRequirementDecisioning:
 
         result = can_diver_join_trip(
             diver=diver_profile,
-            excursion=dive_trip,
+            trip=dive_trip,
             as_of=timezone.now(),
         )
 

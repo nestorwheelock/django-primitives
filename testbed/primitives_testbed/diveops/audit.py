@@ -210,10 +210,15 @@ class Actions:
     SITE_PRICE_ADJUSTMENT_DEACTIVATED = "site_price_adjustment_deactivated"
 
     # -------------------------------------------------------------------------
-    # Agreement Actions
+    # Agreement Actions (SignableAgreement workflow)
     # -------------------------------------------------------------------------
     AGREEMENT_CREATED = "agreement_created"
+    AGREEMENT_EDITED = "agreement_edited"
+    AGREEMENT_SENT = "agreement_sent"
     AGREEMENT_SIGNED = "agreement_signed"
+    AGREEMENT_VOIDED = "agreement_voided"
+    AGREEMENT_EXPIRED = "agreement_expired"
+    # Legacy - for django-agreements ledger
     AGREEMENT_AMENDED = "agreement_amended"
     AGREEMENT_TERMINATED = "agreement_terminated"
 
@@ -332,6 +337,12 @@ class Actions:
     DIVER_PROOF_SUBMITTED = "diver_proof_submitted"
     DIVER_PROOF_VERIFIED = "diver_proof_verified"
     DIVER_PROOF_REJECTED = "diver_proof_rejected"
+
+    # -------------------------------------------------------------------------
+    # Photo Tag Actions
+    # -------------------------------------------------------------------------
+    PHOTO_DIVER_TAGGED = "photo_diver_tagged"
+    PHOTO_DIVER_UNTAGGED = "photo_diver_untagged"
 
 
 # =============================================================================
@@ -1427,23 +1438,23 @@ def _build_agreement_metadata(agreement, extra_data: dict | None = None) -> dict
 
 
 # =============================================================================
-# Marine Park Logging Functions
+# Protected Area Logging Functions
 # =============================================================================
 
 
-def log_marine_park_event(
+def log_protected_area_event(
     action: str,
-    marine_park,
+    protected_area,
     actor=None,
     data: dict | None = None,
     changes: dict | None = None,
     request=None,
 ):
-    """Log an audit event for a marine park operation.
+    """Log an audit event for a protected area operation.
 
     Args:
         action: One of Actions.PARK_* constants
-        marine_park: MarinePark instance
+        protected_area: ProtectedArea instance
         actor: Django User who performed the action
         data: Optional additional context
         changes: Optional field changes
@@ -1453,25 +1464,28 @@ def log_marine_park_event(
         AuditLog instance
     """
     metadata = {
-        "park_id": str(marine_park.pk),
-        "park_name": marine_park.name,
-        "park_code": marine_park.code,
-        "designation_type": marine_park.designation_type,
-        "is_active": marine_park.is_active,
+        "protected_area_id": str(protected_area.pk),
+        "protected_area_name": protected_area.name,
+        "protected_area_code": protected_area.code,
+        "designation_type": protected_area.designation_type,
+        "is_active": protected_area.is_active,
     }
 
-    if marine_park.governing_authority:
-        metadata["governing_authority"] = marine_park.governing_authority
+    if protected_area.parent_id:
+        metadata["parent_id"] = str(protected_area.parent_id)
 
-    if marine_park.place_id:
-        metadata["place_id"] = str(marine_park.place_id)
+    if protected_area.governing_authority:
+        metadata["governing_authority"] = protected_area.governing_authority
+
+    if protected_area.place_id:
+        metadata["place_id"] = str(protected_area.place_id)
 
     if data:
         metadata.update(data)
 
     return audit_log(
         action=action,
-        obj=marine_park,
+        obj=protected_area,
         actor=actor,
         changes=changes or {},
         metadata=metadata,
@@ -1479,7 +1493,11 @@ def log_marine_park_event(
     )
 
 
-def log_park_zone_event(
+# Backwards compatibility alias
+log_marine_park_event = log_protected_area_event
+
+
+def log_protected_area_zone_event(
     action: str,
     zone,
     actor=None,
@@ -1487,11 +1505,11 @@ def log_park_zone_event(
     changes: dict | None = None,
     request=None,
 ):
-    """Log an audit event for a park zone operation.
+    """Log an audit event for a protected area zone operation.
 
     Args:
         action: One of Actions.PARK_ZONE_* constants
-        zone: ParkZone instance
+        zone: ProtectedAreaZone instance
         actor: Django User who performed the action
         data: Optional additional context
         changes: Optional field changes
@@ -1505,12 +1523,12 @@ def log_park_zone_event(
         "zone_name": zone.name,
         "zone_code": zone.code,
         "zone_type": zone.zone_type,
-        "marine_park_id": str(zone.marine_park_id),
+        "protected_area_id": str(zone.protected_area_id),
         "is_active": zone.is_active,
     }
 
-    if zone.marine_park:
-        metadata["marine_park_name"] = zone.marine_park.name
+    if zone.protected_area:
+        metadata["protected_area_name"] = zone.protected_area.name
 
     if data:
         metadata.update(data)
@@ -1525,7 +1543,11 @@ def log_park_zone_event(
     )
 
 
-def log_park_rule_event(
+# Backwards compatibility alias
+log_park_zone_event = log_protected_area_zone_event
+
+
+def log_protected_area_rule_event(
     action: str,
     rule,
     actor=None,
@@ -1533,11 +1555,11 @@ def log_park_rule_event(
     changes: dict | None = None,
     request=None,
 ):
-    """Log an audit event for a park rule operation.
+    """Log an audit event for a protected area rule operation.
 
     Args:
         action: One of Actions.PARK_RULE_* constants
-        rule: ParkRule instance
+        rule: ProtectedAreaRule instance
         actor: Django User who performed the action
         data: Optional additional context
         changes: Optional field changes
@@ -1552,7 +1574,7 @@ def log_park_rule_event(
         "subject": rule.subject,
         "activity": rule.activity,
         "enforcement_level": rule.enforcement_level,
-        "marine_park_id": str(rule.marine_park_id),
+        "protected_area_id": str(rule.protected_area_id),
         "effective_start": rule.effective_start.isoformat() if rule.effective_start else None,
     }
 
@@ -1575,7 +1597,11 @@ def log_park_rule_event(
     )
 
 
-def log_guide_credential_event(
+# Backwards compatibility alias
+log_park_rule_event = log_protected_area_rule_event
+
+
+def log_protected_area_guide_credential_event(
     action: str,
     credential,
     actor=None,
@@ -1583,11 +1609,11 @@ def log_guide_credential_event(
     changes: dict | None = None,
     request=None,
 ):
-    """Log an audit event for a park guide credential operation.
+    """Log an audit event for a guide permit/credential operation.
 
     Args:
         action: One of Actions.PARK_GUIDE_CREDENTIAL_* constants
-        credential: ParkGuideCredential instance
+        credential: ProtectedAreaPermit (type=GUIDE) or legacy credential object
         actor: Django User who performed the action
         data: Optional additional context
         changes: Optional field changes
@@ -1599,13 +1625,13 @@ def log_guide_credential_event(
     metadata = {
         "credential_id": str(credential.pk),
         "diver_id": str(credential.diver_id),
-        "marine_park_id": str(credential.marine_park_id),
+        "protected_area_id": str(credential.protected_area_id),
         "is_active": credential.is_active,
         "issued_at": credential.issued_at.isoformat() if credential.issued_at else None,
     }
 
-    if credential.marine_park:
-        metadata["marine_park_name"] = credential.marine_park.name
+    if credential.protected_area:
+        metadata["protected_area_name"] = credential.protected_area.name
 
     if credential.credential_number:
         metadata["credential_number"] = credential.credential_number
@@ -1629,6 +1655,10 @@ def log_guide_credential_event(
     )
 
 
+# Backwards compatibility alias
+log_guide_credential_event = log_protected_area_guide_credential_event
+
+
 def log_vessel_permit_event(
     action: str,
     permit,
@@ -1641,7 +1671,7 @@ def log_vessel_permit_event(
 
     Args:
         action: One of Actions.VESSEL_PERMIT_* constants
-        permit: VesselPermit instance
+        permit: ProtectedAreaPermit (type=VESSEL) or legacy VesselPermit object
         actor: Django User who performed the action
         data: Optional additional context
         changes: Optional field changes
@@ -1654,15 +1684,15 @@ def log_vessel_permit_event(
         "permit_id": str(permit.pk),
         "vessel_name": permit.vessel_name,
         "permit_number": permit.permit_number,
-        "marine_park_id": str(permit.marine_park_id),
+        "protected_area_id": str(permit.protected_area_id),
         "operator_id": str(permit.operator_id),
         "is_active": permit.is_active,
         "issued_at": permit.issued_at.isoformat() if permit.issued_at else None,
         "expires_at": permit.expires_at.isoformat() if permit.expires_at else None,
     }
 
-    if permit.marine_park:
-        metadata["marine_park_name"] = permit.marine_park.name
+    if permit.protected_area:
+        metadata["protected_area_name"] = permit.protected_area.name
 
     if permit.operator:
         metadata["operator_name"] = permit.operator.name
@@ -1731,6 +1761,54 @@ def log_eligibility_proof_event(
         obj=proof,
         actor=actor,
         changes=changes or {},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_photo_tag_event(
+    action: str,
+    photo_tag,
+    actor=None,
+    data: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a photo tag operation.
+
+    Args:
+        action: One of Actions.PHOTO_DIVER_TAGGED or PHOTO_DIVER_UNTAGGED
+        photo_tag: PhotoTag instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "photo_tag_id": str(photo_tag.pk),
+        "document_id": str(photo_tag.document_id),
+        "diver_id": str(photo_tag.diver_id),
+    }
+
+    if photo_tag.document:
+        metadata["document_filename"] = photo_tag.document.filename
+
+    if photo_tag.diver and photo_tag.diver.person:
+        metadata["diver_name"] = photo_tag.diver.person.get_full_name()
+
+    if photo_tag.tagged_by_id:
+        metadata["tagged_by_id"] = str(photo_tag.tagged_by_id)
+
+    if data:
+        metadata.update(data)
+
+    # Log against the document (primary subject of photo tagging)
+    return audit_log(
+        action=action,
+        obj=photo_tag.document,
+        actor=actor,
+        changes={},
         metadata=metadata,
         request=request,
     )

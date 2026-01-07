@@ -1,4 +1,4 @@
-{% extends "portal_ui/base_staff.html" %}
+{% extends "diveops/staff/_base.html" %}
 {% load portal_ui_tags %}
 
 {% block breadcrumb %}
@@ -7,7 +7,7 @@
         <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
         </svg>
-        <a href="{% url 'diveops:excursion-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Trips</a>
+        <a href="{% url 'diveops:excursion-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Excursions</a>
     </div>
 </li>
 <li>
@@ -15,7 +15,7 @@
         <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
         </svg>
-        <span class="ml-2 text-sm font-medium text-gray-500">{{ excursion.dive_site.name }}</span>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ excursion.site_names|default:"Excursion" }}</span>
     </div>
 </li>
 {% endblock %}
@@ -25,7 +25,7 @@
     <!-- Page Header -->
     <div class="flex items-start justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">{{ excursion.dive_site.name }}</h1>
+            <h1 class="text-2xl font-bold text-gray-900">{{ excursion.site_names|default:"Excursion" }}</h1>
             <p class="text-gray-600">{{ excursion.departure_time|date:"l, F j, Y" }} at {{ excursion.departure_time|time:"g:i A" }}</p>
         </div>
         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {% if excursion.status == 'scheduled' %}bg-blue-100 text-blue-800{% elif excursion.status == 'boarding' %}bg-yellow-100 text-yellow-800{% elif excursion.status == 'departed' %}bg-green-100 text-green-800{% elif excursion.status == 'completed' %}bg-gray-100 text-gray-800{% else %}bg-red-100 text-red-800{% endif %}">
@@ -70,12 +70,66 @@
         </div>
     </div>
 
+    <!-- Dives Section -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">Dives</h3>
+            {% if excursion.status == 'scheduled' %}
+            <a href="{% url 'diveops:dive-add' excursion_pk=excursion.pk %}" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "plus" "w-4 h-4 mr-1" %}
+                Add Dive
+            </a>
+            {% endif %}
+        </div>
+        <div class="p-4">
+            {% if excursion.dives.all %}
+            <div class="space-y-3">
+                {% for dive in excursion.dives.all %}
+                <div class="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:border-blue-200 hover:bg-blue-50">
+                    <div class="flex items-center">
+                        <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                            <span class="text-sm font-bold text-blue-600">{{ dive.sequence }}</span>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-gray-900">{{ dive.dive_site.name }}</p>
+                            <p class="text-sm text-gray-500">{{ dive.planned_start|time:"g:i A" }}{% if dive.planned_duration_minutes %} · {{ dive.planned_duration_minutes }} min{% endif %}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {% if dive.max_depth_meters %}
+                        <span class="text-sm text-gray-500">{{ dive.max_depth_meters }}m</span>
+                        {% endif %}
+                        {% if excursion.status == 'scheduled' %}
+                        <a href="{% url 'diveops:dive-edit' pk=dive.pk %}" class="text-blue-600 hover:text-blue-900 text-sm">Edit</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <div class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                    {% icon "anchor" "w-6 h-6 text-gray-400" %}
+                </div>
+                <p class="text-gray-500 mb-3">No dives scheduled yet.</p>
+                {% if excursion.status == 'scheduled' %}
+                <a href="{% url 'diveops:dive-add' excursion_pk=excursion.pk %}" class="text-blue-600 hover:text-blue-900">Add the first dive</a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
     <!-- Action Buttons -->
     <div class="flex flex-wrap gap-3">
         {% if excursion.status == 'scheduled' or excursion.status == 'boarding' %}
         <a href="{% url 'diveops:book-diver' excursion_pk=excursion.pk %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
             {% icon "user-plus" "w-4 h-4 mr-2" %}
             Book Diver
+        </a>
+        <a href="{% url 'diveops:excursion-edit' pk=excursion.pk %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+            {% icon "edit" "w-4 h-4 mr-2" %}
+            Edit Excursion
         </a>
         {% endif %}
 

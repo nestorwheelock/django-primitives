@@ -1,0 +1,227 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:protected-area-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Protected Areas</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:protected-area-detail' pk=protected_area.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ protected_area.name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ zone.name }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ zone.name }}</h1>
+            <p class="text-gray-600">{{ zone.code }} - {{ zone.get_zone_type_display|default:"General Zone" }}</p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <a href="{% url 'diveops:protected-area-zone-edit' area_pk=protected_area.pk pk=zone.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "edit" "w-4 h-4 mr-2" %}
+                Edit Zone
+            </a>
+        </div>
+    </div>
+
+    <!-- Zone Info Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+            <h3 class="text-lg font-medium text-gray-900">Zone Information</h3>
+        </div>
+        <div class="p-4">
+            <dl class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Status</dt>
+                    <dd class="mt-1">
+                        {% if zone.is_active %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Inactive</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Diving Allowed</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{% if zone.diving_allowed %}Yes{% else %}No{% endif %}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Requires Guide</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{% if zone.requires_guide %}Yes{% else %}No{% endif %}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Max Divers</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ zone.max_divers|default:"No limit" }}</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Zone-Specific Rules Section -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-purple-50 flex items-center justify-between">
+            <div class="flex items-center">
+                {% icon "file-text" "w-5 h-5 text-purple-500 mr-2" %}
+                <h3 class="text-lg font-medium text-purple-900">Zone-Specific Rules</h3>
+                {% if zone_rules %}
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    {{ zone_rules|length }}
+                </span>
+                {% endif %}
+            </div>
+            <a href="{% url 'diveops:zone-rule-create' area_pk=protected_area.pk zone_pk=zone.pk %}"
+               class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-purple-600 hover:bg-purple-700">
+                {% icon "plus" "w-4 h-4 mr-1" %}
+                Add Zone Rule
+            </a>
+        </div>
+        <div class="p-4">
+            {% if zone_rules %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rule</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Applies To</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Enforcement</th>
+                            <th scope="col" class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for rule in zone_rules %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-3 py-2">
+                                <span class="font-medium text-gray-900">{{ rule.subject }}</span>
+                                {% if rule.value %}
+                                <span class="text-sm text-gray-500">({{ rule.get_operator_display }} {{ rule.value }})</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    {{ rule.get_rule_type_display }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                                {{ rule.get_applies_to_display }}
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                                    {% if rule.enforcement_level == 'block' %}bg-red-100 text-red-800
+                                    {% elif rule.enforcement_level == 'warn' %}bg-yellow-100 text-yellow-800
+                                    {% else %}bg-blue-100 text-blue-800{% endif %}">
+                                    {{ rule.get_enforcement_level_display }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap text-right">
+                                <a href="{% url 'diveops:protected-area-rule-edit' area_pk=protected_area.pk pk=rule.pk %}" class="text-purple-600 hover:text-purple-900 text-sm mr-2">Edit</a>
+                                <a href="{% url 'diveops:protected-area-rule-delete' area_pk=protected_area.pk pk=rule.pk %}" class="text-red-600 hover:text-red-900 text-sm">Delete</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <div class="mx-auto w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mb-3">
+                    {% icon "file-text" "w-6 h-6 text-purple-400" %}
+                </div>
+                <p class="text-gray-500 mb-3">No zone-specific rules defined yet.</p>
+                <a href="{% url 'diveops:zone-rule-create' area_pk=protected_area.pk zone_pk=zone.pk %}"
+                   class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-purple-600 hover:bg-purple-700">
+                    {% icon "plus" "w-4 h-4 mr-1" %}
+                    Add First Zone Rule
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Area-Wide Rules Section (inherited) -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div class="flex items-center">
+                {% icon "globe" "w-5 h-5 text-gray-400 mr-2" %}
+                <h3 class="text-lg font-medium text-gray-900">Inherited Area-Wide Rules</h3>
+                {% if area_rules %}
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    {{ area_rules|length }}
+                </span>
+                {% endif %}
+            </div>
+            <span class="text-sm text-gray-500">From {{ protected_area.name }}</span>
+        </div>
+        <div class="p-4">
+            {% if area_rules %}
+            <p class="text-sm text-gray-500 mb-4">These rules apply to all zones in the protected area unless overridden by zone-specific rules.</p>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rule</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Applies To</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Enforcement</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for rule in area_rules %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-3 py-2">
+                                <span class="font-medium text-gray-700">{{ rule.subject }}</span>
+                                {% if rule.value %}
+                                <span class="text-sm text-gray-500">({{ rule.get_operator_display }} {{ rule.value }})</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    {{ rule.get_rule_type_display }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                                {{ rule.get_applies_to_display }}
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                                    {% if rule.enforcement_level == 'block' %}bg-red-100 text-red-800
+                                    {% elif rule.enforcement_level == 'warn' %}bg-yellow-100 text-yellow-800
+                                    {% else %}bg-blue-100 text-blue-800{% endif %}">
+                                    {{ rule.get_enforcement_level_display }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-6">
+                <p class="text-gray-500">No area-wide rules defined.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

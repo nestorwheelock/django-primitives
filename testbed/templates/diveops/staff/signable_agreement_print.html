@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ agreement.template.name }} - {{ party_name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+        @page { margin: 0.75in; }
+        .signature-image { max-height: 80px; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Control Bar (hidden when printing) -->
+    <div class="no-print bg-blue-600 text-white py-3 px-6 sticky top-0 z-50 shadow-lg">
+        <div class="max-w-4xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <span class="text-blue-100">{{ agreement.template.name }}</span>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                    {% if agreement.status == 'draft' %}bg-gray-100 text-gray-800
+                    {% elif agreement.status == 'sent' %}bg-blue-100 text-blue-800
+                    {% elif agreement.status == 'signed' %}bg-green-100 text-green-800
+                    {% elif agreement.status == 'void' %}bg-red-100 text-red-800
+                    {% elif agreement.status == 'expired' %}bg-yellow-100 text-yellow-800
+                    {% endif %}">
+                    {{ agreement.get_status_display }}
+                </span>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button onclick="window.print()" class="px-4 py-2 bg-white text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-50">
+                    Print
+                </button>
+                <button onclick="window.close()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-400">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agreement Document -->
+    <div class="max-w-4xl mx-auto py-8 px-4">
+        <div class="bg-white shadow-lg rounded-lg overflow-hidden">
+            <!-- Header -->
+            <div class="px-8 py-6 border-b border-gray-200 text-center">
+                <h1 class="text-2xl font-bold text-gray-900">{{ agreement.template.name }}</h1>
+                {% if agreement.template.dive_shop %}
+                <p class="text-gray-600 mt-1">{{ agreement.template.dive_shop.name }}</p>
+                {% endif %}
+                <p class="text-gray-500 mt-2">For: <span class="font-medium text-gray-700">{{ party_name }}</span></p>
+            </div>
+
+            <!-- Document Content -->
+            <div class="px-8 py-6">
+                <div class="prose max-w-none text-gray-800 leading-relaxed">
+                    {{ agreement.content_snapshot|safe }}
+                </div>
+
+                {% if agreement.status == 'signed' %}
+                <!-- Signature Section -->
+                <div class="mt-10 pt-8 border-t-2 border-gray-300">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-6">Electronic Signature</h2>
+
+                    <div class="bg-gray-50 rounded-lg p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Signature Image -->
+                            <div>
+                                <p class="text-sm font-medium text-gray-700 mb-2">Signature</p>
+                                {% if agreement.signed_document %}
+                                <div class="border border-gray-300 rounded bg-white p-4">
+                                    {% if signature_data_url %}
+                                    <img src="{{ signature_data_url }}" alt="Signature" class="signature-image">
+                                    {% else %}
+                                    <p class="text-gray-500 italic text-sm">Signature on file</p>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Signature Details -->
+                            <div class="space-y-3">
+                                <div>
+                                    <p class="text-sm text-gray-500">Signed By</p>
+                                    <p class="font-medium text-gray-900">{{ agreement.signed_by_name }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">Date & Time</p>
+                                    <p class="font-medium text-gray-900">{{ agreement.signed_at|date:"F d, Y H:i:s" }} UTC</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">IP Address</p>
+                                    <p class="font-medium text-gray-900">{{ agreement.signed_ip }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Digital Proof -->
+                        <div class="mt-6 pt-4 border-t border-gray-200">
+                            <p class="text-xs text-gray-500 mb-2">Digital Verification</p>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                {% if agreement.signed_geolocation %}
+                                <div>
+                                    <p class="text-gray-400">Location</p>
+                                    <p class="text-gray-600">{{ agreement.signed_geolocation.latitude|floatformat:4 }}, {{ agreement.signed_geolocation.longitude|floatformat:4 }}</p>
+                                </div>
+                                {% endif %}
+                                {% if agreement.signed_timezone %}
+                                <div>
+                                    <p class="text-gray-400">Timezone</p>
+                                    <p class="text-gray-600">{{ agreement.signed_timezone }}</p>
+                                </div>
+                                {% endif %}
+                                {% if agreement.signed_platform %}
+                                <div>
+                                    <p class="text-gray-400">Platform</p>
+                                    <p class="text-gray-600">{{ agreement.signed_platform|truncatechars:20 }}</p>
+                                </div>
+                                {% endif %}
+                                {% if agreement.signed_canvas_fingerprint %}
+                                <div>
+                                    <p class="text-gray-400">Device Hash</p>
+                                    <p class="text-gray-600 font-mono">{{ agreement.signed_canvas_fingerprint|slice:":12" }}...</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Legal Statement -->
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <p class="text-xs text-gray-500">
+                                This agreement was electronically signed by {{ agreement.signed_by_name }}
+                                on {{ agreement.signed_at|date:"F d, Y" }} at {{ agreement.signed_at|time:"H:i:s" }} UTC.
+                                The signer consented to electronic signing{% if agreement.agreed_to_terms %} and agreed to the terms{% endif %}.
+                                Content hash: <span class="font-mono">{{ agreement.content_hash|truncatechars:20 }}</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <!-- Unsigned - Show signature lines -->
+                <div class="mt-10 pt-8 border-t-2 border-gray-300">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-6">Signature</h2>
+
+                    <div class="space-y-8">
+                        <div>
+                            <div class="border-b-2 border-gray-400 w-full md:w-2/3 mb-2"></div>
+                            <p class="text-sm text-gray-600">Signature</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-8">
+                            <div>
+                                <div class="border-b border-gray-400 mb-2"></div>
+                                <p class="text-sm text-gray-600">Printed Name</p>
+                            </div>
+                            <div>
+                                <div class="border-b border-gray-400 mb-2"></div>
+                                <p class="text-sm text-gray-600">Date</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Footer -->
+            <div class="px-8 py-4 bg-gray-50 border-t border-gray-200">
+                <div class="flex justify-between items-center text-xs text-gray-500">
+                    <span>Agreement ID: {{ agreement.pk }}</span>
+                    <span>Template v{{ agreement.template_version }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

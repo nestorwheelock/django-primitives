@@ -1,4 +1,4 @@
-{% extends "portal_ui/base_staff.html" %}
+{% extends "diveops/staff/_base.html" %}
 {% load portal_ui_tags %}
 
 {% block breadcrumb %}
@@ -189,6 +189,7 @@
                     <!-- Route Segments Builder -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Dive Profile Segments</label>
+                        <p class="text-xs text-gray-500 mb-2">Drag segments by the handle to reorder</p>
                         <div id="route-segments-builder" class="space-y-2">
                             <!-- Segments will be rendered here by JavaScript -->
                         </div>
@@ -214,12 +215,22 @@
                         <p class="mt-1 text-xs text-gray-500">{{ form.fields.hazards.help_text }}</p>
                     </div>
 
-                    <!-- Briefing Text -->
+                    <!-- Briefing Video URL -->
                     <div>
-                        <label for="id_briefing_text" class="block text-sm font-medium text-gray-700">Briefing Text</label>
+                        <label for="id_briefing_video_url" class="block text-sm font-medium text-gray-700">Briefing Video URL</label>
+                        <input type="url" name="briefing_video_url" id="id_briefing_video_url"
+                               value="{{ form.briefing_video_url.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="https://www.youtube.com/watch?v=...">
+                        <p class="mt-1 text-xs text-gray-500">{{ form.fields.briefing_video_url.help_text }}</p>
+                    </div>
+
+                    <!-- Briefing Notes -->
+                    <div>
+                        <label for="id_briefing_text" class="block text-sm font-medium text-gray-700">Briefing Notes</label>
                         <textarea name="briefing_text" id="id_briefing_text" rows="4"
                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                                  placeholder="Full dive briefing content for communication to divers...">{{ form.briefing_text.value|default:'' }}</textarea>
+                                  placeholder="Additional briefing notes for divers...">{{ form.briefing_text.value|default:'' }}</textarea>
                         <p class="mt-1 text-xs text-gray-500">{{ form.fields.briefing_text.help_text }}</p>
                     </div>
                 </div>
@@ -280,7 +291,74 @@
             </div>
         </form>
     </div>
+
+    <!-- Dive Profile Preview (only for edit mode) -->
+    {% if not is_create and excursion_type %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">Dive Profile Preview</h3>
+            <button type="button" id="calculate-profile-btn"
+                    class="inline-flex items-center px-3 py-1.5 border border-transparent rounded text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700">
+                {% icon "refresh-cw" "w-4 h-4 mr-1" %}
+                Recalculate Profile
+            </button>
+        </div>
+        <div class="p-4">
+            <!-- Loading State -->
+            <div id="profile-loading" class="hidden text-center py-6">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600 mx-auto"></div>
+                <p class="text-gray-500 mt-2">Calculating profile...</p>
+            </div>
+
+            <!-- Results -->
+            <div id="profile-results" class="hidden space-y-4">
+                <div class="grid grid-cols-4 gap-3">
+                    <div class="bg-gray-50 rounded-lg p-2 text-center">
+                        <div class="text-xl font-bold text-gray-900" id="stat-max-depth">-</div>
+                        <div class="text-xs text-gray-500">Max Depth</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-2 text-center">
+                        <div class="text-xl font-bold text-gray-900" id="stat-runtime">-</div>
+                        <div class="text-xs text-gray-500">Runtime</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-2 text-center">
+                        <div class="text-xl font-bold text-cyan-600" id="stat-loading">-</div>
+                        <div class="text-xs text-gray-500">End Loading</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-2 text-center">
+                        <div class="text-xl font-bold text-gray-900" id="stat-ndl">-</div>
+                        <div class="text-xs text-gray-500">NDL</div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <div class="relative" style="height: 180px;">
+                        <canvas id="dive-profile-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Initial/Error State -->
+            <div id="profile-initial" class="text-center py-6">
+                <div class="text-gray-400 mb-2">
+                    {% icon "activity" "w-10 h-10 mx-auto" %}
+                </div>
+                <p class="text-gray-500 text-sm">Loading profile...</p>
+            </div>
+            <div id="profile-error" class="hidden text-center py-6">
+                <div class="text-red-400 mb-2">
+                    {% icon "alert-circle" "w-10 h-10 mx-auto" %}
+                </div>
+                <p class="text-red-600 text-sm" id="profile-error-message">-</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
+
+<!-- Chart.js (only for edit mode) -->
+{% if not is_create and excursion_type %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endif %}
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -299,12 +377,24 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Failed to parse route segments:', e);
     }
 
+    // Drag and drop state
+    let draggedElement = null;
+    let draggedIndex = null;
+
     function renderSegments() {
         builder.innerHTML = '';
         segments.forEach((seg, idx) => {
             const row = document.createElement('div');
-            row.className = 'flex items-center gap-2 p-3 bg-gray-50 rounded-lg';
+            row.className = 'flex items-center gap-2 p-3 bg-gray-50 rounded-lg transition-all duration-150';
+            row.draggable = true;
+            row.dataset.idx = idx;
             row.innerHTML = `
+                <div class="drag-handle cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600" title="Drag to reorder">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                    </svg>
+                </div>
+                <span class="text-xs font-medium text-gray-500 w-4">${idx + 1}</span>
                 <select data-field="phase" class="px-2 py-1.5 border border-gray-300 rounded text-sm">
                     <option value="descent" ${seg.phase === 'descent' ? 'selected' : ''}>Descent</option>
                     <option value="level" ${seg.phase === 'level' ? 'selected' : ''}>Level</option>
@@ -333,7 +423,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     </svg>
                 </button>
             `;
-            row.dataset.idx = idx;
             builder.appendChild(row);
 
             // Phase change handler - show/hide to_depth field
@@ -357,7 +446,87 @@ document.addEventListener('DOMContentLoaded', function() {
                 renderSegments();
                 updateHiddenField();
             });
+
+            // Drag event handlers
+            row.addEventListener('dragstart', handleDragStart);
+            row.addEventListener('dragend', handleDragEnd);
+            row.addEventListener('dragover', handleDragOver);
+            row.addEventListener('dragenter', handleDragEnter);
+            row.addEventListener('dragleave', handleDragLeave);
+            row.addEventListener('drop', handleDrop);
         });
+    }
+
+    // Drag and Drop Handlers
+    function handleDragStart(e) {
+        draggedElement = this;
+        draggedIndex = parseInt(this.dataset.idx);
+        this.classList.add('opacity-50', 'bg-blue-100');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', draggedIndex);
+    }
+
+    function handleDragEnd(e) {
+        this.classList.remove('opacity-50', 'bg-blue-100');
+        // Remove all drag-over indicators
+        builder.querySelectorAll('[data-idx]').forEach(row => {
+            row.classList.remove('border-t-2', 'border-b-2', 'border-blue-500', 'bg-blue-50');
+        });
+        draggedElement = null;
+        draggedIndex = null;
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    }
+
+    function handleDragEnter(e) {
+        e.preventDefault();
+        if (this === draggedElement) return;
+
+        const targetIndex = parseInt(this.dataset.idx);
+
+        // Remove previous indicators
+        builder.querySelectorAll('[data-idx]').forEach(row => {
+            row.classList.remove('border-t-2', 'border-b-2', 'border-blue-500', 'bg-blue-50');
+        });
+
+        // Add indicator based on position
+        this.classList.add('bg-blue-50');
+        if (targetIndex < draggedIndex) {
+            this.classList.add('border-t-2', 'border-blue-500');
+        } else {
+            this.classList.add('border-b-2', 'border-blue-500');
+        }
+    }
+
+    function handleDragLeave(e) {
+        // Only remove if actually leaving (not entering child)
+        if (!this.contains(e.relatedTarget)) {
+            this.classList.remove('border-t-2', 'border-b-2', 'border-blue-500', 'bg-blue-50');
+        }
+    }
+
+    function handleDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (this === draggedElement) return;
+
+        const targetIndex = parseInt(this.dataset.idx);
+
+        // Remove the dragged segment from array
+        const [movedSegment] = segments.splice(draggedIndex, 1);
+
+        // Insert at new position
+        // If dropping after current position, adjust index since we removed an element
+        const insertIndex = targetIndex > draggedIndex ? targetIndex : targetIndex;
+        segments.splice(insertIndex, 0, movedSegment);
+
+        // Re-render and update
+        renderSegments();
+        updateHiddenField();
     }
 
     function updateSegments() {
@@ -437,6 +606,143 @@ document.addEventListener('DOMContentLoaded', function() {
     // Run on change
     sequenceInput.addEventListener('change', updateSurfaceIntervalVisibility);
     sequenceInput.addEventListener('input', updateSurfaceIntervalVisibility);
+
+    // Profile calculation (only in edit mode)
+    {% if not is_create and excursion_type %}
+    const calculateBtn = document.getElementById('calculate-profile-btn');
+    const loadingEl = document.getElementById('profile-loading');
+    const resultsEl = document.getElementById('profile-results');
+    const initialEl = document.getElementById('profile-initial');
+    const errorEl = document.getElementById('profile-error');
+    const errorMsgEl = document.getElementById('profile-error-message');
+    const chartCanvas = document.getElementById('dive-profile-chart');
+
+    const statMaxDepth = document.getElementById('stat-max-depth');
+    const statRuntime = document.getElementById('stat-runtime');
+    const statLoading = document.getElementById('stat-loading');
+    const statNdl = document.getElementById('stat-ndl');
+
+    let profileChart = null;
+
+    function showProfileState(state) {
+        loadingEl.classList.add('hidden');
+        resultsEl.classList.add('hidden');
+        initialEl.classList.add('hidden');
+        errorEl.classList.add('hidden');
+
+        if (state === 'loading') loadingEl.classList.remove('hidden');
+        else if (state === 'results') resultsEl.classList.remove('hidden');
+        else if (state === 'initial') initialEl.classList.remove('hidden');
+        else if (state === 'error') errorEl.classList.remove('hidden');
+    }
+
+    function buildProfileChart(segments) {
+        const depthPoints = [];
+        let currentTime = 0;
+
+        depthPoints.push({ x: 0, y: 0 });
+
+        segments.forEach(seg => {
+            const duration = seg.duration_min || 0;
+            if (seg.phase === 'descent' || seg.phase === 'ascent') {
+                const startDepth = seg.from_depth_m !== undefined ? seg.from_depth_m : 0;
+                const endDepth = seg.to_depth_m !== undefined ? seg.to_depth_m : seg.depth_m || 0;
+                depthPoints.push({ x: currentTime, y: startDepth });
+                currentTime += duration;
+                depthPoints.push({ x: currentTime, y: endDepth });
+            } else {
+                const depth = seg.depth_m || 0;
+                depthPoints.push({ x: currentTime, y: depth });
+                currentTime += duration;
+                depthPoints.push({ x: currentTime, y: depth });
+            }
+        });
+
+        const lastPoint = depthPoints[depthPoints.length - 1];
+        if (lastPoint && lastPoint.y > 0) {
+            currentTime += lastPoint.y / 9;
+            depthPoints.push({ x: currentTime, y: 0 });
+        }
+
+        return { depthPoints, totalTime: currentTime };
+    }
+
+    function renderProfileChart(segments) {
+        const chartData = buildProfileChart(segments);
+        const maxDepth = Math.max(...chartData.depthPoints.map(p => p.y), 10);
+
+        if (profileChart) profileChart.destroy();
+
+        profileChart = new Chart(chartCanvas, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Depth (m)',
+                    data: chartData.depthPoints,
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { type: 'linear', title: { display: true, text: 'Time (min)', font: { size: 10 } }, min: 0, max: chartData.totalTime },
+                    y: { type: 'linear', reverse: true, title: { display: true, text: 'Depth (m)', font: { size: 10 } }, min: 0, max: maxDepth + 5 }
+                }
+            }
+        });
+
+        return chartData;
+    }
+
+    async function calculateProfile() {
+        showProfileState('loading');
+        if (calculateBtn) calculateBtn.disabled = true;
+
+        try {
+            const response = await fetch('{% url "diveops:api-excursion-type-tissue-profile" pk=excursion_type.pk %}');
+            if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+            const data = await response.json();
+
+            const diveResult = data.dive_results.find(d => d.sequence === {{ dive_template.sequence }});
+
+            if (diveResult) {
+                statMaxDepth.textContent = diveResult.max_depth_m.toFixed(1) + 'm';
+                statRuntime.textContent = diveResult.runtime_min.toFixed(0) + ' min';
+                statLoading.textContent = diveResult.loading_after_percent.toFixed(1) + '%';
+                statNdl.textContent = diveResult.ndl_at_start !== null
+                    ? (diveResult.ndl_at_start >= 999 ? '∞' : diveResult.ndl_at_start + ' min')
+                    : '-';
+
+                if (diveResult.profile_segments && diveResult.profile_segments.length > 0) {
+                    renderProfileChart(diveResult.profile_segments);
+                }
+                showProfileState('results');
+            } else {
+                throw new Error('Dive not found in profile data');
+            }
+        } catch (error) {
+            console.error('Profile calculation error:', error);
+            errorMsgEl.textContent = error.message || 'Failed to calculate profile';
+            showProfileState('error');
+        } finally {
+            if (calculateBtn) calculateBtn.disabled = false;
+        }
+    }
+
+    if (calculateBtn) {
+        calculateBtn.addEventListener('click', calculateProfile);
+    }
+
+    // Auto-calculate on page load
+    calculateProfile();
+    {% endif %}
 });
 </script>
 {% endblock %}

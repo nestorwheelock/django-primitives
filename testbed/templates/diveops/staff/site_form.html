@@ -1,0 +1,326 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:staff-site-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Dive Sites</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">{% if is_create %}Add a new dive site location{% else %}Update dive site information{% endif %}</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    {% icon "alert-circle" "h-5 w-5 text-red-400" %}
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                        <ul class="list-disc pl-5 space-y-1">
+                            {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Form Fields -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-medium text-gray-900">Site Information</h3>
+                </div>
+                <div class="p-6 space-y-6">
+                    <!-- Name -->
+                    <div>
+                        <label for="id_name" class="block text-sm font-medium text-gray-700">Site Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="name" id="id_name" value="{{ form.name.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.name.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., Blue Hole">
+                        {% if form.name.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Description -->
+                    <div>
+                        <label for="id_description" class="block text-sm font-medium text-gray-700">Description</label>
+                        <textarea name="description" id="id_description" rows="3"
+                                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="Describe the dive site...">{{ form.description.value|default:'' }}</textarea>
+                    </div>
+
+                    <!-- Difficulty, Access Type & Depth -->
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label for="id_difficulty" class="block text-sm font-medium text-gray-700">Difficulty <span class="text-red-500">*</span></label>
+                            <select name="difficulty" id="id_difficulty"
+                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                {% for value, label in form.fields.difficulty.choices %}
+                                <option value="{{ value }}" {% if form.difficulty.value == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="id_dive_mode" class="block text-sm font-medium text-gray-700">Access Type <span class="text-red-500">*</span></label>
+                            <select name="dive_mode" id="id_dive_mode"
+                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                {% for value, label in form.fields.dive_mode.choices %}
+                                <option value="{{ value }}" {% if form.dive_mode.value == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            <p class="mt-1 text-xs text-gray-500">How divers access this site</p>
+                        </div>
+                        <div>
+                            <label for="id_max_depth_meters" class="block text-sm font-medium text-gray-700">Max Depth (m) <span class="text-red-500">*</span></label>
+                            <input type="number" name="max_depth_meters" id="id_max_depth_meters" min="1"
+                                   value="{{ form.max_depth_meters.value|default:'' }}"
+                                   class="mt-1 block w-full px-3 py-2 border {% if form.max_depth_meters.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% if form.max_depth_meters.errors %}
+                            <p class="mt-1 text-sm text-red-600">{{ form.max_depth_meters.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Certification Level -->
+                    <div>
+                        <label for="id_min_certification_level" class="block text-sm font-medium text-gray-700">Minimum Certification Level</label>
+                        <select name="min_certification_level" id="id_min_certification_level"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">No minimum required</option>
+                            {% for level in certification_levels %}
+                            <option value="{{ level.pk }}" {% if form.min_certification_level.value|stringformat:'s' == level.pk|stringformat:'s' %}selected{% endif %}>
+                                {{ level.agency.name }} - {{ level.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-sm text-gray-500">Minimum certification required to dive this site</p>
+                    </div>
+
+                    <!-- Rating -->
+                    <div>
+                        <label for="id_rating" class="block text-sm font-medium text-gray-700">Rating</label>
+                        <select name="rating" id="id_rating"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">No rating</option>
+                            {% for i in "12345" %}
+                            <option value="{{ forloop.counter }}" {% if form.rating.value|stringformat:'s' == forloop.counter|stringformat:'s' %}selected{% endif %}>{{ forloop.counter }} Star{{ forloop.counter|pluralize }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Tags -->
+                    <div>
+                        <label for="id_tags" class="block text-sm font-medium text-gray-700">Tags</label>
+                        <input type="text" name="tags" id="id_tags" value="{{ form.tags.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="coral, reef, wreck (comma separated)">
+                        <p class="mt-1 text-sm text-gray-500">Enter tags separated by commas</p>
+                    </div>
+
+                    <!-- Protected Area -->
+                    <div class="border-t border-gray-200 pt-6 mt-6">
+                        <h4 class="text-sm font-medium text-gray-900 mb-4">Protected Area (Optional)</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="id_protected_area" class="block text-sm font-medium text-gray-700">Protected Area</label>
+                                <select name="protected_area" id="id_protected_area"
+                                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">None</option>
+                                    {% for area in protected_areas %}
+                                    <option value="{{ area.pk }}" {% if form.protected_area.value|stringformat:'s' == area.pk|stringformat:'s' %}selected{% endif %}>{{ area.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <p class="mt-1 text-sm text-gray-500">Marine park or reserve</p>
+                            </div>
+                            <div>
+                                <label for="id_protected_area_zone" class="block text-sm font-medium text-gray-700">Zone</label>
+                                <select name="protected_area_zone" id="id_protected_area_zone"
+                                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">None</option>
+                                    {% for zone in protected_area_zones %}
+                                    <option value="{{ zone.pk }}" data-area="{{ zone.protected_area_id }}" {% if form.protected_area_zone.value|stringformat:'s' == zone.pk|stringformat:'s' %}selected{% endif %}>{{ zone.protected_area.name }} - {{ zone.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <p class="mt-1 text-sm text-gray-500">Specific zone within area</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-medium text-gray-900">Location</h3>
+                </div>
+                <div class="p-6">
+                    <p class="text-sm text-gray-600 mb-4">Click on the map to set the dive site location.</p>
+
+                    <!-- Hidden lat/lng fields -->
+                    <input type="hidden" name="latitude" id="id_latitude" value="{{ form.latitude.value|default:'' }}">
+                    <input type="hidden" name="longitude" id="id_longitude" value="{{ form.longitude.value|default:'' }}">
+
+                    <!-- Coordinate display -->
+                    <div class="mb-4 p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center space-x-4 text-sm">
+                            <span class="text-gray-500">Lat:</span>
+                            <span id="lat-display" class="font-mono text-gray-900">{{ form.latitude.value|default:'Not set' }}</span>
+                            <span class="text-gray-500">Lng:</span>
+                            <span id="lng-display" class="font-mono text-gray-900">{{ form.longitude.value|default:'Not set' }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Map container -->
+                    <div id="site-map" class="h-80 rounded-lg border border-gray-200"></div>
+
+                    {% if form.latitude.errors or form.longitude.errors %}
+                    <p class="mt-2 text-sm text-red-600">Please click on the map to set the location</p>
+                    {% endif %}
+
+                    <!-- Leaflet -->
+                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function() {
+                            // Initial coordinates (existing or default)
+                            var initialLat = {{ form.latitude.value|default:'25.0' }};
+                            var initialLng = {{ form.longitude.value|default:'-77.5' }};
+                            var hasInitial = {{ form.latitude.value|yesno:'true,false' }};
+
+                            var map = L.map('site-map').setView([initialLat, initialLng], hasInitial ? 14 : 6);
+                            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                                attribution: '&copy; OpenStreetMap contributors'
+                            }).addTo(map);
+
+                            var marker = null;
+                            if (hasInitial) {
+                                marker = L.marker([initialLat, initialLng], {draggable: true}).addTo(map);
+                                marker.on('dragend', function(e) {
+                                    updateCoordinates(e.target.getLatLng().lat, e.target.getLatLng().lng);
+                                });
+                            }
+
+                            function updateCoordinates(lat, lng) {
+                                document.getElementById('id_latitude').value = lat.toFixed(6);
+                                document.getElementById('id_longitude').value = lng.toFixed(6);
+                                document.getElementById('lat-display').textContent = lat.toFixed(6);
+                                document.getElementById('lng-display').textContent = lng.toFixed(6);
+                            }
+
+                            map.on('click', function(e) {
+                                var lat = e.latlng.lat;
+                                var lng = e.latlng.lng;
+
+                                if (marker) {
+                                    marker.setLatLng([lat, lng]);
+                                } else {
+                                    marker = L.marker([lat, lng], {draggable: true}).addTo(map);
+                                    marker.on('dragend', function(e) {
+                                        updateCoordinates(e.target.getLatLng().lat, e.target.getLatLng().lng);
+                                    });
+                                }
+
+                                updateCoordinates(lat, lng);
+                            });
+                        });
+                    </script>
+                </div>
+            </div>
+        </div>
+
+        <!-- Protected Area Zone Filter Script -->
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const areaSelect = document.getElementById('id_protected_area');
+                const zoneSelect = document.getElementById('id_protected_area_zone');
+                const allZoneOptions = Array.from(zoneSelect.querySelectorAll('option[data-area]'));
+                const currentZoneValue = zoneSelect.value;
+
+                function filterZones() {
+                    const selectedAreaId = areaSelect.value;
+
+                    // Remove all zone options except "None"
+                    while (zoneSelect.options.length > 1) {
+                        zoneSelect.remove(1);
+                    }
+
+                    if (!selectedAreaId) {
+                        // No area selected - disable zone select
+                        zoneSelect.disabled = true;
+                        zoneSelect.value = '';
+                        return;
+                    }
+
+                    // Enable zone select
+                    zoneSelect.disabled = false;
+
+                    // Add matching zones
+                    allZoneOptions.forEach(function(opt) {
+                        if (opt.dataset.area === selectedAreaId) {
+                            const newOpt = opt.cloneNode(true);
+                            // Show just the zone name since area is already selected
+                            newOpt.textContent = opt.textContent.split(' - ').slice(1).join(' - ');
+                            zoneSelect.appendChild(newOpt);
+                        }
+                    });
+
+                    // Restore previous selection if still valid
+                    if (currentZoneValue) {
+                        const matchingOpt = zoneSelect.querySelector('option[value="' + currentZoneValue + '"]');
+                        if (matchingOpt) {
+                            zoneSelect.value = currentZoneValue;
+                        }
+                    }
+                }
+
+                // Initial filter
+                filterZones();
+
+                // Filter on area change
+                areaSelect.addEventListener('change', function() {
+                    zoneSelect.value = '';  // Clear zone when area changes
+                    filterZones();
+                });
+            });
+        </script>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end space-x-3">
+            <a href="{% url 'diveops:staff-site-list' %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% if is_create %}Create Dive Site{% else %}Save Changes{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

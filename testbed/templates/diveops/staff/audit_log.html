@@ -1,0 +1,129 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">System activity and change history</p>
+    </div>
+
+    <!-- Audit Log Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actor</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for entry in entries %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            <div>{{ entry.created_at|date:"M j, Y" }}</div>
+                            <div class="text-xs text-gray-400">{{ entry.created_at|time:"g:i:s A" }}</div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                            {% if entry.actor_display %}
+                                {{ entry.actor_display }}
+                            {% elif entry.actor_user %}
+                                {{ entry.actor_user.email|default:entry.actor_user.username }}
+                            {% else %}
+                                <span class="text-gray-400 italic">System</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if 'create' in entry.action or 'add' in entry.action %}bg-green-100 text-green-800
+                                {% elif 'delete' in entry.action or 'cancel' in entry.action or 'void' in entry.action %}bg-red-100 text-red-800
+                                {% elif 'update' in entry.action or 'edit' in entry.action %}bg-blue-100 text-blue-800
+                                {% elif 'verify' in entry.action or 'complete' in entry.action or 'sign' in entry.action %}bg-purple-100 text-purple-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ entry.action|title }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-900">
+                            {% if entry.object_repr %}
+                                <div>{{ entry.object_repr|truncatechars:50 }}</div>
+                            {% endif %}
+                            {% if entry.model_label %}
+                                <div class="text-xs text-gray-400">{{ entry.model_label }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-500">
+                            {% if entry.metadata %}
+                                <button type="button"
+                                        class="text-blue-600 hover:text-blue-800 text-xs"
+                                        onclick="this.nextElementSibling.classList.toggle('hidden')">
+                                    View details
+                                </button>
+                                <div class="hidden mt-2 p-2 bg-gray-50 rounded text-xs font-mono max-w-xs overflow-auto">
+                                    {{ entry.metadata }}
+                                </div>
+                            {% else %}
+                                <span class="text-gray-400">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-12 text-center">
+                            <div class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                                {% icon "file-text" "w-6 h-6 text-gray-400" %}
+                            </div>
+                            <h3 class="text-lg font-medium text-gray-900 mb-1">No audit entries</h3>
+                            <p class="text-gray-500">No activity has been recorded yet.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div class="text-sm text-gray-500">
+                Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} entries
+            </div>
+            <nav class="flex items-center space-x-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}"
+                   class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-700 bg-white hover:bg-gray-50">
+                    Previous
+                </a>
+                {% endif %}
+
+                <span class="px-3 py-1 text-sm text-gray-700">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}"
+                   class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-700 bg-white hover:bg-gray-50">
+                    Next
+                </a>
+                {% endif %}
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

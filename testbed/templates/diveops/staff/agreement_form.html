@@ -1,0 +1,325 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:agreement-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Agreements</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Agreement Type -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Agreement Type</h3>
+            </div>
+            <div class="px-6 py-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {% for value, label in form.scope_type.field.choices %}
+                    <label class="relative flex cursor-pointer rounded-lg border bg-white p-4 shadow-sm focus:outline-none {% if form.scope_type.value == value %}border-blue-500 ring-2 ring-blue-500{% else %}border-gray-300{% endif %}">
+                        <input type="radio" name="scope_type" value="{{ value }}" class="sr-only"
+                               {% if form.scope_type.value == value or forloop.first and not form.scope_type.value %}checked{% endif %}
+                               onchange="updateAgreementType(this.value)">
+                        <span class="flex flex-1">
+                            <span class="flex flex-col">
+                                <span class="block text-sm font-medium text-gray-900">{{ label }}</span>
+                                <span class="mt-1 flex items-center text-xs text-gray-500">
+                                    {% if value == "vendor_agreement" %}
+                                    Dual signature required
+                                    {% else %}
+                                    Single signature required
+                                    {% endif %}
+                                </span>
+                            </span>
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Parties -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Parties</h3>
+            </div>
+            <div class="px-6 py-4 space-y-6">
+                <!-- Party A -->
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 mb-3">Party A (Shop/Organization)</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                            <select name="party_a_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" onchange="togglePartyFields('a', this.value)">
+                                <option value="organization" {% if form.party_a_type.value == "organization" %}selected{% endif %}>Organization</option>
+                                <option value="person" {% if form.party_a_type.value == "person" %}selected{% endif %}>Person</option>
+                            </select>
+                        </div>
+                        <div id="party_a_org_field">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Organization</label>
+                            {{ form.party_a_organization }}
+                        </div>
+                        <div id="party_a_person_field" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Person</label>
+                            {{ form.party_a_person }}
+                        </div>
+                    </div>
+                    {% if form.party_a_organization.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.party_a_organization.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Party B -->
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 mb-3">Party B (Vendor/Diver/Student)</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                            <select name="party_b_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" onchange="togglePartyFields('b', this.value)">
+                                <option value="organization" {% if form.party_b_type.value == "organization" %}selected{% endif %}>Organization (Vendor)</option>
+                                <option value="person" {% if form.party_b_type.value == "person" or not form.party_b_type.value %}selected{% endif %}>Person (Diver/Student)</option>
+                            </select>
+                        </div>
+                        <div id="party_b_org_field" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Organization</label>
+                            {{ form.party_b_organization }}
+                        </div>
+                        <div id="party_b_person_field">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Person</label>
+                            {{ form.party_b_person }}
+                        </div>
+                    </div>
+                    {% if form.party_b_organization.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.party_b_organization.errors.0 }}</p>
+                    {% endif %}
+                    {% if form.party_b_person.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.party_b_person.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Validity -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Validity Period</h3>
+            </div>
+            <div class="px-6 py-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Valid From</label>
+                        {{ form.valid_from }}
+                        {% if form.valid_from.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.valid_from.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Valid To (optional)</label>
+                        {{ form.valid_to }}
+                        <p class="mt-1 text-xs text-gray-500">Leave blank for no expiration</p>
+                        {% if form.valid_to.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.valid_to.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terms -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Agreement Terms</h3>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    {{ form.terms_description }}
+                    <p class="mt-1 text-xs text-gray-500">Describe the terms and conditions of this agreement</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                    {{ form.terms_notes }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Signatures (Optional during creation) -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-medium text-gray-900">Signatures</h3>
+                    <span class="text-xs text-gray-500">Optional - can be collected later</span>
+                </div>
+            </div>
+            <div class="px-6 py-4 space-y-6">
+                <!-- Party A Signature (for vendor agreements) -->
+                <div id="signature_party_a_section">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Party A Signature (Shop Representative)</h4>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-2" style="max-width: 500px;">
+                        <canvas id="signature_pad_a" class="signature-canvas w-full" width="480" height="150" style="touch-action: none;"></canvas>
+                    </div>
+                    <div class="mt-2 flex space-x-2">
+                        <button type="button" onclick="clearSignature('a')" class="px-3 py-1 text-sm text-gray-600 hover:text-gray-800">Clear</button>
+                    </div>
+                    <input type="hidden" name="signature_party_a" id="signature_party_a_input">
+                </div>
+
+                <!-- Party B Signature -->
+                <div id="signature_party_b_section">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Party B Signature (Vendor/Diver/Student)</h4>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-2" style="max-width: 500px;">
+                        <canvas id="signature_pad_b" class="signature-canvas w-full" width="480" height="150" style="touch-action: none;"></canvas>
+                    </div>
+                    <div class="mt-2 flex space-x-2">
+                        <button type="button" onclick="clearSignature('b')" class="px-3 py-1 text-sm text-gray-600 hover:text-gray-800">Clear</button>
+                    </div>
+                    <input type="hidden" name="signature_party_b" id="signature_party_b_input">
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-end space-x-3">
+            <a href="{% url 'diveops:agreement-list' %}"
+               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                Create Agreement
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- signature_pad library from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+
+<script>
+    // Initialize signature pads
+    let signaturePadA, signaturePadB;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const canvasA = document.getElementById('signature_pad_a');
+        const canvasB = document.getElementById('signature_pad_b');
+
+        if (canvasA) {
+            signaturePadA = new SignaturePad(canvasA, {
+                backgroundColor: 'rgb(255, 255, 255)',
+                penColor: 'rgb(0, 0, 0)'
+            });
+        }
+
+        if (canvasB) {
+            signaturePadB = new SignaturePad(canvasB, {
+                backgroundColor: 'rgb(255, 255, 255)',
+                penColor: 'rgb(0, 0, 0)'
+            });
+        }
+
+        // Initialize party field visibility
+        togglePartyFields('a', document.querySelector('select[name="party_a_type"]').value);
+        togglePartyFields('b', document.querySelector('select[name="party_b_type"]').value);
+
+        // Initialize agreement type visibility
+        const selectedType = document.querySelector('input[name="scope_type"]:checked');
+        if (selectedType) {
+            updateAgreementType(selectedType.value);
+        }
+
+        // Before form submit, save signatures to hidden inputs
+        document.querySelector('form').addEventListener('submit', function(e) {
+            if (signaturePadA && !signaturePadA.isEmpty()) {
+                document.getElementById('signature_party_a_input').value = signaturePadA.toDataURL();
+            }
+            if (signaturePadB && !signaturePadB.isEmpty()) {
+                document.getElementById('signature_party_b_input').value = signaturePadB.toDataURL();
+            }
+        });
+    });
+
+    function clearSignature(party) {
+        if (party === 'a' && signaturePadA) {
+            signaturePadA.clear();
+        } else if (party === 'b' && signaturePadB) {
+            signaturePadB.clear();
+        }
+    }
+
+    function togglePartyFields(party, type) {
+        const orgField = document.getElementById(`party_${party}_org_field`);
+        const personField = document.getElementById(`party_${party}_person_field`);
+
+        if (type === 'organization') {
+            orgField.classList.remove('hidden');
+            personField.classList.add('hidden');
+        } else {
+            orgField.classList.add('hidden');
+            personField.classList.remove('hidden');
+        }
+    }
+
+    function updateAgreementType(type) {
+        const partyASection = document.getElementById('signature_party_a_section');
+
+        // For vendor agreements, show Party A signature
+        // For waivers and training, hide Party A signature (only Party B signs)
+        if (type === 'vendor_agreement') {
+            partyASection.classList.remove('hidden');
+        } else {
+            partyASection.classList.add('hidden');
+        }
+
+        // Update radio button styling
+        document.querySelectorAll('input[name="scope_type"]').forEach(function(radio) {
+            const label = radio.closest('label');
+            if (radio.checked) {
+                label.classList.add('border-blue-500', 'ring-2', 'ring-blue-500');
+                label.classList.remove('border-gray-300');
+            } else {
+                label.classList.remove('border-blue-500', 'ring-2', 'ring-blue-500');
+                label.classList.add('border-gray-300');
+            }
+        });
+    }
+</script>
+
+<style>
+    .signature-canvas {
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        background-color: white;
+    }
+
+    /* Make select inputs consistent */
+    select {
+        @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500;
+    }
+
+    /* Make textarea inputs consistent */
+    textarea {
+        @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500;
+    }
+</style>
+{% endblock %}

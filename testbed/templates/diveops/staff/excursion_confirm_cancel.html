@@ -1,0 +1,126 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:calendar' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Calendar</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Cancel Excursion</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-xl mx-auto space-y-6">
+    <!-- Warning Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-red-200 overflow-hidden">
+        <div class="p-6">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                        {% icon "alert-triangle" "w-6 h-6 text-red-600" %}
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <h2 class="text-lg font-bold text-gray-900">Cancel Excursion</h2>
+                    <p class="mt-1 text-sm text-gray-600">
+                        Are you sure you want to cancel this excursion? This action cannot be undone.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Excursion Details -->
+            <div class="mt-6 bg-gray-50 rounded-lg p-4">
+                <h3 class="text-sm font-medium text-gray-900 mb-3">Excursion Details</h3>
+                <dl class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <dt class="text-gray-500">Dive Site</dt>
+                        <dd class="font-medium text-gray-900">{{ excursion.dive_site.name }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-gray-500">Dive Shop</dt>
+                        <dd class="font-medium text-gray-900">{{ excursion.dive_shop.name }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-gray-500">Date</dt>
+                        <dd class="font-medium text-gray-900">{{ excursion.departure_time|date:"M j, Y" }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-gray-500">Time</dt>
+                        <dd class="font-medium text-gray-900">{{ excursion.departure_time|time:"g:i A" }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-gray-500">Status</dt>
+                        <dd>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if excursion.status == 'scheduled' %}bg-blue-100 text-blue-800
+                                {% elif excursion.status == 'boarding' %}bg-yellow-100 text-yellow-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ excursion.status|title }}
+                            </span>
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-gray-500">Bookings</dt>
+                        <dd class="font-medium text-gray-900">{{ booking_count }} diver{{ booking_count|pluralize }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            {% if booking_count > 0 %}
+            <!-- Booking Warning -->
+            <div class="mt-4 rounded-lg bg-yellow-50 p-4 border border-yellow-200">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        {% icon "alert-circle" "h-5 w-5 text-yellow-400" %}
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-yellow-800">Active Bookings Will Be Cancelled</h3>
+                        <p class="mt-1 text-sm text-yellow-700">
+                            This excursion has {{ booking_count }} active booking{{ booking_count|pluralize }}.
+                            All bookings will be automatically cancelled when you cancel this excursion.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Cancel Form -->
+            <form method="post" class="mt-6">
+                {% csrf_token %}
+
+                <!-- Optional Reason -->
+                <div class="mb-6">
+                    <label for="reason" class="block text-sm font-medium text-gray-700">Cancellation Reason (optional)</label>
+                    <textarea name="reason" id="reason" rows="3"
+                              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-red-500 focus:border-red-500"
+                              placeholder="Weather conditions, maintenance, etc."></textarea>
+                    <p class="mt-1 text-sm text-gray-500">This will be recorded in the audit log.</p>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center justify-end space-x-3">
+                    <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}"
+                       class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        Keep Excursion
+                    </a>
+                    <button type="submit"
+                            class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700">
+                        Cancel Excursion
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

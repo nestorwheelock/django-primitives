@@ -1,0 +1,152 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:payables-summary' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Payables</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ vendor.name }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+            <p class="text-gray-600">Transaction history for {{ vendor.name }}</p>
+        </div>
+        <div class="flex space-x-3">
+            <a href="{% url 'diveops:record-vendor-invoice' %}?vendor={{ vendor.pk }}"
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "file-text" "w-4 h-4 mr-2" %}
+                Record Invoice
+            </a>
+            <a href="{% url 'diveops:record-vendor-payment' %}?vendor={{ vendor.pk }}"
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "credit-card" "w-4 h-4 mr-2" %}
+                Record Payment
+            </a>
+        </div>
+    </div>
+
+    <!-- Balance Cards -->
+    {% if balances %}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {% for item in balances %}
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Balance ({{ item.currency }})</p>
+                    <p class="text-2xl font-bold {% if item.balance > 0 %}text-red-600{% else %}text-green-600{% endif %} mt-1">
+                        {{ item.balance|floatformat:2 }}
+                    </p>
+                </div>
+                <div class="p-3 {% if item.balance > 0 %}bg-red-100{% else %}bg-green-100{% endif %} rounded-full">
+                    {% if item.balance > 0 %}
+                    {% icon "trending-up" "w-6 h-6 text-red-600" %}
+                    {% else %}
+                    {% icon "check" "w-6 h-6 text-green-600" %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Transactions Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h2 class="text-lg font-medium text-gray-900">Transaction History</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
+                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for tx in transactions %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {{ tx.effective_at|date:"M d, Y" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if tx.metadata.type == "vendor_invoice" %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                Invoice
+                            </span>
+                            {% elif tx.metadata.type == "vendor_payment" %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Payment
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                {{ tx.metadata.type|default:"Transaction" }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-900">
+                            {{ tx.description }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {% if tx.metadata.invoice_number %}
+                            {{ tx.metadata.invoice_number }}
+                            {% elif tx.metadata.reference %}
+                            {{ tx.metadata.reference }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            {% for entry in tx.entries.all %}
+                            {% if entry.entry_type == "credit" %}
+                            <span class="text-lg font-semibold text-red-600">{{ entry.amount|floatformat:2 }}</span>
+                            <span class="text-sm text-gray-500">{{ tx.currency }}</span>
+                            {% endif %}
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center">
+                            <div class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                                {% icon "file-text" "w-6 h-6 text-gray-400" %}
+                            </div>
+                            <h3 class="text-lg font-medium text-gray-900 mb-1">No Transactions</h3>
+                            <p class="text-gray-500">No transactions recorded for this vendor yet.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Back Link -->
+    <div class="flex justify-start">
+        <a href="{% url 'diveops:payables-summary' %}"
+           class="text-gray-600 hover:text-gray-900 text-sm">
+            &larr; Back to Payables Summary
+        </a>
+    </div>
+</div>
+{% endblock %}

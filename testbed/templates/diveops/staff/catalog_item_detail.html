@@ -1,0 +1,381 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:catalog-item-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Catalog Items</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <div class="flex items-center space-x-3">
+                <h1 class="text-2xl font-bold text-gray-900">{{ item.display_name }}</h1>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                    {% if item.active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                    {% if item.active %}Active{% else %}Inactive{% endif %}
+                </span>
+            </div>
+            {% if item.display_name_es %}
+            <p class="text-gray-600">{{ item.display_name_es }}</p>
+            {% endif %}
+        </div>
+        <div class="flex items-center space-x-3">
+            <a href="{% url 'diveops:catalog-item-edit' pk=item.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "edit" "w-4 h-4 mr-2" %}
+                Edit
+            </a>
+            <a href="{% url 'diveops:catalog-item-delete' pk=item.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-white hover:bg-red-50">
+                {% icon "trash-2" "w-4 h-4 mr-2" %}
+                Delete
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Item Details -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Item Details</h3>
+            </div>
+            <div class="p-4 space-y-4">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Item Type</dt>
+                    <dd class="mt-1">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {% if item.kind == 'stock_item' %}bg-blue-100 text-blue-800
+                            {% else %}bg-purple-100 text-purple-800{% endif %}">
+                            {% if item.kind == 'stock_item' %}Equipment{% else %}Service{% endif %}
+                        </span>
+                    </dd>
+                </div>
+                {% if item.kind == 'stock_item' and item.default_stock_action %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Usage Type</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ item.get_default_stock_action_display }}</dd>
+                </div>
+                {% endif %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Appears on Invoice</dt>
+                    <dd class="mt-1">
+                        {% if item.is_billable %}
+                        <span class="inline-flex items-center text-green-600">
+                            {% icon "check-circle" "w-5 h-5 mr-1" %}
+                            <span class="text-sm">Yes</span>
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center text-gray-400">
+                            {% icon "x-circle" "w-5 h-5 mr-1" %}
+                            <span class="text-sm">No</span>
+                        </span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metadata -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Metadata</h3>
+            </div>
+            <div class="p-4 space-y-4">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Item ID</dt>
+                    <dd class="mt-1 text-sm text-gray-900 font-mono">{{ item.pk }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Created</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ item.created_at|date:"M d, Y H:i" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Last Updated</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ item.updated_at|date:"M d, Y H:i" }}</dd>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pricing Rules Section -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div class="flex items-center">
+                {% icon "dollar-sign" "w-5 h-5 text-gray-400 mr-2" %}
+                <h3 class="text-lg font-medium text-gray-900">Pricing Rules</h3>
+                {% if price_count > 0 %}
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {{ price_count }}
+                </span>
+                {% endif %}
+            </div>
+            <a href="{% url 'diveops:price-create' item_pk=item.pk %}"
+               class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "plus" "w-4 h-4 mr-1" %}
+                Add Price
+            </a>
+        </div>
+        <div class="p-4">
+            {% if prices %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Customer Price</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Shop Cost</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for price in prices %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                {% if price.agreement %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                    Agreement
+                                </span>
+                                {% elif price.party %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    Party
+                                </span>
+                                {% elif price.organization %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    Organization
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    Global
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                <span class="text-sm font-medium text-gray-900">{{ price.amount }}</span>
+                                <span class="text-xs text-gray-500">{{ price.currency }}</span>
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                {% if price.cost_amount %}
+                                <span class="text-sm text-gray-900">{{ price.cost_amount }}</span>
+                                <span class="text-xs text-gray-500">{{ price.cost_currency }}</span>
+                                {% else %}
+                                <span class="text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
+                                    {{ price.priority }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if price_count > 5 %}
+            <div class="mt-3 text-center">
+                <a href="{% url 'diveops:price-list' item_pk=item.pk %}" class="text-sm text-blue-600 hover:text-blue-800">
+                    View all {{ price_count }} pricing rules &rarr;
+                </a>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="text-center py-6">
+                <div class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                    {% icon "dollar-sign" "w-6 h-6 text-gray-400" %}
+                </div>
+                <p class="text-gray-500 mb-3">No pricing rules defined yet.</p>
+                <a href="{% url 'diveops:price-create' item_pk=item.pk %}"
+                   class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    {% icon "plus" "w-4 h-4 mr-1" %}
+                    Add First Price Rule
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        {% if prices %}
+        <div class="px-4 py-3 bg-gray-50 border-t border-gray-200">
+            <a href="{% url 'diveops:price-list' item_pk=item.pk %}" class="text-sm font-medium text-blue-600 hover:text-blue-800">
+                Manage Pricing Rules &rarr;
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Components Section (Assembly/BOM) -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div class="flex items-center">
+                {% icon "layers" "w-5 h-5 text-gray-400 mr-2" %}
+                <h3 class="text-lg font-medium text-gray-900">Components</h3>
+                {% if component_count > 0 %}
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                    {{ component_count }}
+                </span>
+                {% endif %}
+            </div>
+            <a href="{% url 'diveops:component-create' item_pk=item.pk %}"
+               class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                {% icon "plus" "w-4 h-4 mr-1" %}
+                Add Component
+            </a>
+        </div>
+        <div class="p-4">
+            {% if components %}
+            <p class="text-sm text-gray-600 mb-3">
+                {% icon "info" "w-4 h-4 inline mr-1" %}
+                This item is an <strong>assembly</strong> containing the following components.
+                Components define included items for fulfillment. Pricing behavior depends on product configuration.
+            </p>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Seq</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Component</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Optional</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
+                            <th scope="col" class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for comp in components %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
+                                    {{ comp.sequence }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                <a href="{% url 'diveops:catalog-item-detail' pk=comp.component.pk %}" class="text-sm font-medium text-blue-600 hover:text-blue-800">
+                                    {{ comp.component.display_name }}
+                                </a>
+                                <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium
+                                    {% if comp.component.kind == 'stock_item' %}bg-blue-100 text-blue-700{% else %}bg-purple-100 text-purple-700{% endif %}">
+                                    {% if comp.component.kind == 'stock_item' %}Equip{% else %}Svc{% endif %}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                <span class="text-sm font-medium text-gray-900">{{ comp.quantity }}</span>
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                {% if comp.is_optional %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    Optional
+                                </span>
+                                {% else %}
+                                <span class="text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-2">
+                                {% if comp.notes %}
+                                <span class="text-sm text-gray-600">{{ comp.notes }}</span>
+                                {% else %}
+                                <span class="text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap text-right">
+                                <a href="{% url 'diveops:component-edit' pk=comp.pk %}" class="text-indigo-600 hover:text-indigo-900 text-sm mr-2">Edit</a>
+                                <a href="{% url 'diveops:component-delete' pk=comp.pk %}" class="text-red-600 hover:text-red-900 text-sm">Remove</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-6">
+                <div class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                    {% icon "layers" "w-6 h-6 text-gray-400" %}
+                </div>
+                <p class="text-gray-500 mb-1">No components defined.</p>
+                <p class="text-sm text-gray-400 mb-3">Add components to make this item an assembly/bundle.</p>
+                <a href="{% url 'diveops:component-create' item_pk=item.pk %}"
+                   class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                    {% icon "plus" "w-4 h-4 mr-1" %}
+                    Add First Component
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if used_in_count > 0 %}
+    <!-- Used In Assemblies Section -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center">
+            {% icon "git-merge" "w-5 h-5 text-gray-400 mr-2" %}
+            <h3 class="text-lg font-medium text-gray-900">Used In Assemblies</h3>
+            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                {{ used_in_count }}
+            </span>
+        </div>
+        <div class="p-4">
+            <p class="text-sm text-gray-600 mb-3">
+                {% icon "info" "w-4 h-4 inline mr-1" %}
+                This item is used as a component in the following assemblies.
+            </p>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Assembly</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Optional</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for usage in used_in %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                <a href="{% url 'diveops:catalog-item-detail' pk=usage.parent.pk %}" class="text-sm font-medium text-blue-600 hover:text-blue-800">
+                                    {{ usage.parent.display_name }}
+                                </a>
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                <span class="text-sm text-gray-900">{{ usage.quantity }}</span>
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                {% if usage.is_optional %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    Optional
+                                </span>
+                                {% else %}
+                                <span class="text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Back Link -->
+    <div class="flex justify-start">
+        <a href="{% url 'diveops:catalog-item-list' %}"
+           class="text-gray-600 hover:text-gray-900 text-sm">
+            &larr; Back to Catalog Items
+        </a>
+    </div>
+</div>
+{% endblock %}

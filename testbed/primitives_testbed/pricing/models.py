@@ -132,9 +132,25 @@ class Price(models.Model):
         related_name="prices",
     )
 
-    # The price itself
+    # The price itself (customer charge - what customer pays)
     amount = models.DecimalField(max_digits=10, decimal_places=4)
     currency = models.CharField(max_length=3, default="USD")
+
+    # Shop cost (what shop pays) - optional, for dual tracking
+    # If null, indicates cost is unknown or same as charge
+    cost_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text="Shop cost (what shop pays). Null = unknown or same as charge.",
+    )
+    cost_currency = models.CharField(
+        max_length=3,
+        null=True,
+        blank=True,
+        help_text="Currency for shop cost. Should match currency if set.",
+    )
 
     # Optional scoping (more specific = higher priority)
     # NOTE: PROTECT prevents accidental data loss when deleting scoped entities.
@@ -213,8 +229,36 @@ class Price(models.Model):
 
     @property
     def money(self) -> Money:
-        """Return the price as a Money value object."""
+        """Return the customer charge as a Money value object."""
         return Money(self.amount, self.currency)
+
+    @property
+    def charge(self) -> Money:
+        """Alias for money - the customer charge."""
+        return self.money
+
+    @property
+    def cost(self) -> Money | None:
+        """Return the shop cost as a Money value object, or None if not set."""
+        if self.cost_amount is not None:
+            return Money(self.cost_amount, self.cost_currency or self.currency)
+        return None
+
+    @property
+    def has_cost(self) -> bool:
+        """Check if shop cost is explicitly set."""
+        return self.cost_amount is not None
+
+    @property
+    def margin(self) -> Money | None:
+        """Calculate margin (charge - cost). None if cost not set."""
+        if not self.has_cost:
+            return None
+        cost = self.cost
+        charge = self.charge
+        if cost.currency != charge.currency:
+            return None  # Can't calculate margin across currencies
+        return Money(charge.amount - cost.amount, charge.currency)
 
     @property
     def scope_type(self) -> str:

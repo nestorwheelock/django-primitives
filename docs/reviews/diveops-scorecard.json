@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-01-04T14:26:48.907634+00:00",
-  "commit_sha": "fe35bc02",
+  "timestamp": "2026-01-04T14:40:42.661324+00:00",
+  "commit_sha": "6af50aec",
   "branch": "main",
-  "overall_score": 100.0,
-  "overall_passed": true,
+  "overall_score": 99.44,
+  "overall_passed": false,
   "gates": [
     {
       "name": "tests",
@@ -12,27 +12,29 @@
       "weight": 30,
       "weighted_score": 30.0,
       "details": {
-        "passed": 364,
+        "passed": 376,
         "failed": 0,
         "errors": 0,
-        "total": 364
+        "total": 376
       },
       "violations": [],
       "violation_count": 0
     },
     {
       "name": "coverage",
-      "passed": true,
-      "score": 100,
+      "passed": false,
+      "score": 97.74,
       "weight": 25,
-      "weighted_score": 25.0,
+      "weighted_score": 24.44,
       "details": {
-        "coverage_percent": 90.4,
-        "threshold": 90,
-        "uncovered_lines": 121
+        "coverage_percent": 92.86,
+        "threshold": 95,
+        "uncovered_lines": 90
       },
-      "violations": [],
-      "violation_count": 0
+      "violations": [
+        "Coverage 92.9% below threshold 95%"
+      ],
+      "violation_count": 1
     },
     {
       "name": "static",
@@ -85,7 +87,7 @@
       "details": {
         "patterns_found": 2,
         "patterns_required": 2,
-        "test_functions_scanned": 364
+        "test_functions_scanned": 376
       },
       "violations": [],
       "violation_count": 0

@@ -1,0 +1,115 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:catalog-item-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Catalog Items</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:catalog-item-detail' pk=catalog_item.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ catalog_item.display_name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:price-list' item_pk=catalog_item.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Pricing Rules</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-red-50">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    {% icon "alert-triangle" "h-6 w-6 text-red-600" %}
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-lg font-medium text-red-800">Delete Price Rule</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="px-6 py-4 space-y-4">
+            <p class="text-gray-700">
+                Are you sure you want to delete this price rule? This action cannot be undone.
+            </p>
+
+            <div class="bg-gray-50 rounded-lg p-4 space-y-2">
+                <div class="flex justify-between">
+                    <span class="text-sm text-gray-500">Catalog Item:</span>
+                    <span class="text-sm font-medium text-gray-900">{{ catalog_item.display_name }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-sm text-gray-500">Customer Price:</span>
+                    <span class="text-sm font-medium text-gray-900">{{ price.amount }} {{ price.currency }}</span>
+                </div>
+                {% if price.cost_amount %}
+                <div class="flex justify-between">
+                    <span class="text-sm text-gray-500">Shop Cost:</span>
+                    <span class="text-sm text-gray-900">{{ price.cost_amount }} {{ price.cost_currency }}</span>
+                </div>
+                {% endif %}
+                <div class="flex justify-between">
+                    <span class="text-sm text-gray-500">Scope:</span>
+                    <span class="text-sm text-gray-900">
+                        {% if price.agreement %}Agreement: {{ price.agreement }}
+                        {% elif price.party %}Party: {{ price.party.first_name }} {{ price.party.last_name }}
+                        {% elif price.organization %}Organization: {{ price.organization.name }}
+                        {% else %}Global
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-sm text-gray-500">Valid From:</span>
+                    <span class="text-sm text-gray-900">{{ price.valid_from|date:"M d, Y H:i" }}</span>
+                </div>
+                {% if price.valid_to %}
+                <div class="flex justify-between">
+                    <span class="text-sm text-gray-500">Valid To:</span>
+                    <span class="text-sm text-gray-900">{{ price.valid_to|date:"M d, Y H:i" }}</span>
+                </div>
+                {% endif %}
+                <div class="flex justify-between">
+                    <span class="text-sm text-gray-500">Priority:</span>
+                    <span class="text-sm text-gray-900">{{ price.priority }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
+            <a href="{% url 'diveops:price-list' item_pk=catalog_item.pk %}"
+               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <form method="post" class="inline">
+                {% csrf_token %}
+                <button type="submit"
+                        class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700">
+                    Delete Price Rule
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+            <p class="text-gray-600">Personal dive records for all divers</p>
+        </div>
+    </div>
+
+    <!-- Dive Logs Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {% if dive_logs %}
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dive #</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Diver</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Site</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Depth</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Verified</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for log in dive_logs %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="text-sm font-medium text-gray-900">#{{ log.dive_number }}</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <a href="{% url 'diveops:diver-detail' pk=log.diver.pk %}" class="text-sm text-blue-600 hover:text-blue-800">
+                            {{ log.diver }}
+                        </a>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="text-sm text-gray-900">{{ log.dive.dive_site.name|default:"-" }}</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="text-sm text-gray-500">{{ log.created_at|date:"M j, Y" }}</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="text-sm text-gray-900">
+                            {% if log.max_depth_meters %}{{ log.max_depth_meters }}m{% elif log.dive.actual_max_depth_meters %}{{ log.dive.actual_max_depth_meters }}m{% else %}-{% endif %}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="text-sm text-gray-900">
+                            {% if log.bottom_time_minutes %}{{ log.bottom_time_minutes }} min{% elif log.dive.actual_duration_minutes %}{{ log.dive.actual_duration_minutes }} min{% else %}-{% endif %}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        {% if log.verified_at %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                            Verified
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Pending
+                        </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+            <div class="text-sm text-gray-700">
+                Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ paginator.count }} entries
+            </div>
+            <div class="flex space-x-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50">Previous</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="p-8 text-center">
+            <div class="text-gray-400 mb-2">
+                {% icon "book-open" "w-12 h-12 mx-auto" %}
+            </div>
+            <p class="text-gray-500">No dive logs recorded yet</p>
+            <p class="text-sm text-gray-400 mt-1">Dive logs are created when excursions are completed</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

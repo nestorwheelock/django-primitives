@@ -1,4 +1,4 @@
-{% extends "portal_ui/base_staff.html" %}
+{% extends "diveops/staff/_base.html" %}
 {% load portal_ui_tags %}
 
 {% block breadcrumb %}
@@ -8,7 +8,7 @@
             <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
         </svg>
         <a href="{% url 'diveops:agreement-template-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
-            Paperwork Templates
+            Agreement Templates
         </a>
     </div>
 </li>
@@ -128,6 +128,65 @@
             </div>
         </div>
 
+        <!-- Import from Document Card -->
+        {% if is_create %}
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h2 class="text-lg font-medium text-gray-900">Import from Document</h2>
+                <p class="text-sm text-gray-500">Upload a PDF, Word document, or image to extract text automatically.</p>
+            </div>
+            <div class="px-6 py-4">
+                <div id="upload-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer">
+                    <input type="file" id="document-upload" class="hidden" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.tiff,.txt">
+                    <div id="upload-idle">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-600">
+                            <span class="text-blue-600 font-medium">Click to upload</span> or drag and drop
+                        </p>
+                        <p class="mt-1 text-xs text-gray-500">PDF, Word (.doc, .docx), images (PNG, JPG), or text files</p>
+                    </div>
+                    <div id="upload-progress" class="hidden">
+                        <svg class="animate-spin h-8 w-8 mx-auto text-blue-600" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-600">Extracting text from document...</p>
+                    </div>
+                </div>
+                <div id="upload-result" class="mt-3 hidden">
+                    <div class="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div class="flex items-center">
+                            <svg class="h-5 w-5 text-green-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="text-sm text-green-800">
+                                Text extracted from <span id="result-filename" class="font-medium"></span>
+                                (<span id="result-words"></span> words)
+                            </span>
+                        </div>
+                        <button type="button" id="clear-result" class="text-green-600 hover:text-green-800">
+                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="upload-error" class="mt-3 hidden">
+                    <div class="p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div class="flex items-center">
+                            <svg class="h-5 w-5 text-red-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span id="error-message" class="text-sm text-red-800"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Content Card -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
@@ -222,4 +281,124 @@
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if is_create %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadZone = document.getElementById('upload-zone');
+    const fileInput = document.getElementById('document-upload');
+    const uploadIdle = document.getElementById('upload-idle');
+    const uploadProgress = document.getElementById('upload-progress');
+    const uploadResult = document.getElementById('upload-result');
+    const uploadError = document.getElementById('upload-error');
+    const contentTextarea = document.getElementById('id_content');
+    const resultFilename = document.getElementById('result-filename');
+    const resultWords = document.getElementById('result-words');
+    const errorMessage = document.getElementById('error-message');
+    const clearResult = document.getElementById('clear-result');
+
+    // Click to upload
+    uploadZone.addEventListener('click', function() {
+        fileInput.click();
+    });
+
+    // Drag and drop
+    uploadZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        uploadZone.classList.add('border-blue-400', 'bg-blue-50');
+    });
+
+    uploadZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        uploadZone.classList.remove('border-blue-400', 'bg-blue-50');
+    });
+
+    uploadZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadZone.classList.remove('border-blue-400', 'bg-blue-50');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleFile(files[0]);
+        }
+    });
+
+    // File input change
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            handleFile(this.files[0]);
+        }
+    });
+
+    // Clear result
+    clearResult.addEventListener('click', function() {
+        uploadResult.classList.add('hidden');
+        fileInput.value = '';
+    });
+
+    function handleFile(file) {
+        // Show progress
+        uploadIdle.classList.add('hidden');
+        uploadProgress.classList.remove('hidden');
+        uploadResult.classList.add('hidden');
+        uploadError.classList.add('hidden');
+
+        // Create FormData
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Get CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        // Upload and extract
+        fetch('{% url "diveops:agreement-template-extract-text" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+            },
+            body: formData,
+        })
+        .then(response => response.json())
+        .then(data => {
+            uploadIdle.classList.remove('hidden');
+            uploadProgress.classList.add('hidden');
+
+            if (data.success) {
+                // Show success
+                uploadResult.classList.remove('hidden');
+                resultFilename.textContent = data.filename;
+                resultWords.textContent = data.word_count;
+
+                // Populate content textarea
+                if (contentTextarea.value.trim() === '') {
+                    contentTextarea.value = data.text;
+                } else {
+                    // Ask user if they want to replace or append
+                    if (confirm('The content field already has text. Do you want to replace it with the extracted text?')) {
+                        contentTextarea.value = data.text;
+                    }
+                }
+
+                // Populate name field with suggested title if empty
+                const nameInput = document.getElementById('id_name');
+                if (nameInput && data.suggested_title && nameInput.value.trim() === '') {
+                    nameInput.value = data.suggested_title;
+                }
+            } else {
+                // Show error
+                uploadError.classList.remove('hidden');
+                errorMessage.textContent = data.error;
+            }
+        })
+        .catch(error => {
+            uploadIdle.classList.remove('hidden');
+            uploadProgress.classList.add('hidden');
+            uploadError.classList.remove('hidden');
+            errorMessage.textContent = 'Failed to upload file: ' + error.message;
+        });
+    }
+});
+</script>
+{% endif %}
 {% endblock %}

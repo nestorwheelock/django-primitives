@@ -6,11 +6,13 @@ All write operations are atomic transactions.
 
 import logging
 from dataclasses import dataclass
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError, models, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from .cancellation_policy import RefundDecision
@@ -77,6 +79,10 @@ from .models import (
     ExcursionRoster,
     ExcursionType,
     ExcursionTypeDive,
+    ProtectedArea,
+    ProtectedAreaFeeSchedule,
+    ProtectedAreaRule,
+    ProtectedAreaZone,
     SitePriceAdjustment,
 )
 
@@ -1073,6 +1079,8 @@ def create_dive_site(
     min_certification_level: CertificationLevel | None = None,
     rating: int | None = None,
     tags: list[str] | None = None,
+    protected_area: "ProtectedArea | None" = None,
+    protected_area_zone: "ProtectedAreaZone | None" = None,
 ) -> DiveSite:
     """Create a new dive site with an owned Place.
 
@@ -1091,6 +1099,8 @@ def create_dive_site(
         min_certification_level: Optional minimum certification FK
         rating: Optional rating (1-5)
         tags: Optional list of tags
+        protected_area: Optional protected area FK
+        protected_area_zone: Optional zone within protected area FK
 
     Returns:
         Created DiveSite
@@ -1118,6 +1128,8 @@ def create_dive_site(
         dive_mode=dive_mode,
         rating=rating,
         tags=tags or [],
+        protected_area=protected_area,
+        protected_area_zone=protected_area_zone,
     )
 
     # Emit audit event
@@ -1145,6 +1157,8 @@ def update_dive_site(
     min_certification_level: CertificationLevel | None = None,
     rating: int | None = None,
     tags: list[str] | None = None,
+    protected_area: "ProtectedArea | None" = None,
+    protected_area_zone: "ProtectedAreaZone | None" = None,
 ) -> DiveSite:
     """Update an existing dive site.
 
@@ -1163,6 +1177,8 @@ def update_dive_site(
         min_certification_level: New certification FK (None = no change)
         rating: New rating (None = no change)
         tags: New tags (None = no change)
+        protected_area: New protected area FK (None = no change)
+        protected_area_zone: New zone FK (None = no change)
 
     Returns:
         Updated DiveSite
@@ -1180,6 +1196,22 @@ def update_dive_site(
     _apply_tracked_update(site, "dive_mode", dive_mode, changes)
     _apply_tracked_update(site, "rating", rating, changes)
     _apply_tracked_update(site, "tags", tags, changes)
+
+    # Handle protected_area FK - use sentinel to detect if passed
+    if protected_area != site.protected_area:
+        changes["protected_area"] = {
+            "old": str(site.protected_area_id) if site.protected_area_id else None,
+            "new": str(protected_area.pk) if protected_area else None,
+        }
+        site.protected_area = protected_area
+
+    # Handle protected_area_zone FK
+    if protected_area_zone != site.protected_area_zone:
+        changes["protected_area_zone"] = {
+            "old": str(site.protected_area_zone_id) if site.protected_area_zone_id else None,
+            "new": str(protected_area_zone.pk) if protected_area_zone else None,
+        }
+        site.protected_area_zone = protected_area_zone
 
     # Handle min_certification_level FK specially
     if min_certification_level is not None and min_certification_level != site.min_certification_level:
@@ -1481,7 +1513,6 @@ def create_excursion_type(
     slug: str,
     dive_mode: str,
     time_of_day: str,
-    max_depth_meters: int,
     base_price,
     currency: str = "USD",
     description: str = "",
@@ -1491,6 +1522,7 @@ def create_excursion_type(
     requires_cert: bool = True,
     is_training: bool = False,
     is_active: bool = True,
+    auto_create_catalog_item: bool = True,
 ) -> ExcursionType:
     """Create a new excursion type.
 
@@ -1500,7 +1532,6 @@ def create_excursion_type(
         slug: URL-friendly unique identifier
         dive_mode: "boat" or "shore"
         time_of_day: "day", "night", "dawn", or "dusk"
-        max_depth_meters: Maximum depth for this type
         base_price: Starting price (Decimal)
         currency: Currency code (default: USD)
         description: Optional description
@@ -1510,6 +1541,7 @@ def create_excursion_type(
         requires_cert: If False, skip certification check (DSD)
         is_training: If True, this is a training dive
         is_active: If False, type is not bookable
+        auto_create_catalog_item: If True, auto-create a linked CatalogItem
 
     Returns:
         Created ExcursionType
@@ -1517,13 +1549,22 @@ def create_excursion_type(
     Raises:
         IntegrityError: If slug already exists
     """
+    # Auto-create a catalog item for this excursion type
+    catalog_item = None
+    if auto_create_catalog_item:
+        catalog_item = CatalogItem.objects.create(
+            kind="service",
+            display_name=name,
+            is_billable=True,
+            active=is_active,
+        )
+
     excursion_type = ExcursionType.objects.create(
         name=name,
         slug=slug,
         description=description,
         dive_mode=dive_mode,
         time_of_day=time_of_day,
-        max_depth_meters=max_depth_meters,
         typical_duration_minutes=typical_duration_minutes,
         dives_per_excursion=dives_per_excursion,
         min_certification_level=min_certification_level,
@@ -1532,6 +1573,7 @@ def create_excursion_type(
         base_price=base_price,
         currency=currency,
         is_active=is_active,
+        catalog_item=catalog_item,
     )
 
     log_excursion_type_event(
@@ -1553,7 +1595,6 @@ def update_excursion_type(
     description: str | None = None,
     dive_mode: str | None = None,
     time_of_day: str | None = None,
-    max_depth_meters: int | None = None,
     typical_duration_minutes: int | None = None,
     dives_per_excursion: int | None = None,
     min_certification_level: CertificationLevel | None = None,
@@ -1575,7 +1616,6 @@ def update_excursion_type(
         description: New description (None = no change)
         dive_mode: New dive mode (None = no change)
         time_of_day: New time of day (None = no change)
-        max_depth_meters: New max depth (None = no change)
         typical_duration_minutes: New duration (None = no change)
         dives_per_excursion: New dive count (None = no change)
         min_certification_level: New certification FK (None = no change)
@@ -1596,7 +1636,6 @@ def update_excursion_type(
     _apply_tracked_update(excursion_type, "description", description, changes)
     _apply_tracked_update(excursion_type, "dive_mode", dive_mode, changes)
     _apply_tracked_update(excursion_type, "time_of_day", time_of_day, changes)
-    _apply_tracked_update(excursion_type, "max_depth_meters", max_depth_meters, changes)
     _apply_tracked_update(excursion_type, "typical_duration_minutes", typical_duration_minutes, changes)
     _apply_tracked_update(excursion_type, "dives_per_excursion", dives_per_excursion, changes)
     _apply_tracked_update(excursion_type, "requires_cert", requires_cert, changes)
@@ -2227,7 +2266,8 @@ def delete_dive(
 def create_dive_template(
     *,
     actor,
-    excursion_type: ExcursionType,
+    excursion_type: ExcursionType | None = None,
+    excursion_types: list[ExcursionType] | None = None,
     name: str,
     sequence: int,
     offset_minutes: int = 0,
@@ -2242,13 +2282,20 @@ def create_dive_template(
     route: str = "",
     route_segments: list | None = None,
     briefing_text: str = "",
+    briefing_video_url: str = "",
     hazards: str = "",
+    access_mode: str = "",
+    boat_instructions: str = "",
+    # Commerce linkage
+    catalog_item=None,
+    auto_create_catalog_item: bool = True,
 ) -> ExcursionTypeDive:
-    """Create a new dive template for an excursion type.
+    """Create a new dive template (dive plan).
 
     Args:
         actor: User creating the template (required for audit)
-        excursion_type: ExcursionType this template belongs to
+        excursion_type: Single ExcursionType (backwards compat, added to excursion_types)
+        excursion_types: List of ExcursionTypes this template is used by (M2M)
         name: Name of this dive (e.g., "First Dive", "Night Dive")
         sequence: Order of this dive (1, 2, 3, etc.)
         offset_minutes: Minutes after departure when this dive starts
@@ -2261,22 +2308,40 @@ def create_dive_template(
         route: Route description text
         route_segments: Structured dive profile as list of segments
         briefing_text: Full briefing content
+        briefing_video_url: YouTube video URL for dive briefing
         hazards: Known hazards and safety considerations
+        access_mode: How divers get to the dive site (boat, vehicle, beach_meet, etc.)
+        boat_instructions: Instructions for boat dives
+        catalog_item: CatalogItem FK for product sold for this dive
+        auto_create_catalog_item: If True and no catalog_item provided, auto-create one
 
     Returns:
         Created ExcursionTypeDive
 
     Raises:
         IntegrityError: If constraints are violated
-        ValueError: If dive_site is not in excursion_type.suitable_sites
     """
-    # Auto-add dive_site to suitable_sites if not already there
+    # Build list of excursion types (backwards compat + new M2M)
+    types_to_add = list(excursion_types or [])
+    if excursion_type is not None and excursion_type not in types_to_add:
+        types_to_add.append(excursion_type)
+
+    # Auto-add dive_site to suitable_sites for each excursion type
     if dive_site is not None:
-        if not excursion_type.suitable_sites.filter(pk=dive_site.pk).exists():
-            excursion_type.suitable_sites.add(dive_site)
+        for et in types_to_add:
+            if not et.suitable_sites.filter(pk=dive_site.pk).exists():
+                et.suitable_sites.add(dive_site)
+
+    # Auto-create a catalog item if not provided
+    if catalog_item is None and auto_create_catalog_item:
+        catalog_item = CatalogItem.objects.create(
+            kind="service",
+            display_name=name,
+            is_billable=True,
+            active=True,
+        )
 
     dive_template = ExcursionTypeDive.objects.create(
-        excursion_type=excursion_type,
         name=name,
         sequence=sequence,
         offset_minutes=offset_minutes,
@@ -2290,8 +2355,16 @@ def create_dive_template(
         route=route,
         route_segments=route_segments or [],
         briefing_text=briefing_text,
+        briefing_video_url=briefing_video_url,
         hazards=hazards,
+        access_mode=access_mode,
+        boat_instructions=boat_instructions,
+        catalog_item=catalog_item,
     )
+
+    # Add excursion types via M2M
+    if types_to_add:
+        dive_template.excursion_types.add(*types_to_add)
 
     log_dive_template_event(
         action=Actions.DIVE_TEMPLATE_CREATED,
@@ -2323,7 +2396,13 @@ def update_dive_template(
     route: str | None = None,
     route_segments: list | None = None,
     briefing_text: str | None = None,
+    briefing_video_url: str | None = None,
     hazards: str | None = None,
+    access_mode: str | None = None,
+    boat_instructions: str | None = None,
+    # Commerce linkage
+    catalog_item=None,
+    clear_catalog_item: bool = False,
 ) -> ExcursionTypeDive:
     """Update an existing dive template.
 
@@ -2344,7 +2423,12 @@ def update_dive_template(
         route: Route description (None = no change)
         route_segments: Structured dive profile (None = no change)
         briefing_text: Full briefing content (None = no change)
+        briefing_video_url: YouTube video URL (None = no change)
         hazards: Known hazards (None = no change)
+        access_mode: How divers get to the dive site (None = no change)
+        boat_instructions: Instructions for boat dives (None = no change)
+        catalog_item: CatalogItem FK for product sold (None = no change)
+        clear_catalog_item: If True, clear catalog_item
 
     Returns:
         Updated ExcursionTypeDive
@@ -2362,7 +2446,10 @@ def update_dive_template(
     _apply_tracked_update(dive_template, "gas", gas, changes)
     _apply_tracked_update(dive_template, "route", route, changes)
     _apply_tracked_update(dive_template, "briefing_text", briefing_text, changes)
+    _apply_tracked_update(dive_template, "briefing_video_url", briefing_video_url, changes)
     _apply_tracked_update(dive_template, "hazards", hazards, changes)
+    _apply_tracked_update(dive_template, "access_mode", access_mode, changes)
+    _apply_tracked_update(dive_template, "boat_instructions", boat_instructions, changes)
     # route_segments needs special handling for JSON comparison
     if route_segments is not None and route_segments != dive_template.route_segments:
         changes["route_segments"] = {"old": dive_template.route_segments, "new": route_segments}
@@ -2386,9 +2473,9 @@ def update_dive_template(
     # Handle dive_site FK specially
     # Auto-add dive_site to suitable_sites if not already there
     if dive_site is not None and not clear_dive_site:
-        excursion_type = dive_template.excursion_type
-        if not excursion_type.suitable_sites.filter(pk=dive_site.pk).exists():
-            excursion_type.suitable_sites.add(dive_site)
+        for excursion_type in dive_template.excursion_types.all():
+            if not excursion_type.suitable_sites.filter(pk=dive_site.pk).exists():
+                excursion_type.suitable_sites.add(dive_site)
 
     if clear_dive_site:
         if dive_template.dive_site_id is not None:
@@ -2403,6 +2490,21 @@ def update_dive_template(
             "new": str(dive_site.pk),
         }
         dive_template.dive_site = dive_site
+
+    # Handle catalog_item FK specially
+    if clear_catalog_item:
+        if dive_template.catalog_item_id is not None:
+            changes["catalog_item"] = {
+                "old": str(dive_template.catalog_item_id),
+                "new": None,
+            }
+            dive_template.catalog_item = None
+    elif catalog_item is not None and catalog_item != dive_template.catalog_item:
+        changes["catalog_item"] = {
+            "old": str(dive_template.catalog_item_id) if dive_template.catalog_item_id else None,
+            "new": str(catalog_item.pk),
+        }
+        dive_template.catalog_item = catalog_item
 
     if changes:
         dive_template.save()
@@ -4331,7 +4433,7 @@ class DiveResult:
     ndl_at_start: int | None  # No Deco Limit at start of dive (minutes)
     pressure_group_before: str  # PADI pressure group before dive
     pressure_group_after: str  # PADI pressure group after dive
-    segments: list[dict]  # Actual dive segments [{depth_m, duration_min}, ...]
+    profile_segments: list[dict]  # Raw route_segments for visualization [{phase, depth_m/from_depth_m/to_depth_m, duration_min}, ...]
 
 
 @dataclass
@@ -4477,7 +4579,7 @@ def calculate_excursion_tissue_loading(
                 ndl_at_start=ndl_at_start,
                 pressure_group_before=pg_before_dive,
                 pressure_group_after=pg_after_dive,
-                segments=steps,
+                profile_segments=dive.route_segments,  # Raw segments for chart visualization
             )
         )
 
@@ -4490,3 +4592,1431 @@ def calculate_excursion_tissue_loading(
         gf_low=gf_low,
         gf_high=gf_high,
     )
+
+
+# =============================================================================
+# Protected Area Inheritance-Aware Services
+# =============================================================================
+
+
+def get_applicable_rules(
+    *,
+    protected_area: ProtectedArea,
+    zone: ProtectedAreaZone | None = None,
+    as_of: date | None = None,
+    activity: str | None = None,
+) -> list[ProtectedAreaRule]:
+    """Get all rules applicable to area/zone, including inherited from ancestors.
+
+    Resolution order (most specific first):
+    1. Zone-specific rules for this area
+    2. Area-wide rules for this area
+    3. Area-wide rules from parent area
+    4. Area-wide rules from grandparent area
+    ... up to root
+
+    All filtered by effective_start <= as_of and (effective_end is null or >= as_of).
+
+    Args:
+        protected_area: The ProtectedArea to get rules for
+        zone: Optional zone within the area (adds zone-specific rules)
+        as_of: Date to check rule effective dates against (defaults to today)
+        activity: Optional activity filter (e.g., "diving", "snorkeling")
+                  Rules with activity="all" are always included
+
+    Returns:
+        List of applicable ProtectedAreaRule instances
+    """
+    if as_of is None:
+        as_of = date.today()
+
+    rules = []
+
+    # 1. Zone-specific rules (if zone provided)
+    if zone:
+        zone_rules = ProtectedAreaRule.objects.filter(
+            protected_area=protected_area,
+            zone=zone,
+            effective_start__lte=as_of,
+            is_active=True,
+        ).filter(Q(effective_end__isnull=True) | Q(effective_end__gte=as_of))
+        if activity:
+            zone_rules = zone_rules.filter(Q(activity=activity) | Q(activity="all"))
+        rules.extend(zone_rules)
+
+    # 2. Area-wide rules (zone=null) for this area and ancestors
+    areas = [protected_area] + protected_area.get_ancestors()
+    for area in areas:
+        area_rules = ProtectedAreaRule.objects.filter(
+            protected_area=area,
+            zone__isnull=True,
+            effective_start__lte=as_of,
+            is_active=True,
+        ).filter(Q(effective_end__isnull=True) | Q(effective_end__gte=as_of))
+        if activity:
+            area_rules = area_rules.filter(Q(activity=activity) | Q(activity="all"))
+        rules.extend(area_rules)
+
+    return rules
+
+
+def get_applicable_fee_schedules(
+    *,
+    protected_area: ProtectedArea,
+    zone: ProtectedAreaZone | None = None,
+    as_of: date | None = None,
+) -> list[ProtectedAreaFeeSchedule]:
+    """Get all fee schedules applicable to area/zone, including inherited from ancestors.
+
+    Resolution order (most specific first):
+    1. Zone-specific fees for this area
+    2. Area-wide fees for this area
+    3. Area-wide fees from parent area
+    4. Area-wide fees from grandparent area
+    ... up to root
+
+    All filtered by effective_start <= as_of and (effective_end is null or >= as_of).
+
+    Args:
+        protected_area: The ProtectedArea to get fee schedules for
+        zone: Optional zone within the area (adds zone-specific fees)
+        as_of: Date to check fee schedule effective dates against (defaults to today)
+
+    Returns:
+        List of applicable ProtectedAreaFeeSchedule instances
+    """
+    if as_of is None:
+        as_of = date.today()
+
+    fees = []
+
+    # 1. Zone-specific fees (if zone provided)
+    if zone:
+        zone_fees = ProtectedAreaFeeSchedule.objects.filter(
+            protected_area=protected_area,
+            zone=zone,
+            effective_start__lte=as_of,
+            is_active=True,
+        ).filter(Q(effective_end__isnull=True) | Q(effective_end__gte=as_of))
+        fees.extend(zone_fees)
+
+    # 2. Area-wide fees (zone=null) for this area and ancestors
+    areas = [protected_area] + protected_area.get_ancestors()
+    for area in areas:
+        area_fees = ProtectedAreaFeeSchedule.objects.filter(
+            protected_area=area,
+            zone__isnull=True,
+            effective_start__lte=as_of,
+            is_active=True,
+        ).filter(Q(effective_end__isnull=True) | Q(effective_end__gte=as_of))
+        fees.extend(area_fees)
+
+    return fees
+
+
+# =============================================================================
+# Agreement Services
+# =============================================================================
+
+import hashlib
+import re
+from datetime import timedelta
+
+from .exceptions import (
+    AgreementNotEditable,
+    ChangeNoteRequired,
+    VoidReasonRequired,
+)
+
+
+def _render_agreement_content(template_content: str, party) -> str:
+    """Render template content with party context.
+
+    Replaces placeholders like {{diver_name}}, {{date}}, {{dive_shop}}, etc.
+    """
+    from django.conf import settings
+
+    content = template_content
+
+    # Get party name (works for Person or Organization)
+    party_name = ""
+    if hasattr(party, "first_name") and hasattr(party, "last_name"):
+        party_name = f"{party.first_name} {party.last_name}"
+    elif hasattr(party, "name"):
+        party_name = party.name
+
+    # Get dive shop name from settings or use default
+    dive_shop_name = getattr(settings, "DIVE_SHOP_NAME", "Our Dive Shop")
+
+    # Simple placeholder replacement
+    replacements = {
+        "diver_name": party_name,
+        "party_name": party_name,
+        "date": timezone.now().strftime("%Y-%m-%d"),
+        "today": timezone.now().strftime("%Y-%m-%d"),
+        "dive_shop": dive_shop_name,
+        "company_name": dive_shop_name,
+        "operator_name": dive_shop_name,
+    }
+
+    # Party email
+    if hasattr(party, "email") and party.email:
+        replacements["email"] = party.email
+
+    # Apply all replacements
+    for key, value in replacements.items():
+        content = re.sub(rf"\{{\{{\s*{key}\s*\}}\}}", str(value), content)
+
+    return content
+
+
+@transaction.atomic
+def create_agreement_from_template(
+    *,
+    template,
+    party_a,
+    party_b=None,
+    related_object=None,
+    content_overrides: dict | None = None,
+    actor,
+):
+    """Create draft SignableAgreement from template.
+
+    Renders template with party context, computes content_hash (SHA-256),
+    and creates audit log entry.
+
+    Idempotent: returns existing pending if dedupe constraint matches.
+
+    Args:
+        template: AgreementTemplate to create from
+        party_a: The party who will sign (Person, Organization, etc.)
+        party_b: Optional counter-party
+        related_object: Optional related object (Booking, etc.)
+        content_overrides: Optional dict to override template variables
+        actor: User performing the action (for audit)
+
+    Returns:
+        SignableAgreement instance (draft status)
+    """
+    from .models import SignableAgreement
+
+    # Try to find existing pending agreement (idempotent)
+    party_a_ct = ContentType.objects.get_for_model(party_a)
+    party_a_id = str(party_a.pk)
+
+    related_ct = None
+    related_id = ""
+    if related_object:
+        related_ct = ContentType.objects.get_for_model(related_object)
+        related_id = str(related_object.pk)
+
+    existing = SignableAgreement.objects.filter(
+        template=template,
+        party_a_content_type=party_a_ct,
+        party_a_object_id=party_a_id,
+        related_content_type=related_ct,
+        related_object_id=related_id,
+        status__in=["draft", "sent"],
+    ).first()
+
+    if existing:
+        return existing
+
+    # Render content
+    content = _render_agreement_content(template.content, party_a)
+
+    # Apply any overrides
+    if content_overrides:
+        for key, value in content_overrides.items():
+            content = re.sub(rf"\{{\{{\s*{key}\s*\}}\}}", str(value), content)
+
+    # Compute hash
+    content_hash = hashlib.sha256(content.encode()).hexdigest()
+
+    # Create agreement
+    agreement = SignableAgreement.objects.create(
+        template=template,
+        template_version=template.version,
+        party_a_content_type=party_a_ct,
+        party_a_object_id=party_a_id,
+        party_b_content_type=ContentType.objects.get_for_model(party_b) if party_b else None,
+        party_b_object_id=str(party_b.pk) if party_b else "",
+        related_content_type=related_ct,
+        related_object_id=related_id,
+        content_snapshot=content,
+        content_hash=content_hash,
+        status="draft",
+    )
+
+    # Audit log
+    log_event(
+        action=Actions.AGREEMENT_CREATED,
+        target=agreement,
+        actor=actor,
+        data={
+            "template_id": str(template.pk),
+            "template_name": template.name,
+            "party_a_type": party_a_ct.model,
+            "party_a_id": party_a_id,
+        },
+    )
+
+    return agreement
+
+
+@transaction.atomic
+def edit_agreement(
+    *,
+    agreement,
+    new_content: str,
+    change_note: str,
+    actor,
+):
+    """Edit agreement content (draft or sent only).
+
+    Creates SignableAgreementRevision with old/new hash + change_note.
+    Updates content_snapshot and content_hash.
+
+    Args:
+        agreement: SignableAgreement to edit
+        new_content: New content text
+        change_note: Required explanation of why change was made
+        actor: User performing the action
+
+    Returns:
+        Updated SignableAgreement
+
+    Raises:
+        ChangeNoteRequired: If change_note is empty
+        AgreementNotEditable: If agreement is not in editable status
+    """
+    from .models import SignableAgreementRevision
+
+    # Validate
+    if not change_note or not change_note.strip():
+        raise ChangeNoteRequired("Change note is required when editing an agreement")
+
+    if agreement.status not in ("draft", "sent"):
+        raise AgreementNotEditable(
+            f"Cannot edit agreement in {agreement.status} status"
+        )
+
+    # Store old content and hash for revision history
+    old_content = agreement.content_snapshot
+    old_hash = agreement.content_hash
+
+    # Compute new hash
+    new_hash = hashlib.sha256(new_content.encode()).hexdigest()
+
+    # Get next revision number
+    max_revision = agreement.revisions.aggregate(models.Max("revision_number"))[
+        "revision_number__max"
+    ]
+    next_revision = (max_revision or 0) + 1
+
+    # Create revision record with content_before for diff viewing
+    SignableAgreementRevision.objects.create(
+        agreement=agreement,
+        revision_number=next_revision,
+        previous_content_hash=old_hash,
+        new_content_hash=new_hash,
+        content_before=old_content,
+        change_note=change_note.strip(),
+        changed_by=actor,
+    )
+
+    # Update agreement
+    agreement.content_snapshot = new_content
+    agreement.content_hash = new_hash
+    agreement.save(update_fields=["content_snapshot", "content_hash", "updated_at"])
+
+    # Audit log
+    log_event(
+        action=Actions.AGREEMENT_EDITED,
+        target=agreement,
+        actor=actor,
+        data={
+            "revision_number": next_revision,
+            "change_note": change_note.strip(),
+        },
+    )
+
+    return agreement
+
+
+@transaction.atomic
+def send_agreement(
+    *,
+    agreement,
+    delivery_method: str,
+    expires_in_days: int = 30,
+    actor,
+):
+    """Send agreement to party. Status: draft → sent.
+
+    Generates cryptographically random token, stores only the hash.
+    Returns raw token ONCE for URL generation.
+
+    Args:
+        agreement: SignableAgreement to send
+        delivery_method: How it was sent (email, link, in_person)
+        expires_in_days: Days until expiration (default 30)
+        actor: User performing the action
+
+    Returns:
+        tuple: (agreement, raw_token) - raw token returned ONCE for URL generation
+    """
+    from .models import SignableAgreement
+
+    # Generate token
+    raw_token, token_hash = SignableAgreement.generate_token()
+
+    # Update agreement
+    now = timezone.now()
+    agreement.status = "sent"
+    agreement.sent_at = now
+    agreement.sent_by = actor
+    agreement.delivery_method = delivery_method
+    agreement.access_token = raw_token
+    agreement.access_token_hash = token_hash
+    agreement.expires_at = now + timedelta(days=expires_in_days)
+    agreement.save(
+        update_fields=[
+            "status",
+            "sent_at",
+            "sent_by",
+            "delivery_method",
+            "access_token",
+            "access_token_hash",
+            "expires_at",
+            "updated_at",
+        ]
+    )
+
+    # Audit log
+    log_event(
+        action=Actions.AGREEMENT_SENT,
+        target=agreement,
+        actor=actor,
+        data={
+            "delivery_method": delivery_method,
+            "expires_at": agreement.expires_at.isoformat(),
+        },
+    )
+
+    return agreement, raw_token
+
+
+@transaction.atomic
+def void_agreement(
+    *,
+    agreement,
+    reason: str,
+    actor,
+):
+    """Void agreement. Any status → void.
+
+    Can void draft, sent, or even signed (for legal recall).
+    Requires reason for audit trail.
+
+    Args:
+        agreement: SignableAgreement to void
+        reason: Required reason for voiding
+        actor: User performing the action
+
+    Returns:
+        Updated SignableAgreement
+
+    Raises:
+        VoidReasonRequired: If reason is empty
+    """
+    if not reason or not reason.strip():
+        raise VoidReasonRequired("Reason is required when voiding an agreement")
+
+    agreement.status = "void"
+    agreement.save(update_fields=["status", "updated_at"])
+
+    # Audit log
+    log_event(
+        action=Actions.AGREEMENT_VOIDED,
+        target=agreement,
+        actor=actor,
+        data={
+            "reason": reason.strip(),
+        },
+    )
+
+    return agreement
+
+
+def get_agreement_by_token(token: str):
+    """Lookup agreement by token hash.
+
+    PUBLIC SIGNING SECURITY:
+    - Returns None if token invalid (caller returns 404, not 403)
+    - Never reveals whether agreement exists
+    - Filters for status='sent' only (can't sign draft or signed)
+
+    Args:
+        token: Raw token from signing URL
+
+    Returns:
+        SignableAgreement or None if not found/invalid
+    """
+    from .models import SignableAgreement
+
+    # Hash the token for lookup
+    token_hash = SignableAgreement.hash_token(token)
+
+    # Only find sent agreements with valid token
+    return SignableAgreement.objects.filter(
+        access_token_hash=token_hash,
+        status="sent",
+        token_consumed=False,
+    ).first()
+
+
+def expire_stale_agreements() -> int:
+    """Mark expired agreements as EXPIRED status.
+
+    Called by management command or celery beat.
+
+    Returns:
+        Count of agreements marked expired
+    """
+    from .models import SignableAgreement
+
+    now = timezone.now()
+
+    count = SignableAgreement.objects.filter(
+        status="sent",
+        expires_at__lt=now,
+    ).update(status="expired")
+
+    return count
+
+
+@transaction.atomic
+def resend_agreement(
+    *,
+    agreement,
+    delivery_method: str,
+    expires_in_days: int = 30,
+    actor,
+) -> tuple:
+    """Resend a sent agreement with a new token.
+
+    Generates a new access token and updates expiration. Useful when the
+    original link has expired or was lost.
+
+    Args:
+        agreement: SignableAgreement to resend
+        delivery_method: How to deliver (email, link, in_person)
+        expires_in_days: Number of days until expiration
+        actor: User performing the action
+
+    Returns:
+        Tuple of (agreement, raw_token)
+
+    Raises:
+        ValueError: If agreement is not in 'sent' status
+    """
+    from .audit import Actions, log_event
+    from .models import SignableAgreement
+
+    if agreement.status != "sent":
+        raise ValueError("Can only resend agreements with 'sent' status")
+
+    # Generate new token
+    token, token_hash = SignableAgreement.generate_token()
+
+    # Update agreement with new token and expiration
+    agreement.access_token = token
+    agreement.access_token_hash = token_hash
+    agreement.token_consumed = False
+    agreement.delivery_method = delivery_method
+    agreement.expires_at = timezone.now() + timedelta(days=expires_in_days)
+    agreement.save(
+        update_fields=[
+            "access_token",
+            "access_token_hash",
+            "token_consumed",
+            "delivery_method",
+            "expires_at",
+            "updated_at",
+        ]
+    )
+
+    # Log the resend
+    log_event(
+        action=Actions.AGREEMENT_SENT,  # Use same action as send
+        actor=actor,
+        target=agreement,
+        data={
+            "delivery_method": delivery_method,
+            "expires_in_days": expires_in_days,
+            "is_resend": True,
+        },
+    )
+
+    return agreement, token
+
+
+@transaction.atomic
+def sign_agreement(
+    *,
+    agreement,
+    raw_token: str,
+    signature_image: bytes,
+    signed_by_name: str,
+    ip_address: str | None = None,
+    user_agent: str = "",
+    agreed_to_terms: bool = True,
+    agreed_to_esign: bool = True,
+    # Enhanced digital fingerprint
+    fingerprint: dict | None = None,
+):
+    """Sign an agreement.
+
+    Security measures enforced:
+    - Verifies token hash matches (constant-time comparison)
+    - Checks token not already consumed
+    - Checks expires_at not passed
+    - Stores signature as Document (role=signature)
+    - Creates django_agreements.Agreement as immutable ledger record
+    - Marks token as consumed
+    - Captures comprehensive digital fingerprint for legal validity
+
+    Args:
+        agreement: SignableAgreement to sign
+        raw_token: Token from signing URL
+        signature_image: PNG image data of signature
+        signed_by_name: Name as entered by signer
+        ip_address: IP address of signer
+        user_agent: User agent string
+        agreed_to_terms: Whether signer checked "agree to terms" checkbox
+        agreed_to_esign: Whether signer checked "consent to e-sign" checkbox
+        fingerprint: Dict containing digital fingerprint data:
+            - screen_resolution: e.g., "1920x1080"
+            - timezone: e.g., "America/New_York"
+            - timezone_offset: UTC offset in minutes
+            - language: Browser language
+            - platform: OS/Platform
+            - device_memory: Device memory in GB
+            - hardware_concurrency: CPU cores
+            - touch_support: Touch screen device
+            - canvas_fingerprint: SHA-256 hash of canvas fingerprint
+            - geolocation: {lat, lng} if permitted
+
+    Returns:
+        Updated SignableAgreement
+
+    Raises:
+        AgreementExpired: If agreement has expired
+        InvalidToken: If token is invalid or consumed
+        AgreementAlreadySigned: If agreement is already signed
+    """
+    from django.conf import settings
+
+    from .audit import Actions, log_event
+    from .exceptions import AgreementAlreadySigned, AgreementExpired, InvalidToken
+    from .models import SignableAgreement
+
+    # Verify agreement is in correct state
+    if agreement.status == "signed":
+        raise AgreementAlreadySigned("This agreement has already been signed.")
+
+    if agreement.status != "sent":
+        raise InvalidToken("This agreement cannot be signed in its current state.")
+
+    # Verify token
+    if not agreement.verify_token(raw_token):
+        raise InvalidToken("Invalid or expired signing link.")
+
+    # Check expiration
+    if agreement.expires_at and agreement.expires_at < timezone.now():
+        raise AgreementExpired("This signing link has expired.")
+
+    # Store signature image as Document if provided
+    signature_document = None
+    if signature_image:
+        try:
+            from django.core.files.base import ContentFile
+            from django_documents.models import Document, DocumentFolder
+
+            # Get the Signatures folder (child of Agreements)
+            signatures_folder = DocumentFolder.objects.filter(
+                slug="signatures",
+                parent__slug="agreements",
+            ).first()
+
+            # Create document for signature
+            signature_document = Document.objects.create(
+                target=agreement,
+                folder=signatures_folder,
+                file=ContentFile(
+                    signature_image,
+                    name=f"signature_{agreement.pk}.png",
+                ),
+                filename=f"signature_{agreement.pk}.png",
+                content_type="image/png",
+                document_type="signature",
+                description=f"Signature for {signed_by_name}",
+            )
+        except Exception:
+            # If document storage fails, continue without it
+            # The signature metadata is still captured
+            pass
+
+    # Create immutable ledger record using django-agreements primitive
+    from django.contrib.auth import get_user_model
+    from django_agreements.services import create_agreement as create_ledger_agreement
+    from django_parties.models import Organization
+
+    # Get or create the dive shop organization as party_b
+    dive_shop, _ = Organization.objects.get_or_create(
+        name=getattr(settings, "DIVE_SHOP_NAME", "Dive Shop"),
+        defaults={"legal_name": getattr(settings, "DIVE_SHOP_NAME", "Dive Shop")},
+    )
+
+    # For agreed_by, we need a User instance.
+    # Use the staff member who sent the agreement, or fall back to a system user.
+    User = get_user_model()
+    if agreement.sent_by:
+        agreed_by_user = agreement.sent_by
+    else:
+        # Fall back to first superuser or create system user
+        agreed_by_user = User.objects.filter(is_superuser=True).first()
+        if not agreed_by_user:
+            agreed_by_user, _ = User.objects.get_or_create(
+                username="system",
+                defaults={"is_active": False, "email": "system@localhost"},
+            )
+
+    # Create the ledger agreement using the primitive's service
+    ledger_agreement = create_ledger_agreement(
+        party_a=agreement.party_a,
+        party_b=dive_shop,
+        scope_type="waiver",
+        terms={
+            "template_name": agreement.template.name,
+            "template_version": agreement.template_version,
+            "content": agreement.content_snapshot,
+            "content_hash": agreement.content_hash,
+            "signed_by_name": signed_by_name,
+            "signed_ip": ip_address,
+        },
+        agreed_by=agreed_by_user,
+        valid_from=timezone.now(),
+    )
+
+    # Update agreement fields before PDF generation
+    agreement.status = SignableAgreement.Status.SIGNED
+    agreement.signed_at = timezone.now()
+    agreement.signed_by_name = signed_by_name
+    agreement.signed_ip = ip_address
+    agreement.signed_user_agent = user_agent
+    agreement.token_consumed = True
+    agreement.signature_document = signature_document
+    agreement.ledger_agreement = ledger_agreement
+    agreement.agreed_to_terms = agreed_to_terms
+    agreement.agreed_to_esign = agreed_to_esign
+
+    # Store enhanced fingerprint data
+    fp = fingerprint or {}
+    agreement.signed_screen_resolution = fp.get("screen_resolution", "")[:20]
+    agreement.signed_timezone = fp.get("timezone", "")[:100]
+    agreement.signed_timezone_offset = fp.get("timezone_offset")
+    agreement.signed_language = fp.get("language", "")[:50]
+    agreement.signed_platform = fp.get("platform", "")[:100]
+    agreement.signed_device_memory = fp.get("device_memory", "")[:20]
+    agreement.signed_hardware_concurrency = fp.get("hardware_concurrency")
+    agreement.signed_touch_support = fp.get("touch_support")
+    agreement.signed_canvas_fingerprint = fp.get("canvas_fingerprint", "")[:64]
+    agreement.signed_geolocation = fp.get("geolocation")
+
+    # Generate signed PDF with digital proof stamp
+    signed_pdf_document = None
+    try:
+        from django.core.files.base import ContentFile
+        from django_documents.models import Document, DocumentFolder
+
+        # Get the Signed PDFs folder (child of Agreements)
+        signed_pdfs_folder = DocumentFolder.objects.filter(
+            slug="signed-pdfs",
+            parent__slug="agreements",
+        ).first()
+
+        pdf_bytes = _generate_signed_agreement_pdf(agreement)
+        signed_pdf_document = Document.objects.create(
+            target=agreement,
+            folder=signed_pdfs_folder,
+            file=ContentFile(
+                pdf_bytes,
+                name=f"signed_agreement_{agreement.pk}.pdf",
+            ),
+            filename=f"signed_agreement_{agreement.pk}.pdf",
+            content_type="application/pdf",
+            document_type="signed_agreement",
+            description=f"Signed agreement for {signed_by_name} on {agreement.signed_at.strftime('%Y-%m-%d')}",
+        )
+        agreement.signed_document = signed_pdf_document
+    except Exception:
+        # If PDF generation fails, continue without it
+        # The agreement is still valid
+        pass
+
+    agreement.save(
+        update_fields=[
+            "status",
+            "signed_at",
+            "signed_by_name",
+            "signed_ip",
+            "signed_user_agent",
+            "token_consumed",
+            "signature_document",
+            "signed_document",
+            "ledger_agreement",
+            "agreed_to_terms",
+            "agreed_to_esign",
+            # Enhanced fingerprint fields
+            "signed_screen_resolution",
+            "signed_timezone",
+            "signed_timezone_offset",
+            "signed_language",
+            "signed_platform",
+            "signed_device_memory",
+            "signed_hardware_concurrency",
+            "signed_touch_support",
+            "signed_canvas_fingerprint",
+            "signed_geolocation",
+            "updated_at",
+        ]
+    )
+
+    # Log the signing with PDF information and full fingerprint
+    audit_data = {
+        "signed_by_name": signed_by_name,
+        "ip_address": ip_address,
+        "user_agent": _truncate_user_agent(user_agent, 100) if user_agent else None,
+        "has_signature_image": bool(signature_document),
+        "content_hash": agreement.content_hash,
+        "consent": {
+            "agreed_to_terms": agreed_to_terms,
+            "agreed_to_esign": agreed_to_esign,
+            "terms_text": "I have read and understand the agreement above, and I agree to be bound by its terms.",
+            "esign_text": "I consent to sign this document electronically. I understand that my electronic signature has the same legal effect as a handwritten signature and that a signed copy will be available for my records.",
+        },
+        # Enhanced digital fingerprint for legal validity
+        "digital_fingerprint": {
+            "screen_resolution": fp.get("screen_resolution"),
+            "timezone": fp.get("timezone"),
+            "timezone_offset_minutes": fp.get("timezone_offset"),
+            "language": fp.get("language"),
+            "platform": fp.get("platform"),
+            "device_memory_gb": fp.get("device_memory"),
+            "cpu_cores": fp.get("hardware_concurrency"),
+            "touch_support": fp.get("touch_support"),
+            "canvas_fingerprint_hash": fp.get("canvas_fingerprint"),
+            "geolocation": fp.get("geolocation"),
+        },
+    }
+
+    # Add PDF information if generated
+    if signed_pdf_document:
+        # Compute checksum for the PDF
+        pdf_checksum = signed_pdf_document.compute_checksum() if hasattr(signed_pdf_document, 'compute_checksum') else None
+        if pdf_checksum and not signed_pdf_document.checksum:
+            signed_pdf_document.checksum = pdf_checksum
+            signed_pdf_document.save(update_fields=['checksum'])
+
+        audit_data["pdf"] = {
+            "filename": signed_pdf_document.filename,
+            "location": signed_pdf_document.file.url if signed_pdf_document.file else None,
+            "checksum": signed_pdf_document.checksum or pdf_checksum,
+            "document_id": str(signed_pdf_document.pk),
+        }
+
+    log_event(
+        action=Actions.AGREEMENT_SIGNED,
+        actor=None,  # Public signing has no authenticated user
+        target=agreement,
+        data=audit_data,
+    )
+
+    return agreement
+
+
+# =============================================================================
+# PDF Generation for Signed Agreements
+# =============================================================================
+
+
+def _generate_signed_agreement_pdf(agreement) -> bytes:
+    """
+    Generate a PDF document for a signed agreement with digital proof stamp.
+
+    The PDF includes:
+    - Agreement content
+    - Signature image with name and date
+    - Digital signature proof footer with:
+      - Document hash
+      - Signer's name
+      - Signed date/time (UTC)
+      - IP address
+      - User agent fingerprint
+
+    Args:
+        agreement: SignableAgreement that has been signed
+
+    Returns:
+        PDF content as bytes
+    """
+    import base64
+    from weasyprint import HTML, CSS
+
+    # Get signature image as base64 if available
+    signature_img_html = ""
+    if agreement.signature_document and agreement.signature_document.file:
+        try:
+            agreement.signature_document.file.seek(0)
+            sig_data = agreement.signature_document.file.read()
+            sig_b64 = base64.b64encode(sig_data).decode('utf-8')
+            content_type = agreement.signature_document.content_type or 'image/png'
+            signature_img_html = f'<img src="data:{content_type};base64,{sig_b64}" class="signature-image" alt="Signature">'
+        except Exception:
+            pass
+
+    # Format signed date
+    signed_date_formatted = agreement.signed_at.strftime('%B %d, %Y') if agreement.signed_at else 'N/A'
+    signed_time_formatted = agreement.signed_at.strftime('%I:%M %p UTC') if agreement.signed_at else ''
+
+    # Create HTML with agreement content and digital proof footer
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page {{
+                size: letter;
+                margin: 1in;
+                @bottom-center {{
+                    content: "Page " counter(page) " of " counter(pages);
+                    font-size: 10px;
+                    color: #666;
+                }}
+            }}
+            body {{
+                font-family: 'Helvetica', 'Arial', sans-serif;
+                font-size: 12px;
+                line-height: 1.6;
+                color: #333;
+            }}
+            .header {{
+                text-align: center;
+                margin-bottom: 2em;
+                padding-bottom: 1em;
+                border-bottom: 2px solid #333;
+            }}
+            .header h1 {{
+                margin: 0;
+                font-size: 18px;
+                font-weight: bold;
+            }}
+            .header .date {{
+                margin-top: 0.5em;
+                font-size: 11px;
+                color: #666;
+            }}
+            .content {{
+                margin-bottom: 3em;
+            }}
+            .signature-block {{
+                margin-top: 3em;
+                page-break-inside: avoid;
+                border: 1px solid #ccc;
+                padding: 1.5em;
+                background-color: #fafafa;
+            }}
+            .signature-block h3 {{
+                margin: 0 0 1em 0;
+                font-size: 14px;
+                color: #333;
+            }}
+            .signature-image {{
+                max-width: 300px;
+                max-height: 100px;
+                border-bottom: 2px solid #333;
+                display: block;
+                margin-bottom: 0.5em;
+            }}
+            .signature-details {{
+                margin-top: 0.5em;
+            }}
+            .signature-name {{
+                font-size: 14px;
+                font-weight: bold;
+                color: #333;
+            }}
+            .signature-date {{
+                font-size: 12px;
+                color: #666;
+                margin-top: 0.25em;
+            }}
+            .signature-line {{
+                border-top: 2px solid #333;
+                width: 300px;
+                margin-top: 60px;
+                padding-top: 5px;
+            }}
+            .digital-proof {{
+                margin-top: 3em;
+                padding: 1em;
+                background-color: #f5f5f5;
+                border: 1px solid #ddd;
+                font-size: 9px;
+                page-break-inside: avoid;
+            }}
+            .digital-proof h3 {{
+                margin: 0 0 1em 0;
+                font-size: 11px;
+                color: #333;
+                border-bottom: 1px solid #ccc;
+                padding-bottom: 0.5em;
+            }}
+            .digital-proof .proof-row {{
+                display: flex;
+                margin: 0.3em 0;
+            }}
+            .digital-proof .proof-label {{
+                font-weight: bold;
+                width: 120px;
+                color: #555;
+            }}
+            .digital-proof .proof-value {{
+                font-family: 'Courier New', monospace;
+                word-break: break-all;
+            }}
+            .digital-proof .hash {{
+                font-size: 8px;
+                color: #666;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>{agreement.template.name}</h1>
+            <div class="date">Document ID: {agreement.pk}</div>
+        </div>
+
+        <div class="content">
+            {agreement.content_snapshot}
+        </div>
+
+        <div class="signature-block">
+            <h3>Signature</h3>
+            {signature_img_html if signature_img_html else '<div class="signature-line"></div>'}
+            <div class="signature-details">
+                <div class="signature-name">{agreement.signed_by_name}</div>
+                <div class="signature-date">Date: {signed_date_formatted}</div>
+            </div>
+        </div>
+
+        <div class="digital-proof">
+            <h3>🔒 Digital Signature Verification</h3>
+            <div class="proof-row">
+                <span class="proof-label">Signer Name:</span>
+                <span class="proof-value">{agreement.signed_by_name}</span>
+            </div>
+            <div class="proof-row">
+                <span class="proof-label">Signed Date:</span>
+                <span class="proof-value">{agreement.signed_at.strftime('%Y-%m-%d %H:%M:%S UTC') if agreement.signed_at else 'N/A'}</span>
+            </div>
+            <div class="proof-row">
+                <span class="proof-label">IP Address:</span>
+                <span class="proof-value">{agreement.signed_ip or 'Not recorded'}</span>
+            </div>
+            <div class="proof-row">
+                <span class="proof-label">Browser:</span>
+                <span class="proof-value">{_truncate_user_agent(agreement.signed_user_agent) if agreement.signed_user_agent else 'Not recorded'}</span>
+            </div>
+            <div class="proof-row">
+                <span class="proof-label">Content Hash:</span>
+                <span class="proof-value hash">{agreement.content_hash}</span>
+            </div>
+            <div class="proof-row">
+                <span class="proof-label">Document ID:</span>
+                <span class="proof-value">{agreement.pk}</span>
+            </div>
+            <div style="margin-top: 1em; font-size: 8px; color: #888;">
+                This document was digitally signed. The content hash can be used to verify
+                that this document has not been modified since signing.
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    # Generate PDF using WeasyPrint
+    html = HTML(string=html_content)
+    pdf_bytes = html.write_pdf()
+
+    return pdf_bytes
+
+
+def _truncate_user_agent(user_agent: str, max_length: int = 80) -> str:
+    """Truncate user agent string for display."""
+    if not user_agent:
+        return ""
+    if len(user_agent) <= max_length:
+        return user_agent
+    return user_agent[:max_length] + "..."
+
+
+# =============================================================================
+# Agreement Integration Services (for Booking/Enrollment Flows)
+# =============================================================================
+
+
+def ensure_required_agreements(
+    *,
+    related_object,
+    party,
+    templates_required: list,
+    actor,
+) -> list:
+    """Create/return agreements required for a related object.
+
+    IDEMPOTENT due to UniqueConstraint on (template, party_a, related_content_type, related_id).
+
+    Args:
+        related_object: The booking, enrollment, etc. that requires agreements
+        party: The Person/Organization who needs to sign
+        templates_required: List of AgreementTemplate objects required
+        actor: User performing the action
+
+    Returns:
+        List of all pending (draft/sent) agreements for this party+object
+
+    Example:
+        templates = AgreementTemplate.objects.filter(is_required_for_booking=True)
+        agreements = ensure_required_agreements(
+            related_object=booking,
+            party=diver,
+            templates_required=list(templates),
+            actor=request.user,
+        )
+    """
+    from django.contrib.contenttypes.models import ContentType
+
+    from .models import SignableAgreement
+
+    # Get content type for related object
+    ct = ContentType.objects.get_for_model(related_object)
+    object_id = str(related_object.pk)
+
+    # Get party content type
+    party_ct = ContentType.objects.get_for_model(party)
+    party_id = str(party.pk)
+
+    agreements = []
+
+    for template in templates_required:
+        # Check for existing pending agreement
+        existing = SignableAgreement.objects.filter(
+            template=template,
+            party_a_content_type=party_ct,
+            party_a_object_id=party_id,
+            related_content_type=ct,
+            related_id=object_id,
+            status__in=["draft", "sent"],
+        ).first()
+
+        if existing:
+            agreements.append(existing)
+        else:
+            # Create new draft agreement
+            agreement = create_agreement_from_template(
+                template=template,
+                party_a=party,
+                related_object=related_object,
+                actor=actor,
+            )
+            agreements.append(agreement)
+
+    return agreements
+
+
+def get_pending_agreements(related_object) -> list:
+    """Get all pending (draft/sent) agreements for a related object.
+
+    Args:
+        related_object: The booking, enrollment, etc.
+
+    Returns:
+        QuerySet of SignableAgreement objects in draft or sent status
+    """
+    from django.contrib.contenttypes.models import ContentType
+
+    from .models import SignableAgreement
+
+    ct = ContentType.objects.get_for_model(related_object)
+    object_id = str(related_object.pk)
+
+    return list(
+        SignableAgreement.objects.filter(
+            related_content_type=ct,
+            related_id=object_id,
+            status__in=["draft", "sent"],
+        ).select_related("template")
+    )
+
+
+def all_agreements_signed(related_object) -> bool:
+    """Check if all required agreements for an object are signed.
+
+    Args:
+        related_object: The booking, enrollment, etc.
+
+    Returns:
+        True if no pending (draft/sent) agreements exist for this object
+    """
+    from django.contrib.contenttypes.models import ContentType
+
+    from .models import SignableAgreement
+
+    ct = ContentType.objects.get_for_model(related_object)
+    object_id = str(related_object.pk)
+
+    # Check if any pending agreements exist
+    pending_count = SignableAgreement.objects.filter(
+        related_content_type=ct,
+        related_id=object_id,
+        status__in=["draft", "sent"],
+    ).count()
+
+    return pending_count == 0
+
+
+def get_signed_agreements(related_object) -> list:
+    """Get all signed agreements for a related object.
+
+    Args:
+        related_object: The booking, enrollment, etc.
+
+    Returns:
+        List of SignableAgreement objects in signed status
+    """
+    from django.contrib.contenttypes.models import ContentType
+
+    from .models import SignableAgreement
+
+    ct = ContentType.objects.get_for_model(related_object)
+    object_id = str(related_object.pk)
+
+    return list(
+        SignableAgreement.objects.filter(
+            related_content_type=ct,
+            related_id=object_id,
+            status="signed",
+        ).select_related("template", "ledger_agreement")
+    )
+
+
+# =============================================================================
+# AI Text Enhancement Service
+# =============================================================================
+
+
+@dataclass
+class EnhancedDocument:
+    """Result of AI document enhancement."""
+
+    content: str
+    method: str
+    suggested_title: str = ""
+
+
+def enhance_extracted_text(text: str, method: str) -> EnhancedDocument:
+    """
+    Enhance extracted text using AI if configured.
+
+    Uses OpenRouter API to clean up OCR errors and format document text.
+    Falls back to original text if AI is disabled, not configured, or fails.
+
+    Args:
+        text: Raw extracted text from document
+        method: Extraction method used (e.g., "tesseract", "pypdf2")
+
+    Returns:
+        EnhancedDocument with content, method, and suggested_title
+        If AI enhancement is applied, method will have "+ai_enhanced(model)" appended
+    """
+    import json
+    import logging
+
+    from .models import AISettings
+
+    logger = logging.getLogger(__name__)
+
+    # Get AI settings
+    ai_settings = AISettings.get_instance()
+
+    # Check if enhancement is enabled
+    if not ai_settings.ocr_enhancement_enabled:
+        return EnhancedDocument(content=text, method=method)
+
+    # Check if AI is configured
+    if not ai_settings.is_configured():
+        return EnhancedDocument(content=text, method=method)
+
+    try:
+        import requests
+
+        api_key = ai_settings.get_with_fallback("openrouter_api_key")
+        model = ai_settings.default_model
+
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://diveops.local",
+            },
+            json={
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": """You are a legal document formatter. Transform raw OCR text into professionally styled HTML for display in a web application.
+
+OUTPUT FORMAT: JSON with two fields:
+{
+  "title": "Document Title (extracted or generated from content)",
+  "content": "<html content here>"
+}
+
+HTML STRUCTURE FOR content FIELD:
+1. DO NOT include the title in the HTML - it will be displayed separately
+2. Sections - Use <h3 class="font-semibold mt-6 mb-2">Section Name</h3>
+3. Numbered Lists - Use <ol class="list-decimal ml-6 space-y-2"><li>Item</li></ol>
+4. Paragraphs - Use <p class="mb-4">Text</p>
+5. For questionnaires/checklists, use interactive checkboxes:
+   <div class="space-y-2">
+     <label class="flex items-start gap-2">
+       <input type="checkbox" name="question_1" class="mt-1">
+       <span>Question or statement text</span>
+     </label>
+   </div>
+6. Signature and Verification Block at end:
+   <div class="mt-8 pt-4 border-t space-y-6">
+     <div class="no-print bg-blue-50 border border-blue-200 rounded p-4">
+       <p class="text-sm text-blue-800 mb-2">Please review this document carefully before signing.</p>
+       <button type="button" onclick="window.print()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
+         Print Document for Review
+       </button>
+     </div>
+     <div>
+       <h4 class="font-semibold mb-3">Required Documents</h4>
+       <div class="space-y-4">
+         <div>
+           <label class="block text-sm font-medium mb-1">Photo ID (Driver's License or Passport)</label>
+           <input type="file" name="photo_id" accept="image/*,.pdf" class="block w-full text-sm border rounded p-2">
+         </div>
+         <div>
+           <label class="block text-sm font-medium mb-1">Certification Card (Front)</label>
+           <input type="file" name="certification_card" accept="image/*,.pdf" class="block w-full text-sm border rounded p-2">
+         </div>
+       </div>
+     </div>
+     <div>
+       <h4 class="font-semibold mb-3">Dive Insurance</h4>
+       <div class="space-y-3">
+         <label class="flex items-center gap-2">
+           <input type="checkbox" name="has_dan_insurance" id="has_dan_insurance" onchange="document.getElementById('dan_policy_section').classList.toggle('hidden', !this.checked)">
+           <span>I have DAN (Divers Alert Network) insurance</span>
+         </label>
+         <div id="dan_policy_section" class="hidden ml-6">
+           <label class="block text-sm font-medium mb-1">DAN Policy Number</label>
+           <input type="text" name="dan_policy_number" class="block w-full text-sm border rounded p-2" placeholder="Enter your DAN policy number">
+         </div>
+       </div>
+     </div>
+     <div class="print-only">
+       <h4 class="font-semibold mb-3">Signature</h4>
+       <p class="mb-4"><strong>Participant Signature:</strong> _______________________</p>
+       <p class="mb-4"><strong>Print Name:</strong> {{ diver_name }}</p>
+       <p><strong>Date:</strong> {{ date }}</p>
+     </div>
+     <div class="no-print bg-blue-50 border border-blue-200 rounded p-4">
+       <p class="text-sm text-blue-800 mb-2">Before signing electronically, you may print a copy for review.</p>
+       <button type="button" onclick="window.print()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
+         Print for Review
+       </button>
+     </div>
+   </div>
+
+TITLE FIELD:
+- Extract the document title from the content (e.g., "Liability Waiver", "Medical Questionnaire")
+- If no clear title, generate one based on document type (e.g., "Dive Liability Release Form")
+- Keep it concise (3-6 words typically)
+
+CONTENT RULES:
+- Fix OCR errors (l/1, O/0, rn/m confusions)
+- Preserve all legal language - do not change meaning
+- Use {{ field_name }} for Django template variables ({{ diver_name }}, {{ date }}, etc.)
+- Remove duplicate text or OCR artifacts
+- Use <strong> for emphasis, <em> for italics
+- For yes/no questions, medical forms, or checklists, use checkboxes
+
+Output ONLY valid JSON. No markdown, no explanations, no code fences.""",
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Clean and format this extracted document:\n\n{text}",
+                    },
+                ],
+                "temperature": 0.1,
+                "max_tokens": 4000,
+            },
+            timeout=60,
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            ai_response = result["choices"][0]["message"]["content"]
+            enhanced_method = f"{method}+ai_enhanced({model})"
+
+            # Try to parse as JSON
+            try:
+                # Strip any markdown code fences if present
+                ai_response = ai_response.strip()
+                if ai_response.startswith("```"):
+                    # Remove code fence markers
+                    lines = ai_response.split("\n")
+                    ai_response = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+
+                parsed = json.loads(ai_response)
+                return EnhancedDocument(
+                    content=parsed.get("content", ai_response),
+                    method=enhanced_method,
+                    suggested_title=parsed.get("title", ""),
+                )
+            except json.JSONDecodeError:
+                # AI didn't return valid JSON, use response as content
+                logger.warning("AI response was not valid JSON, using as plain content")
+                return EnhancedDocument(
+                    content=ai_response,
+                    method=enhanced_method,
+                    suggested_title="",
+                )
+        else:
+            logger.warning(
+                f"AI enhancement failed: {response.status_code} - {response.text}"
+            )
+            return EnhancedDocument(content=text, method=method)
+
+    except Exception as e:
+        logger.warning(f"AI enhancement error: {e}")
+        return EnhancedDocument(content=text, method=method)

@@ -1,4 +1,4 @@
-{% extends "portal_ui/base_staff.html" %}
+{% extends "diveops/staff/_base.html" %}
 {% load portal_ui_tags %}
 
 {% block breadcrumb %}
@@ -81,7 +81,9 @@
                     </div>
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Maximum Depth</dt>
-                        <dd class="mt-1 text-sm text-gray-900">{{ excursion_type.max_depth_meters }} meters</dd>
+                        <dd class="mt-1 text-sm text-gray-900">
+                            {% if excursion_type.max_depth_meters %}{{ excursion_type.max_depth_meters }} meters{% else %}<span class="text-gray-400 italic">Calculated from dive plans</span>{% endif %}
+                        </dd>
                     </div>
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Typical Duration</dt>
@@ -153,11 +155,11 @@
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
                     <h3 class="text-lg font-medium text-gray-900">Dive Planning</h3>
-                    <a href="{% url 'diveops:excursion-type-dive-create' type_pk=excursion_type.pk %}"
-                       class="inline-flex items-center px-3 py-1.5 border border-transparent rounded text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    <button type="button" id="add-dive-btn"
+                            class="inline-flex items-center px-3 py-1.5 border border-transparent rounded text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
                         {% icon "plus" "w-4 h-4 mr-1" %}
                         Add Dive
-                    </a>
+                    </button>
                 </div>
 
                 {% if dive_templates %}
@@ -189,7 +191,13 @@
                                     {{ dive.sequence }}
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-medium text-gray-900">{{ dive.name }}</h4>
+                                    <h4 class="text-sm font-medium text-gray-900">
+                                        <a href="{% url 'diveops:dive-plan-detail' pk=dive.pk %}"
+                                           target="_blank"
+                                           class="text-blue-600 hover:text-blue-800 hover:underline">
+                                            {{ dive.name }}
+                                        </a>
+                                    </h4>
                                     {% if dive.description %}
                                     <p class="text-sm text-gray-500 mt-1">{{ dive.description }}</p>
                                     {% endif %}
@@ -256,8 +264,8 @@
                     </div>
                     <button type="button" id="calculate-profile-btn"
                             class="inline-flex items-center px-3 py-1.5 border border-transparent rounded text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700">
-                        {% icon "activity" "w-4 h-4 mr-1" %}
-                        Calculate Profile
+                        {% icon "refresh-cw" "w-4 h-4 mr-1" %}
+                        Recalculate Profile
                     </button>
                 </div>
 
@@ -490,6 +498,100 @@
     </div>
 </div>
 
+<!-- Add Dive Modal -->
+<div id="add-dive-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <!-- Background overlay -->
+        <div id="modal-backdrop" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+
+        <!-- Modal panel -->
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900" id="modal-title">Add Dive to Excursion Type</h3>
+                    <button type="button" id="modal-close-btn" class="text-gray-400 hover:text-gray-500">
+                        {% icon "x" "w-6 h-6" %}
+                    </button>
+                </div>
+
+                <!-- Available Dives List -->
+                {% if available_dives %}
+                <div class="mb-4">
+                    <p class="text-sm text-gray-600 mb-3">Select an existing dive plan to add:</p>
+                    <div class="max-h-64 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-200">
+                        {% for dive in available_dives %}
+                        <form method="post" action="{% url 'diveops:excursion-type-dive-link' type_pk=excursion_type.pk dive_pk=dive.pk %}" class="block">
+                            {% csrf_token %}
+                            <button type="submit" class="w-full text-left px-4 py-3 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">{{ dive.name }}</p>
+                                        <p class="text-xs text-gray-500">
+                                            {% if dive.dive_site %}{{ dive.dive_site.name }} • {% endif %}
+                                            {% if dive.planned_depth_meters %}{{ dive.planned_depth_meters }}m{% endif %}
+                                            {% if dive.planned_duration_minutes %} • {{ dive.planned_duration_minutes }} min{% endif %}
+                                        </p>
+                                    </div>
+                                    <span class="text-blue-600">
+                                        {% icon "plus-circle" "w-5 h-5" %}
+                                    </span>
+                                </div>
+                            </button>
+                        </form>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="mb-4 text-center py-4">
+                    <p class="text-sm text-gray-500">No existing dive plans available to add.</p>
+                </div>
+                {% endif %}
+
+                <!-- Create New Option -->
+                <div class="border-t border-gray-200 pt-4">
+                    <p class="text-sm text-gray-600 mb-3">Or create a new dive plan:</p>
+                    <a href="{% url 'diveops:excursion-type-dive-create' type_pk=excursion_type.pk %}"
+                       class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                        {% icon "plus" "w-4 h-4 mr-2" %}
+                        Create New Dive Plan
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Script -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('add-dive-modal');
+    const openBtn = document.getElementById('add-dive-btn');
+    const closeBtn = document.getElementById('modal-close-btn');
+    const backdrop = document.getElementById('modal-backdrop');
+
+    function openModal() {
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    }
+
+    function closeModal() {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    }
+
+    openBtn.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    backdrop.addEventListener('click', closeModal);
+
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeModal();
+        }
+    });
+});
+</script>
+
 {% if dive_templates %}
 <!-- Chart.js from CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -681,43 +783,71 @@ document.addEventListener('DOMContentLoaded', function() {
             // Loading before dive
             loadingPoints.push({ x: currentTime, y: dive.loading_before_percent });
 
-            // Use actual segments - no fallback
-            if (!dive.segments || dive.segments.length === 0) {
+            // Use profile_segments (raw route_segments) for visualization
+            const segments = dive.profile_segments;
+            if (!segments || segments.length === 0) {
                 throw new Error(`Dive ${dive.sequence} (${dive.name}) has no segments defined`);
             }
 
             // Start at surface
             depthPoints.push({ x: currentTime, y: 0 });
 
-            // Add descent to first segment depth (assume 18m/min descent rate)
-            const firstDepth = dive.segments[0].depth_m;
-            const descentTime = firstDepth / 18; // ~18m/min descent
-            currentTime += descentTime;
-            depthPoints.push({ x: currentTime, y: firstDepth });
+            // Track current depth for segments that don't specify start depth
+            let currentDepth = 0;
 
-            // Plot each segment
-            let prevDepth = firstDepth;
-            dive.segments.forEach((seg, segIndex) => {
-                const segDepth = seg.depth_m;
-                const segDuration = seg.duration_min;
+            // Plot each segment based on its phase type
+            segments.forEach((seg) => {
+                const phase = seg.phase;
+                const duration = seg.duration_min || 0;
 
-                // If depth changed from previous segment, add transition
-                if (segDepth !== prevDepth) {
-                    // Instant transition to new depth
-                    depthPoints.push({ x: currentTime, y: segDepth });
+                if (phase === 'descent') {
+                    // Ramp from from_depth_m to to_depth_m
+                    const startDepth = seg.from_depth_m !== undefined ? seg.from_depth_m : currentDepth;
+                    const endDepth = seg.to_depth_m !== undefined ? seg.to_depth_m : seg.depth_m;
+                    depthPoints.push({ x: currentTime, y: startDepth });
+                    currentTime += duration;
+                    depthPoints.push({ x: currentTime, y: endDepth });
+                    currentDepth = endDepth;
+                } else if (phase === 'ascent') {
+                    // Ramp from from_depth_m to to_depth_m (going up)
+                    const startDepth = seg.from_depth_m !== undefined ? seg.from_depth_m : currentDepth;
+                    const endDepth = seg.to_depth_m !== undefined ? seg.to_depth_m : seg.depth_m;
+                    depthPoints.push({ x: currentTime, y: startDepth });
+                    currentTime += duration;
+                    depthPoints.push({ x: currentTime, y: endDepth });
+                    currentDepth = endDepth;
+                } else if (phase === 'level' || phase === 'bottom') {
+                    // Flat line at depth_m
+                    const depth = seg.depth_m !== undefined ? seg.depth_m : currentDepth;
+                    depthPoints.push({ x: currentTime, y: depth });
+                    currentTime += duration;
+                    depthPoints.push({ x: currentTime, y: depth });
+                    currentDepth = depth;
+                } else if (phase === 'safety_stop') {
+                    // Flat line at safety stop depth (typically 5m)
+                    const depth = seg.depth_m !== undefined ? seg.depth_m : 5;
+                    depthPoints.push({ x: currentTime, y: depth });
+                    currentTime += duration;
+                    depthPoints.push({ x: currentTime, y: depth });
+                    currentDepth = depth;
+                } else {
+                    // Unknown phase - treat as level at current depth or seg.depth_m
+                    const depth = seg.depth_m !== undefined ? seg.depth_m : currentDepth;
+                    depthPoints.push({ x: currentTime, y: depth });
+                    currentTime += duration;
+                    depthPoints.push({ x: currentTime, y: depth });
+                    currentDepth = depth;
                 }
-
-                // Stay at this depth for segment duration
-                currentTime += segDuration;
-                depthPoints.push({ x: currentTime, y: segDepth });
-                prevDepth = segDepth;
             });
 
-            // Final ascent to surface (9m/min ascent rate)
-            const finalDepth = prevDepth;
-            const ascentTime = finalDepth / 9;
-            currentTime += ascentTime;
-            depthPoints.push({ x: currentTime, y: 0 });
+            // If we're not at surface after all segments, add final ascent
+            if (currentDepth > 0) {
+                // 9m/min ascent rate
+                const ascentTime = currentDepth / 9;
+                currentTime += ascentTime;
+                depthPoints.push({ x: currentTime, y: 0 });
+                currentDepth = 0;
+            }
 
             // Loading after dive
             loadingPoints.push({ x: currentTime, y: dive.loading_after_percent });
@@ -982,6 +1112,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     calculateBtn.addEventListener('click', calculateProfile);
+
+    // Auto-calculate on page load
+    calculateProfile();
 });
 </script>
 {% endif %}

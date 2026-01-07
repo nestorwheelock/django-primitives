@@ -1,0 +1,223 @@
+{% extends "portal_ui/staff_base.html" %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+            <p class="mt-1 text-sm text-gray-500">
+                Export documents as a ZIP archive or sync to S3 storage.
+            </p>
+        </div>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div class="rounded-lg border border-gray-200 bg-white p-4">
+            <dt class="text-sm font-medium text-gray-500">Total Folders</dt>
+            <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ stats.total_folders }}</dd>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4">
+            <dt class="text-sm font-medium text-gray-500">Total Documents</dt>
+            <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ stats.total_documents }}</dd>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4">
+            <dt class="text-sm font-medium text-gray-500">In Trash</dt>
+            <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ stats.trash_documents }}</dd>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4">
+            <dt class="text-sm font-medium text-gray-500">Estimated Size</dt>
+            <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ stats.estimated_size|filesizeformat }}</dd>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- ZIP Download Form -->
+        <div class="rounded-lg border border-gray-200 bg-white shadow">
+            <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                <h2 class="text-lg font-medium text-gray-900 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Download as ZIP
+                </h2>
+            </div>
+            <form method="post" action="{% url 'diveops:document-backup-download' %}" class="p-6 space-y-4">
+                {% csrf_token %}
+
+                <!-- Backup All Option -->
+                <div class="flex items-center">
+                    <input type="checkbox" id="backup_all" name="backup_all"
+                           class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                           onchange="toggleFolderSelection(this.checked)">
+                    <label for="backup_all" class="ml-2 text-sm font-medium text-gray-900">
+                        Backup all documents
+                    </label>
+                </div>
+
+                <!-- Include Trash -->
+                <div class="flex items-center">
+                    <input type="checkbox" id="include_trash" name="include_trash"
+                           class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <label for="include_trash" class="ml-2 text-sm text-gray-700">
+                        Include Trash folder
+                    </label>
+                </div>
+
+                <!-- Folder Selection -->
+                <div id="folder_selection" class="border border-gray-200 rounded-lg p-4 max-h-64 overflow-y-auto">
+                    <p class="text-sm font-medium text-gray-700 mb-3">Select folders to include:</p>
+                    {% for folder in folders %}
+                        {% include "diveops/staff/_folder_checkbox.html" with folder=folder depth=0 %}
+                    {% empty %}
+                        <p class="text-sm text-gray-500">No folders available.</p>
+                    {% endfor %}
+                </div>
+
+                <button type="submit"
+                        class="w-full inline-flex justify-center items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Download ZIP
+                </button>
+            </form>
+        </div>
+
+        <!-- S3 Sync Form -->
+        <div class="rounded-lg border border-gray-200 bg-white shadow">
+            <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                <h2 class="text-lg font-medium text-gray-900 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z" />
+                    </svg>
+                    Sync to S3
+                </h2>
+            </div>
+            <form method="post" action="{% url 'diveops:document-s3-sync' %}" class="p-6 space-y-4">
+                {% csrf_token %}
+
+                <!-- S3 Bucket -->
+                <div>
+                    <label for="s3_bucket" class="block text-sm font-medium text-gray-700">S3 Bucket Name</label>
+                    <input type="text" id="s3_bucket" name="s3_bucket" required
+                           class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                           placeholder="my-document-bucket">
+                </div>
+
+                <!-- S3 Prefix -->
+                <div>
+                    <label for="s3_prefix" class="block text-sm font-medium text-gray-700">Key Prefix (folder path)</label>
+                    <input type="text" id="s3_prefix" name="s3_prefix" value="document-backup/"
+                           class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                           placeholder="backups/documents/">
+                </div>
+
+                <!-- Sync All Option -->
+                <div class="flex items-center">
+                    <input type="checkbox" id="sync_all" name="sync_all"
+                           class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                           onchange="toggleS3FolderSelection(this.checked)">
+                    <label for="sync_all" class="ml-2 text-sm font-medium text-gray-900">
+                        Sync all documents
+                    </label>
+                </div>
+
+                <!-- Include Trash -->
+                <div class="flex items-center">
+                    <input type="checkbox" id="s3_include_trash" name="include_trash"
+                           class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <label for="s3_include_trash" class="ml-2 text-sm text-gray-700">
+                        Include Trash folder
+                    </label>
+                </div>
+
+                <!-- Delete Removed -->
+                <div class="flex items-center">
+                    <input type="checkbox" id="s3_delete" name="s3_delete"
+                           class="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500">
+                    <label for="s3_delete" class="ml-2 text-sm text-gray-700">
+                        Delete S3 objects not in selection <span class="text-red-500">(caution)</span>
+                    </label>
+                </div>
+
+                <!-- Folder Selection for S3 -->
+                <div id="s3_folder_selection" class="border border-gray-200 rounded-lg p-4 max-h-64 overflow-y-auto">
+                    <p class="text-sm font-medium text-gray-700 mb-3">Select folders to sync:</p>
+                    {% for folder in folders %}
+                        {% include "diveops/staff/_folder_checkbox.html" with folder=folder depth=0 prefix="s3_" %}
+                    {% empty %}
+                        <p class="text-sm text-gray-500">No folders available.</p>
+                    {% endfor %}
+                </div>
+
+                <button type="submit"
+                        class="w-full inline-flex justify-center items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z" />
+                    </svg>
+                    Sync to S3
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="rounded-lg bg-blue-50 p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">Command Line Usage</h3>
+                <p class="mt-1 text-sm text-blue-700">
+                    You can also run backups via the command line:
+                </p>
+                <pre class="mt-2 text-xs bg-blue-100 p-2 rounded overflow-x-auto">python manage.py backup_documents --output backup.zip
+python manage.py backup_documents --s3-bucket my-bucket --s3-prefix backups/</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="flex items-center gap-4">
+        <a href="{% url 'diveops:document-browser' %}" class="text-sm text-gray-500 hover:text-gray-700">
+            &larr; Back to Documents
+        </a>
+    </div>
+</div>
+
+<script>
+function toggleFolderSelection(backupAll) {
+    const selection = document.getElementById('folder_selection');
+    selection.style.opacity = backupAll ? '0.5' : '1';
+    selection.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.disabled = backupAll;
+    });
+}
+
+function toggleS3FolderSelection(syncAll) {
+    const selection = document.getElementById('s3_folder_selection');
+    selection.style.opacity = syncAll ? '0.5' : '1';
+    selection.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.disabled = syncAll;
+    });
+}
+
+// Handle folder checkbox parent/child relationships
+document.querySelectorAll('.folder-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        // Select/deselect all children
+        const parentItem = this.closest('.folder-item');
+        if (parentItem) {
+            parentItem.querySelectorAll('.folder-checkbox').forEach(child => {
+                child.checked = this.checked;
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

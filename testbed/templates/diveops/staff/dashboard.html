@@ -1,4 +1,4 @@
-{% extends "portal_ui/base_staff.html" %}
+{% extends "diveops/staff/_base.html" %}
 {% load portal_ui_tags %}
 
 {% block staff_content %}
@@ -152,6 +152,14 @@
             <a href="{% url 'diveops:excursion-type-list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                 {% icon "clipboard-list" "w-4 h-4 mr-2" %}
                 Excursion Types
+            </a>
+            <a href="{% url 'diveops:dive-plan-list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 ring-2 ring-blue-500">
+                {% icon "compass" "w-4 h-4 mr-2" %}
+                Dive Plans
+            </a>
+            <a href="{% url 'diveops:dive-log-list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "book-open" "w-4 h-4 mr-2" %}
+                Dive Logs
             </a>
             <a href="{% url 'diveops:audit-log' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                 {% icon "file-text" "w-4 h-4 mr-2" %}

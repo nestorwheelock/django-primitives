@@ -1,0 +1,288 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:catalog-item-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Catalog Items</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:catalog-item-detail' pk=catalog_item.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ catalog_item.display_name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:price-list' item_pk=catalog_item.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Pricing Rules</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">{% if is_create %}Add a new pricing rule{% else %}Update pricing rule{% endif %} for {{ catalog_item.display_name }}</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    {% icon "alert-circle" "h-5 w-5 text-red-400" %}
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                        <ul class="list-disc pl-5 space-y-1">
+                            {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Customer Pricing Section -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Customer Pricing</h3>
+            </div>
+            <div class="p-6 grid grid-cols-2 gap-6">
+                <!-- Amount -->
+                <div>
+                    <label for="id_amount" class="block text-sm font-medium text-gray-700">Customer Charge <span class="text-red-500">*</span></label>
+                    <input type="number" step="0.0001" name="amount" id="id_amount" value="{{ form.amount.value|default:'' }}"
+                           class="mt-1 block w-full px-3 py-2 border {% if form.amount.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="0.00">
+                    <p class="mt-1 text-sm text-gray-500">{{ form.fields.amount.help_text }}</p>
+                    {% if form.amount.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.amount.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Currency -->
+                <div>
+                    <label for="id_currency" class="block text-sm font-medium text-gray-700">Currency <span class="text-red-500">*</span></label>
+                    <select name="currency" id="id_currency"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        {% for value, label in form.fields.currency.choices %}
+                        <option value="{{ value }}" {% if form.currency.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shop Cost Section (Vendor Pricing) -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Shop Cost (Vendor Pricing)</h3>
+                <p class="text-sm text-gray-500">Optional: What the shop pays the vendor for this item</p>
+            </div>
+            <div class="p-6 grid grid-cols-2 gap-6">
+                <!-- Cost Amount -->
+                <div>
+                    <label for="id_cost_amount" class="block text-sm font-medium text-gray-700">Shop Cost</label>
+                    <input type="number" step="0.0001" name="cost_amount" id="id_cost_amount" value="{{ form.cost_amount.value|default:'' }}"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="0.00">
+                    <p class="mt-1 text-sm text-gray-500">{{ form.fields.cost_amount.help_text }}</p>
+                </div>
+
+                <!-- Cost Currency -->
+                <div>
+                    <label for="id_cost_currency" class="block text-sm font-medium text-gray-700">Cost Currency</label>
+                    <select name="cost_currency" id="id_cost_currency"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        {% for value, label in form.fields.cost_currency.choices %}
+                        <option value="{{ value }}" {% if form.cost_currency.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scope Section -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Price Scope</h3>
+                <p class="text-sm text-gray-500">Who this price applies to. Agreement-scoped rules are for vendor pricing.</p>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Scope Type -->
+                <div>
+                    <label for="id_scope_type" class="block text-sm font-medium text-gray-700">Scope <span class="text-red-500">*</span></label>
+                    <select name="scope_type" id="id_scope_type"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        {% for value, label in form.fields.scope_type.choices %}
+                        <option value="{{ value }}" {% if form.scope_type.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-sm text-gray-500">{{ form.fields.scope_type.help_text }}</p>
+                </div>
+
+                <!-- Organization (shown when scope=organization) -->
+                <div id="organization-field" style="display: none;">
+                    <label for="id_organization" class="block text-sm font-medium text-gray-700">Dive Shop</label>
+                    <select name="organization" id="id_organization"
+                            class="mt-1 block w-full px-3 py-2 border {% if form.organization.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select a dive shop...</option>
+                        {% for org in form.fields.organization.queryset %}
+                        <option value="{{ org.pk }}" {% if form.organization.value == org.pk|stringformat:"s" %}selected{% endif %}>{{ org.name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.organization.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.organization.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Party (shown when scope=party) -->
+                <div id="party-field" style="display: none;">
+                    <label for="id_party" class="block text-sm font-medium text-gray-700">Individual</label>
+                    <select name="party" id="id_party"
+                            class="mt-1 block w-full px-3 py-2 border {% if form.party.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select a person...</option>
+                        {% for person in form.fields.party.queryset %}
+                        <option value="{{ person.pk }}" {% if form.party.value == person.pk|stringformat:"s" %}selected{% endif %}>{{ person.first_name }} {{ person.last_name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.party.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.party.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Agreement (shown when scope=agreement) -->
+                <div id="agreement-field" style="display: none;">
+                    <label for="id_agreement" class="block text-sm font-medium text-gray-700">Vendor Agreement</label>
+                    <select name="agreement" id="id_agreement"
+                            class="mt-1 block w-full px-3 py-2 border {% if form.agreement.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select a vendor agreement...</option>
+                        {% for agr in form.fields.agreement.queryset %}
+                        <option value="{{ agr.pk }}" {% if form.agreement.value == agr.pk|stringformat:"s" %}selected{% endif %}>{{ agr }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.agreement.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.agreement.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Validity & Priority Section -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Validity & Priority</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="grid grid-cols-2 gap-6">
+                    <!-- Valid From -->
+                    <div>
+                        <label for="id_valid_from" class="block text-sm font-medium text-gray-700">Valid From <span class="text-red-500">*</span></label>
+                        <input type="datetime-local" name="valid_from" id="id_valid_from"
+                               value="{% if form.valid_from.value %}{{ form.valid_from.value|date:'Y-m-d\TH:i' }}{% endif %}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.valid_from.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-sm text-gray-500">{{ form.fields.valid_from.help_text }}</p>
+                        {% if form.valid_from.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.valid_from.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Valid To -->
+                    <div>
+                        <label for="id_valid_to" class="block text-sm font-medium text-gray-700">Valid To</label>
+                        <input type="datetime-local" name="valid_to" id="id_valid_to"
+                               value="{% if form.valid_to.value %}{{ form.valid_to.value|date:'Y-m-d\TH:i' }}{% endif %}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-sm text-gray-500">{{ form.fields.valid_to.help_text }}</p>
+                        {% if form.valid_to.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.valid_to.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Priority -->
+                <div>
+                    <label for="id_priority" class="block text-sm font-medium text-gray-700">Priority</label>
+                    <input type="number" name="priority" id="id_priority" value="{{ form.priority.value|default:'0' }}"
+                           class="mt-1 block w-32 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <p class="mt-1 text-sm text-gray-500">{{ form.fields.priority.help_text }}</p>
+                </div>
+
+                <!-- Reason -->
+                <div>
+                    <label for="id_reason" class="block text-sm font-medium text-gray-700">Reason</label>
+                    <textarea name="reason" id="id_reason" rows="2"
+                              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Why is this price rule being created?">{{ form.reason.value|default:'' }}</textarea>
+                    <p class="mt-1 text-sm text-gray-500">{{ form.fields.reason.help_text }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end space-x-3">
+            <a href="{% url 'diveops:price-list' item_pk=catalog_item.pk %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% if is_create %}Create Price Rule{% else %}Save Changes{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var scopeSelect = document.getElementById('id_scope_type');
+    var organizationField = document.getElementById('organization-field');
+    var partyField = document.getElementById('party-field');
+    var agreementField = document.getElementById('agreement-field');
+
+    function toggleScopeFields() {
+        var scope = scopeSelect.value;
+
+        // Hide all scope-specific fields
+        organizationField.style.display = 'none';
+        partyField.style.display = 'none';
+        agreementField.style.display = 'none';
+
+        // Show the relevant field based on scope
+        if (scope === 'organization') {
+            organizationField.style.display = 'block';
+        } else if (scope === 'party') {
+            partyField.style.display = 'block';
+        } else if (scope === 'agreement') {
+            agreementField.style.display = 'block';
+        }
+    }
+
+    scopeSelect.addEventListener('change', toggleScopeFields);
+    toggleScopeFields(); // Run on page load
+});
+</script>
+{% endblock %}

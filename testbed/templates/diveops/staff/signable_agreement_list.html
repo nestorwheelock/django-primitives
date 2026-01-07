@@ -1,0 +1,219 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+            <p class="text-gray-600">Track waiver and agreement signing status</p>
+        </div>
+        <a href="{% url 'diveops:signable-agreement-create' %}"
+           class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            New Agreement
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <form method="get" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
+                <select name="status" id="status"
+                        class="mt-1 block w-40 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="template" class="block text-sm font-medium text-gray-700">Template</label>
+                <select name="template" id="template"
+                        class="mt-1 block w-48 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All Templates</option>
+                    {% for tmpl in templates %}
+                    <option value="{{ tmpl.pk }}" {% if template_filter == tmpl.pk|stringformat:"s" %}selected{% endif %}>{{ tmpl.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit"
+                    class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Filter
+            </button>
+            {% if status_filter or template_filter %}
+            <a href="{% url 'diveops:signable-agreement-list' %}"
+               class="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800">
+                Clear Filters
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Agreements Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {% if agreements %}
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Template
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Party
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Sent
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Signed
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for agreement in agreements %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900">{{ agreement.template.name }}</div>
+                        <div class="text-sm text-gray-500">v{{ agreement.template_version }}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900">
+                            {% with party=agreement.party_a %}
+                            {% if party.first_name %}{{ party.first_name }} {{ party.last_name }}{% elif party.name %}{{ party.name }}{% else %}{{ party }}{% endif %}
+                            {% endwith %}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {% if agreement.status == 'draft' %}bg-gray-100 text-gray-800
+                            {% elif agreement.status == 'sent' %}bg-blue-100 text-blue-800
+                            {% elif agreement.status == 'signed' %}bg-green-100 text-green-800
+                            {% elif agreement.status == 'void' %}bg-red-100 text-red-800
+                            {% elif agreement.status == 'expired' %}bg-yellow-100 text-yellow-800
+                            {% endif %}">
+                            {{ agreement.get_status_display }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {% if agreement.sent_at %}
+                        {{ agreement.sent_at|date:"M d, Y H:i" }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {% if agreement.signed_at %}
+                        {{ agreement.signed_at|date:"M d, Y H:i" }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                        <a href="{% url 'diveops:signable-agreement-detail' pk=agreement.pk %}"
+                           class="text-blue-600 hover:text-blue-900">View</a>
+                        {% if agreement.signed_document %}
+                        <a href="{{ agreement.signed_document.file.url }}"
+                           download
+                           class="text-green-600 hover:text-green-900"
+                           title="Download Signed PDF">
+                            <svg class="inline-block w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            PDF
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div class="flex-1 flex justify-between sm:hidden">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if template_filter %}&template={{ template_filter }}{% endif %}"
+                   class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    Previous
+                </a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if template_filter %}&template={{ template_filter }}{% endif %}"
+                   class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    Next
+                </a>
+                {% endif %}
+            </div>
+            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm text-gray-700">
+                        Showing
+                        <span class="font-medium">{{ page_obj.start_index }}</span>
+                        to
+                        <span class="font-medium">{{ page_obj.end_index }}</span>
+                        of
+                        <span class="font-medium">{{ page_obj.paginator.count }}</span>
+                        results
+                    </p>
+                </div>
+                <div>
+                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                        {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if template_filter %}&template={{ template_filter }}{% endif %}"
+                           class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                            Previous
+                        </a>
+                        {% endif %}
+                        {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if template_filter %}&template={{ template_filter }}{% endif %}"
+                           class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                            Next
+                        </a>
+                        {% endif %}
+                    </nav>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No agreements found</h3>
+            <p class="mt-1 text-sm text-gray-500">
+                {% if status_filter or template_filter %}
+                Try adjusting your filters.
+                {% else %}
+                Agreements will appear here when created from templates.
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

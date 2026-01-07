@@ -1,4 +1,4 @@
-{% extends "portal_ui/base_staff.html" %}
+{% extends "diveops/staff/_base.html" %}
 {% load portal_ui_tags %}
 
 {% block breadcrumb %}
@@ -18,7 +18,7 @@
     <div class="flex items-center justify-between">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
-            <p class="text-gray-600">Manage agreement templates for waivers, releases, and other paperwork</p>
+            <p class="text-gray-600">Manage agreement templates for waivers, releases, and other documents</p>
         </div>
         <a href="{% url 'diveops:agreement-template-create' %}"
            class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">

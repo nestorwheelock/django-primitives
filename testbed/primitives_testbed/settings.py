@@ -91,6 +91,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "django_portal_ui.context_processors.portal_ui",
+                "primitives_testbed.diveops.context_processors.diveops_context",
             ],
         },
     },
@@ -185,6 +186,12 @@ LOGGING = {
     },
 }
 
+# Dive Operations configuration
+DIVE_SHOP_NAME = "Blue Water Dive Shop"
+DIVE_SHOP_TIMEZONE = "America/New_York"  # Business timezone for clock display
+DIVE_SHOP_LATITUDE = 25.7617  # Miami, FL - change to your dive shop location
+DIVE_SHOP_LONGITUDE = -80.1918
+
 # Portal UI configuration
 PORTAL_UI = {
     "SITE_NAME": "Primitives Testbed",
@@ -209,15 +216,27 @@ PORTAL_UI = {
         },
         {
             "section": "Dive Operations",
+            "label": "Protected Areas",
+            "url": "diveops:protected-area-list",
+            "icon": "shield",
+        },
+        {
+            "section": "Dive Operations",
             "label": "Excursion Types",
             "url": "diveops:excursion-type-list",
             "icon": "package",
         },
         {
             "section": "Dive Operations",
-            "label": "Paperwork",
+            "label": "Agreement Types",
             "url": "diveops:agreement-template-list",
             "icon": "clipboard",
+        },
+        {
+            "section": "Dive Operations",
+            "label": "Agreements",
+            "url": "diveops:signable-agreement-list",
+            "icon": "file-text",
         },
         {
             "section": "Planning",
@@ -233,6 +252,12 @@ PORTAL_UI = {
         },
         {
             "section": "System",
+            "label": "Documents",
+            "url": "diveops:document-browser",
+            "icon": "folder",
+        },
+        {
+            "section": "System",
             "label": "Audit Log",
             "url": "diveops:audit-log",
             "icon": "file-text",
@@ -242,6 +267,12 @@ PORTAL_UI = {
             "label": "Catalog Items",
             "url": "diveops:catalog-item-list",
             "icon": "tag",
+        },
+        {
+            "section": "Configuration",
+            "label": "AI Settings",
+            "url": "diveops:ai-settings",
+            "icon": "cpu",
         },
         {
             "section": "Finance",

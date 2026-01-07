@@ -291,6 +291,53 @@ class Migration(migrations.Migration):
 
 ---
 
+## EnvFallbackMixin
+
+Mixin for singleton models that need environment variable fallback for sensitive fields like API keys.
+
+### Use Cases
+
+- API keys that should be admin-editable but have safe defaults from environment
+- External service URLs with deployment-specific overrides
+- Any config that needs DB storage with env fallback
+
+### Usage
+
+```python
+from django_singleton import SingletonModel, EnvFallbackMixin
+
+class AISettings(EnvFallbackMixin, SingletonModel):
+    openrouter_api_key = models.CharField(max_length=255, blank=True)
+    openai_api_key = models.CharField(max_length=255, blank=True)
+
+    ENV_FALLBACKS = {
+        'openrouter_api_key': 'OPENROUTER_API_KEY',
+        'openai_api_key': 'OPENAI_API_KEY',
+    }
+
+# Usage
+settings = AISettings.get_instance()
+key = settings.get_with_fallback('openrouter_api_key')  # DB first, then env
+source = settings.get_value_source('openrouter_api_key')  # 'database', 'environment', or 'default'
+```
+
+### Methods
+
+| Method | Description |
+|--------|-------------|
+| `get_with_fallback(field, default='')` | Get field value from DB, fall back to env if blank |
+| `get_value_source(field)` | Returns 'database', 'environment', or 'default' |
+| `get_resolved()` | Dict of all fallback fields with resolved values |
+| `has_value(field)` | Check if field has value from DB or env |
+
+### Precedence
+
+1. **Database value** (if not blank) - Admin-editable, takes priority
+2. **Environment variable** (if configured in ENV_FALLBACKS) - Deployment default
+3. **Default value** (passed to get_with_fallback()) - Fallback
+
+---
+
 ## Dependencies
 
 None. This is a standalone Django model mixin.
@@ -298,6 +345,13 @@ None. This is a standalone Django model mixin.
 ---
 
 ## Changelog
+
+### v0.2.0 (2025-01-07)
+- Added EnvFallbackMixin for database-first with environment fallback pattern
+- get_with_fallback() method for resolved values
+- get_value_source() for debugging/admin display
+- get_resolved() for bulk retrieval
+- has_value() for existence checks
 
 ### v0.1.0 (2024-12-30)
 - Initial release

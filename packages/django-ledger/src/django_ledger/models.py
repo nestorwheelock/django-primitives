@@ -6,11 +6,19 @@ from django.db import models
 from django.utils import timezone
 
 from django_basemodels import BaseModel
-from django_ledger.exceptions import ImmutableEntryError
+from django_ledger.exceptions import ImmutableEntryError, InactiveAccountError
 
 
 class AccountQuerySet(models.QuerySet):
     """Custom queryset for Account model."""
+
+    def active(self):
+        """Return only active accounts."""
+        return self.filter(is_active=True)
+
+    def inactive(self):
+        """Return only inactive accounts."""
+        return self.filter(is_active=False)
 
     def for_owner(self, owner):
         """Return accounts for the given owner."""
@@ -55,6 +63,13 @@ class Account(BaseModel):
     )
     owner = GenericForeignKey('owner_content_type', 'owner_id')
 
+    account_number = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text="Account number for accounting standards (e.g., 1000, 2000)",
+    )
     account_type = models.CharField(
         max_length=50,
         help_text="Account type (receivable, payable, revenue, expense, etc.)",
@@ -68,6 +83,11 @@ class Account(BaseModel):
         blank=True,
         default='',
         help_text="Optional account name",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Whether this account is active. Inactive accounts cannot receive new entries.",
     )
 
     # BaseModel provides: id (UUID), created_at, updated_at, deleted_at
@@ -89,7 +109,9 @@ class Account(BaseModel):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.account_type} ({self.currency})"
+        if self.account_number:
+            return f"{self.account_number} - {self.name or self.account_type} ({self.currency})"
+        return f"{self.name or self.account_type} ({self.currency})"
 
 
 # PRIMITIVES: allow-plain-model
@@ -246,11 +268,17 @@ class Entry(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        """Enforce immutability after transaction is posted."""
+        """Enforce immutability after transaction is posted and check account is active."""
         if self.pk and self.transaction.is_posted:
             raise ImmutableEntryError(
                 f"Cannot modify entry {self.pk} - transaction is posted. "
                 "Create a reversal instead."
+            )
+        # Prevent new entries on inactive accounts
+        if not self.pk and self.account and not self.account.is_active:
+            raise InactiveAccountError(
+                f"Cannot create entry on inactive account '{self.account}'. "
+                "Reactivate the account first."
             )
         super().save(*args, **kwargs)
 

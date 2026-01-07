@@ -18,12 +18,20 @@ from .models import (
     CertificationLevel,
     Dive,
     DiverCertification,
+    DiverEligibilityProof,
     DiverProfile,
     DiveSite,
     Excursion,
     ExcursionRequirement,
     ExcursionType,
     ExcursionTypeDive,
+    GuidePermitDetails,
+    ProtectedArea,
+    ProtectedAreaFeeSchedule,
+    ProtectedAreaFeeTier,
+    ProtectedAreaPermit,
+    ProtectedAreaRule,
+    ProtectedAreaZone,
     SitePriceAdjustment,
 )
 
@@ -236,13 +244,20 @@ class DiverForm(forms.Form):
                 proof_file = data.get("proof_file")
                 if proof_file:
                     from django.contrib.contenttypes.models import ContentType
-                    from django_documents.models import Document
+                    from django_documents.models import Document, DocumentFolder
 
                     # Get content type before creating document (NOT NULL constraint)
                     content_type = ContentType.objects.get_for_model(DiverCertification)
 
+                    # Get the Certifications folder
+                    certifications_folder = DocumentFolder.objects.filter(
+                        slug="certifications",
+                        parent__isnull=True,
+                    ).first()
+
                     doc = Document(
                         file=proof_file,
+                        folder=certifications_folder,
                         filename=proof_file.name,
                         content_type=proof_file.content_type or "application/octet-stream",
                         file_size=proof_file.size,
@@ -380,14 +395,21 @@ class DiverCertificationForm(forms.ModelForm):
         proof_file = self.cleaned_data.get("proof_file")
         if proof_file:
             from django.contrib.contenttypes.models import ContentType
-            from django_documents.models import Document
+            from django_documents.models import Document, DocumentFolder
 
             # Get content type for DiverCertification (needed before save due to NOT NULL constraint)
             content_type = ContentType.objects.get_for_model(DiverCertification)
 
+            # Get the Certifications folder
+            certifications_folder = DocumentFolder.objects.filter(
+                slug="certifications",
+                parent__isnull=True,
+            ).first()
+
             # Create Document for the proof with target_content_type set
             doc = Document(
                 file=proof_file,
+                folder=certifications_folder,
                 filename=proof_file.name,
                 content_type=proof_file.content_type or "application/octet-stream",
                 file_size=proof_file.size,
@@ -535,6 +557,20 @@ class DiveSiteForm(forms.Form):
         label="Tags",
         help_text="Comma-separated tags (e.g., reef, coral, wreck)",
     )
+    protected_area = forms.ModelChoiceField(
+        queryset=ProtectedArea.objects.filter(is_active=True).order_by("name"),
+        required=False,
+        empty_label="No protected area",
+        label="Protected Area",
+        help_text="Optional: Assign this site to a protected area (marine park)",
+    )
+    protected_area_zone = forms.ModelChoiceField(
+        queryset=ProtectedAreaZone.objects.filter(is_active=True).order_by("protected_area__name", "name"),
+        required=False,
+        empty_label="No zone",
+        label="Zone",
+        help_text="Optional: Specific zone within the protected area",
+    )
 
     def __init__(self, *args, instance=None, **kwargs):
         """Initialize form, optionally with existing DiveSite.
@@ -557,6 +593,8 @@ class DiveSiteForm(forms.Form):
             self.fields["min_certification_level"].initial = instance.min_certification_level
             self.fields["rating"].initial = instance.rating
             self.fields["tags"].initial = ", ".join(instance.tags) if instance.tags else ""
+            self.fields["protected_area"].initial = instance.protected_area
+            self.fields["protected_area_zone"].initial = instance.protected_area_zone
 
     def clean_tags(self):
         """Parse comma-separated tags into list."""
@@ -565,6 +603,26 @@ class DiveSiteForm(forms.Form):
             return []
         # Split by comma, strip whitespace, filter empty
         return [tag.strip() for tag in tags_str.split(",") if tag.strip()]
+
+    def clean(self):
+        """Validate that zone belongs to selected protected area."""
+        cleaned_data = super().clean()
+        protected_area = cleaned_data.get("protected_area")
+        protected_area_zone = cleaned_data.get("protected_area_zone")
+
+        if protected_area_zone and not protected_area:
+            raise forms.ValidationError(
+                "You must select a protected area when selecting a zone."
+            )
+
+        if protected_area_zone and protected_area:
+            if protected_area_zone.protected_area_id != protected_area.pk:
+                raise forms.ValidationError(
+                    f"Zone '{protected_area_zone.name}' does not belong to "
+                    f"'{protected_area.name}'. Please select a zone from that area."
+                )
+
+        return cleaned_data
 
     @transaction.atomic
     def save(self, actor=None):
@@ -598,6 +656,8 @@ class DiveSiteForm(forms.Form):
                 min_certification_level=data.get("min_certification_level"),
                 rating=data.get("rating"),
                 tags=data.get("tags", []),
+                protected_area=data.get("protected_area"),
+                protected_area_zone=data.get("protected_area_zone"),
             )
         else:
             # Create new site via service
@@ -613,6 +673,8 @@ class DiveSiteForm(forms.Form):
                 min_certification_level=data.get("min_certification_level"),
                 rating=data.get("rating"),
                 tags=data.get("tags", []),
+                protected_area=data.get("protected_area"),
+                protected_area_zone=data.get("protected_area_zone"),
             )
 
         return site
@@ -822,11 +884,6 @@ class ExcursionTypeForm(forms.Form):
         choices=ExcursionType.TimeOfDay.choices,
         label="Time of Day",
     )
-    max_depth_meters = forms.IntegerField(
-        min_value=1,
-        max_value=100,
-        label="Max Depth (meters)",
-    )
     typical_duration_minutes = forms.IntegerField(
         min_value=15,
         max_value=480,
@@ -898,7 +955,6 @@ class ExcursionTypeForm(forms.Form):
             self.fields["description"].initial = instance.description
             self.fields["dive_mode"].initial = instance.dive_mode
             self.fields["time_of_day"].initial = instance.time_of_day
-            self.fields["max_depth_meters"].initial = instance.max_depth_meters
             self.fields["typical_duration_minutes"].initial = instance.typical_duration_minutes
             self.fields["dives_per_excursion"].initial = instance.dives_per_excursion
             self.fields["min_certification_level"].initial = instance.min_certification_level
@@ -947,7 +1003,6 @@ class ExcursionTypeForm(forms.Form):
                 description=data.get("description", ""),
                 dive_mode=data["dive_mode"],
                 time_of_day=data["time_of_day"],
-                max_depth_meters=data["max_depth_meters"],
                 typical_duration_minutes=data["typical_duration_minutes"],
                 dives_per_excursion=data["dives_per_excursion"],
                 min_certification_level=data.get("min_certification_level"),
@@ -966,7 +1021,6 @@ class ExcursionTypeForm(forms.Form):
                 description=data.get("description", ""),
                 dive_mode=data["dive_mode"],
                 time_of_day=data["time_of_day"],
-                max_depth_meters=data["max_depth_meters"],
                 typical_duration_minutes=data["typical_duration_minutes"],
                 dives_per_excursion=data["dives_per_excursion"],
                 min_certification_level=data.get("min_certification_level"),
@@ -1038,6 +1092,13 @@ class ExcursionTypeDiveForm(forms.Form):
         label="Certification Override",
         help_text="Override certification requirement for this specific dive",
     )
+    catalog_item = forms.ModelChoiceField(
+        queryset=CatalogItem.objects.filter(deleted_at__isnull=True, kind="service"),
+        required=False,
+        empty_label="No product linked",
+        label="Catalog Product",
+        help_text="Product sold for this dive (with components like tank, weights, etc.)",
+    )
     dive_site = forms.ModelChoiceField(
         queryset=DiveSite.objects.filter(is_active=True).order_by("name"),
         required=False,
@@ -1071,21 +1132,39 @@ class ExcursionTypeDiveForm(forms.Form):
         label="Briefing Text",
         help_text="Full briefing content for communication to divers",
     )
+    briefing_video_url = forms.URLField(
+        required=False,
+        label="Briefing Video URL",
+        help_text="YouTube video URL for dive briefing (e.g., https://www.youtube.com/watch?v=...)",
+    )
     hazards = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={"rows": 2}),
         label="Hazards",
         help_text="Known hazards and safety considerations",
     )
+    access_mode = forms.ChoiceField(
+        required=False,
+        choices=[("", "---")] + list(ExcursionTypeDive.AccessMode.choices),
+        label="Access Mode",
+        help_text="How divers get to the dive site",
+    )
+    boat_instructions = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        label="Boat Instructions",
+        help_text="Instructions for boat dives (boarding, gear storage, entry/exit procedures)",
+    )
 
     def __init__(self, *args, excursion_type=None, instance=None, **kwargs):
         """Initialize form with excursion type context and optional instance.
 
         Args:
-            excursion_type: Parent ExcursionType (required for create)
+            excursion_type: Parent ExcursionType (optional, for backwards compat)
             instance: Existing ExcursionTypeDive for editing
         """
-        self.excursion_type = excursion_type or (instance.excursion_type if instance else None)
+        # Get first excursion type for backwards compat (dive plans can have multiple types)
+        self.excursion_type = excursion_type or (instance.excursion_types.first() if instance else None)
         self.instance = instance
         super().__init__(*args, **kwargs)
 
@@ -1098,13 +1177,17 @@ class ExcursionTypeDiveForm(forms.Form):
             self.fields["offset_minutes"].initial = instance.offset_minutes
             self.fields["surface_interval_minutes"].initial = instance.surface_interval_minutes
             self.fields["min_certification_level"].initial = instance.min_certification_level
+            self.fields["catalog_item"].initial = instance.catalog_item
             self.fields["dive_site"].initial = instance.dive_site
             # Dive planning fields
             self.fields["gas"].initial = instance.gas
             self.fields["route"].initial = instance.route
             self.fields["route_segments"].initial = json.dumps(instance.route_segments, indent=2) if instance.route_segments else ""
             self.fields["briefing_text"].initial = instance.briefing_text
+            self.fields["briefing_video_url"].initial = instance.briefing_video_url
             self.fields["hazards"].initial = instance.hazards
+            self.fields["access_mode"].initial = instance.access_mode
+            self.fields["boat_instructions"].initial = instance.boat_instructions
         elif excursion_type:
             # Default sequence to next available
             max_seq = excursion_type.dive_templates.aggregate(
@@ -1113,32 +1196,13 @@ class ExcursionTypeDiveForm(forms.Form):
             self.fields["sequence"].initial = max_seq + 1
 
     def clean_sequence(self):
-        """Validate sequence is unique within excursion type."""
+        """Validate sequence is a positive integer.
+
+        Note: Dive plans can now be shared across multiple excursion types
+        (M2M relationship), so sequence uniqueness per excursion type is
+        no longer enforced at the model level.
+        """
         sequence = self.cleaned_data["sequence"]
-
-        # Get excursion type - either from init or from form data (when dynamically added)
-        excursion_type = self.excursion_type
-        if excursion_type is None and "excursion_type" in self.data:
-            # excursion_type field was dynamically added - validate later in clean()
-            return sequence
-
-        if excursion_type is None:
-            # No excursion type available yet - skip sequence uniqueness check
-            return sequence
-
-        # Check for duplicate sequence (excluding current instance if editing)
-        existing = ExcursionTypeDive.objects.filter(
-            excursion_type=excursion_type,
-            sequence=sequence,
-        )
-        if self.instance:
-            existing = existing.exclude(pk=self.instance.pk)
-
-        if existing.exists():
-            raise forms.ValidationError(
-                f"Dive {sequence} already exists for this excursion type."
-            )
-
         return sequence
 
     def clean_route_segments(self):
@@ -1169,34 +1233,18 @@ class ExcursionTypeDiveForm(forms.Form):
         return segments
 
     def clean(self):
-        """Cross-field validation including sequence uniqueness when excursion_type is from form."""
+        """Cross-field validation for dive template form."""
         cleaned_data = super().clean()
 
-        # If excursion_type was dynamically added to form, validate sequence uniqueness now
+        # Store excursion_type from form if dynamically added
         excursion_type = cleaned_data.get("excursion_type")
-        sequence = cleaned_data.get("sequence")
-
-        if excursion_type and sequence and self.excursion_type is None:
-            # Store excursion_type for save()
+        if excursion_type and self.excursion_type is None:
             self.excursion_type = excursion_type
 
-            # Check for duplicate sequence
-            existing = ExcursionTypeDive.objects.filter(
-                excursion_type=excursion_type,
-                sequence=sequence,
-            )
-            if self.instance:
-                existing = existing.exclude(pk=self.instance.pk)
-
-            if existing.exists():
-                self.add_error(
-                    "sequence",
-                    f"Dive {sequence} already exists for this excursion type."
-                )
-
-        # Surface interval validation
+        sequence = cleaned_data.get("sequence")
         surface_interval = cleaned_data.get("surface_interval_minutes")
 
+        # Surface interval validation
         # Enforce: surface interval required for all dives after first
         if sequence and sequence > 1 and surface_interval is None:
             self.add_error(
@@ -1245,12 +1293,17 @@ class ExcursionTypeDiveForm(forms.Form):
                 clear_min_certification=data.get("min_certification_level") is None,
                 dive_site=data.get("dive_site"),
                 clear_dive_site=data.get("dive_site") is None,
+                catalog_item=data.get("catalog_item"),
+                clear_catalog_item=data.get("catalog_item") is None,
                 # Dive planning fields
                 gas=data.get("gas", ""),
                 route=data.get("route", ""),
                 route_segments=data.get("route_segments", []),
                 briefing_text=data.get("briefing_text", ""),
+                briefing_video_url=data.get("briefing_video_url", ""),
                 hazards=data.get("hazards", ""),
+                access_mode=data.get("access_mode", ""),
+                boat_instructions=data.get("boat_instructions", ""),
             )
         else:
             # Create new via service
@@ -1266,12 +1319,16 @@ class ExcursionTypeDiveForm(forms.Form):
                 surface_interval_minutes=data.get("surface_interval_minutes"),
                 min_certification_level=data.get("min_certification_level"),
                 dive_site=data.get("dive_site"),
+                catalog_item=data.get("catalog_item"),
                 # Dive planning fields
                 gas=data.get("gas", ""),
                 route=data.get("route", ""),
                 route_segments=data.get("route_segments", []),
                 briefing_text=data.get("briefing_text", ""),
+                briefing_video_url=data.get("briefing_video_url", ""),
                 hazards=data.get("hazards", ""),
+                access_mode=data.get("access_mode", ""),
+                boat_instructions=data.get("boat_instructions", ""),
             )
 
 
@@ -2653,4 +2710,560 @@ class AgreementTemplateForm(forms.ModelForm):
                 },
             )
 
+        return instance
+
+
+class CatalogItemComponentForm(forms.Form):
+    """Form for adding/editing catalog item components (assembly BOM)."""
+
+    component = forms.ModelChoiceField(
+        queryset=CatalogItem.objects.none(),
+        label="Component Item",
+        help_text="Select the catalog item to include as a component",
+    )
+    quantity = forms.IntegerField(
+        min_value=1,
+        max_value=9999,
+        initial=1,
+        label="Quantity",
+        help_text="Number of this component per parent item",
+    )
+    sequence = forms.IntegerField(
+        min_value=0,
+        max_value=999,
+        initial=0,
+        label="Sequence",
+        help_text="Display/processing order within the assembly",
+    )
+    is_optional = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Optional Component",
+        help_text="If checked, component can be excluded when ordering the parent",
+    )
+    notes = forms.CharField(
+        required=False,
+        max_length=200,
+        widget=forms.TextInput(attrs={"placeholder": "Optional notes about this component"}),
+        label="Notes",
+        help_text="Optional notes about this component relationship",
+    )
+
+    def __init__(self, *args, parent_item=None, instance=None, **kwargs):
+        """Initialize form.
+
+        Args:
+            parent_item: The parent CatalogItem (assembly)
+            instance: Existing CatalogItemComponent for editing
+        """
+        super().__init__(*args, **kwargs)
+        self.parent_item = parent_item
+        self.instance = instance
+
+        # Exclude parent and items that would create cycles
+        excluded_ids = [parent_item.pk] if parent_item else []
+
+        # Also exclude items that have this parent as a component (prevent circular)
+        if parent_item:
+            from django_catalog.models import CatalogItemComponent
+
+            # Items where parent_item is used as a component
+            excluded_ids.extend(
+                CatalogItemComponent.objects.filter(
+                    component=parent_item,
+                    deleted_at__isnull=True,
+                ).values_list("parent_id", flat=True)
+            )
+
+        self.fields["component"].queryset = CatalogItem.objects.filter(
+            deleted_at__isnull=True,
+            active=True,
+        ).exclude(pk__in=excluded_ids).order_by("display_name")
+
+        # Pre-fill for editing
+        if instance:
+            self.fields["component"].initial = instance.component
+            self.fields["quantity"].initial = instance.quantity
+            self.fields["sequence"].initial = instance.sequence
+            self.fields["is_optional"].initial = instance.is_optional
+            self.fields["notes"].initial = instance.notes
+
+        # Set default sequence for new components
+        if not instance and parent_item:
+            from django_catalog.models import CatalogItemComponent
+
+            max_seq = CatalogItemComponent.objects.filter(
+                parent=parent_item,
+                deleted_at__isnull=True,
+            ).aggregate(max_seq=models.Max("sequence"))["max_seq"]
+            self.fields["sequence"].initial = (max_seq or 0) + 10
+
+    def clean(self):
+        """Validate component data."""
+        cleaned_data = super().clean()
+        component = cleaned_data.get("component")
+
+        if component and self.parent_item:
+            # Check for self-reference
+            if component.pk == self.parent_item.pk:
+                self.add_error("component", "An item cannot be a component of itself.")
+
+            # Check for duplicate component (unless editing the same one)
+            from django_catalog.models import CatalogItemComponent
+
+            existing = CatalogItemComponent.objects.filter(
+                parent=self.parent_item,
+                component=component,
+                deleted_at__isnull=True,
+            )
+            if self.instance:
+                existing = existing.exclude(pk=self.instance.pk)
+
+            if existing.exists():
+                self.add_error("component", "This component is already part of this assembly.")
+
+        return cleaned_data
+
+    @transaction.atomic
+    def save(self, actor=None):
+        """Save component relationship.
+
+        Args:
+            actor: User performing the action
+
+        Returns:
+            CatalogItemComponent instance
+        """
+        from django_catalog.models import CatalogItemComponent
+        from .audit import Actions, log_event
+
+        if self.instance:
+            # Update existing
+            self.instance.component = self.cleaned_data["component"]
+            self.instance.quantity = self.cleaned_data["quantity"]
+            self.instance.sequence = self.cleaned_data["sequence"]
+            self.instance.is_optional = self.cleaned_data["is_optional"]
+            self.instance.notes = self.cleaned_data["notes"]
+            self.instance.save()
+            component = self.instance
+
+            log_event(
+                action=Actions.CATALOG_COMPONENT_UPDATED,
+                actor=actor,
+                target=component,
+                data={
+                    "parent": str(self.parent_item.pk),
+                    "parent_name": self.parent_item.display_name,
+                    "component": str(component.component.pk),
+                    "component_name": component.component.display_name,
+                    "quantity": component.quantity,
+                },
+            )
+        else:
+            # Create new
+            component = CatalogItemComponent.objects.create(
+                parent=self.parent_item,
+                component=self.cleaned_data["component"],
+                quantity=self.cleaned_data["quantity"],
+                sequence=self.cleaned_data["sequence"],
+                is_optional=self.cleaned_data["is_optional"],
+                notes=self.cleaned_data["notes"],
+            )
+
+            log_event(
+                action=Actions.CATALOG_COMPONENT_ADDED,
+                actor=actor,
+                target=component,
+                data={
+                    "parent": str(self.parent_item.pk),
+                    "parent_name": self.parent_item.display_name,
+                    "component": str(component.component.pk),
+                    "component_name": component.component.display_name,
+                    "quantity": component.quantity,
+                },
+            )
+
+        return component
+
+
+# =============================================================================
+# Protected Area ModelForms
+# =============================================================================
+
+
+class ProtectedAreaForm(forms.ModelForm):
+    """Form for creating/editing ProtectedArea with cycle prevention."""
+
+    class Meta:
+        model = ProtectedArea
+        fields = [
+            "name",
+            "code",
+            "parent",
+            "designation_type",
+            "place",
+            "governing_authority",
+            "authority_contact",
+            "official_website",
+            "established_date",
+            "max_divers_per_site",
+            "is_active",
+        ]
+        widgets = {
+            "authority_contact": forms.Textarea(attrs={"rows": 3}),
+            "established_date": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filter parent choices to exclude self and descendants (to prevent cycles)
+        if self.instance.pk:
+            descendants = self._get_all_descendants(self.instance)
+            exclude_ids = [self.instance.pk] + [d.pk for d in descendants]
+            self.fields["parent"].queryset = ProtectedArea.objects.exclude(
+                pk__in=exclude_ids
+            ).filter(is_active=True)
+        else:
+            self.fields["parent"].queryset = ProtectedArea.objects.filter(is_active=True)
+
+    def clean(self):
+        """Validate parent to prevent cycles."""
+        cleaned_data = super().clean()
+        parent = cleaned_data.get("parent")
+
+        if parent and self.instance.pk:
+            # Cannot be own parent
+            if parent.pk == self.instance.pk:
+                raise ValidationError("Area cannot be its own parent.")
+            # Cannot have a descendant as parent
+            descendants = self._get_all_descendants(self.instance)
+            if parent in descendants:
+                raise ValidationError(
+                    "Parent cannot be a descendant of this area (would create cycle)."
+                )
+
+        return cleaned_data
+
+    def _get_all_descendants(self, area):
+        """Recursively get all descendants of an area."""
+        descendants = []
+        for child in area.children.all():
+            descendants.append(child)
+            descendants.extend(self._get_all_descendants(child))
+        return descendants
+
+
+class ProtectedAreaZoneForm(forms.ModelForm):
+    """Form for creating/editing zones within a protected area."""
+
+    class Meta:
+        model = ProtectedAreaZone
+        fields = [
+            "name",
+            "code",
+            "zone_type",
+            "max_divers",
+            "diving_allowed",
+            "requires_guide",
+            "is_active",
+        ]
+
+
+class ProtectedAreaRuleForm(forms.ModelForm):
+    """Form for creating/editing rules within a protected area."""
+
+    class Meta:
+        model = ProtectedAreaRule
+        fields = [
+            "zone",
+            "rule_type",
+            "applies_to",
+            "subject",
+            "activity",
+            "operator",
+            "value",
+            "enforcement_level",
+            "effective_start",
+            "effective_end",
+            "is_active",
+        ]
+        widgets = {
+            "effective_start": forms.DateInput(attrs={"type": "date"}),
+            "effective_end": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, protected_area=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filter zones to only those belonging to the protected area
+        if protected_area:
+            self.fields["zone"].queryset = ProtectedAreaZone.objects.filter(
+                protected_area=protected_area, is_active=True
+            )
+        self.fields["zone"].required = False
+
+
+class ProtectedAreaFeeScheduleForm(forms.ModelForm):
+    """Form for creating/editing fee schedules within a protected area."""
+
+    class Meta:
+        model = ProtectedAreaFeeSchedule
+        fields = [
+            "name",
+            "zone",
+            "fee_type",
+            "applies_to",
+            "currency",
+            "effective_start",
+            "effective_end",
+            "is_active",
+        ]
+        widgets = {
+            "effective_start": forms.DateInput(attrs={"type": "date"}),
+            "effective_end": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, protected_area=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filter zones to only those belonging to the protected area
+        if protected_area:
+            self.fields["zone"].queryset = ProtectedAreaZone.objects.filter(
+                protected_area=protected_area, is_active=True
+            )
+        self.fields["zone"].required = False
+
+
+class ProtectedAreaFeeTierForm(forms.ModelForm):
+    """Form for creating/editing fee tiers within a fee schedule."""
+
+    class Meta:
+        model = ProtectedAreaFeeTier
+        fields = [
+            "tier_code",
+            "label",
+            "amount",
+            "priority",
+            "requires_proof",
+        ]
+
+
+# =============================================================================
+# Unified Permit Forms (Replaces ProtectedAreaGuideCredentialForm + VesselPermitForm)
+# =============================================================================
+
+
+class GuidePermitForm(forms.ModelForm):
+    """Form for creating/editing GUIDE permits.
+
+    Uses ProtectedAreaPermit model with permit_type locked to 'guide'.
+    Only shows fields relevant to guide permits.
+    """
+
+    class Meta:
+        model = ProtectedAreaPermit
+        fields = [
+            "diver",
+            "permit_number",
+            "issued_at",
+            "expires_at",
+            "authorized_zones",
+            "is_active",
+        ]
+        widgets = {
+            "issued_at": forms.DateInput(attrs={"type": "date"}),
+            "expires_at": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, protected_area=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.protected_area = protected_area
+        # Filter authorized_zones to only those belonging to the protected area
+        if protected_area:
+            self.fields["authorized_zones"].queryset = ProtectedAreaZone.objects.filter(
+                protected_area=protected_area, is_active=True, deleted_at__isnull=True
+            )
+        # Filter diver to only show active divers
+        self.fields["diver"].queryset = DiverProfile.objects.filter(
+            deleted_at__isnull=True
+        ).select_related("person")
+
+    def save(self, commit=True):
+        """Set permit_type to GUIDE before saving."""
+        instance = super().save(commit=False)
+        instance.permit_type = ProtectedAreaPermit.PermitType.GUIDE
+        if self.protected_area:
+            instance.protected_area = self.protected_area
+        # Clear vessel fields for guide permits
+        instance.vessel_name = ""
+        instance.vessel_registration = ""
+        instance.organization = None
+        instance.max_divers = None
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+
+class VesselPermitFormNew(forms.ModelForm):
+    """Form for creating/editing VESSEL permits.
+
+    Uses ProtectedAreaPermit model with permit_type locked to 'vessel'.
+    Only shows fields relevant to vessel permits.
+    """
+
+    class Meta:
+        model = ProtectedAreaPermit
+        fields = [
+            "vessel_name",
+            "vessel_registration",
+            "permit_number",
+            "organization",
+            "issued_at",
+            "expires_at",
+            "authorized_zones",
+            "max_divers",
+            "is_active",
+        ]
+        widgets = {
+            "issued_at": forms.DateInput(attrs={"type": "date"}),
+            "expires_at": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, protected_area=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.protected_area = protected_area
+        # Filter authorized_zones to only those belonging to the protected area
+        if protected_area:
+            self.fields["authorized_zones"].queryset = ProtectedAreaZone.objects.filter(
+                protected_area=protected_area, is_active=True, deleted_at__isnull=True
+            )
+
+    def save(self, commit=True):
+        """Set permit_type to VESSEL before saving."""
+        instance = super().save(commit=False)
+        instance.permit_type = ProtectedAreaPermit.PermitType.VESSEL
+        if self.protected_area:
+            instance.protected_area = self.protected_area
+        # Clear diver field for vessel permits
+        instance.diver = None
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+
+class PhotographyPermitForm(forms.ModelForm):
+    """Form for creating/editing PHOTOGRAPHY permits.
+
+    Uses ProtectedAreaPermit model with permit_type locked to 'photography'.
+    Photography permits are issued to individual divers (like guide permits).
+    """
+
+    class Meta:
+        model = ProtectedAreaPermit
+        fields = [
+            "diver",
+            "permit_number",
+            "issued_at",
+            "expires_at",
+            "authorized_zones",
+            "is_active",
+        ]
+        widgets = {
+            "issued_at": forms.DateInput(attrs={"type": "date"}),
+            "expires_at": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, protected_area=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.protected_area = protected_area
+        # Filter authorized_zones to only those belonging to the protected area
+        if protected_area:
+            self.fields["authorized_zones"].queryset = ProtectedAreaZone.objects.filter(
+                protected_area=protected_area, is_active=True, deleted_at__isnull=True
+            )
+        # Filter diver to only show active divers
+        self.fields["diver"].queryset = DiverProfile.objects.filter(
+            deleted_at__isnull=True
+        ).select_related("person")
+
+    def save(self, commit=True):
+        """Set permit_type to PHOTOGRAPHY before saving."""
+        instance = super().save(commit=False)
+        instance.permit_type = ProtectedAreaPermit.PermitType.PHOTOGRAPHY
+        if self.protected_area:
+            instance.protected_area = self.protected_area
+        # Clear vessel fields for photography permits
+        instance.vessel_name = ""
+        instance.vessel_registration = ""
+        instance.organization = None
+        instance.max_divers = None
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+
+class DivingPermitForm(forms.ModelForm):
+    """Form for creating/editing DIVING permits.
+
+    Uses ProtectedAreaPermit model with permit_type locked to 'diving'.
+    Diving permits can be issued to either an individual diver OR an organization.
+    """
+
+    class Meta:
+        model = ProtectedAreaPermit
+        fields = [
+            "diver",
+            "organization",
+            "permit_number",
+            "issued_at",
+            "expires_at",
+            "authorized_zones",
+            "is_active",
+        ]
+        widgets = {
+            "issued_at": forms.DateInput(attrs={"type": "date"}),
+            "expires_at": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, protected_area=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.protected_area = protected_area
+        # Filter authorized_zones to only those belonging to the protected area
+        if protected_area:
+            self.fields["authorized_zones"].queryset = ProtectedAreaZone.objects.filter(
+                protected_area=protected_area, is_active=True, deleted_at__isnull=True
+            )
+        # Filter diver to only show active divers
+        self.fields["diver"].queryset = DiverProfile.objects.filter(
+            deleted_at__isnull=True
+        ).select_related("person")
+        # Make both optional in the form (constraint enforces at least one)
+        self.fields["diver"].required = False
+        self.fields["organization"].required = False
+
+    def clean(self):
+        """Ensure at least one of diver or organization is provided."""
+        cleaned_data = super().clean()
+        diver = cleaned_data.get("diver")
+        organization = cleaned_data.get("organization")
+        if not diver and not organization:
+            raise forms.ValidationError(
+                "A diving permit must be issued to either a diver or an organization."
+            )
+        return cleaned_data
+
+    def save(self, commit=True):
+        """Set permit_type to DIVING before saving."""
+        instance = super().save(commit=False)
+        instance.permit_type = ProtectedAreaPermit.PermitType.DIVING
+        if self.protected_area:
+            instance.protected_area = self.protected_area
+        # Clear vessel fields for diving permits
+        instance.vessel_name = ""
+        instance.vessel_registration = ""
+        instance.max_divers = None
+        if commit:
+            instance.save()
+            self.save_m2m()
         return instance

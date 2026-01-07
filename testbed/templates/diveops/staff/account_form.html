@@ -1,0 +1,144 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:account-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Chart of Accounts</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Account Details</h3>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <!-- Name -->
+                <div>
+                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Account Name *</label>
+                    <input type="text" name="name" id="name" required
+                           value="{{ form.name.value|default:'' }}"
+                           class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                           placeholder="e.g., Dive Revenue - Main Shop">
+                    {% if form.name.help_text %}
+                    <p class="mt-1 text-xs text-gray-500">{{ form.name.help_text }}</p>
+                    {% endif %}
+                    {% if form.name.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Account Type -->
+                <div>
+                    <label for="account_type" class="block text-sm font-medium text-gray-700 mb-1">Account Type *</label>
+                    <select name="account_type" id="account_type" required
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        {% for value, label in form.fields.account_type.choices %}
+                        <option value="{{ value }}" {% if form.account_type.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.account_type.help_text %}
+                    <p class="mt-1 text-xs text-gray-500">{{ form.account_type.help_text }}</p>
+                    {% endif %}
+                    {% if form.account_type.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.account_type.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Currency -->
+                <div>
+                    <label for="currency" class="block text-sm font-medium text-gray-700 mb-1">Currency *</label>
+                    <select name="currency" id="currency" required
+                            {% if not is_create %}disabled{% endif %}
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 {% if not is_create %}bg-gray-100{% endif %}">
+                        {% for value, label in form.fields.currency.choices %}
+                        <option value="{{ value }}" {% if form.currency.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if not is_create %}
+                    <p class="mt-1 text-xs text-gray-500">Currency cannot be changed after account creation.</p>
+                    <input type="hidden" name="currency" value="{{ form.currency.value }}">
+                    {% endif %}
+                    {% if form.currency.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.currency.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Owner -->
+                <div>
+                    <label for="owner" class="block text-sm font-medium text-gray-700 mb-1">Owner (Dive Shop) *</label>
+                    <select name="owner" id="owner" required
+                            {% if not is_create %}disabled{% endif %}
+                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 {% if not is_create %}bg-gray-100{% endif %}">
+                        <option value="">Select a dive shop...</option>
+                        {% for option in form.fields.owner.queryset %}
+                        <option value="{{ option.pk }}" {% if form.owner.value == option.pk|stringformat:"s" %}selected{% endif %}>
+                            {{ option.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if not is_create %}
+                    <p class="mt-1 text-xs text-gray-500">Owner cannot be changed after account creation.</p>
+                    <input type="hidden" name="owner" value="{{ form.owner.value }}">
+                    {% endif %}
+                    {% if form.owner.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.owner.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Account Type Guide -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    {% icon "info" "h-5 w-5 text-blue-400" %}
+                </div>
+                <div class="ml-3">
+                    <h4 class="text-sm font-medium text-blue-800">Account Type Guide</h4>
+                    <ul class="mt-2 text-sm text-blue-700 space-y-1">
+                        <li><strong>Revenue:</strong> Income from dive services, rentals, courses</li>
+                        <li><strong>Expense:</strong> Costs of goods sold (excursion costs, gas, equipment)</li>
+                        <li><strong>Asset:</strong> Cash, bank accounts, prepaid expenses</li>
+                        <li><strong>Receivable:</strong> Customer balances owed</li>
+                        <li><strong>Payable:</strong> Vendor balances owed</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end space-x-3">
+            <a href="{% url 'diveops:account-list' %}"
+               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% if is_create %}Create Account{% else %}Update Account{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

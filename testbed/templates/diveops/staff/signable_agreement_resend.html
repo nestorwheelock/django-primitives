@@ -1,0 +1,151 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:signable-agreement-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            Signable Agreements
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:signable-agreement-detail' pk=agreement.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            {{ agreement.template.name }}
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Resend</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">Resend Agreement</h1>
+        <p class="text-gray-600 mt-1">Generate a new signing link for {{ party_name }}</p>
+    </div>
+
+    <!-- Resend Form Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h2 class="text-lg font-medium text-gray-900">Resend Options</h2>
+        </div>
+        <div class="px-6 py-6">
+            <form method="post">
+                {% csrf_token %}
+
+                <!-- Agreement Info -->
+                <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <dl class="space-y-3 text-sm">
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">Template</dt>
+                            <dd class="text-gray-900 font-medium">{{ agreement.template.name }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">Party</dt>
+                            <dd class="text-gray-900">{{ party_name }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">Originally Sent</dt>
+                            <dd class="text-gray-900">{{ agreement.sent_at|date:"M d, Y H:i" }}</dd>
+                        </div>
+                        {% if agreement.expires_at %}
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">Current Expiration</dt>
+                            <dd class="text-gray-900">{{ agreement.expires_at|date:"M d, Y H:i" }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                </div>
+
+                <!-- Delivery Method -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Delivery Method <span class="text-red-500">*</span>
+                    </label>
+                    <div class="space-y-3">
+                        {% for value, label in delivery_methods %}
+                        <label class="flex items-start cursor-pointer">
+                            <input type="radio" name="delivery_method" value="{{ value }}"
+                                   {% if value == agreement.delivery_method %}checked{% elif forloop.first and not agreement.delivery_method %}checked{% endif %}
+                                   class="mt-1 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                            <span class="ml-3">
+                                <span class="block text-sm font-medium text-gray-900">{{ label }}</span>
+                                {% if value == "email" %}
+                                <span class="block text-xs text-gray-500">An email with the signing link will be sent to the recipient.</span>
+                                {% elif value == "link" %}
+                                <span class="block text-xs text-gray-500">Generate a link that you can share manually (via SMS, message, etc.).</span>
+                                {% else %}
+                                <span class="block text-xs text-gray-500">For signing on a shared device or tablet present at your location.</span>
+                                {% endif %}
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Expiration -->
+                <div class="mb-6">
+                    <label for="expires_in_days" class="block text-sm font-medium text-gray-700 mb-2">
+                        New Expiration
+                    </label>
+                    <div class="flex items-center space-x-2">
+                        <input type="number" name="expires_in_days" id="expires_in_days" value="30" min="1" max="365"
+                               class="w-24 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <span class="text-sm text-gray-600">days from now</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">
+                        The new expiration period for the signing link.
+                    </p>
+                </div>
+
+                <!-- Info Box -->
+                <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="flex">
+                        <svg class="h-5 w-5 text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                        </svg>
+                        <div class="text-sm text-blue-700">
+                            <p class="font-medium">What happens when you resend?</p>
+                            <ul class="mt-1 list-disc list-inside space-y-1">
+                                <li>A new unique signing link will be generated</li>
+                                <li>The previous signing link will no longer work</li>
+                                <li>The expiration period will be reset</li>
+                                <li>The agreement content remains unchanged</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex justify-end space-x-3">
+                    <a href="{% url 'diveops:signable-agreement-detail' pk=agreement.pk %}"
+                       class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        Cancel
+                    </a>
+                    <button type="submit"
+                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        {% icon "send" "w-4 h-4 mr-2" %}
+                        Resend Agreement
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

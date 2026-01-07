@@ -1,0 +1,124 @@
+{% extends "portal_ui/staff_base.html" %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="mt-1 text-sm text-gray-500">
+            {% if is_create %}
+            Define retention rules for a document type.
+            {% else %}
+            Update retention rules for this document type.
+            {% endif %}
+        </p>
+    </div>
+
+    <!-- Form -->
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <div class="rounded-lg border border-gray-200 bg-white p-6 shadow">
+            <div class="space-y-6">
+                <!-- Document Type -->
+                <div>
+                    <label for="id_document_type" class="block text-sm font-medium text-gray-700">
+                        Document Type
+                    </label>
+                    <div class="mt-1">
+                        {{ form.document_type }}
+                    </div>
+                    {% if form.document_type.help_text %}
+                    <p class="mt-1 text-sm text-gray-500">{{ form.document_type.help_text }}</p>
+                    {% endif %}
+                    {% if form.document_type.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.document_type.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Retention Days -->
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <div>
+                        <label for="id_retention_days" class="block text-sm font-medium text-gray-700">
+                            Retention Period (days)
+                        </label>
+                        <div class="mt-1">
+                            {{ form.retention_days }}
+                        </div>
+                        <p class="mt-1 text-sm text-gray-500">{{ form.retention_days.help_text }}</p>
+                        {% if form.retention_days.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.retention_days.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label for="id_trash_retention_days" class="block text-sm font-medium text-gray-700">
+                            Trash Retention (days)
+                        </label>
+                        <div class="mt-1">
+                            {{ form.trash_retention_days }}
+                        </div>
+                        <p class="mt-1 text-sm text-gray-500">{{ form.trash_retention_days.help_text }}</p>
+                        {% if form.trash_retention_days.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.trash_retention_days.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Legal Basis -->
+                <div>
+                    <label for="id_legal_basis" class="block text-sm font-medium text-gray-700">
+                        Legal Basis
+                    </label>
+                    <div class="mt-1">
+                        {{ form.legal_basis }}
+                    </div>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Cite the regulation or standard requiring this retention period.
+                    </p>
+                    {% if form.legal_basis.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.legal_basis.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label for="id_description" class="block text-sm font-medium text-gray-700">
+                        Description
+                    </label>
+                    <div class="mt-1">
+                        {{ form.description }}
+                    </div>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Explain why this retention period is required for compliance.
+                    </p>
+                    {% if form.description.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.description.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Active -->
+                <div class="flex items-center gap-3">
+                    {{ form.is_active }}
+                    <label for="id_is_active" class="text-sm font-medium text-gray-700">
+                        Policy is active
+                    </label>
+                </div>
+                <p class="text-sm text-gray-500">{{ form.is_active.help_text }}</p>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-4">
+            <a href="{% url 'diveops:retention-policy-list' %}"
+               class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
+                {% if is_create %}Create Policy{% else %}Save Changes{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

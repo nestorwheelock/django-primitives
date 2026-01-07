@@ -11,16 +11,21 @@ This module provides domain models for a diving operation built on django-primit
 - TripRoster: Check-in record for actual participants
 """
 
+import hashlib
+import secrets
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.conf import settings
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
 
 from django_basemodels import BaseModel
+from django_singleton import EnvFallbackMixin, SingletonModel
 
 # Configurable waiver validity period (default 365 days, None = never expires)
 DIVEOPS_WAIVER_VALIDITY_DAYS = getattr(settings, "DIVEOPS_WAIVER_VALIDITY_DAYS", 365)
@@ -470,16 +475,16 @@ class DiveSite(BaseModel):
     # Status
     is_active = models.BooleanField(default=True)
 
-    # Marine park integration (optional)
-    marine_park = models.ForeignKey(
-        "MarinePark",
+    # Protected area integration (optional)
+    protected_area = models.ForeignKey(
+        "ProtectedArea",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="dive_sites",
     )
-    park_zone = models.ForeignKey(
-        "ParkZone",
+    protected_area_zone = models.ForeignKey(
+        "ProtectedAreaZone",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
@@ -497,18 +502,18 @@ class DiveSite(BaseModel):
                 condition=Q(rating__isnull=True) | (Q(rating__gte=1) & Q(rating__lte=5)),
                 name="diveops_site_rating_1_to_5",
             ),
-            # If park_zone is set, marine_park must be set
+            # If protected_area_zone is set, protected_area must be set
             models.CheckConstraint(
                 condition=(
-                    Q(park_zone__isnull=True) |
-                    Q(marine_park__isnull=False)
+                    Q(protected_area_zone__isnull=True) |
+                    Q(protected_area__isnull=False)
                 ),
-                name="diveops_site_zone_requires_park",
+                name="diveops_site_zone_requires_area",
             ),
         ]
         indexes = [
             models.Index(fields=["is_active"]),
-            models.Index(fields=["marine_park"]),
+            models.Index(fields=["protected_area"]),
         ]
         ordering = ["name"]
 
@@ -516,12 +521,12 @@ class DiveSite(BaseModel):
         return f"{self.name} ({self.max_depth_meters}m)"
 
     def clean(self):
-        """Validate zone belongs to marine_park (cross-FK validation)."""
+        """Validate zone belongs to protected_area (cross-FK validation)."""
         super().clean()
-        if self.park_zone and self.marine_park:
-            if self.park_zone.marine_park_id != self.marine_park_id:
+        if self.protected_area_zone and self.protected_area:
+            if self.protected_area_zone.protected_area_id != self.protected_area_id:
                 raise ValidationError(
-                    "Zone must belong to the selected marine park."
+                    "Zone must belong to the selected protected area."
                 )
 
 
@@ -2473,6 +2478,12 @@ class AgreementTemplate(BaseModel):
         PUBLISHED = "published", "Published"
         ARCHIVED = "archived", "Archived"
 
+    class TargetPartyType(models.TextChoices):
+        DIVER = "diver", "Diver"
+        EMPLOYEE = "employee", "Employee"
+        VENDOR = "vendor", "Vendor"
+        ANY = "any", "Any Party"
+
     # Ownership
     dive_shop = models.ForeignKey(
         "django_parties.Organization",
@@ -2489,6 +2500,12 @@ class AgreementTemplate(BaseModel):
         max_length=20,
         choices=TemplateType.choices,
         help_text="Type of agreement this template is for",
+    )
+    target_party_type = models.CharField(
+        max_length=20,
+        choices=TargetPartyType.choices,
+        default=TargetPartyType.DIVER,
+        help_text="Type of party who should sign this template (diver, employee, vendor)",
     )
     description = models.TextField(
         blank=True,
@@ -2554,6 +2571,7 @@ class AgreementTemplate(BaseModel):
         ]
         indexes = [
             models.Index(fields=["dive_shop", "template_type"]),
+            models.Index(fields=["dive_shop", "target_party_type"]),
             models.Index(fields=["status"]),
         ]
         ordering = ["dive_shop", "template_type", "-version"]
@@ -2577,15 +2595,363 @@ class AgreementTemplate(BaseModel):
 
 
 # =============================================================================
-# Marine Park Models (Regulatory Framework)
+# Signable Agreement Models (Workflow)
 # =============================================================================
 
 
-class MarinePark(BaseModel):
-    """Marine protected area with regulatory authority.
+class SignableAgreement(BaseModel):
+    """Agreement instance with workflow: draft → sent → signed → void.
 
-    Represents protected areas like Parque Nacional Arrecife de Puerto Morelos.
-    Marine parks manage zones, rules, fees, permits, and guide credentials.
+    This model manages the workflow state for agreements that need to be signed.
+    The django-agreements primitive is an immutable fact store (append-only ledger)
+    with no workflow states. This model provides the workflow layer on top.
+
+    When signed, a ledger_agreement is created in django_agreements.Agreement
+    as the immutable record.
+
+    Security:
+    - access_token is stored as SHA-256 hash, never raw
+    - Token is consumed after signing (cannot be reused)
+    - expires_at is enforced at signing time
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SENT = "sent", "Sent"
+        SIGNED = "signed", "Signed"
+        VOID = "void", "Void"
+        EXPIRED = "expired", "Expired"
+
+    # Source template
+    template = models.ForeignKey(
+        "AgreementTemplate",
+        on_delete=models.PROTECT,
+        related_name="signable_agreements",
+    )
+    template_version = models.CharField(
+        max_length=20,
+        help_text="Snapshot of template.version at creation time",
+    )
+
+    # Party A (the signer) - GenericFK since Party is abstract
+    party_a_content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.PROTECT,
+        related_name="+",
+    )
+    party_a_object_id = models.CharField(max_length=255)
+    party_a = GenericForeignKey("party_a_content_type", "party_a_object_id")
+
+    # Party B (optional counter-party) - GenericFK
+    party_b_content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    party_b_object_id = models.CharField(max_length=255, blank=True)
+    party_b = GenericForeignKey("party_b_content_type", "party_b_object_id")
+
+    # Related object (booking, enrollment, etc.) - GenericFK
+    related_content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    related_object_id = models.CharField(max_length=255, blank=True)
+    related_object = GenericForeignKey("related_content_type", "related_object_id")
+
+    # Content
+    content_snapshot = models.TextField(
+        help_text="Rendered content at send time (editable until signed)",
+    )
+    content_hash = models.CharField(
+        max_length=64,
+        help_text="SHA-256 hash of content_snapshot",
+    )
+
+    # Workflow state
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+    )
+
+    # Delivery tracking
+    sent_at = models.DateTimeField(null=True, blank=True)
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    delivery_method = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="How agreement was delivered: email, link, in_person",
+    )
+
+    # Token for signing URL
+    access_token = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Raw token for signing URL (displayed to staff)",
+    )
+    access_token_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        db_index=True,
+        help_text="SHA-256 hash of access token for verification",
+    )
+    token_consumed = models.BooleanField(
+        default=False,
+        help_text="Token invalidated after signing (cannot be reused)",
+    )
+
+    # Signature tracking (metadata only - image stored as Document)
+    signed_at = models.DateTimeField(null=True, blank=True)
+    signed_by_name = models.CharField(max_length=255, blank=True)
+    signed_ip = models.GenericIPAddressField(null=True, blank=True)
+    signed_user_agent = models.TextField(blank=True)
+
+    # Enhanced digital fingerprint for legal validity
+    signed_screen_resolution = models.CharField(max_length=20, blank=True, help_text="e.g., 1920x1080")
+    signed_timezone = models.CharField(max_length=100, blank=True, help_text="e.g., America/New_York")
+    signed_timezone_offset = models.SmallIntegerField(null=True, blank=True, help_text="UTC offset in minutes")
+    signed_language = models.CharField(max_length=50, blank=True, help_text="Browser language preference")
+    signed_platform = models.CharField(max_length=100, blank=True, help_text="OS/Platform")
+    signed_device_memory = models.CharField(max_length=20, blank=True, help_text="Device memory in GB")
+    signed_hardware_concurrency = models.PositiveSmallIntegerField(null=True, blank=True, help_text="CPU cores")
+    signed_touch_support = models.BooleanField(null=True, blank=True, help_text="Touch screen device")
+    signed_canvas_fingerprint = models.CharField(max_length=64, blank=True, help_text="SHA-256 of canvas fingerprint")
+    signed_geolocation = models.JSONField(null=True, blank=True, help_text="Lat/long if permitted")
+
+    # E-Sign consent tracking (for legal compliance)
+    agreed_to_terms = models.BooleanField(
+        default=False,
+        help_text="Signer checked 'I agree to be bound by its terms'",
+    )
+    agreed_to_esign = models.BooleanField(
+        default=False,
+        help_text="Signer checked 'I consent to sign electronically'",
+    )
+
+    # Signature image stored as Document (role=signature)
+    signature_document = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="signature_for_agreements",
+    )
+
+    # Signed PDF document
+    signed_document = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="signed_agreements",
+    )
+
+    # Linked immutable record (django-agreements primitive)
+    ledger_agreement = models.ForeignKey(
+        "django_agreements.Agreement",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="signable_agreements",
+    )
+
+    # Expiration - MUST be enforced at signing time
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this agreement expires (enforced at signing)",
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["party_a_content_type", "party_a_object_id"]),
+            models.Index(fields=["related_content_type", "related_object_id"]),
+            models.Index(fields=["access_token_hash"]),
+            models.Index(fields=["expires_at"]),
+        ]
+        constraints = [
+            # WORKFLOW INTEGRITY: status='signed' requires signed_at
+            models.CheckConstraint(
+                condition=~Q(status="signed") | Q(signed_at__isnull=False),
+                name="signable_signed_requires_signed_at",
+            ),
+            # WORKFLOW INTEGRITY: status='sent' requires sent_at
+            models.CheckConstraint(
+                condition=~Q(status="sent") | Q(sent_at__isnull=False),
+                name="signable_sent_requires_sent_at",
+            ),
+            # WORKFLOW INTEGRITY: status in (sent, signed) requires token hash
+            models.CheckConstraint(
+                condition=~Q(status__in=["sent", "signed"]) | ~Q(access_token_hash=""),
+                name="signable_sent_signed_requires_token",
+            ),
+            # WORKFLOW INTEGRITY: status='signed' requires ledger_agreement
+            models.CheckConstraint(
+                condition=~Q(status="signed") | Q(ledger_agreement__isnull=False),
+                name="signable_signed_requires_ledger",
+            ),
+            # Content hash must be valid SHA-256 (64 hex chars)
+            models.CheckConstraint(
+                condition=Q(content_hash__regex=r"^[a-f0-9]{64}$"),
+                name="signable_valid_content_hash",
+            ),
+            # LEGAL COMPLIANCE: status='signed' requires agreed_to_terms=True
+            models.CheckConstraint(
+                condition=~Q(status="signed") | Q(agreed_to_terms=True),
+                name="signable_signed_requires_terms_consent",
+            ),
+            # LEGAL COMPLIANCE: status='signed' requires agreed_to_esign=True
+            models.CheckConstraint(
+                condition=~Q(status="signed") | Q(agreed_to_esign=True),
+                name="signable_signed_requires_esign_consent",
+            ),
+            # DIGITAL PROOF: status='signed' requires IP address
+            models.CheckConstraint(
+                condition=~Q(status="signed") | Q(signed_ip__isnull=False),
+                name="signable_signed_requires_ip",
+            ),
+            # DIGITAL PROOF: status='signed' requires user agent fingerprint
+            models.CheckConstraint(
+                condition=~Q(status="signed") | ~Q(signed_user_agent=""),
+                name="signable_signed_requires_user_agent",
+            ),
+            # DIGITAL PROOF: status='signed' requires signer name
+            models.CheckConstraint(
+                condition=~Q(status="signed") | ~Q(signed_by_name=""),
+                name="signable_signed_requires_signer_name",
+            ),
+            # DEDUPING: Only one pending agreement per template+party+related_object
+            # Partial unique constraint for status in (draft, sent)
+            # nulls_distinct=False ensures NULL values are treated as equal for deduping
+            models.UniqueConstraint(
+                fields=[
+                    "template",
+                    "party_a_content_type",
+                    "party_a_object_id",
+                    "related_content_type",
+                    "related_object_id",
+                ],
+                condition=Q(status__in=["draft", "sent"]),
+                name="signable_unique_pending_per_party_object",
+                nulls_distinct=False,
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.template.name} for {self.party_a} ({self.status})"
+
+    @staticmethod
+    def generate_token() -> tuple[str, str]:
+        """Generate cryptographically random token and its hash.
+
+        Returns:
+            tuple: (raw_token, token_hash)
+            - raw_token: URL-safe token to send to signer (returned ONCE)
+            - token_hash: SHA-256 hash to store in database
+        """
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        return token, token_hash
+
+    @staticmethod
+    def hash_token(token: str) -> str:
+        """Hash a token for comparison."""
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    def verify_token(self, token: str) -> bool:
+        """Verify token matches stored hash and is not consumed.
+
+        Args:
+            token: Raw token from signing URL
+
+        Returns:
+            bool: True if token is valid and not consumed
+        """
+        if self.token_consumed:
+            return False
+        return secrets.compare_digest(
+            self.access_token_hash,
+            self.hash_token(token),
+        )
+
+
+class SignableAgreementRevision(BaseModel):
+    """Immutable record of content changes for auditability.
+
+    Every edit to a SignableAgreement's content creates a revision record.
+    This provides a complete audit trail of all changes made before signing.
+
+    Stores the content_before to enable diff viewing between revisions.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    agreement = models.ForeignKey(
+        SignableAgreement,
+        on_delete=models.CASCADE,
+        related_name="revisions",
+    )
+    revision_number = models.PositiveIntegerField()
+    previous_content_hash = models.CharField(max_length=64)
+    new_content_hash = models.CharField(max_length=64)
+    content_before = models.TextField(
+        blank=True,
+        help_text="Content snapshot before this revision (for diff viewing)",
+    )
+    change_note = models.TextField(
+        help_text="Required explanation of why the change was made",
+    )
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["revision_number"]
+        unique_together = [["agreement", "revision_number"]]
+        constraints = [
+            # Change note is required (non-empty)
+            models.CheckConstraint(
+                condition=~Q(change_note=""),
+                name="revision_requires_change_note",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Revision {self.revision_number} of {self.agreement}"
+
+
+# =============================================================================
+# Protected Area Models (Regulatory Framework)
+# =============================================================================
+
+
+class ProtectedArea(BaseModel):
+    """Hierarchical protected area with regulatory authority.
+
+    Represents protected areas like Parque Nacional Arrecife de Puerto Morelos
+    or Reserva de la Biosfera del Caribe Mexicano. Areas can be nested:
+    - A Biosphere Reserve can be parent of multiple parks
+    - Parks can have zones
+    - Rules and fees can be set at any level and inherit down
 
     Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
     objects (excludes deleted), all_objects (includes deleted).
@@ -2593,10 +2959,21 @@ class MarinePark(BaseModel):
 
     class DesignationType(models.TextChoices):
         NATIONAL_PARK = "national_park", "National Park"
+        MARINE_PARK = "marine_park", "Marine Park"
         MARINE_RESERVE = "marine_reserve", "Marine Reserve"
         BIOSPHERE_RESERVE = "biosphere_reserve", "Biosphere Reserve"
         PROTECTED_AREA = "protected_area", "Protected Natural Area"
         SANCTUARY = "sanctuary", "Marine Sanctuary"
+
+    # Hierarchy - self-referential FK for parent/child areas
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="children",
+        help_text="Parent area (e.g., biosphere reserve containing parks)",
+    )
 
     # Identity
     name = models.CharField(max_length=200)
@@ -2609,12 +2986,12 @@ class MarinePark(BaseModel):
         on_delete=models.PROTECT,
         null=True,
         blank=True,
-        related_name="marine_parks",
+        related_name="protected_areas",
     )
 
     # Boundary file (KML/KMZ)
     boundary_file = models.FileField(
-        upload_to="marine_parks/boundaries/%Y/",
+        upload_to="protected_areas/boundaries/%Y/",
         blank=True,
         null=True,
     )
@@ -2640,17 +3017,36 @@ class MarinePark(BaseModel):
         indexes = [
             models.Index(fields=["code"]),
             models.Index(fields=["is_active"]),
+            models.Index(fields=["parent"]),
         ]
         ordering = ["name"]
 
     def __str__(self):
         return self.name
 
+    def get_ancestors(self) -> list["ProtectedArea"]:
+        """Return parent chain from immediate parent to root.
 
-class ParkZone(BaseModel):
-    """Zone within a marine park with specific rules.
+        Returns:
+            List of ProtectedArea instances, starting with immediate parent
+            and ending with the root (topmost) ancestor.
+        """
+        ancestors = []
+        current = self.parent
+        while current:
+            ancestors.append(current)
+            current = current.parent
+        return ancestors
 
-    Parks are divided into zones with different use restrictions:
+
+# Backwards compatibility alias
+MarinePark = ProtectedArea
+
+
+class ProtectedAreaZone(BaseModel):
+    """Zone within a protected area with specific rules.
+
+    Protected areas are divided into zones with different use restrictions:
     - Core (no-take): No extractive activities
     - Buffer: Limited activities allowed
     - Use: Recreational activities permitted
@@ -2668,8 +3064,8 @@ class ParkZone(BaseModel):
         RESTORATION = "restoration", "Restoration Zone"
         RESEARCH = "research", "Research Zone"
 
-    marine_park = models.ForeignKey(
-        MarinePark,
+    protected_area = models.ForeignKey(
+        ProtectedArea,
         on_delete=models.CASCADE,
         related_name="zones",
     )
@@ -2683,7 +3079,7 @@ class ParkZone(BaseModel):
 
     # Boundary (KML/KMZ for zone)
     boundary_file = models.FileField(
-        upload_to="marine_parks/zones/%Y/",
+        upload_to="protected_areas/zones/%Y/",
         blank=True,
         null=True,
     )
@@ -2708,25 +3104,29 @@ class ParkZone(BaseModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["marine_park", "code"],
+                fields=["protected_area", "code"],
                 condition=Q(deleted_at__isnull=True),
-                name="diveops_unique_zone_code_per_park",
+                name="diveops_unique_zone_code_per_area",
             ),
         ]
         indexes = [
-            models.Index(fields=["marine_park", "zone_type"]),
+            models.Index(fields=["protected_area", "zone_type"]),
         ]
-        ordering = ["marine_park", "name"]
+        ordering = ["protected_area", "name"]
 
     def __str__(self):
-        return f"{self.name} ({self.marine_park.name})"
+        return f"{self.name} ({self.protected_area.name})"
 
 
-class ParkRule(BaseModel):
-    """Effective-dated enforceable rule for a marine park.
+# Backwards compatibility alias
+ParkZone = ProtectedAreaZone
+
+
+class ProtectedAreaRule(BaseModel):
+    """Effective-dated enforceable rule for a protected area.
 
     Rules define what activities are permitted/prohibited and under what
-    conditions. Rules can be park-wide or zone-specific, and have enforcement
+    conditions. Rules can be area-wide or zone-specific, and have enforcement
     levels (info, warn, block).
 
     Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
@@ -2769,19 +3169,19 @@ class ParkRule(BaseModel):
         CONTAINS = "contains", "Contains"
         REQUIRED_TRUE = "required_true", "Must be true"
 
-    # Scope: park-wide or zone-specific
-    marine_park = models.ForeignKey(
-        MarinePark,
+    # Scope: area-wide or zone-specific
+    protected_area = models.ForeignKey(
+        ProtectedArea,
         on_delete=models.CASCADE,
         related_name="rules",
     )
     zone = models.ForeignKey(
-        ParkZone,
+        ProtectedAreaZone,
         on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="rules",
-        help_text="Null = applies park-wide",
+        help_text="Null = applies area-wide",
     )
 
     # Rule definition
@@ -2837,7 +3237,7 @@ class ParkRule(BaseModel):
 
     class Meta:
         indexes = [
-            models.Index(fields=["marine_park", "effective_start"]),
+            models.Index(fields=["protected_area", "effective_start"]),
             models.Index(fields=["zone", "effective_start"]),
             models.Index(fields=["rule_type"]),
             models.Index(fields=["activity"]),
@@ -2846,11 +3246,15 @@ class ParkRule(BaseModel):
 
     def __str__(self):
         zone_name = f" ({self.zone.name})" if self.zone else ""
-        return f"{self.marine_park.name}{zone_name}: {self.subject}"
+        return f"{self.protected_area.name}{zone_name}: {self.subject}"
 
 
-class ParkFeeSchedule(BaseModel):
-    """Fee schedule for a marine park with stratified tiers.
+# Backwards compatibility alias
+ParkRule = ProtectedAreaRule
+
+
+class ProtectedAreaFeeSchedule(BaseModel):
+    """Fee schedule for a protected area with stratified tiers.
 
     Fee schedules define categories of fees (diving, snorkeling, etc.)
     and contain tiers for different diver categories.
@@ -2874,18 +3278,18 @@ class ParkFeeSchedule(BaseModel):
         ALL = "all", "All Activities"
 
     # Scope
-    marine_park = models.ForeignKey(
-        MarinePark,
+    protected_area = models.ForeignKey(
+        ProtectedArea,
         on_delete=models.CASCADE,
         related_name="fee_schedules",
     )
     zone = models.ForeignKey(
-        ParkZone,
+        ProtectedAreaZone,
         on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="fee_schedules",
-        help_text="Null = applies park-wide",
+        help_text="Null = applies area-wide",
     )
 
     # Schedule identity
@@ -2922,16 +3326,20 @@ class ParkFeeSchedule(BaseModel):
 
     class Meta:
         indexes = [
-            models.Index(fields=["marine_park", "effective_start"]),
+            models.Index(fields=["protected_area", "effective_start"]),
             models.Index(fields=["applies_to"]),
         ]
         ordering = ["-effective_start", "name"]
 
     def __str__(self):
-        return f"{self.name} ({self.marine_park.name})"
+        return f"{self.name} ({self.protected_area.name})"
 
 
-class ParkFeeTier(BaseModel):
+# Backwards compatibility alias
+ParkFeeSchedule = ProtectedAreaFeeSchedule
+
+
+class ProtectedAreaFeeTier(BaseModel):
     """Stratified fee tier within a schedule.
 
     Fee tiers define pricing for different diver categories:
@@ -2954,7 +3362,7 @@ class ParkFeeTier(BaseModel):
         INFANT = "infant", "Infant (Free)"
 
     schedule = models.ForeignKey(
-        ParkFeeSchedule,
+        ProtectedAreaFeeSchedule,
         on_delete=models.CASCADE,
         related_name="tiers",
     )
@@ -2988,6 +3396,10 @@ class ParkFeeTier(BaseModel):
 
     def __str__(self):
         return f"{self.label}: {self.amount} {self.schedule.currency}"
+
+
+# Backwards compatibility alias
+ParkFeeTier = ProtectedAreaFeeTier
 
 
 class DiverEligibilityProof(BaseModel):
@@ -3079,49 +3491,239 @@ class DiverEligibilityProof(BaseModel):
         return self.expires_at >= as_of
 
 
-class ParkGuideCredential(BaseModel):
-    """Credential/permission for a person to guide in a marine park.
+# =============================================================================
+# Unified Permit Model (Replaces ProtectedAreaGuideCredential + VesselPermit)
+# =============================================================================
 
-    This is NOT an employment relationship - it's a park-issued permission.
-    The person can be:
-    - A boat owner guiding on their own vessel
-    - An employee of a dive shop
-    - An independent contractor
 
-    Requirements:
-    - Divemaster (DM) or higher certification
-    - Signed carta evaluación from a boat owner (can be self)
-    - Park refresher course completion
+class ProtectedAreaPermit(BaseModel):
+    """Unified authorization model for operating in a protected area.
+
+    Replaces separate ProtectedAreaGuideCredential and VesselPermit models
+    with a single permit model that uses permit_type to distinguish.
+
+    Holder fields are constrained by permit_type:
+    - GUIDE: diver required, vessel_name/organization must be null
+    - VESSEL: vessel_name required, diver must be null
 
     Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
     objects (excludes deleted), all_objects (includes deleted).
     """
 
-    marine_park = models.ForeignKey(
-        MarinePark,
+    class PermitType(models.TextChoices):
+        GUIDE = "guide", "Guide Credential"
+        VESSEL = "vessel", "Vessel Permit"
+        PHOTOGRAPHY = "photography", "Photography Permit"
+        DIVING = "diving", "Ojo de Agua Permit"
+
+    # Core fields - required for all permit types
+    protected_area = models.ForeignKey(
+        ProtectedArea,
         on_delete=models.CASCADE,
-        related_name="guide_credentials",
+        related_name="permits",
+    )
+    permit_type = models.CharField(
+        max_length=20,
+        choices=PermitType.choices,
+    )
+    permit_number = models.CharField(
+        max_length=50,
+        help_text="Unique permit/credential number within area and type",
+    )
+    issued_at = models.DateField()
+    expires_at = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    # Zone authorization (optional, applies to both types)
+    authorized_zones = models.ManyToManyField(
+        ProtectedAreaZone,
+        blank=True,
+        related_name="permits",
+        help_text="Zones this permit authorizes (empty = all zones)",
     )
 
-    # The person receiving the credential (must be DM or higher)
+    # Holder fields - constrained by permit_type via CheckConstraint
+    # GUIDE/PHOTOGRAPHY permits: diver required
+    # DIVING permits: diver OR organization required
     diver = models.ForeignKey(
         DiverProfile,
         on_delete=models.CASCADE,
-        related_name="park_guide_credentials",
-        help_text="Person receiving credential (must be DM or higher)",
+        null=True,
+        blank=True,
+        related_name="area_permits",
+        help_text="Required for GUIDE/PHOTOGRAPHY permits, optional for DIVING",
+    )
+    # VESSEL permits: vessel_name and optionally organization
+    vessel_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Required for VESSEL permits only",
+    )
+    vessel_registration = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Vessel registration number (VESSEL permits)",
+    )
+    # Organization - for VESSEL (optional) and DIVING (when not individual)
+    organization = models.ForeignKey(
+        "django_parties.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="area_permits",
+        help_text="Optional for VESSEL, required for DIVING if no diver",
     )
 
-    # Park credential details
-    credential_number = models.CharField(max_length=50, blank=True)
-    issued_at = models.DateField()
-    expires_at = models.DateField(null=True, blank=True)
-
-    # Zone authorization (null = all zones, else specific zones)
-    authorized_zones = models.ManyToManyField(
-        ParkZone,
+    # Vessel-specific: max divers allowed
+    max_divers = models.PositiveIntegerField(
+        null=True,
         blank=True,
-        related_name="authorized_guides",
-        help_text="Zones this credential authorizes (empty = all zones)",
+        help_text="Max divers capacity (VESSEL permits)",
+    )
+
+    class Meta:
+        constraints = [
+            # Unique permit number per area and type
+            models.UniqueConstraint(
+                fields=["protected_area", "permit_type", "permit_number"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_permit_number_per_area_type",
+            ),
+            # One permit per diver per area (for GUIDE type)
+            models.UniqueConstraint(
+                fields=["protected_area", "diver"],
+                condition=Q(deleted_at__isnull=True, permit_type="guide"),
+                name="diveops_unique_guide_permit_per_diver_area",
+            ),
+            # GUIDE permits MUST have diver set
+            models.CheckConstraint(
+                condition=~Q(permit_type="guide") | Q(diver__isnull=False),
+                name="diveops_guide_permit_requires_diver",
+            ),
+            # GUIDE permits must NOT have vessel_name
+            models.CheckConstraint(
+                condition=~Q(permit_type="guide") | Q(vessel_name=""),
+                name="diveops_guide_permit_no_vessel",
+            ),
+            # VESSEL permits MUST have vessel_name
+            models.CheckConstraint(
+                condition=~Q(permit_type="vessel") | ~Q(vessel_name=""),
+                name="diveops_vessel_permit_requires_vessel",
+            ),
+            # VESSEL permits must NOT have diver
+            models.CheckConstraint(
+                condition=~Q(permit_type="vessel") | Q(diver__isnull=True),
+                name="diveops_vessel_permit_no_diver",
+            ),
+            # PHOTOGRAPHY permits MUST have diver set (like GUIDE)
+            models.CheckConstraint(
+                condition=~Q(permit_type="photography") | Q(diver__isnull=False),
+                name="diveops_photography_permit_requires_diver",
+            ),
+            # PHOTOGRAPHY permits must NOT have vessel_name (like GUIDE)
+            models.CheckConstraint(
+                condition=~Q(permit_type="photography") | Q(vessel_name=""),
+                name="diveops_photography_permit_no_vessel",
+            ),
+            # DIVING permits MUST have diver OR organization (flexible holder)
+            models.CheckConstraint(
+                condition=~Q(permit_type="diving") | Q(diver__isnull=False) | Q(organization__isnull=False),
+                name="diveops_diving_permit_requires_holder",
+            ),
+            # DIVING permits must NOT have vessel_name
+            models.CheckConstraint(
+                condition=~Q(permit_type="diving") | Q(vessel_name=""),
+                name="diveops_diving_permit_no_vessel",
+            ),
+            # expires_at must be >= issued_at (if set)
+            models.CheckConstraint(
+                condition=Q(expires_at__isnull=True) | Q(expires_at__gte=models.F("issued_at")),
+                name="diveops_permit_expires_after_issued",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["protected_area", "permit_type", "is_active"]),
+            models.Index(fields=["diver"]),
+            models.Index(fields=["organization"]),
+            models.Index(fields=["expires_at"]),
+        ]
+        ordering = ["protected_area", "permit_type", "permit_number"]
+
+    def __str__(self):
+        if self.permit_type == self.PermitType.GUIDE:
+            return f"{self.diver} - {self.protected_area.name} Guide"
+        elif self.permit_type == self.PermitType.VESSEL:
+            return f"{self.vessel_name} ({self.protected_area.name})"
+        elif self.permit_type == self.PermitType.PHOTOGRAPHY:
+            return f"{self.diver} - {self.protected_area.name} Photography"
+        elif self.permit_type == self.PermitType.DIVING:
+            holder = self.diver or self.organization
+            return f"{holder} - {self.protected_area.name} Diving"
+        else:
+            return f"{self.permit_number} ({self.protected_area.name})"
+
+    def clean(self):
+        """Validate permit holder fields match permit_type."""
+        super().clean()
+        errors = {}
+
+        if self.permit_type == self.PermitType.GUIDE:
+            if not self.diver_id:
+                errors["diver"] = "Guide permits require a diver."
+            if self.vessel_name:
+                errors["vessel_name"] = "Guide permits cannot have a vessel name."
+            # Validate DM or higher for guide permits
+            if self.diver_id:
+                min_rank = 5  # DM rank per DiverProfile.LEVEL_HIERARCHY
+                has_dm_or_higher = self.diver.certifications.filter(
+                    level__rank__gte=min_rank,
+                    deleted_at__isnull=True,
+                ).exists()
+                if not has_dm_or_higher:
+                    errors["diver"] = "Guide must have Divemaster (DM) or higher certification."
+
+        elif self.permit_type == self.PermitType.VESSEL:
+            if not self.vessel_name:
+                errors["vessel_name"] = "Vessel permits require a vessel name."
+            if self.diver_id:
+                errors["diver"] = "Vessel permits cannot have a diver."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def can_operate_in_zone(self, zone: "ProtectedAreaZone") -> bool:
+        """Check if permit authorizes operation in a specific zone."""
+        if not self.authorized_zones.exists():
+            return True  # No zone restriction = all zones
+        return self.authorized_zones.filter(pk=zone.pk).exists()
+
+    @property
+    def holder_display(self) -> str:
+        """Return display name for the permit holder."""
+        if self.permit_type == self.PermitType.GUIDE:
+            return str(self.diver.person) if self.diver else ""
+        else:
+            parts = [self.vessel_name]
+            if self.organization:
+                parts.append(f"({self.organization.name})")
+            return " ".join(parts)
+
+
+class GuidePermitDetails(BaseModel):
+    """Extended details for GUIDE permits.
+
+    OneToOne with ProtectedAreaPermit for guide-specific fields that don't
+    apply to other permit types.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    permit = models.OneToOneField(
+        ProtectedAreaPermit,
+        on_delete=models.CASCADE,
+        related_name="guide_details",
+        limit_choices_to={"permit_type": "guide"},
     )
 
     # Carta evaluación (signed by boat owner - can be self if owner)
@@ -3130,7 +3732,7 @@ class ParkGuideCredential(BaseModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="guide_carta_evals",
+        related_name="guide_carta_evals_v2",
         help_text="Signed carta evaluación document",
     )
     carta_eval_signed_by = models.ForeignKey(
@@ -3138,7 +3740,7 @@ class ParkGuideCredential(BaseModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="signed_carta_evals",
+        related_name="signed_carta_evals_v2",
         help_text="Boat owner who signed (can be the guide themselves)",
     )
     carta_eval_signed_at = models.DateField(null=True, blank=True)
@@ -3159,41 +3761,24 @@ class ParkGuideCredential(BaseModel):
         help_text="When next refresher is due",
     )
 
-    # Status
-    is_active = models.BooleanField(default=True)
+    # Suspension tracking
     suspended_at = models.DateTimeField(null=True, blank=True)
     suspension_reason = models.TextField(blank=True)
 
     class Meta:
-        constraints = [
-            # One credential per person per park
-            models.UniqueConstraint(
-                fields=["marine_park", "diver"],
-                condition=Q(deleted_at__isnull=True),
-                name="diveops_unique_guide_credential_per_park",
-            ),
-        ]
         indexes = [
-            models.Index(fields=["marine_park", "is_active"]),
-            models.Index(fields=["diver"]),
             models.Index(fields=["next_refresher_due_at"]),
         ]
-        ordering = ["marine_park", "diver"]
 
     def __str__(self):
-        return f"{self.diver} - {self.marine_park.name} Guide"
+        return f"Guide Details for {self.permit}"
 
     def clean(self):
-        """Validate guide has DM or higher certification."""
+        """Validate this is attached to a GUIDE permit."""
         super().clean()
-        min_rank = 5  # DM rank per DiverProfile.LEVEL_HIERARCHY
-        has_dm_or_higher = self.diver.certifications.filter(
-            level__rank__gte=min_rank,
-            deleted_at__isnull=True,
-        ).exists()
-        if not has_dm_or_higher:
+        if self.permit_id and self.permit.permit_type != ProtectedAreaPermit.PermitType.GUIDE:
             raise ValidationError(
-                "Guide must have Divemaster (DM) or higher certification."
+                "GuidePermitDetails can only be attached to GUIDE permits."
             )
 
     @property
@@ -3203,61 +3788,6 @@ class ParkGuideCredential(BaseModel):
             return False
         return date.today() > self.next_refresher_due_at
 
-    def can_guide_in_zone(self, zone: "ParkZone") -> bool:
-        """Check if credential authorizes guiding in a specific zone."""
-        if not self.authorized_zones.exists():
-            return True  # No zone restriction = all zones
-        return self.authorized_zones.filter(pk=zone.pk).exists()
-
-
-class VesselPermit(BaseModel):
-    """Vessel permit to operate within a marine park.
-
-    Vessels operating in marine parks require permits issued by the
-    park authority. Permit numbers are unique PER PARK (not globally).
-
-    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
-    objects (excludes deleted), all_objects (includes deleted).
-    """
-
-    marine_park = models.ForeignKey(
-        MarinePark,
-        on_delete=models.CASCADE,
-        related_name="vessel_permits",
-    )
-    vessel_name = models.CharField(max_length=100)
-    vessel_registration = models.CharField(max_length=50, blank=True)
-    operator = models.ForeignKey(
-        "django_parties.Organization",
-        on_delete=models.PROTECT,
-        related_name="vessel_permits",
-    )
-
-    permit_number = models.CharField(max_length=50)
-    issued_at = models.DateField()
-    expires_at = models.DateField()
-    max_divers = models.PositiveIntegerField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-
-    class Meta:
-        constraints = [
-            # Permit number unique PER PARK (not globally)
-            models.UniqueConstraint(
-                fields=["marine_park", "permit_number"],
-                condition=Q(deleted_at__isnull=True),
-                name="diveops_unique_permit_per_park",
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["marine_park", "is_active"]),
-            models.Index(fields=["operator"]),
-            models.Index(fields=["expires_at"]),
-        ]
-        ordering = ["marine_park", "vessel_name"]
-
-    def __str__(self):
-        return f"{self.vessel_name} ({self.marine_park.name})"
-
 
 # =============================================================================
 # Pricing Models (from diveops.pricing submodule)
@@ -3265,6 +3795,320 @@ class VesselPermit(BaseModel):
 
 # Import pricing models to ensure Django discovers them
 from .pricing.models import DiverEquipmentRental
+
+
+# =============================================================================
+# Document Retention Policy Models (overlay on django-documents)
+# =============================================================================
+
+
+class DocumentRetentionPolicy(BaseModel):
+    """Defines retention rules for documents by type.
+
+    Overlay model that extends django-documents with retention policies.
+    Used for compliance with regulations like GDPR, HIPAA, IRS requirements.
+
+    Default behavior: 30 days in Trash before permanent deletion.
+    Policies can override this per document type.
+    """
+
+    document_type = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Document type this policy applies to (e.g., 'agreement', 'certification')",
+    )
+    retention_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Days to retain after creation (null = keep forever)",
+    )
+    trash_retention_days = models.PositiveIntegerField(
+        default=30,
+        help_text="Days to keep in Trash before auto-delete (default 30)",
+    )
+    legal_basis = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Regulation/standard requiring this retention (e.g., 'IRS 7-year rule', 'PADI records')",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Explanation of why this retention period is required",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this policy is currently enforced",
+    )
+
+    class Meta:
+        verbose_name = "Document Retention Policy"
+        verbose_name_plural = "Document Retention Policies"
+        ordering = ["document_type"]
+
+    def __str__(self):
+        if self.retention_days:
+            return f"{self.document_type}: {self.retention_days} days"
+        return f"{self.document_type}: keep forever"
+
+
+class DocumentLegalHold(BaseModel):
+    """Prevents deletion of a specific document.
+
+    Legal holds override retention policies and prevent any deletion
+    (including from Trash) until the hold is released.
+
+    Use cases:
+    - Litigation hold
+    - Regulatory investigation
+    - Audit preservation
+    - Insurance claim
+    """
+
+    document = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.CASCADE,
+        related_name="legal_holds",
+        help_text="Document under legal hold",
+    )
+    reason = models.CharField(
+        max_length=200,
+        help_text="Reason for the hold (e.g., 'Litigation: Smith v. DiveShop')",
+    )
+    reference = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Case/ticket/reference number",
+    )
+    placed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="document_holds_placed",
+        help_text="User who placed the hold",
+    )
+    placed_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When the hold was placed",
+    )
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="document_holds_released",
+        help_text="User who released the hold",
+    )
+    released_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the hold was released (null = still active)",
+    )
+    release_reason = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Reason for releasing the hold",
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text="Additional notes about this hold",
+    )
+
+    class Meta:
+        verbose_name = "Document Legal Hold"
+        verbose_name_plural = "Document Legal Holds"
+        ordering = ["-placed_at"]
+        indexes = [
+            models.Index(fields=["document", "released_at"]),
+        ]
+
+    def __str__(self):
+        status = "ACTIVE" if self.is_active else "Released"
+        return f"{self.document.filename}: {self.reason} [{status}]"
+
+    @property
+    def is_active(self):
+        """Check if hold is still active."""
+        return self.released_at is None
+
+    def release(self, user, reason=""):
+        """Release the hold."""
+        if self.released_at:
+            raise ValueError("Hold already released")
+        self.released_by = user
+        self.released_at = timezone.now()
+        self.release_reason = reason
+        self.save(update_fields=["released_by", "released_at", "release_reason", "updated_at"])
+
+    @classmethod
+    def document_has_active_hold(cls, document):
+        """Check if a document has any active legal holds."""
+        return cls.objects.filter(
+            document=document,
+            released_at__isnull=True,
+            deleted_at__isnull=True,
+        ).exists()
+
+
+# =============================================================================
+# Photo Tagging
+# =============================================================================
+
+
+class PhotoTagQuerySet(models.QuerySet):
+    """Custom queryset for PhotoTag model."""
+
+    def for_document(self, document):
+        """Return tags for a specific document."""
+        return self.filter(document=document)
+
+    def for_diver(self, diver):
+        """Return tags for a specific diver."""
+        return self.filter(diver=diver)
+
+
+class PhotoTag(BaseModel):
+    """Tag a diver in a photo.
+
+    Links documents (photos) to divers, optionally with position
+    coordinates for face-tagging functionality.
+
+    Usage:
+        PhotoTag.objects.create(
+            document=photo_doc,
+            diver=diver_profile,
+            tagged_by=request.user,
+        )
+
+        # Get all divers tagged in a photo
+        tags = PhotoTag.objects.for_document(photo)
+        divers = [tag.diver for tag in tags]
+
+        # Get all photos of a diver
+        tags = PhotoTag.objects.for_diver(diver)
+        photos = [tag.document for tag in tags]
+    """
+
+    document = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.CASCADE,
+        related_name="photo_tags",
+        help_text="The photo document",
+    )
+    diver = models.ForeignKey(
+        "DiverProfile",
+        on_delete=models.CASCADE,
+        related_name="photo_tags",
+        help_text="The diver tagged in this photo",
+    )
+    tagged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="photo_tags_created",
+        help_text="User who created this tag",
+    )
+
+    # Optional position for face-tagging (percentages of image dimensions)
+    position_x = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="X position as percentage (0-100) from left edge",
+    )
+    position_y = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Y position as percentage (0-100) from top edge",
+    )
+
+    objects = PhotoTagQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Photo Tag"
+        verbose_name_plural = "Photo Tags"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["document"]),
+            models.Index(fields=["diver"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["document", "diver"],
+                name="phototag_unique_diver_per_photo",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.diver} in {self.document.filename}"
+
+
+# =============================================================================
+# AI Settings (Singleton Configuration)
+# =============================================================================
+
+
+class AISettings(EnvFallbackMixin, SingletonModel):
+    """AI service configuration for the dive shop.
+
+    Stores API keys and settings for AI services used in:
+    - Document text extraction (OCR enhancement)
+    - Agreement template processing
+    - Other AI-powered features
+
+    Uses EnvFallbackMixin: Database values take precedence,
+    with fallback to environment variables if DB is blank.
+
+    Usage:
+        settings = AISettings.get_instance()
+        key = settings.get_with_fallback('openrouter_api_key')
+        if settings.has_value('openrouter_api_key'):
+            # AI features are available
+    """
+
+    # API Keys
+    openrouter_api_key = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="OpenRouter API key (falls back to OPENROUTER_API_KEY env var)",
+    )
+    openai_api_key = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="OpenAI API key (falls back to OPENAI_API_KEY env var)",
+    )
+
+    # Model Configuration
+    default_model = models.CharField(
+        max_length=100,
+        default="anthropic/claude-3-haiku",
+        help_text="Default AI model to use for processing",
+    )
+
+    # Feature Flags
+    ocr_enhancement_enabled = models.BooleanField(
+        default=True,
+        help_text="Enable AI-powered OCR enhancement for scanned documents",
+    )
+    auto_extract_enabled = models.BooleanField(
+        default=False,
+        help_text="Automatically extract text from uploaded documents",
+    )
+
+    ENV_FALLBACKS = {
+        "openrouter_api_key": "OPENROUTER_API_KEY",
+        "openai_api_key": "OPENAI_API_KEY",
+    }
+
+    class Meta:
+        verbose_name = "AI Settings"
+        verbose_name_plural = "AI Settings"
+
+    def __str__(self):
+        return "AI Settings"
+
+    def is_configured(self):
+        """Check if at least one AI service is configured."""
+        return self.has_value("openrouter_api_key") or self.has_value("openai_api_key")
+
 
 __all__ = [
     "CertificationLevel",
@@ -3291,15 +4135,33 @@ __all__ = [
     "DiveLog",
     "DiverEquipmentRental",
     "AgreementTemplate",
-    # Marine Park Models
+    # Protected Area Models (new names)
+    "ProtectedArea",
+    "ProtectedAreaZone",
+    "ProtectedAreaRule",
+    "ProtectedAreaFeeSchedule",
+    "ProtectedAreaFeeTier",
+    "DiverEligibilityProof",
+    # Unified Permit Model (replaces ProtectedAreaGuideCredential + VesselPermit)
+    "ProtectedAreaPermit",
+    "GuidePermitDetails",
+    # Legacy models (deprecated - use ProtectedAreaPermit instead)
+    "ProtectedAreaGuideCredential",
+    "VesselPermit",
+    # Backwards compatibility aliases
     "MarinePark",
     "ParkZone",
     "ParkRule",
     "ParkFeeSchedule",
     "ParkFeeTier",
-    "DiverEligibilityProof",
     "ParkGuideCredential",
-    "VesselPermit",
+    # Document Retention Policy (overlay on django-documents)
+    "DocumentRetentionPolicy",
+    "DocumentLegalHold",
+    # Photo Tagging
+    "PhotoTag",
+    # AI Configuration
+    "AISettings",
 ]
 
 

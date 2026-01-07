@@ -1,0 +1,116 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:protected-area-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Protected Areas</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:protected-area-detail' pk=protected_area.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ protected_area.name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-xl mx-auto space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">{% if is_create %}Add a tier to {{ schedule.name }}{% else %}Update fee tier{% endif %}</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+            <div class="flex">
+                <div class="flex-shrink-0">{% icon "alert-circle" "h-5 w-5 text-red-400" %}</div>
+                <div class="ml-3">
+                    <ul class="list-disc pl-5 space-y-1 text-sm text-red-700">
+                        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Fee Tier</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_tier_code" class="block text-sm font-medium text-gray-700">Tier Code <span class="text-red-500">*</span></label>
+                        <select name="tier_code" id="id_tier_code"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.tier_code.choices %}
+                            <option value="{{ value }}" {% if form.tier_code.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.tier_code.errors %}<p class="mt-1 text-sm text-red-600">{{ form.tier_code.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="id_label" class="block text-sm font-medium text-gray-700">Display Label <span class="text-red-500">*</span></label>
+                        <input type="text" name="label" id="id_label" value="{{ form.label.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.label.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., Foreign Tourist">
+                        {% if form.label.errors %}<p class="mt-1 text-sm text-red-600">{{ form.label.errors.0 }}</p>{% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_amount" class="block text-sm font-medium text-gray-700">Amount <span class="text-red-500">*</span></label>
+                        <div class="mt-1 relative">
+                            <input type="number" step="0.01" min="0" name="amount" id="id_amount" value="{{ form.amount.value|default:'' }}"
+                                   class="block w-full px-3 py-2 border {% if form.amount.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 pr-12">
+                            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 text-sm">{{ schedule.currency }}</span>
+                            </div>
+                        </div>
+                        {% if form.amount.errors %}<p class="mt-1 text-sm text-red-600">{{ form.amount.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="id_priority" class="block text-sm font-medium text-gray-700">Priority</label>
+                        <input type="number" name="priority" id="id_priority" value="{{ form.priority.value|default:'0' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-sm text-gray-500">Higher priority tiers are applied first</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" name="requires_proof" id="id_requires_proof"
+                           class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                           {% if form.requires_proof.value %}checked{% endif %}>
+                    <label for="id_requires_proof" class="ml-2 block text-sm text-gray-900">Requires proof of eligibility</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-3">
+            <a href="{% url 'diveops:protected-area-detail' pk=protected_area.pk %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Cancel</a>
+            <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700">
+                {% if is_create %}Create Tier{% else %}Save Changes{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

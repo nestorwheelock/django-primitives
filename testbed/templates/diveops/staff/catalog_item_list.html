@@ -1,0 +1,144 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+            <p class="text-gray-600">Manage equipment and service catalog items</p>
+        </div>
+        <a href="{% url 'diveops:catalog-item-create' %}"
+           class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+            {% icon "plus" "w-4 h-4 mr-2" %}
+            Add Catalog Item
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <form method="get" class="flex items-center space-x-4">
+            <div>
+                <label for="kind-filter" class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select id="kind-filter" name="kind" class="block w-40 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All Types</option>
+                    <option value="stock_item" {% if current_kind == 'stock_item' %}selected{% endif %}>Equipment</option>
+                    <option value="service" {% if current_kind == 'service' %}selected{% endif %}>Service</option>
+                </select>
+            </div>
+            <div class="flex items-center">
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" name="show_inactive" value="1" {% if show_inactive %}checked{% endif %}
+                           class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <span class="ml-2 text-sm text-gray-700">Show inactive</span>
+                </label>
+            </div>
+            <div class="flex-1"></div>
+            <button type="submit" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Apply Filters
+            </button>
+            {% if current_kind or show_inactive %}
+            <a href="{% url 'diveops:catalog-item-list' %}" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
+                Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Items Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Billable</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for item in items %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3">
+                            <a href="{% url 'diveops:catalog-item-detail' pk=item.pk %}" class="text-blue-600 hover:text-blue-800 font-medium">
+                                {{ item.display_name }}
+                            </a>
+                            {% if item.display_name_es %}
+                            <p class="text-sm text-gray-500">{{ item.display_name_es }}</p>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if item.kind == 'stock_item' %}bg-blue-100 text-blue-800
+                                {% else %}bg-purple-100 text-purple-800{% endif %}">
+                                {% if item.kind == 'stock_item' %}Equipment{% else %}Service{% endif %}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                            {% if item.kind == 'stock_item' and item.default_stock_action %}
+                                {{ item.get_default_stock_action_display }}
+                            {% else %}
+                                <span class="text-gray-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            {% if item.is_billable %}
+                            <span class="inline-flex items-center text-green-600">
+                                {% icon "check-circle" "w-5 h-5" %}
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center text-gray-400">
+                                {% icon "x-circle" "w-5 h-5" %}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if item.active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {% if item.active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-right text-sm">
+                            <a href="{% url 'diveops:catalog-item-edit' pk=item.pk %}"
+                               class="text-blue-600 hover:text-blue-800 mr-3">Edit</a>
+                            <a href="{% url 'diveops:catalog-item-delete' pk=item.pk %}"
+                               class="text-red-600 hover:text-red-800">Delete</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-4 py-12 text-center">
+                            <div class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                                {% icon "tag" "w-6 h-6 text-gray-400" %}
+                            </div>
+                            <h3 class="text-lg font-medium text-gray-900 mb-1">No catalog items</h3>
+                            <p class="text-gray-500 mb-4">Get started by adding your first catalog item.</p>
+                            <a href="{% url 'diveops:catalog-item-create' %}"
+                               class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                                {% icon "plus" "w-4 h-4 mr-2" %}
+                                Add Catalog Item
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

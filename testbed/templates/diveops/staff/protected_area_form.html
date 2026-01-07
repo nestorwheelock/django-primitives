@@ -1,0 +1,178 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:protected-area-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Protected Areas</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">{% if is_create %}Add a new protected area{% else %}Update protected area information{% endif %}</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    {% icon "alert-circle" "h-5 w-5 text-red-400" %}
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                        <ul class="list-disc pl-5 space-y-1">
+                            {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Basic Information -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-medium text-gray-900">Basic Information</h3>
+                </div>
+                <div class="p-6 space-y-6">
+                    <!-- Name -->
+                    <div>
+                        <label for="id_name" class="block text-sm font-medium text-gray-700">Area Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="name" id="id_name" value="{{ form.name.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.name.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., Parque Nacional Arrecife de Puerto Morelos">
+                        {% if form.name.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Code -->
+                    <div>
+                        <label for="id_code" class="block text-sm font-medium text-gray-700">Code <span class="text-red-500">*</span></label>
+                        <input type="text" name="code" id="id_code" value="{{ form.code.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.code.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., pnapm">
+                        {% if form.code.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.code.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-1 text-sm text-gray-500">URL-friendly slug identifier</p>
+                    </div>
+
+                    <!-- Designation Type -->
+                    <div>
+                        <label for="id_designation_type" class="block text-sm font-medium text-gray-700">Designation Type <span class="text-red-500">*</span></label>
+                        <select name="designation_type" id="id_designation_type"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.designation_type.choices %}
+                            <option value="{{ value }}" {% if form.designation_type.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Parent Area -->
+                    <div>
+                        <label for="id_parent" class="block text-sm font-medium text-gray-700">Parent Area</label>
+                        <select name="parent" id="id_parent"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">None (Top-level area)</option>
+                            {% for parent in form.fields.parent.queryset %}
+                            <option value="{{ parent.pk }}" {% if form.parent.value|stringformat:'s' == parent.pk|stringformat:'s' %}selected{% endif %}>{{ parent.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-sm text-gray-500">Select a parent if this area is contained within another</p>
+                    </div>
+
+                    <!-- Max Divers Per Site -->
+                    <div>
+                        <label for="id_max_divers_per_site" class="block text-sm font-medium text-gray-700">Max Divers Per Site</label>
+                        <input type="number" name="max_divers_per_site" id="id_max_divers_per_site" min="1"
+                               value="{{ form.max_divers_per_site.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-sm text-gray-500">Default limit for dive sites in this area</p>
+                    </div>
+
+                    <!-- Active -->
+                    <div class="flex items-center">
+                        <input type="checkbox" name="is_active" id="id_is_active"
+                               class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                               {% if form.is_active.value %}checked{% endif %}>
+                        <label for="id_is_active" class="ml-2 block text-sm text-gray-900">Active</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Authority & Contact -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-medium text-gray-900">Authority & Contact</h3>
+                </div>
+                <div class="p-6 space-y-6">
+                    <!-- Governing Authority -->
+                    <div>
+                        <label for="id_governing_authority" class="block text-sm font-medium text-gray-700">Governing Authority</label>
+                        <input type="text" name="governing_authority" id="id_governing_authority" value="{{ form.governing_authority.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., CONANP, SEMARNAT">
+                    </div>
+
+                    <!-- Authority Contact -->
+                    <div>
+                        <label for="id_authority_contact" class="block text-sm font-medium text-gray-700">Authority Contact</label>
+                        <textarea name="authority_contact" id="id_authority_contact" rows="3"
+                                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="Address, phone, email...">{{ form.authority_contact.value|default:'' }}</textarea>
+                    </div>
+
+                    <!-- Official Website -->
+                    <div>
+                        <label for="id_official_website" class="block text-sm font-medium text-gray-700">Official Website</label>
+                        <input type="url" name="official_website" id="id_official_website" value="{{ form.official_website.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="https://...">
+                    </div>
+
+                    <!-- Established Date -->
+                    <div>
+                        <label for="id_established_date" class="block text-sm font-medium text-gray-700">Established Date</label>
+                        <input type="date" name="established_date" id="id_established_date" value="{{ form.established_date.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end space-x-3">
+            <a href="{% url 'diveops:protected-area-list' %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% if is_create %}Create Protected Area{% else %}Save Changes{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

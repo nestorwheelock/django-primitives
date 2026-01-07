@@ -1,0 +1,190 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:agreement-template-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            Agreement Templates
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:agreement-template-detail' pk=template.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            {{ template.name }}
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Send</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">Send Agreement</h1>
+        <p class="text-gray-600 mt-1">Send "{{ template.name }}" to a party for signing</p>
+    </div>
+
+    <!-- Send Form Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h2 class="text-lg font-medium text-gray-900">Recipient & Delivery</h2>
+        </div>
+        <div class="px-6 py-6">
+            <form method="post">
+                {% csrf_token %}
+
+                <!-- Party Selection -->
+                <div class="mb-6">
+                    <label for="party_id" class="block text-sm font-medium text-gray-700 mb-2">
+                        Select {{ party_type_label }} <span class="text-red-500">*</span>
+                    </label>
+                    <select name="party_id" id="party_id" required
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">-- Select a {{ party_type_label|lower }} --</option>
+                        {% for party in parties %}
+                        <option value="{{ party.pk }}">
+                            {% if is_organization %}
+                            {{ party.name }}
+                            {% else %}
+                            {{ party.last_name }}, {{ party.first_name }}
+                            {% if party.email %}({{ party.email }}){% endif %}
+                            {% endif %}
+                        </option>
+                        {% empty %}
+                        <option value="" disabled>No {{ party_type_label|lower }}s available</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Choose the {{ party_type_label|lower }} who will receive and sign this agreement.
+                    </p>
+                    {% if not parties %}
+                    <p class="mt-2 text-sm text-amber-600">
+                        <svg class="inline h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        No {{ party_type_label|lower }}s found.
+                        {% if party_type_label == "Diver" %}
+                        Create diver profiles first.
+                        {% elif party_type_label == "Employee" %}
+                        Add employees with an active employment relationship to your shop.
+                        {% elif party_type_label == "Vendor" %}
+                        Add vendors with an active vendor relationship to your shop.
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+
+                <!-- Delivery Method -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Delivery Method <span class="text-red-500">*</span>
+                    </label>
+                    <div class="space-y-3">
+                        {% for value, label in delivery_methods %}
+                        <label class="flex items-start cursor-pointer">
+                            <input type="radio" name="delivery_method" value="{{ value }}"
+                                   {% if forloop.first %}checked{% endif %}
+                                   class="mt-1 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                            <span class="ml-3">
+                                <span class="block text-sm font-medium text-gray-900">{{ label }}</span>
+                                {% if value == "email" %}
+                                <span class="block text-xs text-gray-500">An email with the signing link will be sent to the recipient.</span>
+                                {% elif value == "link" %}
+                                <span class="block text-xs text-gray-500">Generate a link that you can share manually (via SMS, message, etc.).</span>
+                                {% else %}
+                                <span class="block text-xs text-gray-500">For signing on a shared device or tablet present at your location.</span>
+                                {% endif %}
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Expiration -->
+                <div class="mb-6">
+                    <label for="expires_in_days" class="block text-sm font-medium text-gray-700 mb-2">
+                        Expires In
+                    </label>
+                    <div class="flex items-center space-x-2">
+                        <input type="number" name="expires_in_days" id="expires_in_days" value="30" min="1" max="365"
+                               class="w-24 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <span class="text-sm text-gray-600">days</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">
+                        How long the signing link will be valid. After expiration, the agreement cannot be signed.
+                    </p>
+                </div>
+
+                <!-- Template Preview -->
+                <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">Template Details</h3>
+                    <dl class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">Name</dt>
+                            <dd class="text-gray-900">{{ template.name }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">Type</dt>
+                            <dd class="text-gray-900">{{ template.get_template_type_display }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">For</dt>
+                            <dd class="text-gray-900">{{ template.get_target_party_type_display }}s</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">Version</dt>
+                            <dd class="text-gray-900">{{ template.version }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">Requires Signature</dt>
+                            <dd class="text-gray-900">{% if template.requires_signature %}Yes{% else %}No{% endif %}</dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- Info Box -->
+                <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="flex">
+                        <svg class="h-5 w-5 text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                        </svg>
+                        <div class="text-sm text-blue-700">
+                            <p class="font-medium">What happens next?</p>
+                            <p class="mt-1">A signing request will be created. The recipient will be able to review and sign the agreement using the generated link. You'll be able to track the signing status from the Signable Agreements list.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex justify-end space-x-3">
+                    <a href="{% url 'diveops:agreement-template-detail' pk=template.pk %}"
+                       class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        Cancel
+                    </a>
+                    <button type="submit"
+                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        {% icon "send" "w-4 h-4 mr-2" %}
+                        Send Agreement
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

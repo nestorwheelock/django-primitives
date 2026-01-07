@@ -1,0 +1,140 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:protected-area-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Protected Areas</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:protected-area-detail' pk=protected_area.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ protected_area.name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page_title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">{% if is_create %}Add a new fee schedule to {{ protected_area.name }}{% else %}Update fee schedule{% endif %}</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+            <div class="flex">
+                <div class="flex-shrink-0">{% icon "alert-circle" "h-5 w-5 text-red-400" %}</div>
+                <div class="ml-3">
+                    <ul class="list-disc pl-5 space-y-1 text-sm text-red-700">
+                        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-medium text-gray-900">Fee Schedule Information</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                <div>
+                    <label for="id_name" class="block text-sm font-medium text-gray-700">Schedule Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="name" id="id_name" value="{{ form.name.value|default:'' }}"
+                           class="mt-1 block w-full px-3 py-2 border {% if form.name.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="e.g., Diving Entry Fee">
+                    {% if form.name.errors %}<p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_fee_type" class="block text-sm font-medium text-gray-700">Fee Type <span class="text-red-500">*</span></label>
+                        <select name="fee_type" id="id_fee_type"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.fee_type.choices %}
+                            <option value="{{ value }}" {% if form.fee_type.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_applies_to" class="block text-sm font-medium text-gray-700">Applies To <span class="text-red-500">*</span></label>
+                        <select name="applies_to" id="id_applies_to"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.applies_to.choices %}
+                            <option value="{{ value }}" {% if form.applies_to.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_zone" class="block text-sm font-medium text-gray-700">Zone</label>
+                        <select name="zone" id="id_zone"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">All Zones (Area-wide)</option>
+                            {% for zone in form.fields.zone.queryset %}
+                            <option value="{{ zone.pk }}" {% if form.zone.value|stringformat:'s' == zone.pk|stringformat:'s' %}selected{% endif %}>{{ zone.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_currency" class="block text-sm font-medium text-gray-700">Currency <span class="text-red-500">*</span></label>
+                        <select name="currency" id="id_currency"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="MXN" {% if form.currency.value == 'MXN' %}selected{% endif %}>MXN - Mexican Peso</option>
+                            <option value="USD" {% if form.currency.value == 'USD' %}selected{% endif %}>USD - US Dollar</option>
+                            <option value="EUR" {% if form.currency.value == 'EUR' %}selected{% endif %}>EUR - Euro</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_effective_start" class="block text-sm font-medium text-gray-700">Effective Start</label>
+                        <input type="date" name="effective_start" id="id_effective_start" value="{{ form.effective_start.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="id_effective_end" class="block text-sm font-medium text-gray-700">Effective End</label>
+                        <input type="date" name="effective_end" id="id_effective_end" value="{{ form.effective_end.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" name="is_active" id="id_is_active"
+                           class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                           {% if form.is_active.value %}checked{% endif %}>
+                    <label for="id_is_active" class="ml-2 block text-sm text-gray-900">Active</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-3">
+            <a href="{% url 'diveops:protected-area-detail' pk=protected_area.pk %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Cancel</a>
+            <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700">
+                {% if is_create %}Create Fee Schedule{% else %}Save Changes{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

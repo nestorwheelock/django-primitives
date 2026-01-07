@@ -158,7 +158,7 @@ class TestBookExcursion:
 
         # Mock basket creation to fail
         mocker.patch(
-            "primitives_testbed.diveops.integrations.create_excursion_basket",
+            "primitives_testbed.diveops.integrations.create_trip_basket",
             side_effect=Exception("Simulated error"),
         )
 
@@ -658,3 +658,403 @@ class TestBookExcursionConcurrency:
         assert bookings_created == original_spots, (
             f"Expected {original_spots} bookings, got {bookings_created}"
         )
+
+
+# =============================================================================
+# Excursion CRUD Services
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestCreateExcursion:
+    """Tests for create_excursion service."""
+
+    def test_create_excursion_with_required_fields(self, dive_site, dive_shop, user):
+        """create_excursion creates an excursion with required fields."""
+        from primitives_testbed.diveops.services import create_excursion
+
+        departure = timezone.now() + timedelta(days=7)
+
+        excursion = create_excursion(
+            actor=user,
+            dive_site=dive_site,
+            dive_shop=dive_shop,
+            departure_time=departure,
+            max_divers=12,
+        )
+
+        assert excursion.pk is not None
+        assert excursion.dive_site == dive_site
+        assert excursion.dive_shop == dive_shop
+        assert excursion.departure_time == departure
+        assert excursion.max_divers == 12
+        assert excursion.status == "scheduled"
+
+    def test_create_excursion_with_optional_fields(self, dive_site, dive_shop, user):
+        """create_excursion creates an excursion with all optional fields."""
+        from primitives_testbed.diveops.services import create_excursion
+
+        departure = timezone.now() + timedelta(days=7)
+        return_time = departure + timedelta(hours=6)
+
+        excursion = create_excursion(
+            actor=user,
+            dive_site=dive_site,
+            dive_shop=dive_shop,
+            departure_time=departure,
+            return_time=return_time,
+            max_divers=8,
+            price_per_diver=Decimal("150.00"),
+            currency="EUR",
+        )
+
+        assert excursion.price_per_diver == Decimal("150.00")
+        assert excursion.currency == "EUR"
+        assert excursion.return_time == return_time
+
+    def test_create_excursion_emits_audit_event(self, dive_site, dive_shop, user):
+        """create_excursion emits TRIP_CREATED audit event."""
+        from django_audit_log.models import AuditLog
+
+        from primitives_testbed.diveops.audit import Actions
+        from primitives_testbed.diveops.services import create_excursion
+
+        AuditLog.objects.all().delete()
+
+        departure = timezone.now() + timedelta(days=7)
+        excursion = create_excursion(
+            actor=user,
+            dive_site=dive_site,
+            dive_shop=dive_shop,
+            departure_time=departure,
+            max_divers=10,
+        )
+
+        audit_entry = AuditLog.objects.filter(action=Actions.TRIP_CREATED).first()
+        assert audit_entry is not None, "TRIP_CREATED audit event not emitted"
+        assert str(audit_entry.object_id) == str(excursion.pk)
+        assert audit_entry.actor_user == user
+
+
+@pytest.mark.django_db
+class TestUpdateExcursion:
+    """Tests for update_excursion service."""
+
+    def test_update_excursion_changes_fields(self, dive_trip, user):
+        """update_excursion updates specified fields."""
+        from primitives_testbed.diveops.services import update_excursion
+
+        new_departure = timezone.now() + timedelta(days=14)
+        new_return = new_departure + timedelta(hours=4)
+        updated = update_excursion(
+            actor=user,
+            excursion=dive_trip,
+            departure_time=new_departure,
+            return_time=new_return,
+            max_divers=20,
+        )
+
+        assert updated.departure_time == new_departure
+        assert updated.return_time == new_return
+        assert updated.max_divers == 20
+
+    def test_update_excursion_tracks_changes(self, dive_trip, user):
+        """update_excursion tracks field changes in audit log."""
+        from django_audit_log.models import AuditLog
+
+        from primitives_testbed.diveops.audit import Actions
+        from primitives_testbed.diveops.services import update_excursion
+
+        AuditLog.objects.all().delete()
+        old_max = dive_trip.max_divers
+
+        update_excursion(
+            actor=user,
+            excursion=dive_trip,
+            max_divers=25,
+        )
+
+        audit_entry = AuditLog.objects.filter(action=Actions.TRIP_UPDATED).first()
+        assert audit_entry is not None, "TRIP_UPDATED audit event not emitted"
+        assert "max_divers" in audit_entry.changes
+        assert audit_entry.changes["max_divers"]["old"] == str(old_max)
+        assert audit_entry.changes["max_divers"]["new"] == "25"
+
+    def test_update_excursion_no_change_no_audit(self, dive_trip, user):
+        """update_excursion does not emit audit if no changes made."""
+        from django_audit_log.models import AuditLog
+
+        from primitives_testbed.diveops.audit import Actions
+        from primitives_testbed.diveops.services import update_excursion
+
+        AuditLog.objects.all().delete()
+
+        # Update with same values
+        update_excursion(
+            actor=user,
+            excursion=dive_trip,
+            max_divers=dive_trip.max_divers,
+        )
+
+        audit_count = AuditLog.objects.filter(action=Actions.TRIP_UPDATED).count()
+        assert audit_count == 0, "Should not emit audit when no changes"
+
+
+@pytest.mark.django_db
+class TestCancelExcursion:
+    """Tests for cancel_excursion service."""
+
+    def test_cancel_excursion_sets_cancelled_status(self, dive_trip, user):
+        """cancel_excursion sets status to cancelled."""
+        from primitives_testbed.diveops.services import cancel_excursion
+
+        cancelled = cancel_excursion(excursion=dive_trip, actor=user)
+
+        assert cancelled.status == "cancelled"
+
+    def test_cancel_excursion_emits_audit_event(self, dive_trip, user):
+        """cancel_excursion emits TRIP_CANCELLED audit event."""
+        from django_audit_log.models import AuditLog
+
+        from primitives_testbed.diveops.audit import Actions
+        from primitives_testbed.diveops.services import cancel_excursion
+
+        AuditLog.objects.all().delete()
+
+        cancel_excursion(excursion=dive_trip, actor=user)
+
+        audit_entry = AuditLog.objects.filter(action=Actions.TRIP_CANCELLED).first()
+        assert audit_entry is not None, "TRIP_CANCELLED audit event not emitted"
+        assert str(audit_entry.object_id) == str(dive_trip.pk)
+
+    def test_cancel_excursion_cancels_bookings(self, dive_trip, diver_profile, user):
+        """cancel_excursion also cancels all active bookings."""
+        from primitives_testbed.diveops.models import Booking
+        from primitives_testbed.diveops.services import book_excursion, cancel_excursion
+
+        booking = book_excursion(
+            excursion=dive_trip,
+            diver=diver_profile,
+            booked_by=user,
+            skip_eligibility_check=True,
+        )
+        assert booking.status == "confirmed"
+
+        cancel_excursion(excursion=dive_trip, actor=user)
+
+        booking.refresh_from_db()
+        assert booking.status == "cancelled"
+
+    def test_cancel_already_cancelled_excursion_raises(self, dive_trip, user):
+        """cancel_excursion raises error if already cancelled."""
+        from primitives_testbed.diveops.exceptions import TripStateError
+        from primitives_testbed.diveops.services import cancel_excursion
+
+        cancel_excursion(excursion=dive_trip, actor=user)
+
+        with pytest.raises(TripStateError):
+            cancel_excursion(excursion=dive_trip, actor=user)
+
+    def test_cancel_completed_excursion_raises(self, dive_trip, diver_profile, user):
+        """cancel_excursion raises error if excursion is completed."""
+        from primitives_testbed.diveops.exceptions import TripStateError
+        from primitives_testbed.diveops.services import (
+            book_excursion,
+            cancel_excursion,
+            check_in,
+            complete_excursion,
+            start_excursion,
+        )
+
+        # Complete the excursion
+        booking = book_excursion(
+            excursion=dive_trip,
+            diver=diver_profile,
+            booked_by=user,
+            skip_eligibility_check=True,
+        )
+        check_in(booking, user)
+        start_excursion(dive_trip, user)
+        complete_excursion(dive_trip, user)
+
+        # Refresh to get the updated status from DB
+        dive_trip.refresh_from_db()
+
+        with pytest.raises(TripStateError):
+            cancel_excursion(excursion=dive_trip, actor=user)
+
+
+@pytest.mark.django_db
+class TestEnhanceExtractedText:
+    """Tests for enhance_extracted_text service."""
+
+    def test_returns_original_when_ai_disabled(self):
+        """When OCR enhancement is disabled, returns original text unchanged."""
+        from primitives_testbed.diveops.models import AISettings
+        from primitives_testbed.diveops.services import enhance_extracted_text
+
+        # Ensure AI enhancement is disabled
+        settings = AISettings.get_instance()
+        settings.ocr_enhancement_enabled = False
+        settings.save()
+
+        original_text = "This is some OCR text with err0rs."
+        original_method = "tesseract"
+
+        result = enhance_extracted_text(original_text, original_method)
+
+        assert result.content == original_text
+        assert result.method == original_method
+        assert result.suggested_title == ""
+
+    def test_returns_original_when_not_configured(self):
+        """When no API key is configured, returns original text unchanged."""
+        import os
+        from primitives_testbed.diveops.models import AISettings
+        from primitives_testbed.diveops.services import enhance_extracted_text
+
+        # Enable AI but remove all keys
+        settings = AISettings.get_instance()
+        settings.ocr_enhancement_enabled = True
+        settings.openrouter_api_key = ""
+        settings.openai_api_key = ""
+        settings.save()
+
+        # Also ensure no env var
+        os.environ.pop("OPENROUTER_API_KEY", None)
+        os.environ.pop("OPENAI_API_KEY", None)
+
+        original_text = "This is some OCR text."
+        original_method = "tesseract"
+
+        result = enhance_extracted_text(original_text, original_method)
+
+        assert result.content == original_text
+        assert result.method == original_method
+        assert result.suggested_title == ""
+
+    def test_calls_openrouter_when_configured(self, mocker):
+        """When AI is enabled and configured, calls OpenRouter API with JSON response."""
+        import json
+        from primitives_testbed.diveops.models import AISettings
+        from primitives_testbed.diveops.services import enhance_extracted_text
+
+        # Configure AI settings
+        settings = AISettings.get_instance()
+        settings.ocr_enhancement_enabled = True
+        settings.openrouter_api_key = "sk-test-key"
+        settings.default_model = "anthropic/claude-3-haiku"
+        settings.save()
+
+        # Mock the requests.post call with JSON response
+        ai_json_response = json.dumps({
+            "title": "Liability Waiver",
+            "content": "<p>Enhanced clean text.</p>"
+        })
+        mock_response = mocker.Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{"message": {"content": ai_json_response}}]
+        }
+        mock_post = mocker.patch("requests.post", return_value=mock_response)
+
+        original_text = "Messy 0CR text with err0rs"
+        original_method = "tesseract"
+
+        result = enhance_extracted_text(original_text, original_method)
+
+        # Verify API was called
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+
+        # Verify correct endpoint
+        assert call_args[0][0] == "https://openrouter.ai/api/v1/chat/completions"
+
+        # Verify API key in headers
+        assert "Bearer sk-test-key" in call_args[1]["headers"]["Authorization"]
+
+        # Verify model in payload
+        assert call_args[1]["json"]["model"] == "anthropic/claude-3-haiku"
+
+        # Verify enhanced text returned
+        assert result.content == "<p>Enhanced clean text.</p>"
+        assert "ai_enhanced" in result.method
+        assert result.suggested_title == "Liability Waiver"
+
+    def test_returns_original_on_api_error(self, mocker):
+        """When API call fails, returns original text unchanged."""
+        from primitives_testbed.diveops.models import AISettings
+        from primitives_testbed.diveops.services import enhance_extracted_text
+
+        # Configure AI settings
+        settings = AISettings.get_instance()
+        settings.ocr_enhancement_enabled = True
+        settings.openrouter_api_key = "sk-test-key"
+        settings.save()
+
+        # Mock API failure
+        mock_response = mocker.Mock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+        mocker.patch("requests.post", return_value=mock_response)
+
+        original_text = "Original text"
+        original_method = "tesseract"
+
+        result = enhance_extracted_text(original_text, original_method)
+
+        # Should return original unchanged
+        assert result.content == original_text
+        assert result.method == original_method
+        assert result.suggested_title == ""
+
+    def test_returns_original_on_exception(self, mocker):
+        """When exception occurs, returns original text unchanged."""
+        from primitives_testbed.diveops.models import AISettings
+        from primitives_testbed.diveops.services import enhance_extracted_text
+
+        # Configure AI settings
+        settings = AISettings.get_instance()
+        settings.ocr_enhancement_enabled = True
+        settings.openrouter_api_key = "sk-test-key"
+        settings.save()
+
+        # Mock network exception
+        mocker.patch("requests.post", side_effect=Exception("Network error"))
+
+        original_text = "Original text"
+        original_method = "tesseract"
+
+        result = enhance_extracted_text(original_text, original_method)
+
+        # Should return original unchanged
+        assert result.content == original_text
+        assert result.method == original_method
+        assert result.suggested_title == ""
+
+    def test_handles_non_json_ai_response(self, mocker):
+        """When AI returns non-JSON, uses response as content with empty title."""
+        from primitives_testbed.diveops.models import AISettings
+        from primitives_testbed.diveops.services import enhance_extracted_text
+
+        # Configure AI settings
+        settings = AISettings.get_instance()
+        settings.ocr_enhancement_enabled = True
+        settings.openrouter_api_key = "sk-test-key"
+        settings.default_model = "anthropic/claude-3-haiku"
+        settings.save()
+
+        # Mock AI returning plain text (not JSON)
+        mock_response = mocker.Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{"message": {"content": "<p>Plain HTML response</p>"}}]
+        }
+        mocker.patch("requests.post", return_value=mock_response)
+
+        result = enhance_extracted_text("OCR text", "tesseract")
+
+        # Should use plain response as content, empty title
+        assert result.content == "<p>Plain HTML response</p>"
+        assert "ai_enhanced" in result.method
+        assert result.suggested_title == ""

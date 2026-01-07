@@ -1,0 +1,128 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:excursion-type-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Excursion Types</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:excursion-type-detail' pk=excursion_type.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ excursion_type.name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Add Sites</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">Select dive sites that are suitable for this excursion type</p>
+    </div>
+
+    <!-- Form -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <form method="post">
+            {% csrf_token %}
+            <div class="p-4">
+                {% if available_sites %}
+                <div class="space-y-4">
+                    <p class="text-sm text-gray-500">Select sites and optionally create dive plans:</p>
+                    {% for site in available_sites %}
+                    <div class="rounded-lg border border-gray-200 overflow-hidden">
+                        <!-- Site header with checkbox -->
+                        <label class="flex items-center p-3 bg-gray-50 cursor-pointer hover:bg-gray-100">
+                            <input type="checkbox" name="sites" value="{{ site.pk }}"
+                                   class="site-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                   data-site-id="{{ site.pk }}">
+                            <div class="ml-3 flex-1 flex items-center justify-between">
+                                <div>
+                                    <span class="text-sm font-medium text-gray-900">{{ site.name }}</span>
+                                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                        {% if site.difficulty == 'beginner' %}bg-green-100 text-green-800
+                                        {% elif site.difficulty == 'intermediate' %}bg-yellow-100 text-yellow-800
+                                        {% elif site.difficulty == 'advanced' %}bg-orange-100 text-orange-800
+                                        {% else %}bg-red-100 text-red-800{% endif %}">
+                                        {{ site.difficulty|title }}
+                                    </span>
+                                    {% if site.max_depth_meters %}
+                                    <span class="ml-2 text-xs text-gray-500">{{ site.max_depth_meters }}m max</span>
+                                    {% endif %}
+                                </div>
+                                <a href="{% url 'diveops:staff-site-detail' pk=site.pk %}"
+                                   class="text-xs text-blue-600 hover:text-blue-800"
+                                   onclick="event.stopPropagation();">View site</a>
+                            </div>
+                        </label>
+                        <!-- Existing dive plans for this site -->
+                        <div class="p-3 border-t border-gray-200 bg-white">
+                            {% with plans=site.dive_plan_templates.all %}
+                            {% if plans %}
+                            <p class="text-xs text-gray-500 mb-2">Existing dive plans for this site:</p>
+                            <div class="flex flex-wrap gap-2 mb-3">
+                                {% for plan in plans %}
+                                <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-50 text-blue-700">
+                                    {{ plan.excursion_type.name }}: {{ plan.name }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <p class="text-xs text-gray-400 mb-2">No dive plans exist for this site yet</p>
+                            {% endif %}
+                            {% endwith %}
+                            <a href="{% url 'diveops:excursion-type-dive-create' type_pk=excursion_type.pk %}?site={{ site.pk }}"
+                               class="inline-flex items-center text-xs text-green-600 hover:text-green-800">
+                                {% icon "plus" "w-3 h-3 mr-1" %}
+                                Create new dive plan for this site
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-8">
+                    <div class="text-gray-400 mb-2">
+                        {% icon "map-pin" "w-12 h-12 mx-auto" %}
+                    </div>
+                    <p class="text-gray-500">All sites are already added to this excursion type</p>
+                    <a href="{% url 'diveops:staff-site-create' %}" class="mt-4 inline-flex items-center text-sm text-blue-600 hover:text-blue-800">
+                        {% icon "plus" "w-4 h-4 mr-1" %}
+                        Create a new dive site
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="px-4 py-3 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
+                <a href="{% url 'diveops:excursion-type-detail' pk=excursion_type.pk %}"
+                   class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </a>
+                {% if available_sites %}
+                <button type="submit"
+                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    {% icon "plus" "w-4 h-4 mr-2" %}
+                    Add Selected Sites
+                </button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
