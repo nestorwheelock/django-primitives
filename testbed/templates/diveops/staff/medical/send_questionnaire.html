@@ -1,0 +1,91 @@
+{% extends "portal/base.html" %}
+{% load portal_tags %}
+
+{% block title %}Send Medical Questionnaire - {{ diver }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="mb-6">
+        <a href="{% url 'diveops:diver-medical-status' pk=diver.pk %}" class="text-blue-600 hover:text-blue-800">
+            &larr; Back to {{ diver }}'s Medical Status
+        </a>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h1 class="text-xl font-semibold text-gray-900">Send Medical Questionnaire</h1>
+            <p class="text-sm text-gray-600 mt-1">Send RSTC Medical Questionnaire to {{ diver }}</p>
+        </div>
+
+        <form method="post" class="px-6 py-4 space-y-6">
+            {% csrf_token %}
+
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div class="flex items-start">
+                    <svg class="h-5 w-5 text-blue-500 mr-3 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                    </svg>
+                    <div>
+                        <h4 class="text-sm font-medium text-blue-800">Diver Information</h4>
+                        <p class="mt-1 text-sm text-blue-700">
+                            <strong>Name:</strong> {{ diver }}<br>
+                            {% if diver.person.email %}
+                            <strong>Email:</strong> {{ diver.person.email }}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label for="expires_in_days" class="block text-sm font-medium text-gray-700 mb-2">
+                    Questionnaire Validity Period
+                </label>
+                <div class="flex items-center space-x-4">
+                    <select name="expires_in_days" id="expires_in_days"
+                            class="px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="30">30 days (1 month)</option>
+                        <option value="90">90 days (3 months)</option>
+                        <option value="180">180 days (6 months)</option>
+                        <option value="365" selected>365 days (1 year) - Standard</option>
+                        <option value="730">730 days (2 years)</option>
+                    </select>
+                    <span class="text-sm text-gray-500">
+                        Medical clearance will be valid for this period after completion
+                    </span>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                    RSTC recommends annual medical questionnaires (365 days).
+                    Override only if there's a specific reason (e.g., medical condition requiring shorter validity).
+                </p>
+            </div>
+
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div class="flex items-start">
+                    <svg class="h-5 w-5 text-yellow-500 mr-3 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                    </svg>
+                    <div>
+                        <h4 class="text-sm font-medium text-yellow-800">What happens next</h4>
+                        <p class="mt-1 text-sm text-yellow-700">
+                            A unique link will be generated for the diver to complete the questionnaire.
+                            The link will expire after the validity period if not completed.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                <a href="{% url 'diveops:diver-medical-status' pk=diver.pk %}"
+                   class="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                    Send Questionnaire
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

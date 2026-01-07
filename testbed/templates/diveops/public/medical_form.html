@@ -1,0 +1,472 @@
+{% load diveops_filters %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ instance.definition.name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .follow-up-box {
+            display: none;
+            animation: slideDown 0.3s ease-out;
+        }
+        .follow-up-box.visible {
+            display: block;
+        }
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .signature-pad {
+            border: 2px dashed #d1d5db;
+            border-radius: 0.5rem;
+            touch-action: none;
+        }
+        .signature-pad.signing {
+            border-color: #3b82f6;
+        }
+        .signature-pad.has-signature {
+            border-color: #10b981;
+            border-style: solid;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="max-w-3xl mx-auto py-8 px-4">
+        <!-- Header -->
+        <div class="text-center mb-6">
+            <div class="flex justify-center items-center space-x-4 mb-4">
+                <img src="https://www.diversalertnetwork.org/images/DAN_logo_2020.svg" alt="DAN" class="h-10" onerror="this.style.display='none'">
+                <span class="text-gray-300">|</span>
+                <span class="text-lg font-semibold text-gray-700">RSTC</span>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ instance.definition.name }}</h1>
+            <p class="text-gray-600 mt-1">{{ instance.definition.description }}</p>
+        </div>
+
+        <!-- Participant Info -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div class="flex items-center">
+                <svg class="h-5 w-5 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+                <span class="font-medium text-blue-900">Participant: {{ respondent_name }}</span>
+            </div>
+        </div>
+
+        {% if errors %}
+        <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div class="flex">
+                <svg class="h-5 w-5 text-red-400 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-medium text-red-800">Please correct the following:</p>
+                    <ul class="mt-1 text-sm text-red-700 list-disc list-inside">
+                        {% for error in errors %}
+                        <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Directions -->
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <h2 class="font-semibold text-yellow-800 mb-2">Directions</h2>
+            <p class="text-sm text-yellow-700">{{ metadata.instructions|default:"Complete this questionnaire as a prerequisite to a recreational scuba diving or freediving course." }}</p>
+            {% if metadata.note_to_women %}
+            <p class="text-sm text-yellow-700 mt-2"><strong>Note to women:</strong> {{ metadata.note_to_women }}</p>
+            {% endif %}
+        </div>
+
+        <form method="post" id="medical-form">
+            {% csrf_token %}
+
+            <!-- Initial Screening Questions -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-semibold text-gray-900">Initial Screening Questions</h2>
+                    <p class="text-sm text-gray-600 mt-1">Please answer each question honestly.</p>
+                </div>
+                <div class="divide-y divide-gray-100">
+                    {% for item in screening_questions %}
+                    <div class="px-6 py-4">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1 pr-4">
+                                <label class="block text-sm font-medium text-gray-900">
+                                    {{ item.question.sequence }}. {{ item.question.question_text }}
+                                </label>
+                                {% if item.question.help_text %}
+                                <p class="text-xs text-gray-500 mt-1">{{ item.question.help_text }}</p>
+                                {% endif %}
+                                {% if item.requires_physician %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 mt-1">
+                                    *Requires physician evaluation if Yes
+                                </span>
+                                {% endif %}
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="q_{{ item.question.sequence }}" value="yes"
+                                           class="form-radio h-4 w-4 text-blue-600 screening-question"
+                                           data-sequence="{{ item.question.sequence }}"
+                                           data-opens-box="{{ item.opens_box|default:'' }}"
+                                           required>
+                                    <span class="ml-2 text-sm text-gray-700">Yes</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="q_{{ item.question.sequence }}" value="no"
+                                           class="form-radio h-4 w-4 text-blue-600 screening-question"
+                                           data-sequence="{{ item.question.sequence }}"
+                                           data-opens-box="{{ item.opens_box|default:'' }}">
+                                    <span class="ml-2 text-sm text-gray-700">No</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Follow-up box (conditionally shown) -->
+                        {% if item.opens_box %}
+                        {% with box=follow_up_boxes|get_item:item.question.sequence %}
+                        {% if box %}
+                        <div id="box-{{ item.question.sequence }}" class="follow-up-box mt-4 ml-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                            <h3 class="font-medium text-gray-900 mb-3">
+                                {% if box.questions.0.help_text %}{{ box.questions.0.help_text }}{% else %}Follow-up Questions{% endif %}
+                            </h3>
+                            <div class="space-y-3">
+                                {% for fq in box.questions %}
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1 pr-4">
+                                        <label class="block text-sm text-gray-700">
+                                            {{ fq.question_text }}
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center space-x-4 flex-shrink-0">
+                                        <label class="inline-flex items-center">
+                                            <input type="radio" name="q_{{ fq.sequence }}" value="yes"
+                                                   class="form-radio h-4 w-4 text-blue-600">
+                                            <span class="ml-1 text-sm text-gray-700">Yes</span>
+                                        </label>
+                                        <label class="inline-flex items-center">
+                                            <input type="radio" name="q_{{ fq.sequence }}" value="no"
+                                                   class="form-radio h-4 w-4 text-blue-600">
+                                            <span class="ml-1 text-sm text-gray-700">No</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Participant Statement & Signature -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-semibold text-gray-900">Participant Statement & Signature</h2>
+                </div>
+                <div class="px-6 py-4 space-y-6">
+                    <p class="text-sm text-gray-700">
+                        I have answered all questions honestly, and understand that I accept responsibility for any
+                        consequences resulting from any questions I may have answered inaccurately or for my failure
+                        to disclose any existing or past health conditions.
+                    </p>
+
+                    <!-- Full Name -->
+                    <div>
+                        <label for="signed_by_name" class="block text-sm font-medium text-gray-700 mb-2">
+                            Full Legal Name <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" name="signed_by_name" id="signed_by_name" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="Enter your full legal name">
+                        <p class="mt-1 text-xs text-gray-500">
+                            Please enter your name exactly as it appears on your ID.
+                        </p>
+                    </div>
+
+                    <!-- Signature Pad -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Your Signature <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <canvas id="signature-pad" class="signature-pad w-full h-40 bg-white rounded-lg cursor-crosshair"></canvas>
+                            <button type="button" id="clear-signature"
+                                    class="absolute top-2 right-2 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded">
+                                Clear
+                            </button>
+                        </div>
+                        <input type="hidden" name="signature_data" id="signature_data">
+                        <p class="mt-1 text-xs text-gray-500">
+                            Please sign using your mouse or finger on touch devices.
+                        </p>
+                    </div>
+
+                    <!-- Checkboxes -->
+                    <div class="space-y-3">
+                        <label class="inline-flex items-start">
+                            <input type="checkbox" name="agree_statement" id="agree_statement" required
+                                   class="form-checkbox h-4 w-4 text-blue-600 mt-0.5">
+                            <span class="ml-2 text-sm text-gray-700">
+                                I agree to the above statement and certify that all information provided is accurate.
+                            </span>
+                        </label>
+
+                        <label class="inline-flex items-start">
+                            <input type="checkbox" name="esign_checkbox" id="esign_checkbox" required
+                                   class="form-checkbox h-4 w-4 text-blue-600 mt-0.5">
+                            <span class="ml-2 text-sm text-gray-700">
+                                I consent to signing this document electronically and understand that my electronic signature
+                                has the same legal effect as a handwritten signature.
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden Fingerprint Fields -->
+            <input type="hidden" name="fp_screen_resolution" id="fp_screen_resolution">
+            <input type="hidden" name="fp_timezone" id="fp_timezone">
+            <input type="hidden" name="fp_timezone_offset" id="fp_timezone_offset">
+            <input type="hidden" name="fp_language" id="fp_language">
+            <input type="hidden" name="fp_platform" id="fp_platform">
+            <input type="hidden" name="fp_device_memory" id="fp_device_memory">
+            <input type="hidden" name="fp_hardware_concurrency" id="fp_hardware_concurrency">
+            <input type="hidden" name="fp_touch_support" id="fp_touch_support">
+            <input type="hidden" name="fp_canvas_fingerprint" id="fp_canvas_fingerprint">
+
+            <!-- Submit Button -->
+            <div class="flex justify-end">
+                <button type="submit" id="submit-btn"
+                        class="inline-flex items-center px-6 py-3 border border-transparent rounded-lg text-base font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Sign &amp; Submit Questionnaire
+                </button>
+            </div>
+        </form>
+
+        <!-- Footer -->
+        <div class="mt-8 text-center text-xs text-gray-500">
+            <p>Form {{ metadata.form_number|default:"10346E" }} | Version {{ instance.definition.version }}</p>
+            <p class="mt-1">Created by the Diver Medical Screen Committee in association with DAN, UHMS, and RSTC.</p>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================================
+        // Signature Pad Implementation
+        // =====================================================================
+        const canvas = document.getElementById('signature-pad');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let hasSignature = false;
+
+        // Set up canvas size
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            ctx.strokeStyle = '#1f2937';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        function getCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            if (e.touches && e.touches.length > 0) {
+                return {
+                    x: e.touches[0].clientX - rect.left,
+                    y: e.touches[0].clientY - rect.top
+                };
+            }
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            hasSignature = true;
+            canvas.classList.add('signing');
+            const coords = getCoordinates(e);
+            ctx.beginPath();
+            ctx.moveTo(coords.x, coords.y);
+            e.preventDefault();
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const coords = getCoordinates(e);
+            ctx.lineTo(coords.x, coords.y);
+            ctx.stroke();
+            e.preventDefault();
+        }
+
+        function stopDrawing() {
+            if (isDrawing) {
+                isDrawing = false;
+                canvas.classList.remove('signing');
+                if (hasSignature) {
+                    canvas.classList.add('has-signature');
+                    document.getElementById('signature_data').value = canvas.toDataURL('image/png');
+                }
+            }
+        }
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseleave', stopDrawing);
+        canvas.addEventListener('touchstart', startDrawing);
+        canvas.addEventListener('touchmove', draw);
+        canvas.addEventListener('touchend', stopDrawing);
+
+        document.getElementById('clear-signature').addEventListener('click', function() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            hasSignature = false;
+            canvas.classList.remove('has-signature');
+            document.getElementById('signature_data').value = '';
+        });
+
+        // =====================================================================
+        // Digital Fingerprint Collection
+        // =====================================================================
+        function collectFingerprint() {
+            document.getElementById('fp_screen_resolution').value = window.screen.width + 'x' + window.screen.height;
+            document.getElementById('fp_timezone').value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            document.getElementById('fp_timezone_offset').value = new Date().getTimezoneOffset();
+            document.getElementById('fp_language').value = navigator.language;
+            document.getElementById('fp_platform').value = navigator.platform;
+            document.getElementById('fp_device_memory').value = navigator.deviceMemory || '';
+            document.getElementById('fp_hardware_concurrency').value = navigator.hardwareConcurrency || '';
+            document.getElementById('fp_touch_support').value = ('ontouchstart' in window) ? 'true' : 'false';
+
+            // Canvas fingerprint
+            const fpCanvas = document.createElement('canvas');
+            const fpCtx = fpCanvas.getContext('2d');
+            fpCanvas.width = 200;
+            fpCanvas.height = 50;
+            fpCtx.textBaseline = 'top';
+            fpCtx.font = '14px Arial';
+            fpCtx.fillStyle = '#f60';
+            fpCtx.fillRect(125, 1, 62, 20);
+            fpCtx.fillStyle = '#069';
+            fpCtx.fillText('Medical Form Signature', 2, 15);
+            fpCtx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+            fpCtx.fillText('Medical Form Signature', 4, 17);
+            document.getElementById('fp_canvas_fingerprint').value = fpCanvas.toDataURL().slice(-50);
+        }
+        collectFingerprint();
+
+        // =====================================================================
+        // Handle conditional display of follow-up boxes
+        // =====================================================================
+        document.querySelectorAll('.screening-question').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                const sequence = this.dataset.sequence;
+                const opensBox = this.dataset.opensBox;
+                const isYes = this.value === 'yes';
+
+                // Find the follow-up box for this question
+                const box = document.getElementById('box-' + sequence);
+                if (box) {
+                    if (isYes) {
+                        box.classList.add('visible');
+                    } else {
+                        box.classList.remove('visible');
+                        // Clear follow-up answers when hiding
+                        box.querySelectorAll('input[type="radio"]').forEach(function(input) {
+                            input.checked = false;
+                        });
+                    }
+                }
+            });
+        });
+
+        // =====================================================================
+        // Form validation
+        // =====================================================================
+        document.getElementById('medical-form').addEventListener('submit', function(e) {
+            // Check all required screening questions are answered
+            const screeningQuestions = document.querySelectorAll('.screening-question');
+            const sequences = new Set();
+            screeningQuestions.forEach(function(q) {
+                sequences.add(q.dataset.sequence);
+            });
+
+            let missingQuestions = [];
+            sequences.forEach(function(seq) {
+                const answered = document.querySelector('input[name="q_' + seq + '"]:checked');
+                if (!answered) {
+                    missingQuestions.push(seq);
+                }
+            });
+
+            if (missingQuestions.length > 0) {
+                e.preventDefault();
+                alert('Please answer all screening questions. Missing questions: ' + missingQuestions.join(', '));
+                return false;
+            }
+
+            // Check signature
+            const signatureData = document.getElementById('signature_data').value;
+            if (!signatureData) {
+                e.preventDefault();
+                alert('Please provide your signature.');
+                return false;
+            }
+
+            // Check name
+            const signedByName = document.getElementById('signed_by_name').value.trim();
+            if (!signedByName) {
+                e.preventDefault();
+                alert('Please enter your full legal name.');
+                return false;
+            }
+
+            // Check agreement checkbox
+            const agreeCheckbox = document.getElementById('agree_statement');
+            if (!agreeCheckbox.checked) {
+                e.preventDefault();
+                alert('Please agree to the participant statement to continue.');
+                return false;
+            }
+
+            // Check e-sign consent
+            const esignCheckbox = document.getElementById('esign_checkbox');
+            if (!esignCheckbox.checked) {
+                e.preventDefault();
+                alert('Please consent to electronic signing to continue.');
+                return false;
+            }
+
+            // Update signature data one more time before submit
+            if (hasSignature) {
+                document.getElementById('signature_data').value = canvas.toDataURL('image/png');
+            }
+        });
+    </script>
+</body>
+</html>

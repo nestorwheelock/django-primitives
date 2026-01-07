@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ definition.name }} - {{ respondent_name }}</title>
+    <style>
+        @page {
+            size: letter;
+            margin: 0.5in 0.6in;
+        }
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            text-align: center;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            border-bottom: 3px solid #b8860b;
+        }
+        .header-brand {
+            color: #b8860b;
+            font-size: 14pt;
+            font-weight: bold;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+        .header h1 {
+            font-size: 16pt;
+            margin: 5px 0;
+            color: #333;
+        }
+        .header p {
+            margin: 3px 0;
+            color: #666;
+            font-size: 9pt;
+        }
+        .participant-box {
+            background: #e8f4fc;
+            border: 1px solid #b8d4e8;
+            border-radius: 5px;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+        }
+        .participant-box .label {
+            font-weight: bold;
+            color: #2c5282;
+        }
+        .directions-box {
+            background: #fef9e7;
+            border: 1px solid #f0d78c;
+            border-radius: 5px;
+            padding: 12px 15px;
+            margin-bottom: 15px;
+        }
+        .directions-box h3 {
+            margin: 0 0 8px 0;
+            font-size: 11pt;
+            color: #8b6914;
+        }
+        .directions-box p {
+            margin: 5px 0;
+            font-size: 9pt;
+            color: #6b5a14;
+        }
+        .directions-box .note {
+            color: #c53030;
+            font-weight: bold;
+        }
+        .section {
+            margin-bottom: 15px;
+        }
+        .section-header {
+            background: #f7f7f7;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+            padding: 8px 12px;
+        }
+        .section-header h2 {
+            margin: 0;
+            font-size: 12pt;
+            color: #333;
+        }
+        .section-header p {
+            margin: 3px 0 0 0;
+            font-size: 9pt;
+            color: #666;
+        }
+        .section-content {
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .question-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 8px 12px;
+            border-bottom: 1px solid #eee;
+            page-break-inside: avoid;
+        }
+        .question-row:last-child {
+            border-bottom: none;
+        }
+        .question-row.flagged {
+            background: #fff5f5;
+        }
+        .question-text {
+            flex: 1;
+            padding-right: 15px;
+            font-size: 9.5pt;
+        }
+        .question-number {
+            font-weight: bold;
+            color: #555;
+        }
+        .answer-box {
+            display: flex;
+            align-items: center;
+            min-width: 90px;
+            justify-content: flex-end;
+        }
+        .answer-option {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 12px;
+            font-size: 9pt;
+        }
+        .radio-circle {
+            width: 12px;
+            height: 12px;
+            border: 2px solid #666;
+            border-radius: 50%;
+            margin-right: 4px;
+            display: inline-block;
+        }
+        .radio-circle.selected {
+            background: #3182ce;
+            border-color: #3182ce;
+        }
+        .radio-circle.selected-yes {
+            background: #3182ce;
+            border-color: #3182ce;
+        }
+        .radio-circle.selected-no {
+            background: #38a169;
+            border-color: #38a169;
+        }
+        .follow-up-box {
+            margin: 10px 12px;
+            padding: 10px;
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        .follow-up-box h4 {
+            margin: 0 0 8px 0;
+            font-size: 10pt;
+            color: #444;
+            font-weight: bold;
+        }
+        .follow-up-question {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 5px 0;
+            font-size: 9pt;
+        }
+        .follow-up-question .question-text {
+            font-size: 9pt;
+        }
+        .certification-box {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 12px 15px;
+            margin: 15px 0;
+            font-size: 9pt;
+        }
+        .certification-box p {
+            margin: 0;
+        }
+        .signature-section {
+            margin-top: 15px;
+            page-break-inside: avoid;
+        }
+        .signature-section h2 {
+            font-size: 12pt;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+        .signature-grid {
+            display: flex;
+            gap: 20px;
+        }
+        .signature-info {
+            flex: 1;
+        }
+        .signature-info p {
+            margin: 4px 0;
+            font-size: 9pt;
+        }
+        .signature-image-box {
+            flex: 1;
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
+            min-height: 80px;
+        }
+        .signature-image {
+            max-width: 200px;
+            max-height: 60px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 9pt;
+            font-weight: bold;
+        }
+        .status-completed {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        .status-flagged {
+            background: #fed7d7;
+            color: #822727;
+        }
+        .status-cleared {
+            background: #bee3f8;
+            color: #2a4365;
+        }
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 8pt;
+            color: #888;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+        .verification-section {
+            margin-top: 15px;
+            font-size: 8pt;
+            color: #666;
+            background: #f5f5f5;
+            padding: 8px 10px;
+            border-radius: 3px;
+        }
+        .verification-section h4 {
+            margin: 0 0 5px 0;
+            font-size: 8pt;
+            color: #555;
+        }
+        .hash-code {
+            font-family: monospace;
+            font-size: 7pt;
+            word-break: break-all;
+            background: #eee;
+            padding: 5px;
+            margin-top: 5px;
+        }
+        .requires-physician {
+            color: #c53030;
+            font-size: 8pt;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-brand">RSTC</div>
+        <h1>{{ definition.name }}</h1>
+        <p>{{ definition.description }}</p>
+    </div>
+
+    <!-- Participant Info -->
+    <div class="participant-box">
+        <span class="label">Participant:</span> {{ respondent_name }}
+    </div>
+
+    <!-- Directions -->
+    <div class="directions-box">
+        <h3>Directions</h3>
+        <p>{{ definition_metadata.instructions|default:"If you answered NO to all 10 questions, a medical evaluation is not required. If you answered YES to any question, you must complete the follow-up questions and may require physician evaluation." }}</p>
+        {% if definition_metadata.note_to_women %}
+        <p class="note">Note to women: {{ definition_metadata.note_to_women }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Initial Screening Questions -->
+    <div class="section">
+        <div class="section-header">
+            <h2>Initial Screening Questions</h2>
+            <p>Please answer each question honestly.</p>
+        </div>
+        <div class="section-content">
+            {% for item in screening_questions %}
+            <div class="question-row {% if item.is_flagged %}flagged{% endif %}">
+                <div class="question-text">
+                    <span class="question-number">{{ item.question.sequence }}.</span>
+                    {{ item.question.question_text }}
+                    {% if item.question.validation_rules.requires_physician %}
+                    <span class="requires-physician">*Requires physician evaluation if Yes</span>
+                    {% endif %}
+                </div>
+                <div class="answer-box">
+                    <span class="answer-option">
+                        <span class="radio-circle {% if item.answer_bool == True %}selected-yes{% endif %}"></span>
+                        Yes
+                    </span>
+                    <span class="answer-option">
+                        <span class="radio-circle {% if item.answer_bool == False %}selected-no{% endif %}"></span>
+                        No
+                    </span>
+                </div>
+            </div>
+
+            <!-- Follow-up box if this question has one and it was answered Yes -->
+            {% for box in follow_up_boxes %}
+            {% if box.parent_sequence == item.question.sequence and box.visible %}
+            <div class="follow-up-box">
+                <h4>{{ box.title }}</h4>
+                {% for fq in box.questions %}
+                <div class="follow-up-question">
+                    <div class="question-text">{{ fq.question.question_text }}</div>
+                    <div class="answer-box">
+                        <span class="answer-option">
+                            <span class="radio-circle {% if fq.answer_bool == True %}selected-yes{% endif %}"></span>
+                            Yes
+                        </span>
+                        <span class="answer-option">
+                            <span class="radio-circle {% if fq.answer_bool == False %}selected-no{% endif %}"></span>
+                            No
+                        </span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Certification -->
+    <div class="certification-box">
+        <p><strong>Participant Statement:</strong> I have answered all questions honestly, and understand that I accept responsibility for any consequences resulting from any questions I may have answered inaccurately or for my failure to disclose any existing or past health conditions.</p>
+    </div>
+
+    <!-- Status -->
+    <div style="margin-bottom: 15px;">
+        <strong>Medical Status:</strong>
+        {% if status == 'completed' %}
+        <span class="status-badge status-completed">CLEARED - No Physician Evaluation Required</span>
+        {% elif status == 'flagged' %}
+        <span class="status-badge status-flagged">REQUIRES PHYSICIAN CLEARANCE</span>
+        {% elif status == 'cleared' %}
+        <span class="status-badge status-cleared">CLEARED - Physician Clearance Received</span>
+        {% else %}
+        <span class="status-badge">{{ status|title }}</span>
+        {% endif %}
+    </div>
+
+    <!-- Signature Section -->
+    <div class="signature-section">
+        <h2>Electronic Signature</h2>
+        <div class="signature-grid">
+            <div class="signature-info">
+                <p><strong>Signed by:</strong> {{ signed_by_name }}</p>
+                <p><strong>Date:</strong> {{ signed_at }}</p>
+                <p><strong>IP Address:</strong> {{ ip_address }}</p>
+                <p><strong>Valid Until:</strong> {{ expires_at|date:"F j, Y" }}</p>
+            </div>
+            <div class="signature-image-box">
+                {% if signature_image %}
+                <img src="{{ signature_image }}" class="signature-image" alt="Signature">
+                {% else %}
+                <p style="color: #999; font-size: 9pt;">Signature on file</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Verification Data -->
+    <div class="verification-section">
+        <h4>Digital Verification Data</h4>
+        <p>
+            <strong>Screen:</strong> {{ fingerprint.screen_resolution|default:"N/A" }} |
+            <strong>Timezone:</strong> {{ fingerprint.timezone|default:"N/A" }} |
+            <strong>Platform:</strong> {{ fingerprint.platform|default:"N/A" }} |
+            <strong>Language:</strong> {{ fingerprint.language|default:"N/A" }}
+        </p>
+        {% if document_hash %}
+        <div class="hash-code">
+            <strong>Document Hash (SHA-256):</strong> {{ document_hash }}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>Form {{ definition_metadata.form_number|default:"10346E" }} | Version {{ definition.version }} | Document ID: {{ instance.pk }}</p>
+        <p>Generated on {{ generated_at|date:"F j, Y, g:i A" }}</p>
+        <p>This document is electronically signed and contains integrity verification data.</p>
+    </div>
+</body>
+</html>

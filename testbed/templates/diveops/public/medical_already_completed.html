@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Questionnaire Already Completed</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="max-w-2xl mx-auto py-16 px-4">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="p-8 text-center">
+                <div class="mx-auto w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-6">
+                    <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-900 mb-2">Already Completed</h1>
+                <p class="text-gray-600 mb-6">
+                    This medical questionnaire has already been submitted by {{ respondent_name }}.
+                </p>
+
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <dl class="text-sm">
+                        <div class="flex justify-between py-1">
+                            <dt class="text-gray-500">Status:</dt>
+                            <dd class="font-medium text-gray-900">
+                                {% if instance.status == 'completed' %}
+                                <span class="text-green-600">Completed</span>
+                                {% elif instance.status == 'flagged' %}
+                                <span class="text-yellow-600">Requires Clearance</span>
+                                {% elif instance.status == 'cleared' %}
+                                <span class="text-green-600">Cleared</span>
+                                {% else %}
+                                {{ instance.status|title }}
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% if instance.completed_at %}
+                        <div class="flex justify-between py-1">
+                            <dt class="text-gray-500">Completed:</dt>
+                            <dd class="font-medium text-gray-900">{{ instance.completed_at|date:"M j, Y" }}</dd>
+                        </div>
+                        {% endif %}
+                        <div class="flex justify-between py-1">
+                            <dt class="text-gray-500">Expires:</dt>
+                            <dd class="font-medium text-gray-900">{{ instance.expires_at|date:"M j, Y" }}</dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <p class="text-sm text-gray-500 mt-6">
+                    If you need to update your responses, please contact your dive operator.
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

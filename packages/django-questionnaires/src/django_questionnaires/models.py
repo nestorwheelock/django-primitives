@@ -206,6 +206,9 @@ class QuestionnaireInstance(BaseModel):
         "clearance_document_object_id",
     )
 
+    # Metadata for signatures, fingerprints, and domain-specific data
+    metadata = models.JSONField(default=dict, blank=True)
+
     class Meta:
         ordering = ["-created_at"]
         indexes = [

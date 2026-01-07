@@ -17,6 +17,8 @@ from django_questionnaires.services import (
 )
 from django_questionnaires.models import InstanceStatus
 
+from ..audit import Actions, log_medical_questionnaire_event
+
 
 class MedicalStatus(models.TextChoices):
     """Medical clearance status for divers."""
@@ -108,12 +110,22 @@ def send_medical_questionnaire(
     Returns:
         QuestionnaireInstance
     """
-    return questionnaire_create_instance(
+    instance = questionnaire_create_instance(
         definition_slug=RSTC_MEDICAL_SLUG,
         respondent=diver,
         expires_in_days=expires_in_days,
         actor=actor,
     )
+
+    # Log to audit trail
+    log_medical_questionnaire_event(
+        action=Actions.MEDICAL_QUESTIONNAIRE_SENT,
+        instance=instance,
+        actor=actor,
+        data={"expires_in_days": expires_in_days},
+    )
+
+    return instance
 
 
 def upload_physician_clearance(
@@ -133,12 +145,25 @@ def upload_physician_clearance(
     Returns:
         The cleared QuestionnaireInstance
     """
-    return questionnaire_clear_instance(
+    cleared_instance = questionnaire_clear_instance(
         instance=instance,
         cleared_by=cleared_by,
         notes=notes,
         clearance_document=document,
     )
+
+    # Log to audit trail
+    log_medical_questionnaire_event(
+        action=Actions.MEDICAL_QUESTIONNAIRE_CLEARED,
+        instance=cleared_instance,
+        actor=cleared_by,
+        data={
+            "clearance_notes": notes,
+            "document_id": str(document.pk) if document else None,
+        },
+    )
+
+    return cleared_instance
 
 
 def get_diver_medical_instance(diver: Any):

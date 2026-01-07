@@ -350,7 +350,7 @@ class DiverDetailView(StaffPortalMixin, DetailView):
         return diver
 
     def get_context_data(self, **kwargs):
-        """Add certifications and permits to context."""
+        """Add certifications, permits, and medical status to context."""
         context = super().get_context_data(**kwargs)
         context["certifications"] = self.object.certifications.filter(
             deleted_at__isnull=True
@@ -361,6 +361,12 @@ class DiverDetailView(StaffPortalMixin, DetailView):
             permit_type=ProtectedAreaPermit.PermitType.GUIDE,
             deleted_at__isnull=True
         ).select_related("protected_area").prefetch_related("guide_details").order_by("protected_area__name")
+        # Add medical status
+        try:
+            from .medical.services import get_diver_medical_status
+            context["medical_status"] = get_diver_medical_status(self.object).value
+        except ImportError:
+            context["medical_status"] = None
         return context
 
 
@@ -4702,8 +4708,10 @@ class SignableAgreementListView(StaffPortalMixin, ListView):
         return queryset
 
     def get_context_data(self, **kwargs):
-        """Add filter options to context."""
+        """Add filter options and medical documents to context."""
         from .models import AgreementTemplate, SignableAgreement
+        from django_documents.models import Document
+        from django.contrib.contenttypes.models import ContentType
 
         context = super().get_context_data(**kwargs)
         context["page_title"] = "Signable Agreements"
@@ -4713,6 +4721,17 @@ class SignableAgreementListView(StaffPortalMixin, ListView):
         context["templates"] = AgreementTemplate.objects.filter(
             deleted_at__isnull=True
         ).order_by("name")
+
+        # Add signed medical questionnaire documents
+        # These are attached to DiverProfile and have document_type="signed_medical_questionnaire"
+        from .models import DiverProfile
+        diver_ct = ContentType.objects.get_for_model(DiverProfile)
+        context["medical_documents"] = Document.objects.filter(
+            target_content_type=diver_ct,
+            document_type="signed_medical_questionnaire",
+            deleted_at__isnull=True,
+        ).select_related("target_content_type").order_by("-created_at")[:50]
+
         return context
 
 
@@ -5313,6 +5332,8 @@ class MedicalQuestionnaireListView(StaffPortalMixin, ListView):
 
     def get_queryset(self):
         from django_questionnaires.models import QuestionnaireInstance, InstanceStatus
+        from django.utils import timezone
+        from datetime import timedelta
 
         queryset = QuestionnaireInstance.objects.filter(
             definition__slug="rstc-medical",
@@ -5321,12 +5342,40 @@ class MedicalQuestionnaireListView(StaffPortalMixin, ListView):
             "definition",
             "respondent_content_type",
             "cleared_by",
-        ).order_by("-created_at")
+        )
 
         # Filter by status
         status = self.request.GET.get("status")
         if status:
             queryset = queryset.filter(status=status)
+
+        # Filter by expiration
+        expiration_filter = self.request.GET.get("expiration")
+        now = timezone.now()
+        if expiration_filter == "expired":
+            queryset = queryset.filter(expires_at__lt=now)
+        elif expiration_filter == "expiring_soon":
+            # Expiring within 30 days
+            queryset = queryset.filter(
+                expires_at__gte=now,
+                expires_at__lte=now + timedelta(days=30)
+            )
+        elif expiration_filter == "expiring_90":
+            # Expiring within 90 days
+            queryset = queryset.filter(
+                expires_at__gte=now,
+                expires_at__lte=now + timedelta(days=90)
+            )
+        elif expiration_filter == "valid":
+            queryset = queryset.filter(expires_at__gte=now)
+
+        # Sorting
+        sort = self.request.GET.get("sort", "-created_at")
+        valid_sorts = ["expires_at", "-expires_at", "created_at", "-created_at", "status"]
+        if sort in valid_sorts:
+            queryset = queryset.order_by(sort)
+        else:
+            queryset = queryset.order_by("-created_at")
 
         return queryset
 
@@ -5335,6 +5384,21 @@ class MedicalQuestionnaireListView(StaffPortalMixin, ListView):
         from django_questionnaires.models import InstanceStatus
         context["status_choices"] = InstanceStatus.choices
         context["current_status"] = self.request.GET.get("status", "")
+        context["current_expiration"] = self.request.GET.get("expiration", "")
+        context["current_sort"] = self.request.GET.get("sort", "-created_at")
+        context["expiration_choices"] = [
+            ("", "All"),
+            ("valid", "Valid (Not Expired)"),
+            ("expiring_soon", "Expiring in 30 days"),
+            ("expiring_90", "Expiring in 90 days"),
+            ("expired", "Expired"),
+        ]
+        context["sort_choices"] = [
+            ("-created_at", "Newest First"),
+            ("created_at", "Oldest First"),
+            ("expires_at", "Expiring Soonest"),
+            ("-expires_at", "Expiring Latest"),
+        ]
         return context
 
 
@@ -5377,6 +5441,16 @@ class MedicalQuestionnaireDetailView(StaffPortalMixin, DetailView):
         # Get diver if respondent is a DiverProfile
         if instance.respondent_content_type.model == "diverprofile":
             context["diver"] = instance.respondent
+
+        # Get PDF document if available
+        if instance.metadata and instance.metadata.get("pdf_document_id"):
+            from django_documents.models import Document
+            try:
+                context["pdf_document"] = Document.objects.get(
+                    pk=instance.metadata["pdf_document_id"]
+                )
+            except Document.DoesNotExist:
+                pass
 
         return context
 
@@ -5479,22 +5553,123 @@ class DiverMedicalStatusView(StaffPortalMixin, DetailView):
 class SendMedicalQuestionnaireView(StaffPortalMixin, View):
     """Send a medical questionnaire to a diver."""
 
+    template_name = "diveops/staff/medical/send_questionnaire.html"
+
+    def get(self, request, diver_pk):
+        diver = get_object_or_404(DiverProfile, pk=diver_pk)
+        return render(request, self.template_name, {
+            "diver": diver,
+            "default_expires_days": 365,
+        })
+
     def post(self, request, diver_pk):
         from .medical.services import send_medical_questionnaire
 
         diver = get_object_or_404(DiverProfile, pk=diver_pk)
 
+        # Get custom expiration days (default to 365)
+        try:
+            expires_in_days = int(request.POST.get("expires_in_days", 365))
+            if expires_in_days < 1:
+                expires_in_days = 365
+            if expires_in_days > 730:  # Max 2 years
+                expires_in_days = 730
+        except (ValueError, TypeError):
+            expires_in_days = 365
+
         try:
             instance = send_medical_questionnaire(
                 diver=diver,
-                expires_in_days=30,
+                expires_in_days=expires_in_days,
                 actor=request.user,
             )
             messages.success(
                 request,
-                f"Medical questionnaire sent to {diver}. Expires in 30 days."
+                f"Medical questionnaire sent to {diver}. Expires in {expires_in_days} days."
             )
         except Exception as e:
             messages.error(request, f"Error sending questionnaire: {e}")
 
         return redirect("diveops:diver-medical-status", pk=diver_pk)
+
+
+class SendMedicalQuestionnaireCreateView(StaffPortalMixin, View):
+    """Create and send a new medical questionnaire - with diver picker."""
+
+    template_name = "diveops/staff/medical/send_questionnaire_create.html"
+
+    def get(self, request):
+        """Show the create form with diver selection."""
+        from .models import DiverProfile
+
+        divers = DiverProfile.objects.select_related("person").order_by(
+            "person__last_name", "person__first_name"
+        )
+
+        # Check for pre-selected diver from query params
+        selected_diver = request.GET.get("diver")
+
+        context = {
+            "page_title": "Send Medical Questionnaire",
+            "divers": divers,
+            "selected_diver": selected_diver,
+            "default_expires_days": 365,
+        }
+        return render(request, self.template_name, context)
+
+    def post(self, request):
+        """Create and send the questionnaire."""
+        from .medical.services import send_medical_questionnaire
+        from .models import DiverProfile
+
+        diver_id = request.POST.get("diver")
+        expires_in_days = request.POST.get("expires_in_days", 365)
+
+        try:
+            expires_in_days = int(expires_in_days)
+            if expires_in_days < 1:
+                expires_in_days = 365
+            if expires_in_days > 730:
+                expires_in_days = 730
+        except (ValueError, TypeError):
+            expires_in_days = 365
+
+        if not diver_id:
+            divers = DiverProfile.objects.select_related("person").order_by(
+                "person__last_name", "person__first_name"
+            )
+            context = {
+                "page_title": "Send Medical Questionnaire",
+                "divers": divers,
+                "errors": ["Please select a diver."],
+                "selected_diver": diver_id,
+                "default_expires_days": expires_in_days,
+            }
+            return render(request, self.template_name, context)
+
+        try:
+            diver = DiverProfile.objects.select_related("person").get(pk=diver_id)
+
+            instance = send_medical_questionnaire(
+                diver=diver,
+                expires_in_days=expires_in_days,
+                actor=request.user,
+            )
+
+            # Build the public URL for the questionnaire
+            public_url = request.build_absolute_uri(
+                reverse("diveops_public:medical-questionnaire", kwargs={"instance_id": instance.pk})
+            )
+
+            messages.success(
+                request,
+                f"Medical questionnaire sent to {diver}. Link: {public_url}"
+            )
+            return redirect("diveops:medical-list")
+
+        except DiverProfile.DoesNotExist:
+            messages.error(request, "Diver not found.")
+            return redirect("diveops:medical-list")
+        except Exception as e:
+            messages.error(request, f"Error sending questionnaire: {e}")
+            return redirect("diveops:medical-list")

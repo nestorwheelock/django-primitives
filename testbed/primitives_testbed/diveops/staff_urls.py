@@ -211,6 +211,7 @@ urlpatterns = [
     path("settings/ai/", staff_views.AISettingsView.as_view(), name="ai-settings"),
     # Medical Questionnaires
     path("medical/", staff_views.MedicalQuestionnaireListView.as_view(), name="medical-list"),
+    path("medical/send/", staff_views.SendMedicalQuestionnaireCreateView.as_view(), name="medical-send-create"),
     path("medical/<uuid:pk>/", staff_views.MedicalQuestionnaireDetailView.as_view(), name="medical-detail"),
     path("medical/<uuid:pk>/clear/", staff_views.MedicalClearanceUploadView.as_view(), name="medical-clearance"),
     path("divers/<uuid:pk>/medical/", staff_views.DiverMedicalStatusView.as_view(), name="diver-medical-status"),

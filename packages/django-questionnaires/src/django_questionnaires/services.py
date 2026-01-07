@@ -201,10 +201,18 @@ def create_instance(
     try:
         definition = QuestionnaireDefinition.objects.get(
             slug=definition_slug,
+            status=DefinitionStatus.PUBLISHED,
             deleted_at__isnull=True,
         )
     except QuestionnaireDefinition.DoesNotExist:
-        raise DefinitionNotFoundError(f"Definition '{definition_slug}' not found")
+        raise DefinitionNotFoundError(f"Published definition '{definition_slug}' not found")
+    except QuestionnaireDefinition.MultipleObjectsReturned:
+        # If multiple published definitions exist, get the most recent one
+        definition = QuestionnaireDefinition.objects.filter(
+            slug=definition_slug,
+            status=DefinitionStatus.PUBLISHED,
+            deleted_at__isnull=True,
+        ).order_by('-created_at').first()
 
     if definition.status != DefinitionStatus.PUBLISHED:
         raise DefinitionNotPublishedError(

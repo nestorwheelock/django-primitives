@@ -1,268 +1,428 @@
 {
   "slug": "rstc-medical",
-  "name": "RSTC Medical Statement",
-  "description": "Recreational Scuba Training Council Medical Questionnaire. Required before diving activities.",
-  "version": "1.0.0",
+  "name": "Diver Medical | Participant Questionnaire",
+  "description": "RSTC/WRSTC/DAN/UHMS Medical Questionnaire. Complete this questionnaire as a prerequisite to a recreational scuba diving or freediving course.",
+  "version": "2022.02.01",
   "validity_days": 365,
   "metadata": {
-    "standard": "RSTC",
-    "year": "2020",
+    "standard": "RSTC/WRSTC",
+    "year": "2022",
+    "form_number": "10346E",
     "clearance_required_on_flag": true,
-    "instructions": "Please answer all questions honestly. A 'Yes' answer to any question does not necessarily disqualify you from diving but may require a physician's evaluation."
+    "instructions": "If you answered NO to all 10 questions, a medical evaluation is not required. If you answered YES to any question, you must complete the follow-up questions and may require physician evaluation.",
+    "note_to_women": "If you are pregnant, or attempting to become pregnant, do not dive."
   },
   "categories": [
-    {"key": "general", "label": "General Health", "sequence": 1},
-    {"key": "cardiovascular", "label": "Cardiovascular", "sequence": 2},
-    {"key": "respiratory", "label": "Respiratory", "sequence": 3},
-    {"key": "neurological", "label": "Neurological", "sequence": 4},
-    {"key": "ent", "label": "Ear, Nose & Throat", "sequence": 5},
-    {"key": "gastrointestinal", "label": "Gastrointestinal", "sequence": 6},
-    {"key": "orthopedic", "label": "Orthopedic & Musculoskeletal", "sequence": 7},
-    {"key": "behavioral", "label": "Behavioral Health", "sequence": 8},
-    {"key": "medications", "label": "Medications", "sequence": 9},
-    {"key": "dive_history", "label": "Diving History", "sequence": 10}
+    {"key": "screening", "label": "Initial Screening Questions", "sequence": 1},
+    {"key": "box_a", "label": "Box A - Lungs, Breathing, Heart, Blood", "sequence": 2},
+    {"key": "box_b", "label": "Box B - Over 45 Years of Age", "sequence": 3},
+    {"key": "box_c", "label": "Box C - Eyes, Ears, Sinuses", "sequence": 4},
+    {"key": "box_d", "label": "Box D - Neurological", "sequence": 5},
+    {"key": "box_e", "label": "Box E - Behavioral Health", "sequence": 6},
+    {"key": "box_f", "label": "Box F - Back, Hernia, Ulcers, Diabetes", "sequence": 7},
+    {"key": "box_g", "label": "Box G - Stomach, Intestine", "sequence": 8}
   ],
   "questions": [
     {
       "sequence": 1,
-      "category": "general",
+      "category": "screening",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have any of the following: High blood pressure, angina, heart attack, heart surgery, or other cardiovascular problems?",
+      "question_text": "I have had problems with my lungs, breathing, heart and/or blood affecting my normal physical or mental performance.",
       "is_required": true,
-      "triggers_flag": true
+      "triggers_flag": true,
+      "validation_rules": {"opens_box": "box_a"}
     },
     {
       "sequence": 2,
-      "category": "general",
+      "category": "screening",
       "question_type": "yes_no",
-      "question_text": "Are you over 45 and have one or more of the following: currently smoke, high cholesterol, family history of heart attack or stroke, currently receiving medical care?",
+      "question_text": "I am over 45 years of age.",
       "is_required": true,
-      "triggers_flag": true
+      "triggers_flag": false,
+      "validation_rules": {"opens_box": "box_b"}
     },
     {
       "sequence": 3,
-      "category": "cardiovascular",
+      "category": "screening",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have heart disease or heart attack?",
+      "question_text": "I struggle to perform moderate exercise (for example, walk 1.6 kilometer/one mile in 14 minutes or swim 200 meters/yards without resting), OR I have been unable to participate in a normal physical activity due to fitness or health reasons within the past 12 months.",
       "is_required": true,
-      "triggers_flag": true
+      "triggers_flag": true,
+      "validation_rules": {"requires_physician": true}
     },
     {
       "sequence": 4,
-      "category": "cardiovascular",
+      "category": "screening",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have heart rhythm abnormalities (arrhythmias)?",
+      "question_text": "I have had problems with my eyes, ears, or nasal passages/sinuses.",
       "is_required": true,
-      "triggers_flag": true
+      "triggers_flag": true,
+      "validation_rules": {"opens_box": "box_c"}
     },
     {
       "sequence": 5,
-      "category": "cardiovascular",
+      "category": "screening",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have high blood pressure?",
+      "question_text": "I have had surgery within the last 12 months, OR I have ongoing problems related to past surgery.",
       "is_required": true,
-      "triggers_flag": true
+      "triggers_flag": true,
+      "validation_rules": {"requires_physician": true}
     },
     {
       "sequence": 6,
-      "category": "cardiovascular",
+      "category": "screening",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have a blood disorder or bleeding problems?",
+      "question_text": "I have lost consciousness, had migraine headaches, seizures, stroke, significant head injury, or suffer from persistent neurologic injury or disease.",
       "is_required": true,
-      "triggers_flag": true
+      "triggers_flag": true,
+      "validation_rules": {"opens_box": "box_d"}
     },
     {
       "sequence": 7,
-      "category": "respiratory",
+      "category": "screening",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have asthma, wheezing, or difficulty breathing with exercise?",
+      "question_text": "I am currently undergoing treatment (or have required treatment within the last five years) for psychological problems, personality disorder, panic attacks, or an addiction to drugs or alcohol; or, I have been diagnosed with a learning or developmental disability.",
       "is_required": true,
-      "triggers_flag": true
+      "triggers_flag": true,
+      "validation_rules": {"opens_box": "box_e"}
     },
     {
       "sequence": 8,
-      "category": "respiratory",
+      "category": "screening",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have collapsed lung (pneumothorax)?",
+      "question_text": "I have had back problems, hernia, ulcers, or diabetes.",
       "is_required": true,
-      "triggers_flag": true
+      "triggers_flag": true,
+      "validation_rules": {"opens_box": "box_f"}
     },
     {
       "sequence": 9,
-      "category": "respiratory",
+      "category": "screening",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have any lung disease (emphysema, COPD, bronchitis)?",
+      "question_text": "I have had stomach or intestine problems, including recent diarrhea.",
       "is_required": true,
-      "triggers_flag": true
+      "triggers_flag": true,
+      "validation_rules": {"opens_box": "box_g"}
     },
     {
       "sequence": 10,
-      "category": "respiratory",
+      "category": "screening",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have tuberculosis?",
+      "question_text": "I am taking prescription medications (with the exception of birth control or anti-malarial drugs other than mefloquine/Lariam).",
       "is_required": true,
-      "triggers_flag": true
+      "triggers_flag": true,
+      "validation_rules": {"requires_physician": true}
     },
+
     {
       "sequence": 11,
-      "category": "neurological",
+      "category": "box_a",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have epilepsy, seizures, or convulsions?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Chest surgery, heart surgery, heart valve surgery, an implantable medical device (eg, stent, pacemaker, neurostimulator), pneumothorax, and/or chronic lung disease.",
+      "help_text": "Box A - I HAVE/HAVE HAD:",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 1, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 12,
-      "category": "neurological",
+      "category": "box_a",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have recurring migraine headaches or take medication to prevent them?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Asthma, wheezing, severe allergies, hay fever or congested airways within the last 12 months that limits my physical activity/exercise.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 1, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 13,
-      "category": "neurological",
+      "category": "box_a",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have blackouts, fainting, or loss of consciousness?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "A problem or illness involving my heart such as: angina, chest pain on exertion, heart failure, immersion pulmonary edema, heart attack or stroke, OR am taking medication for any heart condition.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 1, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 14,
-      "category": "neurological",
+      "category": "box_a",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have a head injury with loss of consciousness in the past 5 years?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Recurrent bronchitis and currently coughing within the past 12 months, OR have been diagnosed with emphysema.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 1, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 15,
-      "category": "neurological",
+      "category": "box_a",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have stroke or transient ischemic attack (TIA)?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Symptoms affecting my lungs, breathing, heart and/or blood in the last 30 days that impair my physical or mental performance.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 1, "answer_equals": true}, "requires_physician": true}
     },
+
     {
       "sequence": 16,
-      "category": "ent",
+      "category": "box_b",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have recurring ear problems or ear surgery?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "I currently smoke or inhale nicotine by other means.",
+      "help_text": "Box B - I AM OVER 45 YEARS OF AGE AND:",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 2, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 17,
-      "category": "ent",
+      "category": "box_b",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have hearing loss or balance problems?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "I have a high cholesterol level.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 2, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 18,
-      "category": "ent",
+      "category": "box_b",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have recurring sinus problems or sinus surgery?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "I have high blood pressure.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 2, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 19,
-      "category": "gastrointestinal",
+      "category": "box_b",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have recurring problems with stomach, intestines, or hernias?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "I have had a close blood relative die suddenly or of cardiac disease or stroke before the age of 50, OR have a family history of heart disease before age 50 (including abnormal heart rhythms, coronary artery disease or cardiomyopathy).",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 2, "answer_equals": true}, "requires_physician": true}
     },
+
     {
       "sequence": 20,
-      "category": "gastrointestinal",
+      "category": "box_c",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have diabetes?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Sinus surgery within the last 6 months.",
+      "help_text": "Box C - I HAVE/HAVE HAD:",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 4, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 21,
-      "category": "orthopedic",
+      "category": "box_c",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have back problems, back surgery, or spinal problems?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Ear disease or ear surgery, hearing loss, or problems with balance.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 4, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 22,
-      "category": "orthopedic",
+      "category": "box_c",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have arm/leg/joint problems that could affect safe diving?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Recurrent sinusitis within the past 12 months.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 4, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 23,
-      "category": "behavioral",
+      "category": "box_c",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have a behavioral health, mental, or psychological problem requiring treatment?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Eye surgery within the past 3 months.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 4, "answer_equals": true}, "requires_physician": true}
     },
+
     {
       "sequence": 24,
-      "category": "behavioral",
+      "category": "box_d",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have a fear of closed or open spaces (claustrophobia or agoraphobia)?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Head injury with loss of consciousness within the past 5 years.",
+      "help_text": "Box D - I HAVE/HAVE HAD:",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 6, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 25,
-      "category": "behavioral",
+      "category": "box_d",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have a problem with drug or alcohol abuse?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Persistent neurologic injury or disease.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 6, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 26,
-      "category": "medications",
+      "category": "box_d",
       "question_type": "yes_no",
-      "question_text": "Are you currently taking prescription medications (with the exception of birth control or anti-malarial drugs)?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Recurring migraine headaches within the past 12 months, or take medications to prevent them.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 6, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 27,
-      "category": "dive_history",
+      "category": "box_d",
       "question_type": "yes_no",
-      "question_text": "Have you ever had or do you currently have decompression sickness (the bends)?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Blackouts or fainting (full/partial loss of consciousness) within the last 5 years.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 6, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 28,
-      "category": "dive_history",
+      "category": "box_d",
       "question_type": "yes_no",
-      "question_text": "Have you ever been unable to complete a dive for medical or fitness reasons?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Epilepsy, seizures, or convulsions, OR take medications to prevent them.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 6, "answer_equals": true}, "requires_physician": true}
     },
+
     {
       "sequence": 29,
-      "category": "general",
+      "category": "box_e",
       "question_type": "yes_no",
-      "question_text": "Are you pregnant or trying to become pregnant?",
-      "help_text": "This question applies to female participants only.",
+      "question_text": "Behavioral health, mental or psychological problems requiring medical/psychiatric treatment.",
+      "help_text": "Box E - I HAVE/HAVE HAD:",
       "is_required": false,
-      "triggers_flag": true
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 7, "answer_equals": true}, "requires_physician": true}
     },
     {
       "sequence": 30,
-      "category": "general",
+      "category": "box_e",
       "question_type": "yes_no",
-      "question_text": "Have you had any surgery or major illness in the past 12 months?",
-      "is_required": true,
-      "triggers_flag": true
+      "question_text": "Major depression, suicidal ideation, panic attacks, uncontrolled bipolar disorder requiring medication/psychiatric treatment.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 7, "answer_equals": true}, "requires_physician": true}
+    },
+    {
+      "sequence": 31,
+      "category": "box_e",
+      "question_type": "yes_no",
+      "question_text": "Been diagnosed with a mental health condition or a learning/developmental disorder that requires ongoing care or special accommodation.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 7, "answer_equals": true}, "requires_physician": true}
+    },
+    {
+      "sequence": 32,
+      "category": "box_e",
+      "question_type": "yes_no",
+      "question_text": "An addiction to drugs or alcohol requiring treatment within the last 5 years.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 7, "answer_equals": true}, "requires_physician": true}
+    },
+
+    {
+      "sequence": 33,
+      "category": "box_f",
+      "question_type": "yes_no",
+      "question_text": "Recurrent back problems in the last 6 months that limit my everyday activity.",
+      "help_text": "Box F - I HAVE/HAVE HAD:",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 8, "answer_equals": true}, "requires_physician": true}
+    },
+    {
+      "sequence": 34,
+      "category": "box_f",
+      "question_type": "yes_no",
+      "question_text": "Back or spinal surgery within the last 12 months.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 8, "answer_equals": true}, "requires_physician": true}
+    },
+    {
+      "sequence": 35,
+      "category": "box_f",
+      "question_type": "yes_no",
+      "question_text": "Diabetes, either drug or diet controlled, OR gestational diabetes within the last 12 months.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 8, "answer_equals": true}, "requires_physician": true}
+    },
+    {
+      "sequence": 36,
+      "category": "box_f",
+      "question_type": "yes_no",
+      "question_text": "An uncorrected hernia that limits my physical abilities.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 8, "answer_equals": true}, "requires_physician": true}
+    },
+    {
+      "sequence": 37,
+      "category": "box_f",
+      "question_type": "yes_no",
+      "question_text": "Active or untreated ulcers, problem wounds, or ulcer surgery within the last 6 months.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 8, "answer_equals": true}, "requires_physician": true}
+    },
+
+    {
+      "sequence": 38,
+      "category": "box_g",
+      "question_type": "yes_no",
+      "question_text": "Ostomy surgery and do not have medical clearance to swim or engage in physical activity.",
+      "help_text": "Box G - I HAVE HAD:",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 9, "answer_equals": true}, "requires_physician": true}
+    },
+    {
+      "sequence": 39,
+      "category": "box_g",
+      "question_type": "yes_no",
+      "question_text": "Dehydration requiring medical intervention within the last 7 days.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 9, "answer_equals": true}, "requires_physician": true}
+    },
+    {
+      "sequence": 40,
+      "category": "box_g",
+      "question_type": "yes_no",
+      "question_text": "Active or untreated stomach or intestinal ulcers or ulcer surgery within the last 6 months.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 9, "answer_equals": true}, "requires_physician": true}
+    },
+    {
+      "sequence": 41,
+      "category": "box_g",
+      "question_type": "yes_no",
+      "question_text": "Frequent heartburn, regurgitation, or gastroesophageal reflux disease (GERD).",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 9, "answer_equals": true}, "requires_physician": true}
+    },
+    {
+      "sequence": 42,
+      "category": "box_g",
+      "question_type": "yes_no",
+      "question_text": "Active or uncontrolled ulcerative colitis or Crohn's disease.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 9, "answer_equals": true}, "requires_physician": true}
+    },
+    {
+      "sequence": 43,
+      "category": "box_g",
+      "question_type": "yes_no",
+      "question_text": "Bariatric surgery within the last 12 months.",
+      "is_required": false,
+      "triggers_flag": true,
+      "validation_rules": {"show_if": {"question_sequence": 9, "answer_equals": true}, "requires_physician": true}
     }
   ]
 }

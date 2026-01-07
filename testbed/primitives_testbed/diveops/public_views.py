@@ -4,9 +4,17 @@ These views do NOT require authentication and are rate-limited for security.
 """
 
 from django.http import Http404
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.utils import timezone
 from django.views import View
+
+from django_questionnaires.models import (
+    QuestionnaireInstance,
+    InstanceStatus,
+)
+from django_questionnaires.services import submit_response
+
+from .audit import Actions, log_medical_questionnaire_event
 
 
 class PublicSigningView(View):
@@ -231,5 +239,302 @@ class PublicSigningView(View):
                     "token": token,
                     "errors": [str(e)],
                     "signed_by_name": signed_by_name,
+                },
+            )
+
+
+class PublicMedicalQuestionnaireView(View):
+    """Public-facing medical questionnaire form (no login required).
+
+    Security measures:
+    - Invalid UUID returns 404 (no existence leak)
+    - Expired questionnaires show user-friendly error
+    - Already completed questionnaires show confirmation
+    """
+
+    def get_instance(self, instance_id):
+        """Get questionnaire instance by UUID."""
+        try:
+            return QuestionnaireInstance.objects.select_related(
+                "definition"
+            ).prefetch_related(
+                "definition__questions"
+            ).get(
+                pk=instance_id,
+                deleted_at__isnull=True,
+            )
+        except QuestionnaireInstance.DoesNotExist:
+            return None
+
+    def get_respondent_name(self, instance):
+        """Get respondent name for display."""
+        respondent = instance.respondent
+        if respondent:
+            if hasattr(respondent, "person"):
+                return str(respondent.person)
+            elif hasattr(respondent, "first_name") and hasattr(respondent, "last_name"):
+                return f"{respondent.first_name} {respondent.last_name}"
+            elif hasattr(respondent, "name"):
+                return respondent.name
+            else:
+                return str(respondent)
+        return "Unknown"
+
+    def get_client_ip(self, request):
+        """Get the client IP address from the request."""
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            return x_forwarded_for.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR", "")
+
+    def get_questions_by_category(self, instance):
+        """Organize questions by category with conditional display info."""
+        questions = instance.definition.questions.filter(
+            deleted_at__isnull=True
+        ).order_by("sequence")
+
+        # Separate screening questions from follow-up boxes
+        screening_questions = []
+        follow_up_boxes = {}
+
+        for q in questions:
+            validation_rules = q.validation_rules or {}
+            show_if = validation_rules.get("show_if")
+
+            if show_if:
+                # This is a follow-up question
+                parent_seq = show_if.get("question_sequence")
+                if parent_seq not in follow_up_boxes:
+                    follow_up_boxes[parent_seq] = {
+                        "category": q.category,
+                        "questions": [],
+                    }
+                follow_up_boxes[parent_seq]["questions"].append(q)
+            else:
+                # This is a screening question
+                screening_questions.append({
+                    "question": q,
+                    "opens_box": validation_rules.get("opens_box"),
+                    "requires_physician": validation_rules.get("requires_physician", False),
+                })
+
+        return screening_questions, follow_up_boxes
+
+    def get(self, request, instance_id):
+        """Display the questionnaire form."""
+        instance = self.get_instance(instance_id)
+
+        if not instance:
+            raise Http404()
+
+        # Check if expired
+        if instance.expires_at < timezone.now():
+            return render(
+                request,
+                "diveops/public/medical_expired.html",
+                {"instance": instance},
+            )
+
+        # Check if already completed
+        if instance.status != InstanceStatus.PENDING:
+            return render(
+                request,
+                "diveops/public/medical_already_completed.html",
+                {
+                    "instance": instance,
+                    "respondent_name": self.get_respondent_name(instance),
+                },
+            )
+
+        screening_questions, follow_up_boxes = self.get_questions_by_category(instance)
+
+        return render(
+            request,
+            "diveops/public/medical_form.html",
+            {
+                "instance": instance,
+                "respondent_name": self.get_respondent_name(instance),
+                "screening_questions": screening_questions,
+                "follow_up_boxes": follow_up_boxes,
+                "metadata": instance.definition.metadata or {},
+            },
+        )
+
+    def post(self, request, instance_id):
+        """Handle questionnaire submission."""
+        instance = self.get_instance(instance_id)
+
+        if not instance:
+            raise Http404()
+
+        # Check if expired
+        if instance.expires_at < timezone.now():
+            return render(
+                request,
+                "diveops/public/medical_expired.html",
+                {"instance": instance},
+            )
+
+        # Check if already completed
+        if instance.status != InstanceStatus.PENDING:
+            return render(
+                request,
+                "diveops/public/medical_already_completed.html",
+                {
+                    "instance": instance,
+                    "respondent_name": self.get_respondent_name(instance),
+                },
+            )
+
+        # Collect answers from form
+        answers = {}
+        questions = instance.definition.questions.filter(deleted_at__isnull=True)
+
+        for question in questions:
+            field_name = f"q_{question.sequence}"
+            value = request.POST.get(field_name)
+
+            # Only include answers for questions that were visible
+            # Check if this is a conditional question
+            validation_rules = question.validation_rules or {}
+            show_if = validation_rules.get("show_if")
+
+            if show_if:
+                # This is a follow-up question - check if parent was "Yes"
+                parent_seq = show_if.get("question_sequence")
+                parent_field = f"q_{parent_seq}"
+                parent_value = request.POST.get(parent_field)
+                if parent_value != "yes":
+                    # Parent was "No", skip this follow-up question
+                    continue
+
+            if value is not None:
+                # Use string keys to match service expectation
+                q_id = str(question.pk)
+                if question.question_type == "yes_no":
+                    answers[q_id] = {"answer_bool": value == "yes"}
+                elif question.question_type == "text":
+                    answers[q_id] = {"answer_text": value}
+                elif question.question_type == "number":
+                    try:
+                        answers[q_id] = {"answer_number": float(value) if value else None}
+                    except ValueError:
+                        answers[q_id] = {"answer_number": None}
+                elif question.question_type == "date":
+                    answers[q_id] = {"answer_date": value if value else None}
+                elif question.question_type in ("choice", "multi_choice"):
+                    if question.question_type == "multi_choice":
+                        values = request.POST.getlist(field_name)
+                        answers[q_id] = {"answer_choices": values}
+                    else:
+                        answers[q_id] = {"answer_choices": [value] if value else []}
+
+        # Collect signature and fingerprint data
+        import hashlib
+        import json
+
+        signature_data = request.POST.get("signature_data", "")
+        signed_by_name = request.POST.get("signed_by_name", "")
+
+        fingerprint_data = {
+            "screen_resolution": request.POST.get("fp_screen_resolution", ""),
+            "timezone": request.POST.get("fp_timezone", ""),
+            "timezone_offset": request.POST.get("fp_timezone_offset", ""),
+            "language": request.POST.get("fp_language", ""),
+            "platform": request.POST.get("fp_platform", ""),
+            "device_memory": request.POST.get("fp_device_memory", ""),
+            "hardware_concurrency": request.POST.get("fp_hardware_concurrency", ""),
+            "touch_support": request.POST.get("fp_touch_support", ""),
+            "canvas_fingerprint": request.POST.get("fp_canvas_fingerprint", ""),
+        }
+
+        # Create document hash for integrity verification
+        hash_content = {
+            "answers": answers,
+            "signed_by_name": signed_by_name,
+            "fingerprint": fingerprint_data,
+            "timestamp": timezone.now().isoformat(),
+        }
+        document_hash = hashlib.sha256(
+            json.dumps(hash_content, sort_keys=True).encode()
+        ).hexdigest()
+
+        try:
+            # Submit the response
+            updated_instance = submit_response(instance, answers, actor=None)
+
+            # Store signature metadata on the instance
+            updated_instance.metadata = {
+                "signature": {
+                    "signed_by_name": signed_by_name,
+                    "signature_image": signature_data[:100] + "..." if len(signature_data) > 100 else signature_data,
+                    "signature_full": signature_data,  # Full base64 PNG
+                    "signed_at": timezone.now().isoformat(),
+                    "ip_address": self.get_client_ip(request),
+                    "user_agent": request.META.get("HTTP_USER_AGENT", "")[:500],
+                },
+                "fingerprint": fingerprint_data,
+                "document_hash": document_hash,
+                "esign_consent": request.POST.get("esign_checkbox") == "on",
+            }
+            updated_instance.save(update_fields=["metadata"])
+
+            # Generate and store signed PDF
+            try:
+                from .medical.pdf_service import generate_and_store_medical_pdf
+                document, pdf_hash = generate_and_store_medical_pdf(
+                    instance=updated_instance,
+                    actor=None,
+                )
+                # Refresh instance to get updated metadata
+                updated_instance.refresh_from_db()
+            except Exception as pdf_error:
+                # Log error but don't fail the submission
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to generate medical PDF: {pdf_error}")
+
+            # Log to audit trail
+            if updated_instance.status == InstanceStatus.FLAGGED:
+                log_medical_questionnaire_event(
+                    action=Actions.MEDICAL_QUESTIONNAIRE_FLAGGED,
+                    instance=updated_instance,
+                    actor=None,
+                    request=request,
+                    data={"submission_type": "public_form"},
+                )
+            else:
+                log_medical_questionnaire_event(
+                    action=Actions.MEDICAL_QUESTIONNAIRE_COMPLETED,
+                    instance=updated_instance,
+                    actor=None,
+                    request=request,
+                    data={"submission_type": "public_form"},
+                )
+
+            # Redirect to success page
+            return render(
+                request,
+                "diveops/public/medical_success.html",
+                {
+                    "instance": updated_instance,
+                    "respondent_name": self.get_respondent_name(updated_instance),
+                    "is_flagged": updated_instance.status == InstanceStatus.FLAGGED,
+                },
+            )
+
+        except Exception as e:
+            screening_questions, follow_up_boxes = self.get_questions_by_category(instance)
+
+            return render(
+                request,
+                "diveops/public/medical_form.html",
+                {
+                    "instance": instance,
+                    "respondent_name": self.get_respondent_name(instance),
+                    "screening_questions": screening_questions,
+                    "follow_up_boxes": follow_up_boxes,
+                    "metadata": instance.definition.metadata or {},
+                    "errors": [str(e)],
                 },
             )
