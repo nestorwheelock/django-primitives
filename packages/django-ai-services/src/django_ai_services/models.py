@@ -17,7 +17,11 @@ class AIServiceConfig(SingletonModel):
     """
     Global AI service configuration.
     Supports API key storage with environment variable fallback.
+    Optional encryption for provider configs at rest.
     """
+
+    # Class-level encryption key (set at app startup, not stored in DB)
+    _encryption_key: str | None = None
 
     # Provider Configuration
     _provider_configs = models.TextField(
@@ -135,9 +139,41 @@ class AIServiceConfig(SingletonModel):
     class Meta:
         verbose_name = "AI Service Configuration"
 
+    # ═══════════════════════════════════════════════════════════════════
+    # ENCRYPTION METHODS
+    # ═══════════════════════════════════════════════════════════════════
+
+    @classmethod
+    def set_encryption_key(cls, key: str):
+        """
+        Set encryption key from environment (call at app startup).
+
+        Args:
+            key: A Fernet-compatible key (use Fernet.generate_key())
+        """
+        cls._encryption_key = key
+
+    def _get_fernet(self):
+        """Get Fernet instance if encryption key is set."""
+        if self._encryption_key:
+            try:
+                from cryptography.fernet import Fernet
+                return Fernet(self._encryption_key.encode())
+            except Exception:
+                return None
+        return None
+
     @property
     def provider_configs(self) -> dict:
-        """Return provider configs."""
+        """Decrypt and return provider configs."""
+        fernet = self._get_fernet()
+        if fernet and self._provider_configs:
+            try:
+                decrypted = fernet.decrypt(self._provider_configs.encode())
+                return json.loads(decrypted)
+            except Exception:
+                # Fall back to plain JSON if decryption fails
+                pass
         try:
             return json.loads(self._provider_configs)
         except json.JSONDecodeError:
@@ -145,8 +181,13 @@ class AIServiceConfig(SingletonModel):
 
     @provider_configs.setter
     def provider_configs(self, value: dict):
-        """Store provider configs."""
-        self._provider_configs = json.dumps(value)
+        """Encrypt and store provider configs."""
+        json_str = json.dumps(value)
+        fernet = self._get_fernet()
+        if fernet:
+            self._provider_configs = fernet.encrypt(json_str.encode()).decode()
+        else:
+            self._provider_configs = json_str
 
     def get_provider_config(self, provider_name: str) -> dict:
         """Get config for specific provider, with env fallback."""

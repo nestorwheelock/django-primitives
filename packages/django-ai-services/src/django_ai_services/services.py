@@ -525,6 +525,26 @@ class AIService:
 
         AIUsageLog.objects.create(**log_kwargs)
 
+        # Also log to django-audit-log if target_obj provided and success
+        if target_obj and success:
+            try:
+                from django_audit_log import log as audit_log
+
+                # Use response.model (actual model used) when available
+                actual_model = response.model if response else model
+                audit_log(
+                    action=f"ai_{operation}",
+                    obj=target_obj,
+                    actor=self.user,
+                    metadata={
+                        "model": actual_model,
+                        "cost_usd": str(response.cost_usd if response else 0),
+                    },
+                )
+            except ImportError:
+                # django-audit-log not installed, skip
+                pass
+
     def analyze_object(
         self,
         obj,

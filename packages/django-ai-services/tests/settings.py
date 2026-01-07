@@ -7,6 +7,8 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
     "django_singleton",
+    "django_decisioning",
+    "django_audit_log",
     "django_ai_services",
 ]
 
