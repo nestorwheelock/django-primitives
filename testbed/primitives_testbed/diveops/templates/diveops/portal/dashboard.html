@@ -38,7 +38,15 @@
         <div class="bg-white shadow rounded-lg p-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center">
-                    {% icon "heart" "w-8 h-8 mr-3 {% if medical_status.has_clearance and not medical_status.is_expired %}text-green-500{% elif medical_status.is_expired %}text-red-500{% else %}text-gray-400{% endif %}" %}
+                    <div class="w-8 h-8 mr-3 flex items-center justify-center">
+                        {% if medical_status.has_clearance and not medical_status.is_expired %}
+                            {% icon "heart" "w-8 h-8 text-green-500" %}
+                        {% elif medical_status.is_expired %}
+                            {% icon "heart" "w-8 h-8 text-red-500" %}
+                        {% else %}
+                            {% icon "heart" "w-8 h-8 text-gray-400" %}
+                        {% endif %}
+                    </div>
                     <div>
                         <h4 class="text-sm font-medium text-gray-500">Medical Clearance</h4>
                         {% if medical_status.has_clearance %}
@@ -64,7 +72,13 @@
         <div class="bg-white shadow rounded-lg p-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center">
-                    {% icon "file-text" "w-8 h-8 mr-3 {% if pending_agreements %}text-yellow-500{% else %}text-green-500{% endif %}" %}
+                    <div class="w-8 h-8 mr-3 flex items-center justify-center">
+                        {% if pending_agreements %}
+                            {% icon "file-text" "w-8 h-8 text-yellow-500" %}
+                        {% else %}
+                            {% icon "file-text" "w-8 h-8 text-green-500" %}
+                        {% endif %}
+                    </div>
                     <div>
                         <h4 class="text-sm font-medium text-gray-500">Agreements</h4>
                         {% if pending_agreements %}
