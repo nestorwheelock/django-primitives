@@ -158,3 +158,28 @@ def youtube_embed_url(url):
 
     # Return as-is if we can't parse it
     return url
+
+
+@register.filter
+def get_item(collection, key):
+    """
+    Get an item from a dictionary or list using a variable key/index.
+
+    Usage in template:
+        {{ my_dict|get_item:key_variable }}
+        {{ my_list|get_item:index }}
+
+    Handles both string and integer keys for dicts, and integer indices for lists.
+    """
+    if collection is None:
+        return None
+    try:
+        # Try dictionary-style access first
+        return collection.get(key)
+    except (AttributeError, TypeError):
+        pass
+    try:
+        # Try list-style index access
+        return collection[int(key)]
+    except (IndexError, ValueError, TypeError, KeyError):
+        return None

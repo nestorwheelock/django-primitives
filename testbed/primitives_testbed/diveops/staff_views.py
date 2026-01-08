@@ -106,10 +106,37 @@ class DiverListView(StaffPortalMixin, ListView):
     context_object_name = "divers"
 
     def get_queryset(self):
-        """Return divers with person data."""
-        return DiverProfile.objects.select_related("person").order_by(
+        """Return divers with person data and profile photo."""
+        return DiverProfile.objects.select_related(
+            "person", "profile_photo"
+        ).order_by(
             "person__last_name", "person__first_name"
         )
+
+    def get_context_data(self, **kwargs):
+        """Add medical status for each diver."""
+        context = super().get_context_data(**kwargs)
+        divers = context["divers"]
+
+        # Fetch medical status and instances for all divers
+        try:
+            from .medical.services import get_diver_medical_status, get_diver_medical_instance
+
+            medical_data = {}
+            for diver in divers:
+                status = get_diver_medical_status(diver)
+                instance = get_diver_medical_instance(diver)
+                has_restrictions = bool(instance and instance.clearance_notes)
+                medical_data[diver.pk] = {
+                    "status": status.value,
+                    "has_restrictions": has_restrictions,
+                    "instance": instance,
+                }
+            context["medical_data"] = medical_data
+        except ImportError:
+            context["medical_data"] = {}
+
+        return context
 
 
 class CreateDiverView(StaffPortalMixin, FormView):
@@ -185,7 +212,7 @@ class EditDiverView(StaffPortalMixin, FormView):
 
 
 class ExcursionListView(StaffPortalMixin, ListView):
-    """List upcoming dive excursions for staff."""
+    """Excursions dashboard with scheduled trips and available products."""
 
     model = Excursion
     template_name = "diveops/staff/excursion_list.html"
@@ -194,6 +221,14 @@ class ExcursionListView(StaffPortalMixin, ListView):
     def get_queryset(self):
         """Return upcoming excursions with booking counts."""
         return list_upcoming_excursions()
+
+    def get_context_data(self, **kwargs):
+        """Add excursion types for quick booking section."""
+        context = super().get_context_data(**kwargs)
+        context["excursion_types"] = ExcursionType.objects.filter(
+            is_active=True
+        ).order_by("name")
+        return context
 
 
 class ExcursionDetailView(StaffPortalMixin, DetailView):
@@ -350,7 +385,7 @@ class DiverDetailView(StaffPortalMixin, DetailView):
         return diver
 
     def get_context_data(self, **kwargs):
-        """Add certifications, permits, and medical status to context."""
+        """Add certifications, permits, medical status, notes, documents, and agreements to context."""
         context = super().get_context_data(**kwargs)
         context["certifications"] = self.object.certifications.filter(
             deleted_at__isnull=True
@@ -361,12 +396,40 @@ class DiverDetailView(StaffPortalMixin, DetailView):
             permit_type=ProtectedAreaPermit.PermitType.GUIDE,
             deleted_at__isnull=True
         ).select_related("protected_area").prefetch_related("guide_details").order_by("protected_area__name")
-        # Add medical status
+        # Add medical status and questionnaire instance
         try:
-            from .medical.services import get_diver_medical_status
+            from .medical.services import get_diver_medical_status, get_diver_medical_instance
             context["medical_status"] = get_diver_medical_status(self.object).value
+            context["medical_instance"] = get_diver_medical_instance(self.object)
         except ImportError:
             context["medical_status"] = None
+            context["medical_instance"] = None
+
+        # Add staff notes using django-notes primitive
+        from django_notes.models import Note
+        context["staff_notes"] = Note.objects.for_target(self.object).select_related("author")
+
+        # Add documents using django-documents primitive
+        from django_documents.models import Document
+        context["documents"] = Document.objects.for_target(self.object).order_by("-created_at")
+
+        # Add signable agreements for this diver (linked via Person, not DiverProfile)
+        from django.contrib.contenttypes.models import ContentType
+        from .models import SignableAgreement
+        person_ct = ContentType.objects.get_for_model(self.object.person)
+        context["agreements"] = SignableAgreement.objects.filter(
+            party_a_content_type=person_ct,
+            party_a_object_id=str(self.object.person.pk),
+            deleted_at__isnull=True,
+        ).select_related("template").order_by("-created_at")
+
+        # Add photos where diver is tagged using PhotoTag
+        from .models import PhotoTag
+        context["photo_tags"] = PhotoTag.objects.filter(
+            diver=self.object,
+            deleted_at__isnull=True,
+        ).select_related("document", "document__media_asset").order_by("-created_at")[:12]
+
         return context
 
 
@@ -432,6 +495,14 @@ class EditCertificationView(StaffPortalMixin, UpdateView):
             DiverCertification.objects.select_related("diver", "level", "level__agency"),
             pk=self.kwargs["pk"],
         )
+
+    def get_form_kwargs(self):
+        """Ensure request.FILES is passed to the form for file uploads."""
+        kwargs = super().get_form_kwargs()
+        # Explicitly include FILES for multipart form handling
+        if self.request.method in ("POST", "PUT"):
+            kwargs["files"] = self.request.FILES
+        return kwargs
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
@@ -619,9 +690,16 @@ class DiveSiteDetailView(StaffPortalMixin, DetailView):
         )
 
     def get_context_data(self, **kwargs):
-        """Add page title, price adjustments, dive plans, and excursion types to context."""
+        """Add page title, price adjustments, dive plans, excursion types, and photos to context."""
         context = super().get_context_data(**kwargs)
         context["page_title"] = self.object.name
+
+        # Photos
+        context["profile_photo"] = self.object.profile_photo
+        context["featured_photos"] = self.object.featured_photos
+        context["gallery_photos"] = self.object.gallery_photos
+        context["all_photos"] = self.object.all_photos
+
         # Get price adjustments for this site
         context["price_adjustments"] = self.object.price_adjustments.all().order_by("kind")
         # Get dive plans (ExcursionTypeDive) for this site
@@ -762,6 +840,259 @@ class DiveSiteDeleteView(StaffPortalMixin, View):
             "diveops/staff/site_confirm_delete.html",
             {"site": site, "page_title": f"Delete {site.name}"},
         )
+
+
+# =============================================================================
+# Dive Site Photo Views
+# =============================================================================
+
+
+class DiveSitePhotoUploadView(StaffPortalMixin, View):
+    """Upload photos to a dive site."""
+
+    def get(self, request, pk):
+        site = get_object_or_404(DiveSite, pk=pk, deleted_at__isnull=True)
+        return render(request, "diveops/staff/site_photo_upload.html", {
+            "site": site,
+            "page_title": f"Upload Photos - {site.name}",
+        })
+
+    def post(self, request, pk):
+        from django.db.models import Max
+        from django_documents.services import attach_document, get_or_create_folder_path
+        from .models import DiveSitePhoto, DiveSitePhotoTag
+        from .document_metadata import extract_document_metadata
+
+        site = get_object_or_404(DiveSite, pk=pk, deleted_at__isnull=True)
+
+        photos = request.FILES.getlist("photos")
+        if not photos:
+            messages.error(request, "Please select at least one photo to upload.")
+            return redirect("diveops:site-photo-upload", pk=pk)
+
+        # Get or create Dive Sites folder
+        folder = get_or_create_folder_path("Dive Sites/Site Photos")
+
+        uploaded_count = 0
+        for photo in photos:
+            # Use attach_document service
+            doc = attach_document(
+                target=site,
+                file=photo,
+                document_type="dive_site_photo",
+                uploaded_by=request.user,
+                description=f"Photo of {site.name}",
+                folder=folder,
+            )
+
+            # Set category for images and create MediaAsset
+            if doc.content_type and doc.content_type.startswith("image/"):
+                doc.category = "image"
+                doc.save(update_fields=["category", "updated_at"])
+
+                # Create MediaAsset so it shows up in Media Library
+                try:
+                    from django_documents.media_service import process_image_upload, generate_renditions
+                    asset = process_image_upload(doc)
+                    generate_renditions(asset)
+                except Exception:
+                    pass  # Best effort - thumbnails may already exist
+
+                # Auto-extract EXIF metadata
+                try:
+                    extracted = extract_document_metadata(doc)
+                    if extracted:
+                        metadata = doc.metadata or {}
+                        metadata.update(extracted)
+                        doc.metadata = metadata
+                        doc.save(update_fields=["metadata", "updated_at"])
+                except Exception:
+                    pass  # Best effort
+
+            # Get next position for gallery (non-featured)
+            max_pos = DiveSitePhoto.objects.filter(
+                dive_site=site,
+                is_featured=False,
+                deleted_at__isnull=True,
+            ).aggregate(Max("position"))["position__max"] or 0
+
+            # Create DiveSitePhoto link
+            DiveSitePhoto.objects.create(
+                dive_site=site,
+                document=doc,
+                position=max_pos + 1,
+                is_featured=False,
+                uploaded_by=request.user,
+            )
+
+            # Auto-tag the photo with this dive site
+            DiveSitePhotoTag.objects.get_or_create(
+                document=doc,
+                dive_site=site,
+                defaults={"tagged_by": request.user},
+            )
+
+            uploaded_count += 1
+
+        messages.success(request, f"Uploaded {uploaded_count} photo{'s' if uploaded_count != 1 else ''} to {site.name}.")
+        return redirect("diveops:staff-site-detail", pk=pk)
+
+
+class DiveSiteSetProfilePhotoView(StaffPortalMixin, View):
+    """Set a photo as the dive site's profile photo."""
+
+    def post(self, request, pk, photo_pk):
+        from .models import DiveSitePhoto
+
+        site = get_object_or_404(DiveSite, pk=pk, deleted_at__isnull=True)
+        site_photo = get_object_or_404(
+            DiveSitePhoto,
+            pk=photo_pk,
+            dive_site=site,
+            deleted_at__isnull=True,
+        )
+
+        site.profile_photo = site_photo.document
+        site.save(update_fields=["profile_photo", "updated_at"])
+
+        messages.success(request, "Profile photo updated.")
+        return redirect("diveops:staff-site-detail", pk=pk)
+
+
+class DiveSiteSetFeaturedPhotoView(StaffPortalMixin, View):
+    """Set a photo as featured (positions 1-4) or remove from featured."""
+
+    def post(self, request, pk, photo_pk):
+        from .models import DiveSitePhoto
+
+        site = get_object_or_404(DiveSite, pk=pk, deleted_at__isnull=True)
+        site_photo = get_object_or_404(
+            DiveSitePhoto,
+            pk=photo_pk,
+            dive_site=site,
+            deleted_at__isnull=True,
+        )
+
+        position = request.POST.get("position")
+        if position:
+            position = int(position)
+            if 1 <= position <= 4:
+                # Clear existing photo at this position
+                DiveSitePhoto.objects.filter(
+                    dive_site=site,
+                    position=position,
+                    is_featured=True,
+                    deleted_at__isnull=True,
+                ).exclude(pk=site_photo.pk).update(is_featured=False, position=0)
+
+                site_photo.position = position
+                site_photo.is_featured = True
+                site_photo.save(update_fields=["position", "is_featured", "updated_at"])
+                messages.success(request, f"Photo set as featured #{position}.")
+            else:
+                messages.error(request, "Position must be 1-4.")
+        else:
+            # Remove from featured
+            site_photo.is_featured = False
+            site_photo.position = 0
+            site_photo.save(update_fields=["position", "is_featured", "updated_at"])
+            messages.success(request, "Photo removed from featured.")
+
+        return redirect("diveops:staff-site-detail", pk=pk)
+
+
+class DiveSiteRemovePhotoView(StaffPortalMixin, View):
+    """Remove a photo from the dive site (soft delete the link)."""
+
+    def post(self, request, pk, photo_pk):
+        from django.utils import timezone
+        from .models import DiveSitePhoto
+
+        site = get_object_or_404(DiveSite, pk=pk, deleted_at__isnull=True)
+        site_photo = get_object_or_404(
+            DiveSitePhoto,
+            pk=photo_pk,
+            dive_site=site,
+            deleted_at__isnull=True,
+        )
+
+        # If this was the profile photo, clear it
+        if site.profile_photo_id == site_photo.document_id:
+            site.profile_photo = None
+            site.save(update_fields=["profile_photo", "updated_at"])
+
+        # Soft delete the link
+        site_photo.deleted_at = timezone.now()
+        site_photo.save(update_fields=["deleted_at", "updated_at"])
+
+        messages.success(request, "Photo removed from dive site.")
+        return redirect("diveops:staff-site-detail", pk=pk)
+
+
+class DiveSiteClearProfilePhotoView(StaffPortalMixin, View):
+    """Clear the profile photo from a dive site."""
+
+    def post(self, request, pk):
+        site = get_object_or_404(DiveSite, pk=pk, deleted_at__isnull=True)
+
+        if site.profile_photo:
+            site.profile_photo = None
+            site.save(update_fields=["profile_photo", "updated_at"])
+            messages.success(request, "Profile photo cleared.")
+        else:
+            messages.info(request, "No profile photo was set.")
+
+        return redirect("diveops:site-photo-manage", pk=pk)
+
+
+class DiveSiteUnfeaturePhotoView(StaffPortalMixin, View):
+    """Remove featured status from a dive site photo."""
+
+    def post(self, request, pk, photo_pk):
+        from .models import DiveSitePhoto
+
+        site = get_object_or_404(DiveSite, pk=pk, deleted_at__isnull=True)
+        site_photo = get_object_or_404(
+            DiveSitePhoto,
+            pk=photo_pk,
+            dive_site=site,
+            deleted_at__isnull=True,
+        )
+
+        if site_photo.is_featured:
+            site_photo.is_featured = False
+            site_photo.position = 0
+            site_photo.save(update_fields=["is_featured", "position", "updated_at"])
+            messages.success(request, "Photo removed from featured.")
+        else:
+            messages.info(request, "Photo was not featured.")
+
+        return redirect("diveops:site-photo-manage", pk=pk)
+
+
+class DiveSitePhotoManageView(StaffPortalMixin, View):
+    """Manage dive site photos - reorder, set featured, etc."""
+
+    def get(self, request, pk):
+        from .models import DiveSitePhoto
+
+        site = get_object_or_404(DiveSite, pk=pk, deleted_at__isnull=True)
+
+        all_photos = DiveSitePhoto.objects.filter(
+            dive_site=site,
+            deleted_at__isnull=True,
+        ).select_related("document").order_by("-is_featured", "position")
+
+        featured_photos = [p for p in all_photos if p.is_featured]
+        gallery_photos = [p for p in all_photos if not p.is_featured]
+
+        return render(request, "diveops/staff/site_photo_manage.html", {
+            "site": site,
+            "all_photos": all_photos,
+            "featured_photos": featured_photos,
+            "gallery_photos": gallery_photos,
+            "page_title": f"Manage Photos - {site.name}",
+        })
 
 
 # =============================================================================
@@ -4872,10 +5203,13 @@ class SignableAgreementDetailView(StaffPortalMixin, DetailView):
             "sent_by",
             "ledger_agreement",
             "signed_document",
+            "signature_document",
         ).prefetch_related("revisions")
 
     def get_context_data(self, **kwargs):
         """Add context data."""
+        import base64
+
         context = super().get_context_data(**kwargs)
         agreement = self.object
 
@@ -4899,6 +5233,17 @@ class SignableAgreementDetailView(StaffPortalMixin, DetailView):
             context["signing_url"] = self.request.build_absolute_uri(
                 f"/sign/{agreement.access_token}/"
             )
+
+        # Get signature image as data URL for display
+        if agreement.signature_document and agreement.signature_document.file:
+            try:
+                agreement.signature_document.file.seek(0)
+                signature_bytes = agreement.signature_document.file.read()
+                content_type = agreement.signature_document.content_type or "image/png"
+                signature_b64 = base64.b64encode(signature_bytes).decode("utf-8")
+                context["signature_data_url"] = f"data:{content_type};base64,{signature_b64}"
+            except Exception:
+                context["signature_data_url"] = None
 
         return context
 
@@ -5342,6 +5687,7 @@ class MedicalQuestionnaireListView(StaffPortalMixin, ListView):
             "definition",
             "respondent_content_type",
             "cleared_by",
+            "clearance_document_content_type",
         )
 
         # Filter by status
@@ -5419,14 +5765,19 @@ class MedicalQuestionnaireDetailView(StaffPortalMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from django_questionnaires.services import get_flagged_questions
+        from primitives_testbed.diveops.medical.pdf_service import MedicalQuestionnairePDFService
 
         instance = self.object
 
-        # Get all questions with their responses
+        # Use PDF service to get organized questions (same format as PDF display)
+        pdf_service = MedicalQuestionnairePDFService(instance)
+        organized = pdf_service.get_organized_questions()
+        context["screening_questions"] = organized["screening"]
+        context["follow_up_boxes"] = organized["follow_up_boxes"]
+
+        # Keep questions_responses for backwards compatibility with other views
         questions = list(instance.definition.questions.all())
         responses = {r.question_id: r for r in instance.responses.all()}
-
-        # Build question-response pairs
         context["questions_responses"] = [
             {
                 "question": q,
@@ -5451,6 +5802,10 @@ class MedicalQuestionnaireDetailView(StaffPortalMixin, DetailView):
                 )
             except Document.DoesNotExist:
                 pass
+
+        # Get clearance document if available
+        if hasattr(instance, 'clearance_document') and instance.clearance_document:
+            context["clearance_document"] = instance.clearance_document
 
         return context
 
@@ -5532,16 +5887,27 @@ class MedicalClearanceUploadView(StaffPortalMixin, View):
         # Handle file upload if provided
         document = None
         if "clearance_document" in request.FILES:
-            from django_documents.services import upload_document, get_or_create_folder
+            from django_documents.services import attach_document, get_or_create_folder_path
 
             file = request.FILES["clearance_document"]
-            folder = get_or_create_folder("Medical Clearances")
+            folder = get_or_create_folder_path("Medical/Physician Statements")
 
-            document = upload_document(
+            # Extract EXIF data from images
+            exif_data = {}
+            content_type = getattr(file, 'content_type', '')
+            if content_type.startswith('image/'):
+                exif_data = self._extract_exif(file)
+                file.seek(0)  # Reset file pointer after reading
+
+            # Attach document to the diver (respondent)
+            document = attach_document(
+                target=instance.respondent,
                 file=file,
+                document_type="physician_clearance",
+                uploaded_by=request.user,
+                description=f"Physician Clearance - {instance.respondent}",
                 folder=folder,
-                title=f"Physician Clearance - {instance.respondent}",
-                actor=request.user,
+                metadata={"exif": exif_data} if exif_data else None,
             )
 
         # Clear the instance
@@ -5554,6 +5920,73 @@ class MedicalClearanceUploadView(StaffPortalMixin, View):
 
         messages.success(request, "Medical questionnaire cleared successfully.")
         return redirect("diveops:medical-detail", pk=pk)
+
+    def _extract_exif(self, file):
+        """Extract EXIF data from an image file."""
+        try:
+            from PIL import Image
+            from PIL.ExifTags import TAGS, GPSTAGS
+
+            img = Image.open(file)
+            exif_raw = img._getexif()
+            if not exif_raw:
+                return {}
+
+            exif = {}
+            for tag_id, value in exif_raw.items():
+                tag = TAGS.get(tag_id, tag_id)
+                # Skip binary/complex data
+                if isinstance(value, bytes):
+                    continue
+                if tag == "GPSInfo":
+                    gps = {}
+                    for gps_tag_id, gps_value in value.items():
+                        gps_tag = GPSTAGS.get(gps_tag_id, gps_tag_id)
+                        gps[gps_tag] = str(gps_value) if not isinstance(gps_value, (int, float)) else gps_value
+                    exif["GPSInfo"] = gps
+                elif tag in ("DateTimeOriginal", "DateTime", "DateTimeDigitized", "Make", "Model", "Software"):
+                    exif[tag] = str(value)
+
+            return exif
+        except Exception:
+            return {}
+
+
+class MedicalQuestionnaireVoidView(StaffPortalMixin, View):
+    """Void a medical questionnaire instance."""
+
+    def post(self, request, pk):
+        from django_questionnaires.models import QuestionnaireInstance, InstanceStatus
+        from django_questionnaires.services import void_instance
+
+        instance = get_object_or_404(
+            QuestionnaireInstance,
+            pk=pk,
+            deleted_at__isnull=True,
+        )
+
+        # Cannot void an already voided instance
+        if instance.status == InstanceStatus.VOIDED:
+            messages.error(request, "This questionnaire has already been voided.")
+            return redirect("diveops:medical-detail", pk=pk)
+
+        reason = request.POST.get("reason", "").strip()
+
+        try:
+            void_instance(
+                instance=instance,
+                voided_by=request.user,
+                reason=reason,
+            )
+            diver_name = str(instance.respondent) if instance.respondent else "Unknown"
+            messages.success(
+                request,
+                f"Medical questionnaire for {diver_name} has been voided."
+            )
+        except ValueError as e:
+            messages.error(request, str(e))
+
+        return redirect("diveops:medical-list")
 
 
 class DiverMedicalStatusView(StaffPortalMixin, DetailView):
@@ -5711,3 +6144,802 @@ class SendMedicalQuestionnaireCreateView(StaffPortalMixin, View):
         except Exception as e:
             messages.error(request, f"Error sending questionnaire: {e}")
             return redirect("diveops:medical-list")
+
+
+# =============================================================================
+# Media Library Views
+# =============================================================================
+
+
+class MediaLibraryView(StaffPortalMixin, ListView):
+    """Media Library - browse all images and videos."""
+
+    template_name = "diveops/staff/media_library.html"
+    context_object_name = "media_assets"
+    paginate_by = 24
+
+    def get_queryset(self):
+        from django_documents.models import MediaAsset, MediaKind
+
+        queryset = MediaAsset.objects.select_related(
+            "document",
+        ).filter(
+            document__deleted_at__isnull=True,
+        ).order_by("-created_at")
+
+        # Filter by kind
+        kind = self.request.GET.get("kind")
+        if kind == "image":
+            queryset = queryset.filter(kind=MediaKind.IMAGE)
+        elif kind == "video":
+            queryset = queryset.filter(kind=MediaKind.VIDEO)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Media Library"
+        context["current_kind"] = self.request.GET.get("kind", "")
+        return context
+
+
+class MediaDetailView(StaffPortalMixin, DetailView):
+    """Media detail view - show media asset info and renditions."""
+
+    template_name = "diveops/staff/media_detail.html"
+    context_object_name = "media_asset"
+
+    def get_queryset(self):
+        from django_documents.models import MediaAsset
+
+        return MediaAsset.objects.select_related(
+            "document",
+        ).prefetch_related(
+            "renditions",
+            "document__attachments",
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = self.object.document.filename
+
+        # Photo tagging - get divers tagged in this photo
+        doc = self.object.document
+        if doc.category == "image" or self.object.kind == "image":
+            from .models import PhotoTag, DiverProfile, DiveSitePhotoTag, DiveSite
+
+            # Diver tagging
+            context["photo_tags"] = PhotoTag.objects.filter(
+                document=doc, deleted_at__isnull=True
+            ).select_related("diver__person", "tagged_by")
+
+            # Get divers not already tagged in this photo
+            tagged_diver_ids = context["photo_tags"].values_list("diver_id", flat=True)
+            context["available_divers"] = DiverProfile.objects.filter(
+                deleted_at__isnull=True
+            ).exclude(
+                id__in=tagged_diver_ids
+            ).select_related("person").order_by("person__last_name", "person__first_name")[:100]
+            context["can_tag_divers"] = True
+
+            # Dive site tagging
+            context["dive_site_tags"] = DiveSitePhotoTag.objects.filter(
+                document=doc, deleted_at__isnull=True
+            ).select_related("dive_site", "tagged_by")
+
+            # Get dive sites not already tagged in this photo
+            tagged_site_ids = context["dive_site_tags"].values_list("dive_site_id", flat=True)
+            context["available_dive_sites"] = DiveSite.objects.filter(
+                deleted_at__isnull=True
+            ).exclude(
+                id__in=tagged_site_ids
+            ).order_by("name")[:100]
+            context["can_tag_dive_sites"] = True
+        else:
+            context["can_tag_divers"] = False
+            context["can_tag_dive_sites"] = False
+
+        return context
+
+
+class MediaUploadView(StaffPortalMixin, View):
+    """Handle media file uploads."""
+
+    def post(self, request):
+        from django_documents.models import Document, MediaAsset
+        from django_documents.media_service import process_image_upload, generate_renditions
+
+        file = request.FILES.get("file")
+        if not file:
+            messages.error(request, "No file was uploaded.")
+            return redirect("diveops:media-library")
+
+        # Create document
+        doc = Document.objects.create(
+            file=file,
+            filename=file.name,
+            content_type=file.content_type,
+            document_type="media",
+            file_size=file.size,
+        )
+
+        # Process as image if it's an image
+        if file.content_type.startswith("image/"):
+            asset = process_image_upload(doc)
+            # Generate renditions
+            generate_renditions(asset)
+
+        messages.success(request, f"Uploaded {file.name}")
+        return redirect("diveops:media-library")
+
+
+# =============================================================================
+# Diver Staff Notes Views (using django-notes primitive)
+# =============================================================================
+
+
+class DiverAddNoteView(StaffPortalMixin, View):
+    """Add a staff note to a diver profile."""
+
+    def post(self, request, diver_pk):
+        from django_notes.models import Note
+        from .audit import Actions, log_diver_note_event
+
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+        content = request.POST.get("content", "").strip()
+        visibility = request.POST.get("visibility", "internal")
+
+        if not content:
+            messages.error(request, "Note content is required.")
+            return redirect("diveops:diver-detail", pk=diver_pk)
+
+        note = Note.objects.create(
+            target=diver,
+            content=content,
+            author=request.user,
+            visibility=visibility,
+        )
+
+        # Audit log
+        log_diver_note_event(
+            action=Actions.DIVER_NOTE_ADDED,
+            note=note,
+            diver=diver,
+            actor=request.user,
+            request=request,
+        )
+
+        messages.success(request, "Note added successfully.")
+        return redirect("diveops:diver-detail", pk=diver_pk)
+
+
+class DiverDeleteNoteView(StaffPortalMixin, View):
+    """Delete a staff note from a diver profile."""
+
+    def post(self, request, diver_pk, note_pk):
+        from django_notes.models import Note
+        from .audit import Actions, log_diver_note_event
+
+        note = get_object_or_404(Note, pk=note_pk, deleted_at__isnull=True)
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+
+        # Audit log before deletion
+        log_diver_note_event(
+            action=Actions.DIVER_NOTE_DELETED,
+            note=note,
+            diver=diver,
+            actor=request.user,
+            request=request,
+        )
+
+        # Soft delete the note
+        note.deleted_at = timezone.now()
+        note.save(update_fields=["deleted_at", "updated_at"])
+
+        messages.success(request, "Note deleted.")
+        return redirect("diveops:diver-detail", pk=diver_pk)
+
+
+# =============================================================================
+# Diver Documents Views (using django-documents primitive)
+# =============================================================================
+
+
+class DiverUploadDocumentView(StaffPortalMixin, View):
+    """Upload a document attached to a diver profile."""
+
+    def post(self, request, diver_pk):
+        from django_documents.models import Document
+        from .models import PhotoTag
+        from .audit import Actions, log_diver_document_event
+
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+        file = request.FILES.get("file")
+        document_type = request.POST.get("document_type", "general")
+        description = request.POST.get("description", "")
+
+        if not file:
+            messages.error(request, "No file was uploaded.")
+            return redirect("diveops:diver-detail", pk=diver_pk)
+
+        doc = Document.objects.create(
+            target=diver,
+            file=file,
+            filename=file.name,
+            content_type=file.content_type or "application/octet-stream",
+            file_size=file.size,
+            document_type=document_type,
+            description=description,
+        )
+
+        # Compute and store checksum
+        doc.checksum = doc.compute_checksum()
+        doc.save(update_fields=["checksum"])
+
+        # Auto-tag the diver in the photo if it's an image
+        if doc.content_type and doc.content_type.startswith("image/"):
+            doc.category = "image"
+            doc.save(update_fields=["category", "updated_at"])
+
+            # Create MediaAsset so it shows up in Media Library
+            try:
+                from django_documents.media_service import process_image_upload, generate_renditions
+                asset = process_image_upload(doc)
+                generate_renditions(asset)
+            except Exception:
+                pass  # Best effort
+
+            PhotoTag.objects.get_or_create(
+                document=doc,
+                diver=diver,
+                defaults={"tagged_by": request.user},
+            )
+
+        # Audit log
+        log_diver_document_event(
+            action=Actions.DIVER_DOCUMENT_UPLOADED,
+            document=doc,
+            diver=diver,
+            actor=request.user,
+            request=request,
+        )
+
+        messages.success(request, f"Document '{file.name}' uploaded successfully.")
+        return redirect("diveops:diver-detail", pk=diver_pk)
+
+
+class DiverDeleteDocumentView(StaffPortalMixin, View):
+    """Delete a document from a diver profile."""
+
+    def post(self, request, diver_pk, doc_pk):
+        from django_documents.models import Document
+        from .audit import Actions, log_diver_document_event
+
+        doc = get_object_or_404(Document, pk=doc_pk, deleted_at__isnull=True)
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+
+        # Audit log before deletion
+        log_diver_document_event(
+            action=Actions.DIVER_DOCUMENT_DELETED,
+            document=doc,
+            diver=diver,
+            actor=request.user,
+            request=request,
+        )
+
+        # Soft delete the document
+        doc.deleted_at = timezone.now()
+        doc.save(update_fields=["deleted_at", "updated_at"])
+
+        messages.success(request, f"Document '{doc.filename}' deleted.")
+        return redirect("diveops:diver-detail", pk=diver_pk)
+
+
+# =============================================================================
+# Media Photo Tagging Views
+# =============================================================================
+
+
+class MediaPhotoTagAddView(StaffPortalMixin, View):
+    """Add a diver tag to a media photo."""
+
+    def post(self, request, pk):
+        from django_documents.models import MediaAsset
+        from .models import PhotoTag, DiverProfile
+        from .audit import Actions, log_photo_tag_event
+
+        media_asset = get_object_or_404(MediaAsset, pk=pk)
+        document = media_asset.document
+
+        diver_id = request.POST.get("diver_id")
+        if not diver_id:
+            messages.error(request, "Please select a diver to tag.")
+            return redirect("diveops:media-detail", pk=pk)
+
+        diver = get_object_or_404(DiverProfile, pk=diver_id, deleted_at__isnull=True)
+
+        # Check if tag exists (including soft-deleted)
+        existing_tag = PhotoTag.all_objects.filter(document=document, diver=diver).first()
+
+        if existing_tag:
+            if existing_tag.deleted_at is None:
+                messages.warning(request, f"{diver.person.get_full_name()} is already tagged in this photo.")
+                return redirect("diveops:media-detail", pk=pk)
+            else:
+                # Restore soft-deleted tag
+                existing_tag.deleted_at = None
+                existing_tag.tagged_by = request.user
+                existing_tag.save(update_fields=["deleted_at", "tagged_by", "updated_at"])
+                tag = existing_tag
+        else:
+            tag = PhotoTag.objects.create(
+                document=document,
+                diver=diver,
+                tagged_by=request.user,
+            )
+
+        # Audit log
+        log_photo_tag_event(
+            action=Actions.PHOTO_DIVER_TAGGED,
+            photo_tag=tag,
+            actor=request.user,
+            request=request,
+        )
+
+        messages.success(request, f"Tagged {diver.person.get_full_name()} in this photo.")
+        return redirect("diveops:media-detail", pk=pk)
+
+
+class MediaPhotoTagRemoveView(StaffPortalMixin, View):
+    """Remove a diver tag from a media photo."""
+
+    def post(self, request, pk, tag_pk):
+        from django_documents.models import MediaAsset
+        from .models import PhotoTag
+        from .audit import Actions, log_photo_tag_event
+
+        media_asset = get_object_or_404(MediaAsset, pk=pk)
+        tag = get_object_or_404(PhotoTag, pk=tag_pk, document=media_asset.document, deleted_at__isnull=True)
+
+        diver_name = tag.diver.person.get_full_name()
+
+        # Audit log before deletion
+        log_photo_tag_event(
+            action=Actions.PHOTO_DIVER_UNTAGGED,
+            photo_tag=tag,
+            actor=request.user,
+            request=request,
+        )
+
+        # Soft delete the tag
+        tag.delete()
+
+        messages.success(request, f"Removed {diver_name} from this photo.")
+        return redirect("diveops:media-detail", pk=pk)
+
+
+class MediaDiveSiteTagAddView(StaffPortalMixin, View):
+    """Add a dive site tag to a media photo."""
+
+    def post(self, request, pk):
+        from django_documents.models import MediaAsset
+        from .models import DiveSitePhotoTag, DiveSite
+
+        media_asset = get_object_or_404(MediaAsset, pk=pk)
+        document = media_asset.document
+
+        dive_site_id = request.POST.get("dive_site_id")
+        if not dive_site_id:
+            messages.error(request, "Please select a dive site to tag.")
+            return redirect("diveops:media-detail", pk=pk)
+
+        dive_site = get_object_or_404(DiveSite, pk=dive_site_id, deleted_at__isnull=True)
+
+        # Check if tag exists (including soft-deleted)
+        existing_tag = DiveSitePhotoTag.all_objects.filter(
+            document=document, dive_site=dive_site
+        ).first()
+
+        if existing_tag:
+            if existing_tag.deleted_at is None:
+                messages.warning(request, f"{dive_site.name} is already tagged in this photo.")
+                return redirect("diveops:media-detail", pk=pk)
+            else:
+                # Restore soft-deleted tag
+                existing_tag.deleted_at = None
+                existing_tag.tagged_by = request.user
+                existing_tag.save(update_fields=["deleted_at", "tagged_by", "updated_at"])
+        else:
+            DiveSitePhotoTag.objects.create(
+                document=document,
+                dive_site=dive_site,
+                tagged_by=request.user,
+            )
+
+        messages.success(request, f"Tagged {dive_site.name} in this photo.")
+        return redirect("diveops:media-detail", pk=pk)
+
+
+class MediaDiveSiteTagRemoveView(StaffPortalMixin, View):
+    """Remove a dive site tag from a media photo."""
+
+    def post(self, request, pk, tag_pk):
+        from django_documents.models import MediaAsset
+        from .models import DiveSitePhotoTag
+
+        media_asset = get_object_or_404(MediaAsset, pk=pk)
+        tag = get_object_or_404(
+            DiveSitePhotoTag,
+            pk=tag_pk,
+            document=media_asset.document,
+            deleted_at__isnull=True
+        )
+
+        site_name = tag.dive_site.name
+
+        # Soft delete the tag
+        tag.delete()
+
+        messages.success(request, f"Removed {site_name} from this photo.")
+        return redirect("diveops:media-detail", pk=pk)
+
+
+# =============================================================================
+# Diver Profile Photo Views
+# =============================================================================
+
+
+class DiverSetProfilePhotoView(StaffPortalMixin, View):
+    """Set a tagged photo as the diver's profile photo."""
+
+    def post(self, request, diver_pk, photo_pk):
+        from django_documents.models import Document
+        from .models import PhotoTag
+        from .audit import log_event
+
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+        document = get_object_or_404(Document, pk=photo_pk, deleted_at__isnull=True)
+
+        # Verify the diver is tagged in this photo
+        if not PhotoTag.objects.filter(document=document, diver=diver, deleted_at__isnull=True).exists():
+            messages.error(request, "This diver is not tagged in this photo.")
+            return redirect("diveops:diver-detail", pk=diver_pk)
+
+        # Set the profile photo
+        old_photo = diver.profile_photo
+        diver.profile_photo = document
+        diver.save(update_fields=["profile_photo", "updated_at"])
+
+        # Audit log
+        log_event(
+            action="diver_profile_photo_set",
+            target=diver,
+            actor=request.user,
+            request=request,
+            data={
+                "diver_name": str(diver.person),
+                "photo_id": str(document.pk),
+                "photo_filename": document.filename,
+                "previous_photo_id": str(old_photo.pk) if old_photo else None,
+            },
+        )
+
+        messages.success(request, f"Profile photo updated for {diver.person}.")
+        return redirect("diveops:diver-detail", pk=diver_pk)
+
+
+class DiverRemoveProfilePhotoView(StaffPortalMixin, View):
+    """Remove a diver's profile photo."""
+
+    def post(self, request, diver_pk):
+        from .audit import log_event
+
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+
+        if not diver.profile_photo:
+            messages.warning(request, "This diver has no profile photo to remove.")
+            return redirect("diveops:diver-detail", pk=diver_pk)
+
+        old_photo = diver.profile_photo
+        diver.profile_photo = None
+        diver.save(update_fields=["profile_photo", "updated_at"])
+
+        # Audit log
+        log_event(
+            action="diver_profile_photo_removed",
+            target=diver,
+            actor=request.user,
+            request=request,
+            data={
+                "diver_name": str(diver.person),
+                "removed_photo_id": str(old_photo.pk),
+                "removed_photo_filename": old_photo.filename,
+            },
+        )
+
+        messages.success(request, f"Profile photo removed for {diver.person}.")
+        return redirect("diveops:diver-detail", pk=diver_pk)
+
+
+class DiverUpdateGearView(StaffPortalMixin, View):
+    """Update diver gear and body measurement fields inline."""
+
+    def post(self, request, pk):
+        from decimal import Decimal, InvalidOperation
+        from .audit import log_event
+
+        diver = get_object_or_404(DiverProfile, pk=pk, deleted_at__isnull=True)
+
+        # Collect old values for audit
+        old_values = {
+            "diver_type": diver.diver_type,
+            "equipment_ownership": diver.equipment_ownership,
+            "weight_kg": str(diver.weight_kg) if diver.weight_kg else None,
+            "height_cm": diver.height_cm,
+            "wetsuit_size": diver.wetsuit_size,
+            "bcd_size": diver.bcd_size,
+            "fin_size": diver.fin_size,
+            "mask_fit": diver.mask_fit,
+            "glove_size": diver.glove_size,
+            "weight_required_kg": str(diver.weight_required_kg) if diver.weight_required_kg else None,
+            "gear_notes": diver.gear_notes,
+        }
+
+        # Update fields from form
+        diver.diver_type = request.POST.get("diver_type", diver.diver_type)
+        diver.equipment_ownership = request.POST.get("equipment_ownership", diver.equipment_ownership)
+
+        # Handle decimal/integer fields
+        weight_kg = request.POST.get("weight_kg", "").strip()
+        if weight_kg:
+            try:
+                diver.weight_kg = Decimal(weight_kg)
+            except InvalidOperation:
+                pass
+        else:
+            diver.weight_kg = None
+
+        height_cm = request.POST.get("height_cm", "").strip()
+        if height_cm:
+            try:
+                diver.height_cm = int(height_cm)
+            except ValueError:
+                pass
+        else:
+            diver.height_cm = None
+
+        weight_required_kg = request.POST.get("weight_required_kg", "").strip()
+        if weight_required_kg:
+            try:
+                diver.weight_required_kg = Decimal(weight_required_kg)
+            except InvalidOperation:
+                pass
+        else:
+            diver.weight_required_kg = None
+
+        # Handle string fields
+        diver.wetsuit_size = request.POST.get("wetsuit_size", "").strip()
+        diver.bcd_size = request.POST.get("bcd_size", "").strip()
+        diver.fin_size = request.POST.get("fin_size", "").strip()
+        diver.mask_fit = request.POST.get("mask_fit", "").strip()
+        diver.glove_size = request.POST.get("glove_size", "").strip()
+        diver.gear_notes = request.POST.get("gear_notes", "").strip()
+
+        diver.save()
+
+        # Collect new values for audit
+        new_values = {
+            "diver_type": diver.diver_type,
+            "equipment_ownership": diver.equipment_ownership,
+            "weight_kg": str(diver.weight_kg) if diver.weight_kg else None,
+            "height_cm": diver.height_cm,
+            "wetsuit_size": diver.wetsuit_size,
+            "bcd_size": diver.bcd_size,
+            "fin_size": diver.fin_size,
+            "mask_fit": diver.mask_fit,
+            "glove_size": diver.glove_size,
+            "weight_required_kg": str(diver.weight_required_kg) if diver.weight_required_kg else None,
+            "gear_notes": diver.gear_notes,
+        }
+
+        # Find which fields changed
+        changed_fields = {k: {"old": old_values[k], "new": new_values[k]}
+                         for k in old_values if old_values[k] != new_values[k]}
+
+        if changed_fields:
+            log_event(
+                action="diver_gear_updated",
+                target=diver,
+                actor=request.user,
+                request=request,
+                data={
+                    "diver_name": str(diver.person),
+                    "changed_fields": changed_fields,
+                },
+            )
+
+        messages.success(request, "Gear information updated.")
+        return redirect("diveops:diver-detail", pk=pk)
+
+
+class DiverUploadPhotoIdView(StaffPortalMixin, View):
+    """Upload or replace a diver's photo ID document."""
+
+    def get(self, request, diver_pk):
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+        return render(request, "diveops/staff/upload_photo_id.html", {
+            "diver": diver,
+        })
+
+    def post(self, request, diver_pk):
+        from django.contrib.contenttypes.models import ContentType
+        from django_documents.models import Document, DocumentFolder
+        from .audit import log_event
+
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+
+        photo_file = request.FILES.get("photo_id")
+        if not photo_file:
+            messages.error(request, "Please select a file to upload.")
+            return redirect("diveops:diver-upload-photo-id", diver_pk=diver_pk)
+
+        # Get or create the IDs folder
+        ids_folder, _ = DocumentFolder.objects.get_or_create(
+            slug="photo-ids",
+            parent__isnull=True,
+            defaults={
+                "name": "Photo IDs",
+                "description": "Government-issued photo IDs uploaded during liability waiver signing",
+            },
+        )
+
+        # Get content type for DiverProfile
+        content_type = ContentType.objects.get_for_model(DiverProfile)
+
+        # Determine category from content type
+        mime = photo_file.content_type or "application/octet-stream"
+        if mime.startswith("image/"):
+            category = "image"
+        else:
+            category = "document"
+
+        # Create the document
+        doc = Document(
+            file=photo_file,
+            folder=ids_folder,
+            filename=photo_file.name,
+            content_type=mime,
+            file_size=photo_file.size,
+            document_type="photo_id",
+            category=category,
+            description=f"Photo ID for {diver.person}",
+            target_content_type=content_type,
+            target_id=str(diver.pk),
+        )
+        doc.checksum = doc.compute_checksum()
+        doc.save()
+
+        # Auto-extract EXIF/metadata for images
+        if category == "image":
+            try:
+                from .document_metadata import extract_document_metadata
+                extracted = extract_document_metadata(doc)
+                if extracted:
+                    metadata = doc.metadata or {}
+                    metadata.update(extracted)
+                    doc.metadata = metadata
+                    doc.save(update_fields=["metadata", "updated_at"])
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Metadata extraction failed for {doc.filename}: {e}")
+
+        # Track old photo ID for audit
+        old_photo_id = diver.photo_id
+
+        # Update diver's photo ID
+        diver.photo_id = doc
+        diver.save(update_fields=["photo_id", "updated_at"])
+
+        # Log the event
+        log_event(
+            action="diver_photo_id_uploaded",
+            target=diver,
+            actor=request.user,
+            request=request,
+            data={
+                "diver_name": str(diver.person),
+                "document_id": str(doc.pk),
+                "old_document_id": str(old_photo_id.pk) if old_photo_id else None,
+            },
+        )
+
+        messages.success(request, f"Photo ID uploaded for {diver.person}.")
+        return redirect("diveops:diver-detail", pk=diver_pk)
+
+
+class EmergencyContactAddView(StaffPortalMixin, View):
+    """Add an emergency contact for a diver."""
+
+    def get(self, request, diver_pk):
+        from django_parties.models import Person
+
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+
+        # Get existing persons for dropdown (excluding the diver themselves)
+        existing_persons = Person.objects.exclude(
+            pk=diver.person.pk
+        ).order_by("first_name", "last_name")[:50]
+
+        # Get next priority number
+        from .models import EmergencyContact
+        next_priority = diver.emergency_contact_entries.filter(
+            deleted_at__isnull=True
+        ).count() + 1
+
+        return render(request, "diveops/staff/emergency_contact_form.html", {
+            "diver": diver,
+            "existing_persons": existing_persons,
+            "next_priority": next_priority,
+            "relationship_choices": EmergencyContact.RELATIONSHIP_CHOICES,
+        })
+
+    def post(self, request, diver_pk):
+        from django_parties.models import Person
+        from .models import EmergencyContact
+        from .audit import log_event
+
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+
+        # Check if using existing person or creating new
+        existing_person_pk = request.POST.get("existing_person")
+        relationship = request.POST.get("relationship")
+        priority = int(request.POST.get("priority", 1))
+        notes = request.POST.get("notes", "")
+
+        if existing_person_pk:
+            # Use existing person
+            contact_person = get_object_or_404(Person, pk=existing_person_pk)
+        else:
+            # Create new person
+            first_name = request.POST.get("first_name", "").strip()
+            last_name = request.POST.get("last_name", "").strip()
+            phone = request.POST.get("phone", "").strip()
+            email = request.POST.get("email", "").strip()
+
+            if not first_name:
+                messages.error(request, "First name is required.")
+                return redirect("diveops:emergency-contact-add", diver_pk=diver_pk)
+
+            contact_person = Person.objects.create(
+                first_name=first_name,
+                last_name=last_name,
+                phone=phone,
+                email=email if email else None,
+            )
+
+        # Create the emergency contact
+        emergency_contact = EmergencyContact.objects.create(
+            diver=diver,
+            contact_person=contact_person,
+            relationship=relationship,
+            priority=priority,
+            notes=notes,
+        )
+
+        # Log the event
+        log_event(
+            action="emergency_contact_added",
+            target=diver,
+            actor=request.user,
+            request=request,
+            data={
+                "diver_name": str(diver.person),
+                "contact_name": str(contact_person),
+                "relationship": relationship,
+                "priority": priority,
+                "is_also_diver": emergency_contact.is_also_diver,
+            },
+        )
+
+        messages.success(request, f"Emergency contact {contact_person} added.")
+        return redirect("diveops:diver-detail", pk=diver_pk)

@@ -1,5 +1,5 @@
 {% extends "diveops/staff/_base.html" %}
-{% load portal_ui_tags %}
+{% load portal_ui_tags diveops_filters diveops_tags %}
 
 {% block breadcrumb %}
 <li>
@@ -24,7 +24,31 @@
 <div class="space-y-6">
     <!-- Page Header -->
     <div class="flex items-center justify-between">
-        <div>
+        <div class="flex items-center space-x-4">
+            <!-- Profile Photo -->
+            <div class="relative group">
+                {% if profile_photo %}
+                <div class="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 shadow-sm">
+                    {% thumbnail_url profile_photo "medium" as thumb %}
+                    <img src="{% if thumb %}{{ thumb }}{% else %}{{ profile_photo.file.url }}{% endif %}"
+                         alt="{{ site.name }}"
+                         class="w-full h-full object-cover">
+                </div>
+                <form method="post" action="{% url 'diveops:site-clear-profile-photo' pk=site.pk %}" class="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {% csrf_token %}
+                    <button type="submit" class="p-1 bg-red-600 hover:bg-red-700 rounded-full text-white shadow" title="Clear profile photo">
+                        {% icon "x" "w-3 h-3" %}
+                    </button>
+                </form>
+                {% else %}
+                <a href="{% url 'diveops:site-photo-upload' pk=site.pk %}"
+                   class="w-20 h-20 rounded-lg bg-gray-100 flex items-center justify-center shadow-sm hover:bg-gray-200 transition-colors border-2 border-dashed border-gray-300 hover:border-blue-400"
+                   title="Upload photos">
+                    {% icon "plus" "w-8 h-8 text-gray-400 hover:text-blue-500" %}
+                </a>
+                {% endif %}
+            </div>
+            <div>
             <div class="flex items-center space-x-3">
                 <h1 class="text-2xl font-bold text-gray-900">{{ site.name }}</h1>
                 <!-- Access Type Badge -->
@@ -46,6 +70,7 @@
             {% if site.description %}
             <p class="text-gray-600 mt-1">{{ site.description }}</p>
             {% endif %}
+            </div>
         </div>
         <div class="flex items-center space-x-3">
             <a href="{% url 'diveops:staff-site-edit' pk=site.pk %}"
@@ -61,10 +86,11 @@
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
         <!-- Site Details -->
-        <div class="lg:col-span-1">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="lg:col-span-1 flex flex-col">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex-1">
                 <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
                     <h3 class="text-lg font-medium text-gray-900">Site Details</h3>
                 </div>
@@ -97,10 +123,10 @@
                             {% endif %}
                         </dd>
                     </div>
-                    {% if site.rating %}
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Rating</dt>
                         <dd class="mt-1 flex items-center">
+                            {% if site.rating %}
                             {% for i in "12345" %}
                                 {% if forloop.counter <= site.rating %}
                                 <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
@@ -113,9 +139,12 @@
                                 {% endif %}
                             {% endfor %}
                             <span class="ml-2 text-sm text-gray-600">({{ site.rating }}/5)</span>
+                            {% else %}
+                            <span class="text-sm text-gray-400 italic">Not yet rated</span>
+                            <a href="{% url 'diveops:staff-site-edit' pk=site.pk %}" class="ml-2 text-sm text-blue-600 hover:text-blue-800">Leave a rating</a>
+                            {% endif %}
                         </dd>
                     </div>
-                    {% endif %}
                     {% if site.tags %}
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Tags</dt>
@@ -143,23 +172,50 @@
                         </dd>
                     </div>
                     {% endif %}
+
+                    <!-- Featured Photos (2x2 grid) -->
+                    {% if featured_photos or all_photos %}
+                    <div class="pt-3 mt-3 border-t border-gray-200">
+                        <dt class="text-sm font-medium text-gray-500 mb-2">Featured Photos</dt>
+                        <dd class="grid grid-cols-2 gap-2">
+                            {% for i in "1234" %}
+                            {% with featured_photos|get_item:forloop.counter0 as photo %}
+                            <div class="aspect-square bg-gray-100 rounded overflow-hidden">
+                                {% if photo %}
+                                {% thumbnail_url photo.document "medium" as thumb %}
+                                <img src="{% if thumb %}{{ thumb }}{% else %}{{ photo.document.file.url }}{% endif %}"
+                                     alt="{{ photo.caption|default:site.name }}"
+                                     class="w-full h-full object-cover cursor-pointer hover:opacity-90"
+                                     data-lightbox="{{ photo.document.file.url }}"
+                                     data-caption="{{ photo.caption|default:'' }}">
+                                {% else %}
+                                <div class="w-full h-full flex items-center justify-center text-gray-300">
+                                    <span class="text-xs">{{ forloop.counter }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endwith %}
+                            {% endfor %}
+                        </dd>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
 
         <!-- Map -->
-        <div class="lg:col-span-2">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="lg:col-span-2 flex flex-col">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col">
                 <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
                     <h3 class="text-lg font-medium text-gray-900">Location</h3>
                 </div>
-                <div class="p-4">
+                <div class="p-4 flex-1 flex flex-col">
                     {% if site.place %}
                     <div class="mb-4 text-sm text-gray-600">
                         <strong>Coordinates:</strong> {{ site.place.latitude }}, {{ site.place.longitude }}
                     </div>
                     <!-- Leaflet Map -->
-                    <div id="site-map" class="h-96 rounded-lg border border-gray-200"></div>
+                    <div id="site-map" class="flex-1 min-h-[24rem] rounded-lg border border-gray-200"></div>
                     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
                     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
                     <script>
@@ -385,5 +441,193 @@
         </table>
     </div>
     {% endif %}
+
+    <!-- Photo Gallery -->
+    {% if all_photos %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <h3 class="text-lg font-medium text-gray-900">Photo Gallery</h3>
+                <span class="text-sm text-gray-500">{{ all_photos|length }} photo{{ all_photos|length|pluralize }}</span>
+            </div>
+            <a href="{% url 'diveops:site-photo-upload' pk=site.pk %}"
+               class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "plus" "w-4 h-4 mr-1" %}
+                Add More
+            </a>
+        </div>
+        <div class="p-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {% for photo in all_photos %}
+                <div class="relative aspect-square bg-gray-100 rounded-lg overflow-hidden group">
+                    {% thumbnail_url photo.document "medium" as thumb %}
+                    <img src="{% if thumb %}{{ thumb }}{% else %}{{ photo.document.file.url }}{% endif %}"
+                         alt="{{ photo.caption|default:site.name }}"
+                         class="w-full h-full object-cover cursor-pointer"
+                         data-lightbox="{{ photo.document.file.url }}"
+                         data-caption="{{ photo.caption|default:'' }}">
+
+                    <!-- Status badges -->
+                    <div class="absolute top-1 left-1 flex gap-1">
+                        {% if photo.document == profile_photo %}
+                        <span class="px-1.5 py-0.5 bg-green-600 rounded text-[10px] text-white font-medium">Profile</span>
+                        {% endif %}
+                        {% if photo.is_featured %}
+                        <span class="px-1.5 py-0.5 bg-blue-600 rounded text-[10px] text-white font-medium">#{{ photo.position }}</span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Hover actions -->
+                    <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div class="flex flex-col gap-1">
+                            {% if photo.document != profile_photo %}
+                            <form method="post" action="{% url 'diveops:site-photo-set-profile' pk=site.pk photo_pk=photo.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-xs text-white font-medium w-full">
+                                    Set Profile
+                                </button>
+                            </form>
+                            {% endif %}
+                            {% if not photo.is_featured %}
+                            <form method="post" action="{% url 'diveops:site-photo-set-featured' pk=site.pk photo_pk=photo.pk %}">
+                                {% csrf_token %}
+                                <select name="position" onchange="this.form.submit()" class="px-2 py-1 rounded text-xs bg-blue-600 text-white cursor-pointer w-full">
+                                    <option value="">Feature as...</option>
+                                    <option value="1">#1</option>
+                                    <option value="2">#2</option>
+                                    <option value="3">#3</option>
+                                    <option value="4">#4</option>
+                                </select>
+                            </form>
+                            {% else %}
+                            <form method="post" action="{% url 'diveops:site-photo-unfeature' pk=site.pk photo_pk=photo.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs text-white font-medium w-full">
+                                    Unfeature
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if photo.caption %}
+                    <div class="absolute bottom-0 left-0 right-0 px-2 py-1 bg-black/60 text-xs text-white truncate">
+                        {{ photo.caption }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- No Photos - Upload CTA -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+            <h3 class="text-lg font-medium text-gray-900">Photo Gallery</h3>
+        </div>
+        <div class="p-8 text-center">
+            <div class="text-gray-400 mb-3">
+                {% icon "camera" "w-12 h-12 mx-auto" %}
+            </div>
+            <h4 class="text-lg font-medium text-gray-900 mb-1">No Photos Yet</h4>
+            <p class="text-gray-500 mb-4">Add photos to showcase this dive site</p>
+            <a href="{% url 'diveops:site-photo-upload' pk=site.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "upload" "w-4 h-4 mr-2" %}
+                Upload Photos
+            </a>
+        </div>
+    </div>
+    {% endif %}
 </div>
+
+<!-- Lightbox Modal -->
+<div id="lightbox" class="fixed inset-0 hidden bg-black/90 flex items-center justify-center" style="z-index: 9999;" onclick="closeLightbox(event)">
+    <button onclick="closeLightbox(event)" class="absolute top-4 right-4 text-white hover:text-gray-300 z-10">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+    </button>
+    <button onclick="prevPhoto(event)" class="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 p-2">
+        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+    </button>
+    <button onclick="nextPhoto(event)" class="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 p-2">
+        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+    </button>
+    <img id="lightbox-img" src="" alt="" class="max-h-[90vh] max-w-[90vw] object-contain">
+    <div id="lightbox-caption" class="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-4 py-2 rounded"></div>
+</div>
+
+<script>
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightbox-img');
+    const lightboxCaption = document.getElementById('lightbox-caption');
+    let photoUrls = [];
+    let currentIndex = 0;
+
+    // Collect all photo URLs from the gallery
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('[data-lightbox]').forEach((el, index) => {
+            photoUrls.push({
+                url: el.dataset.lightbox,
+                caption: el.dataset.caption || ''
+            });
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openLightbox(index);
+            });
+        });
+    });
+
+    function openLightbox(index) {
+        currentIndex = index;
+        showPhoto();
+        lightbox.classList.remove('hidden');
+        lightbox.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox(event) {
+        if (event.target === lightbox || event.currentTarget.tagName === 'BUTTON') {
+            lightbox.classList.add('hidden');
+            lightbox.classList.remove('flex');
+            document.body.style.overflow = '';
+        }
+    }
+
+    function showPhoto() {
+        if (photoUrls[currentIndex]) {
+            lightboxImg.src = photoUrls[currentIndex].url;
+            lightboxCaption.textContent = photoUrls[currentIndex].caption;
+            lightboxCaption.style.display = photoUrls[currentIndex].caption ? 'block' : 'none';
+        }
+    }
+
+    function prevPhoto(event) {
+        event.stopPropagation();
+        currentIndex = (currentIndex - 1 + photoUrls.length) % photoUrls.length;
+        showPhoto();
+    }
+
+    function nextPhoto(event) {
+        event.stopPropagation();
+        currentIndex = (currentIndex + 1) % photoUrls.length;
+        showPhoto();
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+        if (!lightbox.classList.contains('hidden')) {
+            if (e.key === 'Escape') closeLightbox({target: lightbox});
+            if (e.key === 'ArrowLeft') prevPhoto(e);
+            if (e.key === 'ArrowRight') nextPhoto(e);
+        }
+    });
+</script>
 {% endblock %}

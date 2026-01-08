@@ -1,5 +1,5 @@
 {% extends "diveops/staff/_base.html" %}
-{% load portal_ui_tags %}
+{% load portal_ui_tags diveops_tags %}
 
 {% block breadcrumb %}
 <li>
@@ -45,12 +45,29 @@
                     {% for site in sites %}
                     <tr class="hover:bg-gray-50">
                         <td class="px-4 py-3">
-                            <a href="{% url 'diveops:staff-site-detail' pk=site.pk %}" class="text-blue-600 hover:text-blue-800 font-medium">
-                                {{ site.name }}
-                            </a>
-                            {% if site.description %}
-                            <p class="text-sm text-gray-500 truncate max-w-xs">{{ site.description|truncatechars:50 }}</p>
-                            {% endif %}
+                            <div class="flex items-center space-x-3">
+                                <!-- Thumbnail -->
+                                <div class="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-gray-100">
+                                    {% if site.profile_photo %}
+                                    {% thumbnail_url site.profile_photo "small" as thumb %}
+                                    <img src="{% if thumb %}{{ thumb }}{% else %}{{ site.profile_photo.file.url }}{% endif %}"
+                                         alt="{{ site.name }}"
+                                         class="w-full h-full object-cover">
+                                    {% else %}
+                                    <div class="w-full h-full flex items-center justify-center">
+                                        {% icon "image" "w-5 h-5 text-gray-300" %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <a href="{% url 'diveops:staff-site-detail' pk=site.pk %}" class="text-blue-600 hover:text-blue-800 font-medium">
+                                        {{ site.name }}
+                                    </a>
+                                    {% if site.description %}
+                                    <p class="text-sm text-gray-500 truncate max-w-xs">{{ site.description|truncatechars:50 }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </td>
                         <td class="px-4 py-3 whitespace-nowrap">
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
