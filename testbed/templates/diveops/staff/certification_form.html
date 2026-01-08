@@ -112,9 +112,19 @@
             <!-- Proof Document -->
             <div>
                 <label for="id_proof_file" class="block text-sm font-medium text-gray-700">Proof Document</label>
+                {% if not is_create and form.instance.proof_document and form.instance.proof_document.file %}
+                <div class="mt-2 mb-3">
+                    <p class="text-sm text-gray-500 mb-2">Current:</p>
+                    <a href="{{ form.instance.proof_document.file.url }}" target="_blank" class="inline-block">
+                        <img src="{{ form.instance.proof_document.file.url }}"
+                             alt="Current certification card"
+                             class="max-h-32 rounded border border-gray-200 hover:border-blue-400">
+                    </a>
+                </div>
+                {% endif %}
                 <input type="file" name="proof_file" id="id_proof_file" accept="image/*,application/pdf"
                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                <p class="mt-1 text-sm text-gray-500">Upload certification card photo or scan (optional)</p>
+                <p class="mt-1 text-sm text-gray-500">{% if not is_create and form.instance.proof_document %}Upload a new image to replace the current one{% else %}Upload certification card photo or scan (optional){% endif %}</p>
             </div>
 
             <!-- Form Actions -->

@@ -168,6 +168,110 @@
                 </div>
             </div>
 
+            <!-- Diver Profile Section -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Diver Profile</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Diver Type -->
+                    <div>
+                        <label for="id_diver_type" class="block text-sm font-medium text-gray-700">Diver Type</label>
+                        <select name="diver_type" id="id_diver_type"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="activity" {% if form.diver_type.value == 'activity' %}selected{% endif %}>Does Diving (Activity)</option>
+                            <option value="identity" {% if form.diver_type.value == 'identity' %}selected{% endif %}>Diver (Identity)</option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">Is diving their identity or just an activity?</p>
+                    </div>
+
+                    <!-- Equipment Ownership -->
+                    <div>
+                        <label for="id_equipment_ownership" class="block text-sm font-medium text-gray-700">Equipment Ownership</label>
+                        <select name="equipment_ownership" id="id_equipment_ownership"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="none" {% if form.equipment_ownership.value == 'none' %}selected{% endif %}>None - Rents All</option>
+                            <option value="partial" {% if form.equipment_ownership.value == 'partial' %}selected{% endif %}>Partial - Owns Some Gear</option>
+                            <option value="full" {% if form.equipment_ownership.value == 'full' %}selected{% endif %}>Full - Owns All Essential Gear</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Body Measurements Section -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Body Measurements</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Weight -->
+                    <div>
+                        <label for="id_weight_kg" class="block text-sm font-medium text-gray-700">Weight (kg)</label>
+                        <input type="number" name="weight_kg" id="id_weight_kg" value="{{ form.weight_kg.value|default:'' }}" step="0.1" min="0"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Height -->
+                    <div>
+                        <label for="id_height_cm" class="block text-sm font-medium text-gray-700">Height (cm)</label>
+                        <input type="number" name="height_cm" id="id_height_cm" value="{{ form.height_cm.value|default:'' }}" min="0"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Weight Required -->
+                    <div>
+                        <label for="id_weight_required_kg" class="block text-sm font-medium text-gray-700">Weight Required (kg)</label>
+                        <input type="number" name="weight_required_kg" id="id_weight_required_kg" value="{{ form.weight_required_kg.value|default:'' }}" step="0.1" min="0"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500">Weight needed for neutral buoyancy</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gear Sizes Section -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Gear Sizes</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Wetsuit Size -->
+                    <div>
+                        <label for="id_wetsuit_size" class="block text-sm font-medium text-gray-700">Wetsuit Size</label>
+                        <input type="text" name="wetsuit_size" id="id_wetsuit_size" value="{{ form.wetsuit_size.value|default:'' }}" placeholder="e.g., M, L, XL"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- BCD Size -->
+                    <div>
+                        <label for="id_bcd_size" class="block text-sm font-medium text-gray-700">BCD Size</label>
+                        <input type="text" name="bcd_size" id="id_bcd_size" value="{{ form.bcd_size.value|default:'' }}" placeholder="e.g., M, L, XL"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Fin Size -->
+                    <div>
+                        <label for="id_fin_size" class="block text-sm font-medium text-gray-700">Fin Size</label>
+                        <input type="text" name="fin_size" id="id_fin_size" value="{{ form.fin_size.value|default:'' }}" placeholder="e.g., M/L, 9-10"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Mask Fit -->
+                    <div>
+                        <label for="id_mask_fit" class="block text-sm font-medium text-gray-700">Mask Fit</label>
+                        <input type="text" name="mask_fit" id="id_mask_fit" value="{{ form.mask_fit.value|default:'' }}" placeholder="e.g., Low volume, Standard"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Glove Size -->
+                    <div>
+                        <label for="id_glove_size" class="block text-sm font-medium text-gray-700">Glove Size</label>
+                        <input type="text" name="glove_size" id="id_glove_size" value="{{ form.glove_size.value|default:'' }}" placeholder="e.g., M, L, XL"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+
+                <!-- Gear Notes -->
+                <div class="mt-4">
+                    <label for="id_gear_notes" class="block text-sm font-medium text-gray-700">Gear Notes</label>
+                    <textarea name="gear_notes" id="id_gear_notes" rows="3" placeholder="Additional gear preferences or requirements..."
+                              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">{{ form.gear_notes.value|default:'' }}</textarea>
+                </div>
+            </div>
+
             <!-- Form Actions -->
             <div class="border-t pt-6 flex items-center justify-end space-x-3">
                 <a href="{% url 'diveops:diver-list' %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">

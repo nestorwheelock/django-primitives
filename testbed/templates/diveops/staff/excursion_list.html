@@ -13,70 +13,145 @@
 {% endblock %}
 
 {% block staff_content %}
-<div class="space-y-6">
+<div class="space-y-8">
     <!-- Page Header -->
-    <div class="flex items-center justify-between">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-900">Upcoming Excursions</h1>
-            <p class="text-gray-600">Manage scheduled dive excursions</p>
-        </div>
-        <a href="{% url 'diveops:excursion-create' %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
-            {% icon "plus" "w-4 h-4 mr-2" %}
-            Add Excursion
-        </a>
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">Excursions</h1>
+        <p class="text-gray-600">Schedule excursions and manage bookings</p>
     </div>
 
-    <!-- Trips Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {% for excursion in excursions %}
-        <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}" class="block bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:border-blue-300 hover:shadow-md transition-all">
-            <div class="p-4">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <h3 class="text-lg font-medium text-gray-900">{{ excursion.dive_site.name }}</h3>
-                        <p class="text-sm text-gray-500">{{ excursion.dive_shop.name }}</p>
-                    </div>
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if excursion.status == 'scheduled' %}bg-blue-100 text-blue-800{% elif excursion.status == 'boarding' %}bg-yellow-100 text-yellow-800{% elif excursion.status == 'departed' %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
-                        {{ excursion.status|title }}
-                    </span>
-                </div>
+    <!-- Available Excursion Types - POS Style -->
+    <div>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-900">Book New Excursion</h2>
+            <a href="{% url 'diveops:excursion-type-list' %}" class="text-sm text-blue-600 hover:text-blue-800">
+                Manage Types
+            </a>
+        </div>
 
-                <div class="mt-4 space-y-2">
-                    <div class="flex items-center text-sm text-gray-600">
-                        {% icon "calendar" "w-4 h-4 mr-2 text-gray-400" %}
-                        {{ excursion.departure_time|date:"M j, Y" }}
+        {% if excursion_types %}
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {% for exc_type in excursion_types %}
+            <div class="group relative bg-white rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all overflow-hidden">
+                <!-- Main clickable area - view details -->
+                <a href="{% url 'diveops:excursion-type-detail' pk=exc_type.pk %}"
+                   class="block p-4 text-center">
+                    <!-- Icon based on dive mode -->
+                    <div class="mx-auto w-10 h-10 rounded-full flex items-center justify-center mb-2
+                        {% if exc_type.dive_mode == 'boat' %}bg-blue-100 text-blue-600
+                        {% elif exc_type.dive_mode == 'shore' %}bg-green-100 text-green-600
+                        {% elif exc_type.dive_mode == 'cenote' %}bg-cyan-100 text-cyan-600
+                        {% elif exc_type.dive_mode == 'cavern' %}bg-purple-100 text-purple-600
+                        {% else %}bg-gray-100 text-gray-600{% endif %}">
+                        {% if exc_type.dive_mode == 'boat' %}
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                        </svg>
+                        {% elif exc_type.dive_mode == 'shore' %}
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"/>
+                        </svg>
+                        {% else %}
+                        {% icon "anchor" "w-5 h-5" %}
+                        {% endif %}
                     </div>
-                    <div class="flex items-center text-sm text-gray-600">
-                        {% icon "clock" "w-4 h-4 mr-2 text-gray-400" %}
-                        {{ excursion.departure_time|time:"g:i A" }}
-                    </div>
-                    <div class="flex items-center text-sm text-gray-600">
-                        {% icon "users" "w-4 h-4 mr-2 text-gray-400" %}
-                        {{ excursion.confirmed_count|default:0 }} / {{ excursion.max_capacity }} booked
-                    </div>
-                </div>
+                    <h3 class="text-sm font-medium text-gray-900 truncate">{{ exc_type.name }}</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">{{ exc_type.get_dive_mode_display }}</p>
+                    {% if exc_type.base_price %}
+                    <p class="text-sm font-semibold text-green-600 mt-1">${{ exc_type.base_price }}</p>
+                    {% endif %}
+                </a>
 
-                <div class="mt-4 pt-4 border-t border-gray-100">
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm {% if excursion.spots_available > 0 %}text-green-600{% else %}text-red-600{% endif %}">
-                            {{ excursion.spots_available }} spots available
-                        </span>
-                        <span class="text-blue-600 text-sm font-medium">View Details</span>
-                    </div>
-                </div>
+                <!-- Quick add button - appears on hover -->
+                <a href="{% url 'diveops:excursion-create' %}?type={{ exc_type.pk }}"
+                   class="absolute top-2 right-2 p-1.5 bg-green-500 text-white rounded-full shadow opacity-0 group-hover:opacity-100 hover:bg-green-600 transition-all"
+                   title="Schedule {{ exc_type.name }}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </a>
             </div>
-        </a>
-        {% empty %}
-        <div class="col-span-full">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-                <div class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                    {% icon "anchor" "w-6 h-6 text-gray-400" %}
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 mb-1">No upcoming excursions</h3>
-                <p class="text-gray-500">No dive excursions are currently scheduled.</p>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-gray-50 rounded-lg border border-dashed border-gray-300 p-6 text-center">
+            <p class="text-gray-500">No excursion types configured.</p>
+            <a href="{% url 'diveops:excursion-type-create' %}" class="mt-2 inline-flex items-center text-sm text-blue-600 hover:text-blue-800">
+                {% icon "plus" "w-4 h-4 mr-1" %}
+                Create Excursion Type
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Scheduled Excursions Section -->
+    <div>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-900">Scheduled Excursions</h2>
+            <div class="flex items-center gap-3">
+                <a href="{% url 'diveops:calendar' %}" class="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
+                    {% icon "calendar" "w-4 h-4 mr-1" %}
+                    Calendar View
+                </a>
+                <a href="{% url 'diveops:excursion-create' %}" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    {% icon "plus" "w-4 h-4 mr-1" %}
+                    Add Excursion
+                </a>
             </div>
         </div>
-        {% endfor %}
+
+        <!-- Trips Grid -->
+        {% if excursions %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for excursion in excursions %}
+            <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}" class="block bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:border-blue-300 hover:shadow-md transition-all">
+                <div class="p-4">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">{{ excursion.dive_site.name }}</h3>
+                            <p class="text-sm text-gray-500">{{ excursion.dive_shop.name }}</p>
+                        </div>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if excursion.status == 'scheduled' %}bg-blue-100 text-blue-800{% elif excursion.status == 'boarding' %}bg-yellow-100 text-yellow-800{% elif excursion.status == 'departed' %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ excursion.status|title }}
+                        </span>
+                    </div>
+
+                    <div class="mt-4 space-y-2">
+                        <div class="flex items-center text-sm text-gray-600">
+                            {% icon "calendar" "w-4 h-4 mr-2 text-gray-400" %}
+                            {{ excursion.departure_time|date:"M j, Y" }}
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            {% icon "clock" "w-4 h-4 mr-2 text-gray-400" %}
+                            {{ excursion.departure_time|time:"g:i A" }}
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            {% icon "users" "w-4 h-4 mr-2 text-gray-400" %}
+                            {{ excursion.confirmed_count|default:0 }} / {{ excursion.max_capacity }} booked
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm {% if excursion.spots_available > 0 %}text-green-600{% else %}text-red-600{% endif %}">
+                                {{ excursion.spots_available }} spots available
+                            </span>
+                            <span class="text-blue-600 text-sm font-medium">View Details</span>
+                        </div>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+            <div class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                {% icon "calendar" "w-6 h-6 text-gray-400" %}
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-1">No upcoming excursions</h3>
+            <p class="text-gray-500 mb-4">Schedule a dive excursion using the options above.</p>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

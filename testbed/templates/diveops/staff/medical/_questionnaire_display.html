@@ -1,0 +1,285 @@
+{% comment %}
+Questionnaire display partial - matches the PDF template styling for consistency.
+Used in: questionnaire_detail.html
+
+Required context:
+- instance: QuestionnaireInstance
+- screening_questions: list from pdf_service.get_organized_questions()
+- follow_up_boxes: list from pdf_service.get_organized_questions()
+{% endcomment %}
+
+<style>
+.rstc-questionnaire {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #333;
+}
+.rstc-questionnaire .rstc-header {
+    text-align: center;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+    border-bottom: 3px solid #b8860b;
+}
+.rstc-questionnaire .rstc-brand {
+    color: #b8860b;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+}
+.rstc-questionnaire .rstc-title {
+    font-size: 22px;
+    margin: 8px 0;
+    color: #333;
+}
+.rstc-questionnaire .rstc-subtitle {
+    color: #666;
+    font-size: 14px;
+}
+.rstc-questionnaire .participant-box {
+    background: #e8f4fc;
+    border: 1px solid #b8d4e8;
+    border-radius: 8px;
+    padding: 12px 18px;
+    margin-bottom: 20px;
+}
+.rstc-questionnaire .participant-box .label {
+    font-weight: bold;
+    color: #2c5282;
+}
+.rstc-questionnaire .directions-box {
+    background: #fef9e7;
+    border: 1px solid #f0d78c;
+    border-radius: 8px;
+    padding: 15px 18px;
+    margin-bottom: 20px;
+}
+.rstc-questionnaire .directions-box h3 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    color: #8b6914;
+}
+.rstc-questionnaire .directions-box p {
+    margin: 5px 0;
+    font-size: 14px;
+    color: #6b5a14;
+}
+.rstc-questionnaire .section {
+    margin-bottom: 20px;
+}
+.rstc-questionnaire .section-header {
+    background: #f7f7f7;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    padding: 12px 16px;
+}
+.rstc-questionnaire .section-header h2 {
+    margin: 0;
+    font-size: 16px;
+    color: #333;
+}
+.rstc-questionnaire .section-header p {
+    margin: 4px 0 0 0;
+    font-size: 13px;
+    color: #666;
+}
+.rstc-questionnaire .section-content {
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+}
+.rstc-questionnaire .question-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 12px 16px;
+    border-bottom: 1px solid #eee;
+}
+.rstc-questionnaire .question-row:last-child {
+    border-bottom: none;
+}
+.rstc-questionnaire .question-row.flagged {
+    background: #fff5f5;
+}
+.rstc-questionnaire .question-text {
+    flex: 1;
+    padding-right: 20px;
+}
+.rstc-questionnaire .question-number {
+    font-weight: bold;
+    color: #555;
+    margin-right: 8px;
+}
+.rstc-questionnaire .answer-box {
+    display: flex;
+    align-items: center;
+    min-width: 100px;
+    justify-content: flex-end;
+}
+.rstc-questionnaire .answer-option {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 16px;
+    font-size: 14px;
+}
+.rstc-questionnaire .radio-circle {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #999;
+    border-radius: 50%;
+    margin-right: 6px;
+    display: inline-block;
+}
+.rstc-questionnaire .radio-circle.selected-yes {
+    background: #3182ce;
+    border-color: #3182ce;
+}
+.rstc-questionnaire .radio-circle.selected-no {
+    background: #38a169;
+    border-color: #38a169;
+}
+.rstc-questionnaire .follow-up-box {
+    margin: 12px 16px;
+    padding: 12px;
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+}
+.rstc-questionnaire .follow-up-box h4 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #444;
+    font-weight: bold;
+}
+.rstc-questionnaire .follow-up-question {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px 0;
+    font-size: 13px;
+    border-bottom: 1px dotted #ddd;
+}
+.rstc-questionnaire .follow-up-question:last-child {
+    border-bottom: none;
+}
+.rstc-questionnaire .status-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+}
+.rstc-questionnaire .status-completed {
+    background: #c6f6d5;
+    color: #22543d;
+}
+.rstc-questionnaire .status-flagged {
+    background: #fed7d7;
+    color: #822727;
+}
+.rstc-questionnaire .status-cleared {
+    background: #bee3f8;
+    color: #2a4365;
+}
+.rstc-questionnaire .certification-box {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px 18px;
+    margin: 20px 0;
+    font-size: 13px;
+}
+</style>
+
+<div class="rstc-questionnaire">
+    <!-- Header -->
+    <div class="rstc-header">
+        <div class="rstc-brand">RSTC</div>
+        <h1 class="rstc-title">{{ instance.definition.name }}</h1>
+        <p class="rstc-subtitle">{{ instance.definition.description }}</p>
+    </div>
+
+    <!-- Participant Info -->
+    <div class="participant-box">
+        <span class="label">Participant:</span> {{ instance.respondent }}
+    </div>
+
+    <!-- Directions -->
+    <div class="directions-box">
+        <h3>Directions</h3>
+        <p>If you answered NO to all 10 questions, a medical evaluation is not required. If you answered YES to any question, you must complete the follow-up questions and may require physician evaluation.</p>
+    </div>
+
+    <!-- Initial Screening Questions -->
+    <div class="section">
+        <div class="section-header">
+            <h2>Initial Screening Questions</h2>
+            <p>Please answer each question honestly.</p>
+        </div>
+        <div class="section-content">
+            {% for item in screening_questions %}
+            <div class="question-row {% if item.is_flagged %}flagged{% endif %}">
+                <div class="question-text">
+                    <span class="question-number">{{ item.question.sequence }}.</span>
+                    {{ item.question.question_text }}
+                </div>
+                <div class="answer-box">
+                    <span class="answer-option">
+                        <span class="radio-circle {% if item.answer_bool == True %}selected-yes{% endif %}"></span>
+                        Yes
+                    </span>
+                    <span class="answer-option">
+                        <span class="radio-circle {% if item.answer_bool == False %}selected-no{% endif %}"></span>
+                        No
+                    </span>
+                </div>
+            </div>
+
+            <!-- Follow-up box if this question has one and was answered Yes -->
+            {% for box in follow_up_boxes %}
+            {% if box.parent_sequence == item.question.sequence and box.visible %}
+            <div class="follow-up-box">
+                <h4>{{ box.title }}</h4>
+                {% for fq in box.questions %}
+                <div class="follow-up-question">
+                    <div class="question-text">{{ fq.question.question_text }}</div>
+                    <div class="answer-box">
+                        <span class="answer-option">
+                            <span class="radio-circle {% if fq.answer_bool == True %}selected-yes{% endif %}"></span>
+                            Yes
+                        </span>
+                        <span class="answer-option">
+                            <span class="radio-circle {% if fq.answer_bool == False %}selected-no{% endif %}"></span>
+                            No
+                        </span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Certification -->
+    <div class="certification-box">
+        <p><strong>Participant Statement:</strong> I have answered all questions honestly, and understand that I accept responsibility for any consequences resulting from any questions I may have answered inaccurately or for my failure to disclose any existing or past health conditions.</p>
+    </div>
+
+    <!-- Status -->
+    <div style="margin-bottom: 20px;">
+        <strong>Medical Status:</strong>
+        {% if instance.status == 'completed' %}
+        <span class="status-badge status-completed">CLEARED - No Physician Evaluation Required</span>
+        {% elif instance.status == 'flagged' %}
+        <span class="status-badge status-flagged">REQUIRES PHYSICIAN CLEARANCE</span>
+        {% elif instance.status == 'cleared' %}
+        <span class="status-badge status-cleared">CLEARED - Physician Clearance Received</span>
+        {% else %}
+        <span class="status-badge">{{ instance.status|title }}</span>
+        {% endif %}
+    </div>
+</div>

@@ -188,6 +188,10 @@
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                             Expired
                         </span>
+                        {% elif instance.status == 'voided' %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-600">
+                            Voided
+                        </span>
                         {% endif %}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -207,8 +211,8 @@
                         <a href="{% url 'diveops:medical-detail' pk=instance.pk %}"
                            class="text-blue-600 hover:text-blue-900">View</a>
                         {% if instance.status == 'flagged' %}
-                        <a href="{% url 'diveops:medical-clearance' pk=instance.pk %}"
-                           class="text-orange-600 hover:text-orange-900">Clear</a>
+                        <button type="button" onclick="openClearModal('{{ instance.pk }}', '{{ instance.respondent }}')"
+                           class="text-orange-600 hover:text-orange-900">Clear</button>
                         {% endif %}
                         {% if instance.status == 'pending' %}
                         <button type="button" onclick="copyLink('{% url 'diveops_public:medical-questionnaire' instance_id=instance.pk %}')"
@@ -218,11 +222,15 @@
                         {% endif %}
                         {% if instance.status == 'completed' or instance.status == 'cleared' or instance.status == 'flagged' %}
                         <a href="{% url 'diveops:medical-pdf-download' pk=instance.pk %}"
-                           class="text-purple-600 hover:text-purple-900" title="Download PDF">
-                            <svg class="inline w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>PDF
-                        </a>
+                           class="text-purple-600 hover:text-purple-900" title="Download PDF">PDF</a>
+                        {% endif %}
+                        {% if instance.status == 'cleared' and instance.clearance_document %}
+                        <a href="{% url 'diveops:document-download' pk=instance.clearance_document.pk %}"
+                           class="text-teal-600 hover:text-teal-900" title="Download Clearance">Clearance</a>
+                        {% endif %}
+                        {% if instance.status != 'voided' %}
+                        <button type="button" onclick="openVoidModal('{{ instance.pk }}', '{{ instance.respondent }}')"
+                           class="text-gray-400 hover:text-red-600" title="Void this questionnaire">Void</button>
                         {% endif %}
                     </td>
                 </tr>
@@ -315,5 +323,115 @@ function copyLink(path) {
         prompt('Copy this link:', url);
     });
 }
+
+function openClearModal(instanceId, diverName) {
+    document.getElementById('clearModalDiverName').textContent = diverName;
+    document.getElementById('clearForm').action = '/staff/diveops/medical/' + instanceId + '/clear/';
+    document.getElementById('clearModal').classList.remove('hidden');
+}
+
+function closeClearModal() {
+    document.getElementById('clearModal').classList.add('hidden');
+    document.getElementById('clearForm').reset();
+}
+
+function openVoidModal(instanceId, diverName) {
+    document.getElementById('voidModalDiverName').textContent = diverName;
+    document.getElementById('voidForm').action = '/staff/diveops/medical/' + instanceId + '/void/';
+    document.getElementById('voidModal').classList.remove('hidden');
+}
+
+function closeVoidModal() {
+    document.getElementById('voidModal').classList.add('hidden');
+    document.getElementById('voidForm').reset();
+}
 </script>
+
+<!-- Clear Diver Modal -->
+<div id="clearModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeClearModal()"></div>
+
+        <!-- Modal -->
+        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div class="bg-yellow-500 px-4 py-3 rounded-t-lg">
+                <h3 class="text-lg font-semibold text-gray-900">
+                    Clear Diver: <span id="clearModalDiverName"></span>
+                </h3>
+            </div>
+            <form id="clearForm" method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="p-4 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Physician Statement</label>
+                        <input type="file" name="clearance_document" accept="image/*,.pdf" capture="environment"
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        <p class="text-xs text-gray-500 mt-1">Take photo or choose file</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Note (optional)</label>
+                        <input type="text" name="notes" placeholder="Physician name, restrictions..."
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                    </div>
+                </div>
+                <div class="px-4 py-3 bg-gray-50 rounded-b-lg flex justify-end space-x-2">
+                    <button type="button" onclick="closeClearModal()"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
+                        Clear Diver
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Void Questionnaire Modal -->
+<div id="voidModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeVoidModal()"></div>
+
+        <!-- Modal -->
+        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div class="bg-gray-600 px-4 py-3 rounded-t-lg">
+                <h3 class="text-lg font-semibold text-white">
+                    Void Questionnaire: <span id="voidModalDiverName"></span>
+                </h3>
+            </div>
+            <form id="voidForm" method="post">
+                {% csrf_token %}
+                <div class="p-4 space-y-4">
+                    <div class="flex items-start">
+                        <svg class="w-6 h-6 text-red-500 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <div>
+                            <p class="text-sm text-gray-700">This will void the questionnaire. The diver's medical status will fall back to their previous questionnaire on file.</p>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Reason (optional)</label>
+                        <textarea name="reason" rows="2" placeholder="e.g., Sent in error, duplicate entry..."
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"></textarea>
+                    </div>
+                </div>
+                <div class="px-4 py-3 bg-gray-50 rounded-b-lg flex justify-end space-x-2">
+                    <button type="button" onclick="closeVoidModal()"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
+                        Void Questionnaire
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}

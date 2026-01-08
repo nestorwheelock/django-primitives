@@ -1,48 +1,43 @@
 {% extends "diveops/staff/_base.html" %}
 
-{% block title %}Upload Physician Clearance - DiveOps{% endblock %}
+{% block title %}Clear Diver - DiveOps{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <nav aria-label="breadcrumb" class="mb-3">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'diveops:medical-list' %}">Medical Questionnaires</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'diveops:medical-detail' pk=instance.pk %}">{{ instance.definition.name }}</a></li>
-            <li class="breadcrumb-item active">Upload Clearance</li>
-        </ol>
-    </nav>
-
-    <div class="row justify-content-center">
-        <div class="col-lg-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Upload Physician Clearance</h5>
+    <div class="row justify-content-center mt-4">
+        <div class="col-md-5">
+            <div class="card shadow">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0 text-dark">Clear Diver: {{ instance.respondent }}</h5>
                 </div>
                 <div class="card-body">
-                    <div class="alert alert-info">
-                        <strong>Respondent:</strong> {{ instance.respondent }}<br>
-                        <strong>Questionnaire:</strong> {{ instance.definition.name }} v{{ instance.definition_version }}
-                    </div>
-
-                    <form method="post" enctype="multipart/form-data">
+                    <form id="clearanceForm" method="post" enctype="multipart/form-data">
                         {% csrf_token %}
 
+                        <!-- Simple File Input -->
                         <div class="mb-3">
-                            <label for="clearance_document" class="form-label">Physician Clearance Document</label>
-                            <input type="file" class="form-control" id="clearance_document" name="clearance_document" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
-                            <div class="form-text">Upload a scanned copy of the physician's clearance letter (PDF, images, or Word documents)</div>
+                            <label for="clearance_document" class="form-label">Physician Statement</label>
+                            <input type="file" class="form-control" id="clearance_document" name="clearance_document" accept="image/*,.pdf" capture="environment">
+                            <small class="text-muted">Take photo or choose file</small>
                         </div>
 
+                        <!-- Brief Note -->
                         <div class="mb-3">
-                            <label for="notes" class="form-label">Clearance Notes</label>
-                            <textarea class="form-control" id="notes" name="notes" rows="4" placeholder="Enter any notes about the clearance..."></textarea>
+                            <label for="notes" class="form-label">Note <span class="text-muted">(optional)</span></label>
+                            <input type="text" class="form-control" id="notes" name="notes" placeholder="Physician name, restrictions...">
                         </div>
 
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary">Clear Questionnaire</button>
-                            <a href="{% url 'diveops:medical-detail' pk=instance.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                        <!-- Buttons -->
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'diveops:medical-detail' pk=instance.pk %}" class="btn btn-secondary flex-fill">Cancel</a>
+                            <button type="submit" class="btn btn-success flex-fill">
+                                <i class="bi bi-check-circle"></i> Clear Diver
+                            </button>
                         </div>
                     </form>
+                </div>
+                <div class="card-footer text-muted small">
+                    <i class="bi bi-folder"></i> Saved to: Medical / Physician Statements
                 </div>
             </div>
         </div>

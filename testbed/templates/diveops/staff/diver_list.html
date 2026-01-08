@@ -1,5 +1,5 @@
 {% extends "diveops/staff/_base.html" %}
-{% load portal_ui_tags %}
+{% load portal_ui_tags diveops_filters %}
 
 {% block breadcrumb %}
 <li>
@@ -33,6 +33,7 @@
                 <tr>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Medical</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Certification</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Dives</th>
                     <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -40,19 +41,65 @@
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 {% for diver in divers %}
+                {% with med=medical_data|get_item:diver.pk %}
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
                         <div class="flex items-center">
+                            {% if diver.profile_photo and diver.profile_photo.file %}
+                            <img src="{{ diver.profile_photo.file.url }}"
+                                 alt="{{ diver.person }}"
+                                 class="w-8 h-8 rounded-full object-cover">
+                            {% else %}
                             <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                                 <span class="text-sm font-medium text-blue-600">{{ diver.person.first_name|slice:":1"|upper }}</span>
                             </div>
+                            {% endif %}
                             <div class="ml-3">
-                                <p class="text-sm font-medium text-gray-900">{{ diver.person.first_name }} {{ diver.person.last_name }}</p>
+                                <a href="{% url 'diveops:diver-detail' pk=diver.pk %}" class="text-sm font-medium text-gray-900 hover:text-blue-600">{{ diver.person.first_name }} {{ diver.person.last_name }}</a>
                             </div>
                         </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {{ diver.person.email }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if med.status == 'cleared' and med.has_restrictions %}
+                        <!-- Cleared with restrictions -->
+                        <a href="{% url 'diveops:medical-detail' pk=med.instance.pk %}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800" title="Cleared with physician restrictions">
+                            {% icon "alert-triangle" "w-3 h-3 mr-1" %}
+                            Restrictions
+                        </a>
+                        {% elif med.status == 'cleared' %}
+                        <!-- Cleared, no restrictions -->
+                        <a href="{% url 'diveops:medical-detail' pk=med.instance.pk %}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800" title="Cleared to dive">
+                            {% icon "check-circle" "w-3 h-3 mr-1" %}
+                            Cleared
+                        </a>
+                        {% elif med.status == 'requires_clearance' %}
+                        <!-- Requires physician clearance -->
+                        <a href="{% url 'diveops:medical-detail' pk=med.instance.pk %}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800" title="Requires physician clearance">
+                            {% icon "alert-circle" "w-3 h-3 mr-1" %}
+                            Needs Clearance
+                        </a>
+                        {% elif med.status == 'pending' %}
+                        <!-- Pending submission -->
+                        <a href="{% url 'diveops:medical-detail' pk=med.instance.pk %}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" title="Questionnaire pending">
+                            {% icon "clock" "w-3 h-3 mr-1" %}
+                            Pending
+                        </a>
+                        {% elif med.status == 'expired' %}
+                        <!-- Expired -->
+                        <a href="{% url 'diveops:medical-detail' pk=med.instance.pk %}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800" title="Medical expired - needs renewal">
+                            {% icon "clock" "w-3 h-3 mr-1" %}
+                            Expired
+                        </a>
+                        {% else %}
+                        <!-- Not screened -->
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600" title="No medical questionnaire on file">
+                            {% icon "minus-circle" "w-3 h-3 mr-1" %}
+                            Not Screened
+                        </span>
+                        {% endif %}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -64,12 +111,14 @@
                         {{ diver.total_dives }}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <a href="{% url 'diveops:diver-edit' pk=diver.pk %}" class="text-blue-600 hover:text-blue-900">Edit</a>
+                        <a href="{% url 'diveops:diver-detail' pk=diver.pk %}" class="text-blue-600 hover:text-blue-900 mr-3">View</a>
+                        <a href="{% url 'diveops:diver-edit' pk=diver.pk %}" class="text-gray-600 hover:text-gray-900">Edit</a>
                     </td>
                 </tr>
+                {% endwith %}
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                    <td colspan="6" class="px-6 py-12 text-center text-gray-500">
                         No divers registered yet. <a href="{% url 'diveops:diver-create' %}" class="text-blue-600 hover:text-blue-900">Add the first diver</a>.
                     </td>
                 </tr>
