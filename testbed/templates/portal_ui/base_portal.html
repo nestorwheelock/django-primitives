@@ -1,0 +1,141 @@
+{% extends "portal_ui/base.html" %}
+{% load static portal_ui_tags %}
+
+{% block body %}
+{% if is_impersonating %}
+<!-- Impersonation Banner -->
+<div class="bg-amber-500 text-amber-950 px-4 py-2 text-center text-sm font-medium sticky top-0 z-50">
+    <span class="inline-flex items-center">
+        {% icon "eye" "w-4 h-4 mr-2" %}
+        Viewing as <strong class="mx-1">{{ user.email }}</strong>
+        (logged in as {{ original_user.email }})
+        <form action="{% url 'impersonate-stop' %}" method="post" class="inline ml-4">
+            {% csrf_token %}
+            <button type="submit" class="underline hover:no-underline font-semibold">
+                Stop Impersonating
+            </button>
+        </form>
+    </span>
+</div>
+{% endif %}
+
+<div class="min-h-full" x-data="{ sidebarOpen: false }">
+    <!-- Mobile sidebar overlay -->
+    <div x-show="sidebarOpen" x-cloak
+         class="fixed inset-0 z-40 lg:hidden"
+         @click="sidebarOpen = false">
+        <div class="fixed inset-0 bg-gray-600 bg-opacity-75"></div>
+    </div>
+
+    <!-- Sidebar -->
+    {% include "portal_ui/components/portal_sidebar.html" %}
+
+    <!-- Main content -->
+    <div class="lg:pl-64 flex flex-col min-h-screen">
+        <!-- Top bar -->
+        <header class="bg-white shadow-sm border-b border-gray-200 sticky {% if is_impersonating %}top-10{% else %}top-0{% endif %} z-30">
+            <div class="flex items-center justify-between h-16 px-4">
+                <!-- Mobile menu button -->
+                <button @click="sidebarOpen = true; document.getElementById('portal-sidebar').classList.remove('-translate-x-full')" class="lg:hidden text-gray-500 hover:text-gray-700">
+                    {% icon "menu" "w-6 h-6" %}
+                </button>
+
+                <!-- Page title -->
+                <h1 class="text-lg font-semibold text-gray-800 lg:ml-0">
+                    {% block page_title %}Dashboard{% endblock %}
+                </h1>
+
+                <!-- Right side actions -->
+                <div class="flex items-center space-x-4">
+                    {% block header_actions %}{% endblock %}
+
+                    <!-- Profile dropdown -->
+                    <div class="relative" x-data="{ open: false }">
+                        <button @click="open = !open" class="flex items-center text-gray-600 hover:text-primary-500">
+                            <div class="w-8 h-8 rounded-full {% if is_impersonating %}bg-amber-100 text-amber-600{% else %}bg-primary-100 text-primary-600{% endif %} flex items-center justify-center font-medium">
+                                {% if user.email %}{{ user.email|slice:":1"|upper }}{% else %}?{% endif %}
+                            </div>
+                            <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div x-show="open" x-cloak @click.away="open = false"
+                             class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-50 border border-gray-100">
+                            <div class="px-4 py-2 border-b border-gray-100">
+                                <p class="text-sm font-medium text-gray-900 truncate">{{ user.email }}</p>
+                                {% if is_impersonating %}
+                                <p class="text-xs text-amber-600">Impersonating</p>
+                                {% endif %}
+                            </div>
+                            {% if is_impersonating %}
+                            <form action="{% url 'impersonate-stop' %}" method="post">
+                                {% csrf_token %}
+                                <button type="submit" class="w-full text-left block px-4 py-2 text-sm text-amber-700 hover:bg-amber-50">
+                                    {% icon "x-circle" "w-4 h-4 inline mr-2" %} Stop Impersonating
+                                </button>
+                            </form>
+                            {% else %}
+                            {% if user.is_staff %}
+                            <a href="{{ portal_ui.staff_prefix }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                {% icon "briefcase" "w-4 h-4 inline mr-2" %} Staff Portal
+                            </a>
+                            {% endif %}
+                            {% if user.is_superuser %}
+                            <a href="{{ portal_ui.superadmin_prefix }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                {% icon "shield" "w-4 h-4 inline mr-2" %} Admin
+                            </a>
+                            {% endif %}
+                            {% endif %}
+                            <a href="{{ portal_ui.login_url }}profile/" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                {% icon "user" "w-4 h-4 inline mr-2" %} Profile
+                            </a>
+                            <a href="{{ portal_ui.login_url }}logout/" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                {% icon "log-out" "w-4 h-4 inline mr-2" %} Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Flash messages -->
+        {% if messages %}
+        <div class="px-4 py-2">
+            {% for message in messages %}
+            <div class="mb-2 p-4 rounded-lg {% if message.tags == 'error' %}bg-red-100 text-red-700{% elif message.tags == 'success' %}bg-green-100 text-green-700{% elif message.tags == 'warning' %}bg-yellow-100 text-yellow-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Page content -->
+        <main class="flex-1 p-4 lg:p-6">
+            {% block content %}{% endblock %}
+            {% block portal_content %}{% endblock %}
+        </main>
+
+        <!-- Footer -->
+        {% if portal_ui.show_footer %}
+        <footer class="bg-white border-t border-gray-200 py-4 px-6 text-center text-sm text-gray-500">
+            {% block footer %}
+            {{ portal_ui.footer_text|default:"Powered by django-portal-ui" }}
+            {% endblock %}
+        </footer>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function closePortalSidebar() {
+    document.getElementById('portal-sidebar').classList.add('-translate-x-full');
+    document.getElementById('portal-sidebar-overlay').classList.add('hidden');
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closePortalSidebar();
+    }
+});
+</script>
+{% endblock %}

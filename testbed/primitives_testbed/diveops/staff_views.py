@@ -430,6 +430,14 @@ class DiverDetailView(StaffPortalMixin, DetailView):
             deleted_at__isnull=True,
         ).select_related("document", "document__media_asset").order_by("-created_at")[:12]
 
+        # Add User for impersonation (if diver has email matching a user)
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        if self.object.person.email:
+            context["diver_user"] = User.objects.filter(
+                email__iexact=self.object.person.email
+            ).first()
+
         return context
 
 

@@ -11,6 +11,7 @@ from django_cms_core.urls import api_urlpatterns as cms_api_urlpatterns
 from django_cms_core.urls import page_urlpatterns as cms_page_urlpatterns
 
 from . import views
+from .impersonation import ImpersonateStartView, ImpersonateStopView
 
 urlpatterns = [
     # Admin
@@ -18,6 +19,10 @@ urlpatterns = [
 
     # Health check
     path("health/", views.health_check, name="health_check"),
+
+    # User impersonation (staff only)
+    path("impersonate/<int:user_id>/", ImpersonateStartView.as_view(), name="impersonate-start"),
+    path("impersonate/stop/", ImpersonateStopView.as_view(), name="impersonate-stop"),
 
     # Testbed modules
     path("clinic/", include("primitives_testbed.clinic.urls")),

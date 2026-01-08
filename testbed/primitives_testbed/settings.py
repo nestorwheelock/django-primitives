@@ -77,6 +77,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "primitives_testbed.impersonation.ImpersonationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -96,6 +97,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "django_portal_ui.context_processors.portal_ui",
                 "primitives_testbed.diveops.context_processors.diveops_context",
+                "primitives_testbed.impersonation.impersonation_context",
             ],
         },
     },
