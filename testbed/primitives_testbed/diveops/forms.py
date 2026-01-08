@@ -118,6 +118,81 @@ class DiverForm(forms.Form):
         widget=forms.DateInput(attrs={"type": "date"}),
     )
 
+    # Body Measurements / Gear Sizing
+    weight_kg = forms.DecimalField(
+        required=False,
+        label="Weight (kg)",
+        max_digits=5,
+        decimal_places=1,
+    )
+    height_cm = forms.IntegerField(
+        required=False,
+        label="Height (cm)",
+        min_value=0,
+        max_value=300,
+    )
+    wetsuit_size = forms.CharField(
+        required=False,
+        label="Wetsuit Size",
+        max_length=10,
+    )
+    bcd_size = forms.CharField(
+        required=False,
+        label="BCD Size",
+        max_length=10,
+    )
+    fin_size = forms.CharField(
+        required=False,
+        label="Fin Size",
+        max_length=20,
+    )
+    mask_fit = forms.CharField(
+        required=False,
+        label="Mask Fit",
+        max_length=50,
+    )
+    glove_size = forms.CharField(
+        required=False,
+        label="Glove Size",
+        max_length=10,
+    )
+    weight_required_kg = forms.DecimalField(
+        required=False,
+        label="Weight Needed (kg)",
+        max_digits=4,
+        decimal_places=1,
+        help_text="Weight needed for neutral buoyancy",
+    )
+    gear_notes = forms.CharField(
+        required=False,
+        label="Gear Notes",
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
+
+    # Equipment Ownership
+    EQUIPMENT_OWNERSHIP_CHOICES = [
+        ("none", "None - Rents All"),
+        ("partial", "Partial - Own Some Gear"),
+        ("full", "Full - Owns All Essential Gear"),
+    ]
+    equipment_ownership = forms.ChoiceField(
+        choices=EQUIPMENT_OWNERSHIP_CHOICES,
+        initial="none",
+        label="Equipment Ownership",
+    )
+
+    # Diver Type
+    DIVER_TYPE_CHOICES = [
+        ("identity", "Diver (Identity)"),
+        ("activity", "Does Diving (Activity)"),
+    ]
+    diver_type = forms.ChoiceField(
+        choices=DIVER_TYPE_CHOICES,
+        initial="activity",
+        label="Diver Type",
+        help_text="Is diving their identity or just an activity?",
+    )
+
     def __init__(self, *args, instance=None, is_edit=False, **kwargs):
         """Initialize form, optionally with existing DiverProfile.
 
@@ -146,6 +221,19 @@ class DiverForm(forms.Form):
             self.fields["total_dives"].initial = instance.total_dives
             self.fields["medical_clearance_date"].initial = instance.medical_clearance_date
             self.fields["medical_clearance_valid_until"].initial = instance.medical_clearance_valid_until
+
+            # Body measurements / gear sizing
+            self.fields["weight_kg"].initial = instance.weight_kg
+            self.fields["height_cm"].initial = instance.height_cm
+            self.fields["wetsuit_size"].initial = instance.wetsuit_size
+            self.fields["bcd_size"].initial = instance.bcd_size
+            self.fields["fin_size"].initial = instance.fin_size
+            self.fields["mask_fit"].initial = instance.mask_fit
+            self.fields["glove_size"].initial = instance.glove_size
+            self.fields["weight_required_kg"].initial = instance.weight_required_kg
+            self.fields["gear_notes"].initial = instance.gear_notes
+            self.fields["equipment_ownership"].initial = instance.equipment_ownership
+            self.fields["diver_type"].initial = instance.diver_type
 
             # Only pre-populate certification fields if not in edit mode
             if not is_edit:
@@ -215,6 +303,18 @@ class DiverForm(forms.Form):
                 total_dives=data["total_dives"],
                 medical_clearance_date=data.get("medical_clearance_date"),
                 medical_clearance_valid_until=data.get("medical_clearance_valid_until"),
+                # Body measurements / gear sizing
+                weight_kg=data.get("weight_kg"),
+                height_cm=data.get("height_cm"),
+                wetsuit_size=data.get("wetsuit_size", ""),
+                bcd_size=data.get("bcd_size", ""),
+                fin_size=data.get("fin_size", ""),
+                mask_fit=data.get("mask_fit", ""),
+                glove_size=data.get("glove_size", ""),
+                weight_required_kg=data.get("weight_required_kg"),
+                gear_notes=data.get("gear_notes", ""),
+                equipment_ownership=data.get("equipment_ownership", "none"),
+                diver_type=data.get("diver_type", "activity"),
             )
         else:
             # Create new diver via service
@@ -226,6 +326,18 @@ class DiverForm(forms.Form):
                 created_by=actor,
                 medical_clearance_date=data.get("medical_clearance_date"),
                 medical_clearance_valid_until=data.get("medical_clearance_valid_until"),
+                # Body measurements / gear sizing
+                weight_kg=data.get("weight_kg"),
+                height_cm=data.get("height_cm"),
+                wetsuit_size=data.get("wetsuit_size", ""),
+                bcd_size=data.get("bcd_size", ""),
+                fin_size=data.get("fin_size", ""),
+                mask_fit=data.get("mask_fit", ""),
+                glove_size=data.get("glove_size", ""),
+                weight_required_kg=data.get("weight_required_kg"),
+                gear_notes=data.get("gear_notes", ""),
+                equipment_ownership=data.get("equipment_ownership", "none"),
+                diver_type=data.get("diver_type", "activity"),
             )
 
         # Create certification if level provided
@@ -406,14 +518,22 @@ class DiverCertificationForm(forms.ModelForm):
                 parent__isnull=True,
             ).first()
 
+            # Determine category from content type
+            mime = proof_file.content_type or "application/octet-stream"
+            if mime.startswith("image/"):
+                category = "image"
+            else:
+                category = "document"
+
             # Create Document for the proof with target_content_type set
             doc = Document(
                 file=proof_file,
                 folder=certifications_folder,
                 filename=proof_file.name,
-                content_type=proof_file.content_type or "application/octet-stream",
+                content_type=mime,
                 file_size=proof_file.size,
                 document_type="certification_proof",
+                category=category,
                 description=f"Certification proof for {self.cleaned_data.get('level').name if self.cleaned_data.get('level') else 'certification'}",
                 target_content_type=content_type,
                 target_id="pending",  # Placeholder, will update after certification is saved
@@ -421,6 +541,20 @@ class DiverCertificationForm(forms.ModelForm):
             # Compute checksum
             doc.checksum = doc.compute_checksum()
             doc.save()
+
+            # Auto-extract EXIF/metadata for images
+            if category == "image":
+                try:
+                    from .document_metadata import extract_document_metadata
+                    extracted = extract_document_metadata(doc)
+                    if extracted:
+                        metadata = doc.metadata or {}
+                        metadata.update(extracted)
+                        doc.metadata = metadata
+                        doc.save(update_fields=["metadata", "updated_at"])
+                except Exception:
+                    pass  # Metadata extraction is best-effort
+
             proof_document = doc
 
         if commit:

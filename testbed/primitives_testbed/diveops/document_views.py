@@ -1,7 +1,10 @@
 """Document management views for diveops staff portal."""
 
+import logging
 import os
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 from django.contrib import messages
 from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
@@ -229,6 +232,17 @@ class DocumentDetailView(StaffPortalMixin, DetailView):
     template_name = "diveops/staff/document_detail.html"
     context_object_name = "document"
 
+    def get(self, request, *args, **kwargs):
+        response = super().get(request, *args, **kwargs)
+        # Log the view
+        log_access(
+            document=self.object,
+            action=AccessAction.VIEW,
+            actor=request.user,
+            request=request,
+        )
+        return response
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         doc = self.object
@@ -262,7 +276,23 @@ class DocumentDetailView(StaffPortalMixin, DetailView):
         context["notes"] = self._get_document_notes(doc)
 
         # File metadata (EXIF, video/audio info)
+        # Auto-extract metadata for images/video/audio if not already done
         metadata = doc.metadata or {}
+        is_media = (
+            doc.category in ("image", "video", "audio") or
+            (doc.content_type and doc.content_type.startswith(("image/", "video/", "audio/")))
+        )
+        if is_media and "file_metadata" not in metadata:
+            try:
+                from .document_metadata import extract_document_metadata
+                extracted = extract_document_metadata(doc)
+                if extracted:
+                    metadata.update(extracted)
+                    doc.metadata = metadata
+                    doc.save(update_fields=["metadata", "updated_at"])
+            except Exception as e:
+                logger.warning(f"Auto metadata extraction failed for {doc.filename}: {e}")
+
         if "file_metadata" in metadata:
             context["file_metadata"] = metadata.get("file_metadata", {})
             context["image_metadata"] = metadata.get("image_metadata", {})
@@ -281,8 +311,13 @@ class DocumentDetailView(StaffPortalMixin, DetailView):
                 context["office_preview_url"] = reverse("diveops:document-preview-pdf", kwargs={"pk": doc.pk})
 
         # Photo tagging (only for images)
-        if doc.category == "image":
-            from .models import PhotoTag, DiverProfile
+        is_image = (
+            doc.category == "image" or
+            (doc.content_type and doc.content_type.startswith("image/"))
+        )
+        if is_image:
+            from .models import PhotoTag, DiverProfile, DiveSitePhotoTag, DiveSite
+            # Diver tagging
             context["photo_tags"] = PhotoTag.objects.filter(
                 document=doc, deleted_at__isnull=True
             ).select_related("diver__person", "tagged_by")
@@ -292,8 +327,22 @@ class DocumentDetailView(StaffPortalMixin, DetailView):
                 id__in=tagged_diver_ids
             ).select_related("person").order_by("person__last_name", "person__first_name")[:50]
             context["can_tag_divers"] = True
+
+            # Dive site tagging
+            context["dive_site_tags"] = DiveSitePhotoTag.objects.filter(
+                document=doc, deleted_at__isnull=True
+            ).select_related("dive_site", "tagged_by")
+            # Get dive sites not already tagged in this photo
+            tagged_site_ids = context["dive_site_tags"].values_list("dive_site_id", flat=True)
+            context["available_dive_sites"] = DiveSite.objects.filter(
+                deleted_at__isnull=True
+            ).exclude(
+                id__in=tagged_site_ids
+            ).order_by("name")[:50]
+            context["can_tag_dive_sites"] = True
         else:
             context["can_tag_divers"] = False
+            context["can_tag_dive_sites"] = False
 
         return context
 
@@ -486,6 +535,19 @@ class DocumentUploadView(StaffPortalMixin, FormView):
             request=self.request,
         )
 
+        # Auto-extract EXIF/metadata for images, video, audio
+        if category in ("image", "video", "audio"):
+            try:
+                from .document_metadata import extract_document_metadata
+                extracted = extract_document_metadata(doc)
+                if extracted:
+                    metadata = doc.metadata or {}
+                    metadata.update(extracted)
+                    doc.metadata = metadata
+                    doc.save(update_fields=["metadata", "updated_at"])
+            except Exception as e:
+                logger.warning(f"Metadata extraction failed for {doc.filename}: {e}")
+
         # Trigger text extraction if supported
         if can_extract(doc.content_type):
             try:
@@ -559,7 +621,7 @@ class DocumentPreviewView(StaffPortalMixin, View):
         # Log the preview access
         log_access(
             document=document,
-            action=AccessAction.VIEW,
+            action=AccessAction.PREVIEW,
             actor=request.user,
             request=request,
         )
@@ -1605,4 +1667,78 @@ class PhotoTagRemoveView(StaffPortalMixin, View):
         tag.delete()
 
         messages.success(request, f"Removed {diver_name} from this photo.")
+        return redirect("diveops:document-detail", pk=pk)
+
+
+# =============================================================================
+# Dive Site Photo Tagging Views
+# =============================================================================
+
+
+class DiveSitePhotoTagAddView(StaffPortalMixin, View):
+    """Add a dive site tag to a photo."""
+
+    def post(self, request, pk):
+        from .models import DiveSitePhotoTag, DiveSite
+
+        document = get_object_or_404(Document, pk=pk)
+
+        # Only allow tagging on images
+        is_image = (
+            document.category == "image"
+            or (document.content_type and document.content_type.startswith("image/"))
+        )
+        if not is_image:
+            messages.error(request, "Only images can have dive site tags.")
+            return redirect("diveops:document-detail", pk=pk)
+
+        dive_site_id = request.POST.get("dive_site_id")
+        if not dive_site_id:
+            messages.error(request, "Please select a dive site to tag.")
+            return redirect("diveops:document-detail", pk=pk)
+
+        dive_site = get_object_or_404(DiveSite, pk=dive_site_id, deleted_at__isnull=True)
+
+        # Check if tag exists (including soft-deleted)
+        existing_tag = DiveSitePhotoTag.all_objects.filter(
+            document=document, dive_site=dive_site
+        ).first()
+
+        if existing_tag:
+            if existing_tag.deleted_at is None:
+                # Already actively tagged
+                messages.warning(request, f"{dive_site.name} is already tagged in this photo.")
+                return redirect("diveops:document-detail", pk=pk)
+            else:
+                # Restore soft-deleted tag
+                existing_tag.deleted_at = None
+                existing_tag.tagged_by = request.user
+                existing_tag.save(update_fields=["deleted_at", "tagged_by", "updated_at"])
+        else:
+            # Create new tag
+            DiveSitePhotoTag.objects.create(
+                document=document,
+                dive_site=dive_site,
+                tagged_by=request.user,
+            )
+
+        messages.success(request, f"Tagged {dive_site.name} in this photo.")
+        return redirect("diveops:document-detail", pk=pk)
+
+
+class DiveSitePhotoTagRemoveView(StaffPortalMixin, View):
+    """Remove a dive site tag from a photo."""
+
+    def post(self, request, pk, tag_pk):
+        from .models import DiveSitePhotoTag
+
+        document = get_object_or_404(Document, pk=pk)
+        tag = get_object_or_404(DiveSitePhotoTag, pk=tag_pk, document=document)
+
+        site_name = tag.dive_site.name
+
+        # Soft delete the tag
+        tag.delete()
+
+        messages.success(request, f"Removed {site_name} from this photo.")
         return redirect("diveops:document-detail", pk=pk)

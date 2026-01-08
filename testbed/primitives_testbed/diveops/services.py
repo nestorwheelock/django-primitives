@@ -955,6 +955,17 @@ def create_diver(
     *,
     medical_clearance_date=None,
     medical_clearance_valid_until=None,
+    weight_kg=None,
+    height_cm=None,
+    wetsuit_size: str = "",
+    bcd_size: str = "",
+    fin_size: str = "",
+    mask_fit: str = "",
+    glove_size: str = "",
+    weight_required_kg=None,
+    gear_notes: str = "",
+    equipment_ownership: str = "none",
+    diver_type: str = "activity",
 ) -> DiverProfile:
     """Create a new diver with Person and DiverProfile.
 
@@ -966,6 +977,17 @@ def create_diver(
         created_by: User creating the diver
         medical_clearance_date: Optional medical clearance date
         medical_clearance_valid_until: Optional medical clearance expiry
+        weight_kg: Weight in kilograms
+        height_cm: Height in centimeters
+        wetsuit_size: Wetsuit size
+        bcd_size: BCD size
+        fin_size: Fin size
+        mask_fit: Mask fit notes
+        glove_size: Glove size
+        weight_required_kg: Weight needed for neutral buoyancy
+        gear_notes: Additional gear notes
+        equipment_ownership: Equipment ownership status
+        diver_type: Whether diving is identity or activity
 
     Returns:
         Created DiverProfile
@@ -988,6 +1010,17 @@ def create_diver(
         total_dives=total_dives,
         medical_clearance_date=medical_clearance_date,
         medical_clearance_valid_until=medical_clearance_valid_until,
+        weight_kg=weight_kg,
+        height_cm=height_cm,
+        wetsuit_size=wetsuit_size,
+        bcd_size=bcd_size,
+        fin_size=fin_size,
+        mask_fit=mask_fit,
+        glove_size=glove_size,
+        weight_required_kg=weight_required_kg,
+        gear_notes=gear_notes,
+        equipment_ownership=equipment_ownership,
+        diver_type=diver_type,
     )
 
     # Emit audit event
@@ -1011,6 +1044,17 @@ def update_diver(
     total_dives: int | None = None,
     medical_clearance_date=None,
     medical_clearance_valid_until=None,
+    weight_kg=None,
+    height_cm=None,
+    wetsuit_size: str | None = None,
+    bcd_size: str | None = None,
+    fin_size: str | None = None,
+    mask_fit: str | None = None,
+    glove_size: str | None = None,
+    weight_required_kg=None,
+    gear_notes: str | None = None,
+    equipment_ownership: str | None = None,
+    diver_type: str | None = None,
 ) -> DiverProfile:
     """Update an existing diver's Person and DiverProfile.
 
@@ -1023,6 +1067,17 @@ def update_diver(
         total_dives: New dive count (None = no change)
         medical_clearance_date: New clearance date (None = no change)
         medical_clearance_valid_until: New clearance expiry (None = no change)
+        weight_kg: Weight in kilograms
+        height_cm: Height in centimeters
+        wetsuit_size: Wetsuit size
+        bcd_size: BCD size
+        fin_size: Fin size
+        mask_fit: Mask fit notes
+        glove_size: Glove size
+        weight_required_kg: Weight needed for neutral buoyancy
+        gear_notes: Additional gear notes
+        equipment_ownership: Equipment ownership status
+        diver_type: Whether diving is identity or activity
 
     Returns:
         Updated DiverProfile
@@ -1045,6 +1100,19 @@ def update_diver(
     _apply_tracked_update(diver, "total_dives", total_dives, changes)
     _apply_tracked_update(diver, "medical_clearance_date", medical_clearance_date, changes)
     _apply_tracked_update(diver, "medical_clearance_valid_until", medical_clearance_valid_until, changes)
+
+    # Update body measurements / gear sizing
+    _apply_tracked_update(diver, "weight_kg", weight_kg, changes)
+    _apply_tracked_update(diver, "height_cm", height_cm, changes)
+    _apply_tracked_update(diver, "wetsuit_size", wetsuit_size, changes)
+    _apply_tracked_update(diver, "bcd_size", bcd_size, changes)
+    _apply_tracked_update(diver, "fin_size", fin_size, changes)
+    _apply_tracked_update(diver, "mask_fit", mask_fit, changes)
+    _apply_tracked_update(diver, "glove_size", glove_size, changes)
+    _apply_tracked_update(diver, "weight_required_kg", weight_required_kg, changes)
+    _apply_tracked_update(diver, "gear_notes", gear_notes, changes)
+    _apply_tracked_update(diver, "equipment_ownership", equipment_ownership, changes)
+    _apply_tracked_update(diver, "diver_type", diver_type, changes)
 
     if changes:
         person.save()

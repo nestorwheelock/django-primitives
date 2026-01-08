@@ -298,7 +298,7 @@ def get_diver_with_certifications(diver_id) -> Optional[DiverProfile]:
     """
     return (
         DiverProfile.objects.filter(pk=diver_id)
-        .select_related("person")
+        .select_related("person", "profile_photo", "photo_id")
         .prefetch_related(
             Prefetch(
                 "certifications",

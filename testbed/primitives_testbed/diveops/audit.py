@@ -344,6 +344,27 @@ class Actions:
     PHOTO_DIVER_TAGGED = "photo_diver_tagged"
     PHOTO_DIVER_UNTAGGED = "photo_diver_untagged"
 
+    # -------------------------------------------------------------------------
+    # Diver Staff Note Actions
+    # -------------------------------------------------------------------------
+    DIVER_NOTE_ADDED = "diver_note_added"
+    DIVER_NOTE_DELETED = "diver_note_deleted"
+
+    # -------------------------------------------------------------------------
+    # Diver Document Actions
+    # -------------------------------------------------------------------------
+    DIVER_DOCUMENT_UPLOADED = "diver_document_uploaded"
+    DIVER_DOCUMENT_DELETED = "diver_document_deleted"
+
+    # -------------------------------------------------------------------------
+    # Medical Questionnaire Actions
+    # -------------------------------------------------------------------------
+    MEDICAL_QUESTIONNAIRE_SENT = "medical_questionnaire_sent"
+    MEDICAL_QUESTIONNAIRE_COMPLETED = "medical_questionnaire_completed"
+    MEDICAL_QUESTIONNAIRE_FLAGGED = "medical_questionnaire_flagged"
+    MEDICAL_QUESTIONNAIRE_CLEARED = "medical_questionnaire_cleared"
+    MEDICAL_QUESTIONNAIRE_EXPIRED = "medical_questionnaire_expired"
+
 
 # =============================================================================
 # Audit Adapter - Single Entry Point
@@ -1809,6 +1830,166 @@ def log_photo_tag_event(
         obj=photo_tag.document,
         actor=actor,
         changes={},
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_medical_questionnaire_event(
+    action: str,
+    instance,
+    actor=None,
+    data: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a medical questionnaire operation.
+
+    Args:
+        action: One of Actions.MEDICAL_QUESTIONNAIRE_* constants
+        instance: QuestionnaireInstance from django_questionnaires
+        actor: Django User who performed the action (None for public submissions)
+        data: Optional additional context
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "questionnaire_instance_id": str(instance.pk),
+        "definition_slug": instance.definition.slug if instance.definition else None,
+        "definition_name": instance.definition.name if instance.definition else None,
+        "status": instance.status,
+    }
+
+    # Get respondent info (DiverProfile)
+    respondent = instance.respondent
+    if respondent:
+        metadata["diver_id"] = str(respondent.pk)
+        if hasattr(respondent, "person") and respondent.person:
+            metadata["diver_name"] = f"{respondent.person.first_name} {respondent.person.last_name}"
+
+    if instance.completed_at:
+        metadata["completed_at"] = instance.completed_at.isoformat()
+
+    if instance.flagged_at:
+        metadata["flagged_at"] = instance.flagged_at.isoformat()
+
+    if instance.cleared_at:
+        metadata["cleared_at"] = instance.cleared_at.isoformat()
+
+    if instance.cleared_by_id:
+        metadata["cleared_by_id"] = str(instance.cleared_by_id)
+
+    if instance.expires_at:
+        metadata["expires_at"] = instance.expires_at.isoformat()
+
+    if data:
+        metadata.update(data)
+
+    # Log against the respondent (diver) if available, otherwise the instance
+    target = respondent if respondent else instance
+
+    return audit_log(
+        action=action,
+        obj=target,
+        actor=actor,
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_diver_note_event(
+    action: str,
+    note,
+    diver,
+    actor=None,
+    data: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a diver staff note operation.
+
+    Args:
+        action: One of Actions.DIVER_NOTE_ADDED or DIVER_NOTE_DELETED
+        note: Note instance from django_notes
+        diver: DiverProfile instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "note_id": str(note.pk),
+        "diver_id": str(diver.pk),
+        "visibility": note.visibility,
+    }
+
+    if hasattr(diver, "person") and diver.person:
+        metadata["diver_name"] = f"{diver.person.first_name} {diver.person.last_name}"
+
+    if note.author_id:
+        metadata["author_id"] = str(note.author_id)
+
+    # Include content preview (first 100 chars)
+    if note.content:
+        metadata["content_preview"] = note.content[:100]
+
+    if data:
+        metadata.update(data)
+
+    return audit_log(
+        action=action,
+        obj=diver,
+        actor=actor,
+        metadata=metadata,
+        request=request,
+    )
+
+
+def log_diver_document_event(
+    action: str,
+    document,
+    diver,
+    actor=None,
+    data: dict | None = None,
+    request=None,
+):
+    """Log an audit event for a diver document operation.
+
+    Args:
+        action: One of Actions.DIVER_DOCUMENT_UPLOADED or DIVER_DOCUMENT_DELETED
+        document: Document instance from django_documents
+        diver: DiverProfile instance
+        actor: Django User who performed the action
+        data: Optional additional context
+        request: Optional HTTP request
+
+    Returns:
+        AuditLog instance
+    """
+    metadata = {
+        "document_id": str(document.pk),
+        "diver_id": str(diver.pk),
+        "filename": document.filename,
+        "document_type": document.document_type,
+        "content_type": document.content_type,
+        "file_size": document.file_size,
+    }
+
+    if hasattr(diver, "person") and diver.person:
+        metadata["diver_name"] = f"{diver.person.first_name} {diver.person.last_name}"
+
+    if document.description:
+        metadata["description"] = document.description
+
+    if data:
+        metadata.update(data)
+
+    return audit_log(
+        action=action,
+        obj=diver,
+        actor=actor,
         metadata=metadata,
         request=request,
     )

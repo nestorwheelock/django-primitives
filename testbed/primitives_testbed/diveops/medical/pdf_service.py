@@ -199,6 +199,22 @@ class MedicalQuestionnairePDFService:
 
         organized = self.get_organized_questions()
 
+        # Get medical providers if questionnaire is flagged
+        medical_providers = []
+        medical_instructions = None
+        if instance.status == "flagged":
+            from primitives_testbed.diveops.medical.provider_service import (
+                get_medical_instructions,
+                get_recommended_providers,
+            )
+
+            medical_instructions = get_medical_instructions()
+
+            # Get dive shop from questionnaire metadata or respondent's diver profile
+            dive_shop = self._get_dive_shop()
+            if dive_shop:
+                medical_providers = list(get_recommended_providers(dive_shop))
+
         return {
             # Instance info
             "instance": instance,
@@ -227,7 +243,41 @@ class MedicalQuestionnairePDFService:
 
             # Generation timestamp
             "generated_at": timezone.now(),
+
+            # Medical provider instructions (for flagged questionnaires)
+            "medical_providers": medical_providers,
+            "medical_instructions": medical_instructions,
         }
+
+    def _get_dive_shop(self):
+        """Get dive shop organization from questionnaire context.
+
+        Attempts to find the dive shop associated with this questionnaire by:
+        1. Checking instance metadata for dive_shop_id
+        2. Getting from respondent's diver profile (if available)
+
+        Returns:
+            Organization instance or None if not found
+        """
+        from django_parties.models import Organization
+
+        # Try instance metadata first
+        metadata = self.instance.metadata or {}
+        dive_shop_id = metadata.get("dive_shop_id")
+        if dive_shop_id:
+            try:
+                return Organization.objects.get(pk=dive_shop_id)
+            except Organization.DoesNotExist:
+                pass
+
+        # Try to get from respondent's diver profile
+        respondent = self.instance.respondent
+        if respondent and hasattr(respondent, "person"):
+            # Check if person has a relationship with a dive shop
+            # For now, return None - dive shop should be set in metadata
+            pass
+
+        return None
 
     def render_html(self) -> str:
         """Render questionnaire to HTML string."""
