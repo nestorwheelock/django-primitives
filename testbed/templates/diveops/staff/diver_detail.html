@@ -74,6 +74,57 @@
                     {% endif %}
                 </div>
             </div>
+
+            <!-- Medical Status Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mt-6">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+                    <h3 class="text-lg font-medium text-gray-900">Medical Status</h3>
+                    <a href="{% url 'diveops:diver-medical-status' pk=diver.pk %}"
+                       class="text-sm text-blue-600 hover:text-blue-800">View Details</a>
+                </div>
+                <div class="p-4">
+                    {% if medical_status == 'cleared' %}
+                    <div class="flex items-center">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                            {% icon "check-circle" "w-4 h-4 mr-1" %}
+                            Cleared to Dive
+                        </span>
+                    </div>
+                    {% elif medical_status == 'requires_clearance' %}
+                    <div class="flex items-center">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                            {% icon "alert-circle" "w-4 h-4 mr-1" %}
+                            Requires Physician Clearance
+                        </span>
+                    </div>
+                    {% elif medical_status == 'expired' %}
+                    <div class="flex items-center">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                            {% icon "clock" "w-4 h-4 mr-1" %}
+                            Expired
+                        </span>
+                    </div>
+                    {% elif medical_status == 'pending' %}
+                    <div class="flex items-center">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                            {% icon "clock" "w-4 h-4 mr-1" %}
+                            Pending Submission
+                        </span>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-2">
+                        <p class="text-sm text-gray-500 mb-3">No medical questionnaire on file</p>
+                        <form method="post" action="{% url 'diveops:send-medical-questionnaire' diver_pk=diver.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                                {% icon "send" "w-4 h-4 mr-1" %}
+                                Send Questionnaire
+                            </button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
 
         <!-- Certifications Card -->
