@@ -549,7 +549,7 @@ def list_diver_signed_agreements(
     qs = (
         SignableAgreement.objects.filter(
             party_a_content_type=diver_ct,
-            party_a_id=str(diver.pk),
+            party_a_object_id=str(diver.pk),
             status=SignableAgreement.Status.SIGNED,
         )
         .select_related("template", "signed_document")
@@ -608,7 +608,7 @@ def list_diver_pending_agreements(
     return list(
         SignableAgreement.objects.filter(
             party_a_content_type=diver_ct,
-            party_a_id=str(diver.pk),
+            party_a_object_id=str(diver.pk),
             status__in=[SignableAgreement.Status.DRAFT, SignableAgreement.Status.SENT],
         )
         .select_related("template")
