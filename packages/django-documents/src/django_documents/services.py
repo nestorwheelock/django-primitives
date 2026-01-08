@@ -119,6 +119,7 @@ def attach_document(
     retention_days: Optional[int] = None,
     retention_policy: str = 'standard',
     metadata: Optional[dict] = None,
+    folder: Optional[DocumentFolder] = None,
 ) -> Document:
     """
     Attach a document to a target object.
@@ -136,6 +137,7 @@ def attach_document(
         retention_days: Number of days to retain (None = forever).
         retention_policy: Retention policy classification.
         metadata: Additional metadata dictionary.
+        folder: Optional folder to place the document in.
 
     Returns:
         The created Document instance.
@@ -177,6 +179,7 @@ def attach_document(
         retention_days=retention_days,
         retention_policy=retention_policy,
         metadata=doc_metadata,
+        folder=folder,
     )
 
     return doc
@@ -281,6 +284,55 @@ def create_folder(
     else:
         folder.path = f"{parent.path}{folder.pk}/"
     folder.save(update_fields=["path"])
+
+    return folder
+
+
+def get_or_create_folder_path(
+    path: str,
+    owner=None,
+    actor=None,
+) -> DocumentFolder:
+    """
+    Get or create a folder hierarchy from a path string.
+
+    Creates all necessary parent folders if they don't exist.
+
+    Args:
+        path: Folder path like "Medical/Medical Questionnaires".
+        owner: Optional owner object for new folders.
+        actor: User performing the action (for audit).
+
+    Returns:
+        The leaf DocumentFolder instance.
+
+    Usage:
+        folder = get_or_create_folder_path("Medical/Medical Questionnaires")
+    """
+    parts = [p.strip() for p in path.split("/") if p.strip()]
+    if not parts:
+        raise ValueError("Path cannot be empty")
+
+    parent = None
+    for part in parts:
+        slug = slugify(part)
+        # Try to find existing folder
+        try:
+            folder = DocumentFolder.objects.get(
+                slug=slug,
+                parent=parent,
+                deleted_at__isnull=True,
+            )
+        except DocumentFolder.DoesNotExist:
+            # Create the folder
+            folder = create_folder(
+                name=part,
+                parent=parent,
+                slug=slug,
+                owner=owner,
+                actor=actor,
+            )
+        parent = folder
 
     return folder
 

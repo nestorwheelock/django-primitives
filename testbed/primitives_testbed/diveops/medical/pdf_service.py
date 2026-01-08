@@ -278,7 +278,7 @@ def generate_and_store_medical_pdf(instance, actor=None):
     """
     import hashlib
     from django.core.files.base import ContentFile
-    from django_documents.services import attach_document
+    from django_documents.services import attach_document, get_or_create_folder_path
 
     # Ensure we have a diver to attach the document to
     diver = instance.respondent
@@ -296,6 +296,9 @@ def generate_and_store_medical_pdf(instance, actor=None):
     # Create file content
     pdf_file = ContentFile(pdf_bytes, name=filename)
 
+    # Get or create the folder for medical questionnaires
+    folder = get_or_create_folder_path("Medical/Medical Questionnaires")
+
     # Attach document to the DIVER (not the questionnaire instance)
     # This links the signed medical PDF to the diver for easy access
     document = attach_document(
@@ -306,6 +309,7 @@ def generate_and_store_medical_pdf(instance, actor=None):
         filename=filename,
         content_type="application/pdf",
         description=f"Signed medical questionnaire for {service.get_respondent_name()}",
+        folder=folder,
         metadata={
             "questionnaire_instance_id": str(instance.pk),
             "respondent_id": str(diver.pk),
