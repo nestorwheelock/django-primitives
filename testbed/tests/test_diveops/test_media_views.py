@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 from django.urls import reverse
+from django.utils import timezone
 
 from django_documents.models import (
     Document,
@@ -313,3 +314,335 @@ class TestMediaUploadView:
         asset = MediaAsset.objects.get(document__filename="dimensions.png")
         assert asset.width == 1280
         assert asset.height == 720
+
+
+# =============================================================================
+# P1 Tests: MediaLink API Endpoints (auth, method safety, domain logic)
+# =============================================================================
+
+
+@pytest.fixture
+def excursion_for_linking(db, dive_shop, staff_user):
+    """Create an excursion for linking tests."""
+    from primitives_testbed.diveops.models import Excursion, DiveSite
+    from django_geo.models import Place
+    from django_encounters.models import EncounterDefinition
+    from datetime import timedelta
+    from decimal import Decimal
+
+    # Ensure encounter definition exists
+    EncounterDefinition.objects.get_or_create(
+        key="dive_trip",
+        defaults={
+            "name": "Dive Trip",
+            "states": ["scheduled", "boarding", "in_progress", "completed", "cancelled"],
+            "transitions": {
+                "scheduled": ["boarding", "cancelled"],
+                "boarding": ["in_progress", "cancelled"],
+                "in_progress": ["completed"],
+                "completed": [],
+                "cancelled": [],
+            },
+            "initial_state": "scheduled",
+            "terminal_states": ["completed", "cancelled"],
+        }
+    )
+
+    # Create place and dive site
+    place = Place.objects.create(
+        name="Test Site Location",
+        latitude=Decimal("20.0"),
+        longitude=Decimal("-87.0"),
+    )
+    site = DiveSite.objects.create(
+        name="Test Dive Site",
+        place=place,
+        max_depth_meters=20,
+        difficulty="beginner",
+    )
+
+    tomorrow = timezone.now() + timedelta(days=1)
+    return Excursion.objects.create(
+        dive_shop=dive_shop,
+        dive_site=site,
+        departure_time=tomorrow,
+        return_time=tomorrow + timedelta(hours=4),
+        max_divers=8,
+        price_per_diver=Decimal("100.00"),
+        currency="USD",
+        created_by=staff_user,
+    )
+
+
+@pytest.mark.django_db
+class TestMediaLinkExcursionView:
+    """Tests for MediaLinkExcursionView - P1 auth and method safety."""
+
+    def test_requires_authentication(self, anonymous_client, media_asset):
+        """Anonymous users are redirected to login."""
+        url = reverse("diveops:media-link-excursion", kwargs={"pk": media_asset.pk})
+        response = anonymous_client.post(url, {"excursion_id": "123"})
+
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_requires_staff(self, regular_client, media_asset):
+        """Non-staff users are denied access."""
+        url = reverse("diveops:media-link-excursion", kwargs={"pk": media_asset.pk})
+        response = regular_client.post(url, {"excursion_id": "123"})
+
+        assert response.status_code in [302, 403]
+
+    def test_get_not_allowed(self, staff_client, media_asset):
+        """GET method is not allowed (POST only)."""
+        url = reverse("diveops:media-link-excursion", kwargs={"pk": media_asset.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 405
+
+    def test_links_media_to_excursion(self, staff_client, media_asset, excursion_for_linking):
+        """POST successfully links media to excursion."""
+        from primitives_testbed.diveops.models import MediaLink, Excursion
+        from django.contrib.contenttypes.models import ContentType
+
+        url = reverse("diveops:media-link-excursion", kwargs={"pk": media_asset.pk})
+        response = staff_client.post(url, {
+            "excursion_id": str(excursion_for_linking.pk),
+            "cascade": "true",
+        })
+
+        # Should redirect on success
+        assert response.status_code == 302
+
+        # Verify link was created
+        excursion_ct = ContentType.objects.get_for_model(Excursion)
+        assert MediaLink.objects.filter(
+            media_asset=media_asset,
+            content_type=excursion_ct,
+            object_id=str(excursion_for_linking.pk),
+        ).exists()
+
+    def test_missing_excursion_id_shows_error(self, staff_client, media_asset):
+        """POST without excursion_id shows error message."""
+        url = reverse("diveops:media-link-excursion", kwargs={"pk": media_asset.pk})
+        response = staff_client.post(url, {})
+
+        # Should redirect back to detail
+        assert response.status_code == 302
+
+    def test_invalid_excursion_returns_404(self, staff_client, media_asset):
+        """POST with invalid excursion_id returns 404."""
+        import uuid
+
+        url = reverse("diveops:media-link-excursion", kwargs={"pk": media_asset.pk})
+        response = staff_client.post(url, {
+            "excursion_id": str(uuid.uuid4()),  # Non-existent
+        })
+
+        assert response.status_code == 404
+
+    def test_idempotent_linking(self, staff_client, media_asset, excursion_for_linking):
+        """Linking same media to same excursion twice is idempotent."""
+        from primitives_testbed.diveops.models import MediaLink
+
+        url = reverse("diveops:media-link-excursion", kwargs={"pk": media_asset.pk})
+
+        # Link twice
+        staff_client.post(url, {"excursion_id": str(excursion_for_linking.pk)})
+        staff_client.post(url, {"excursion_id": str(excursion_for_linking.pk)})
+
+        # Should only have created links once (excursion + site = 2 links)
+        link_count = MediaLink.objects.filter(media_asset=media_asset).count()
+        assert link_count == 2  # Direct to excursion + derived to site
+
+
+@pytest.mark.django_db
+class TestMediaUnlinkExcursionView:
+    """Tests for MediaUnlinkExcursionView - P1 auth and method safety."""
+
+    def test_requires_authentication(self, anonymous_client, media_asset):
+        """Anonymous users are redirected to login."""
+        url = reverse("diveops:media-unlink-excursion", kwargs={"pk": media_asset.pk})
+        response = anonymous_client.post(url, {"excursion_id": "123"})
+
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_requires_staff(self, regular_client, media_asset):
+        """Non-staff users are denied access."""
+        url = reverse("diveops:media-unlink-excursion", kwargs={"pk": media_asset.pk})
+        response = regular_client.post(url, {"excursion_id": "123"})
+
+        assert response.status_code in [302, 403]
+
+    def test_get_not_allowed(self, staff_client, media_asset):
+        """GET method is not allowed (POST only)."""
+        url = reverse("diveops:media-unlink-excursion", kwargs={"pk": media_asset.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 405
+
+    def test_unlinks_media_from_excursion(self, staff_client, media_asset, excursion_for_linking):
+        """POST successfully unlinks media from excursion."""
+        from primitives_testbed.diveops.models import MediaLink, Excursion
+        from primitives_testbed.diveops.media_link_service import link_media_to_excursion
+        from django.contrib.contenttypes.models import ContentType
+
+        # First, create a link
+        link_media_to_excursion(media_asset, excursion_for_linking)
+
+        # Verify link exists
+        excursion_ct = ContentType.objects.get_for_model(Excursion)
+        assert MediaLink.objects.filter(
+            media_asset=media_asset,
+            content_type=excursion_ct,
+            object_id=str(excursion_for_linking.pk),
+        ).exists()
+
+        # Unlink
+        url = reverse("diveops:media-unlink-excursion", kwargs={"pk": media_asset.pk})
+        response = staff_client.post(url, {
+            "excursion_id": str(excursion_for_linking.pk),
+            "cascade_derived": "true",
+        })
+
+        # Should redirect on success
+        assert response.status_code == 302
+
+        # Verify link was removed
+        assert not MediaLink.objects.filter(
+            media_asset=media_asset,
+            content_type=excursion_ct,
+            object_id=str(excursion_for_linking.pk),
+        ).exists()
+
+    def test_unlink_without_cascade_preserves_derived(self, staff_client, media_asset, excursion_for_linking):
+        """POST with cascade_derived=false preserves derived links."""
+        from primitives_testbed.diveops.models import MediaLink, MediaLinkSource
+        from primitives_testbed.diveops.media_link_service import link_media_to_excursion
+
+        # Create link with cascade
+        link_media_to_excursion(media_asset, excursion_for_linking, cascade=True)
+
+        # Count derived links before
+        derived_before = MediaLink.objects.filter(
+            media_asset=media_asset,
+            link_source=MediaLinkSource.DERIVED_FROM_EXCURSION,
+        ).count()
+
+        # Unlink without cascade
+        url = reverse("diveops:media-unlink-excursion", kwargs={"pk": media_asset.pk})
+        staff_client.post(url, {
+            "excursion_id": str(excursion_for_linking.pk),
+            "cascade_derived": "false",
+        })
+
+        # Derived links should still exist
+        derived_after = MediaLink.objects.filter(
+            media_asset=media_asset,
+            link_source=MediaLinkSource.DERIVED_FROM_EXCURSION,
+        ).count()
+        assert derived_after == derived_before
+
+    def test_unlink_nonexistent_is_noop(self, staff_client, media_asset, excursion_for_linking):
+        """Unlinking when no link exists is a no-op (idempotent)."""
+        url = reverse("diveops:media-unlink-excursion", kwargs={"pk": media_asset.pk})
+        response = staff_client.post(url, {
+            "excursion_id": str(excursion_for_linking.pk),
+        })
+
+        # Should still redirect successfully
+        assert response.status_code == 302
+
+
+@pytest.mark.django_db
+class TestMediaMetadataUpdateView:
+    """Tests for MediaMetadataUpdateView - P1 auth and method safety."""
+
+    def test_requires_authentication(self, anonymous_client, media_asset):
+        """Anonymous users are redirected to login."""
+        url = reverse("diveops:media-metadata", kwargs={"pk": media_asset.pk})
+        response = anonymous_client.post(url, {"visibility": "public"})
+
+        assert response.status_code == 302
+        assert "/login/" in response.url or "/accounts/login/" in response.url
+
+    def test_requires_staff(self, regular_client, media_asset):
+        """Non-staff users are denied access."""
+        url = reverse("diveops:media-metadata", kwargs={"pk": media_asset.pk})
+        response = regular_client.post(url, {"visibility": "public"})
+
+        assert response.status_code in [302, 403]
+
+    def test_get_not_allowed(self, staff_client, media_asset):
+        """GET method is not allowed (POST only)."""
+        url = reverse("diveops:media-metadata", kwargs={"pk": media_asset.pk})
+        response = staff_client.get(url)
+
+        assert response.status_code == 405
+
+    def test_updates_visibility(self, staff_client, media_asset):
+        """POST successfully updates visibility."""
+        assert media_asset.visibility == "private"  # Default
+
+        url = reverse("diveops:media-metadata", kwargs={"pk": media_asset.pk})
+        response = staff_client.post(url, {"visibility": "public"})
+
+        assert response.status_code == 302
+
+        media_asset.refresh_from_db()
+        assert media_asset.visibility == "public"
+
+    def test_updates_captured_at(self, staff_client, media_asset):
+        """POST successfully updates captured_at."""
+        assert media_asset.captured_at is None
+
+        url = reverse("diveops:media-metadata", kwargs={"pk": media_asset.pk})
+        response = staff_client.post(url, {
+            "captured_at": "2025-06-15T10:30:00",
+        })
+
+        assert response.status_code == 302
+
+        media_asset.refresh_from_db()
+        assert media_asset.captured_at is not None
+        assert media_asset.captured_at.year == 2025
+        assert media_asset.captured_at.month == 6
+        assert media_asset.captured_at.day == 15
+
+    def test_updates_both_fields(self, staff_client, media_asset):
+        """POST can update both visibility and captured_at."""
+        url = reverse("diveops:media-metadata", kwargs={"pk": media_asset.pk})
+        response = staff_client.post(url, {
+            "visibility": "internal",
+            "captured_at": "2025-07-20T14:00:00",
+        })
+
+        assert response.status_code == 302
+
+        media_asset.refresh_from_db()
+        assert media_asset.visibility == "internal"
+        assert media_asset.captured_at.month == 7
+
+    def test_invalid_visibility_ignored(self, staff_client, media_asset):
+        """Invalid visibility value is ignored (not rejected)."""
+        media_asset.visibility = "private"
+        media_asset.save()
+
+        url = reverse("diveops:media-metadata", kwargs={"pk": media_asset.pk})
+        response = staff_client.post(url, {"visibility": "invalid_value"})
+
+        assert response.status_code == 302
+
+        media_asset.refresh_from_db()
+        assert media_asset.visibility == "private"  # Unchanged
+
+    def test_invalid_captured_at_ignored(self, staff_client, media_asset):
+        """Invalid captured_at value is ignored (not rejected)."""
+        url = reverse("diveops:media-metadata", kwargs={"pk": media_asset.pk})
+        response = staff_client.post(url, {"captured_at": "not-a-date"})
+
+        assert response.status_code == 302
+
+        media_asset.refresh_from_db()
+        assert media_asset.captured_at is None  # Unchanged
