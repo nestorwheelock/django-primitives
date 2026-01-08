@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-cms-core"
+version = "0.1.0"
+description = "Domain-agnostic CMS primitives for Django with publishing workflow, block-based content, and access control"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+dependencies = [
+    "Django>=4.2",
+    "django-basemodels>=0.1.0",
+    "django-singleton>=0.1.0",
+]
+
+[project.optional-dependencies]
+jsonschema = ["jsonschema>=4.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/django_cms_core"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+python_files = ["test_*.py"]
+pythonpath = ["."]
+testpaths = ["tests"]
