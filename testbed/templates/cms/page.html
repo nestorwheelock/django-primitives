@@ -1,0 +1,70 @@
+{% extends "portal_ui/base_public.html" %}
+{% load portal_ui_tags %}
+
+{% block title %}{{ meta.seo_title|default:page.title }} - {{ portal_ui.site_name|default:"Site" }}{% endblock %}
+
+{% block extra_head %}
+<meta name="description" content="{{ meta.seo_description|default:'' }}">
+{% if meta.og_image_url %}
+<meta property="og:image" content="{{ meta.og_image_url }}">
+{% endif %}
+<meta name="robots" content="{{ meta.robots|default:'index, follow' }}">
+{% endblock %}
+
+{% block content %}
+<article class="max-w-4xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">{{ page.title }}</h1>
+
+    {% for block in blocks %}
+    <div class="cms-block cms-block--{{ block.type }} mb-6">
+        {% if block.type == "rich_text" %}
+            <div class="prose max-w-none">{{ block.data.content|safe }}</div>
+        {% elif block.type == "heading" %}
+            {% with level=block.data.level|default:2 %}
+            {% if level == 1 %}
+            <h1 class="text-3xl font-bold mt-8 mb-4">{{ block.data.text }}</h1>
+            {% elif level == 2 %}
+            <h2 class="text-2xl font-bold mt-6 mb-3">{{ block.data.text }}</h2>
+            {% elif level == 3 %}
+            <h3 class="text-xl font-semibold mt-4 mb-2">{{ block.data.text }}</h3>
+            {% elif level == 4 %}
+            <h4 class="text-lg font-semibold mt-3 mb-2">{{ block.data.text }}</h4>
+            {% else %}
+            <h5 class="text-base font-semibold mt-2 mb-1">{{ block.data.text }}</h5>
+            {% endif %}
+            {% endwith %}
+        {% elif block.type == "hero" %}
+            <div class="bg-gray-800 text-white p-8 rounded-lg{% if block.data.background_url %} bg-cover bg-center{% endif %}"
+                 {% if block.data.background_url %}style="background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('{{ block.data.background_url }}');"{% endif %}>
+                <h2 class="text-3xl font-bold mb-2">{{ block.data.title }}</h2>
+                {% if block.data.subtitle %}<p class="text-xl opacity-90">{{ block.data.subtitle }}</p>{% endif %}
+                {% if block.data.cta_text %}
+                <a href="{{ block.data.cta_url|default:'#' }}" class="mt-4 inline-block bg-white text-gray-800 px-6 py-2 rounded font-medium hover:bg-gray-100 transition-colors">
+                    {{ block.data.cta_text }}
+                </a>
+                {% endif %}
+            </div>
+        {% elif block.type == "cta" %}
+            <a href="{{ block.data.url|default:'#' }}"
+               class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                {{ block.data.text }}
+            </a>
+        {% elif block.type == "image" %}
+            <figure>
+                <img src="{{ block.data.url }}" alt="{{ block.data.alt|default:'' }}" class="rounded-lg max-w-full h-auto">
+                {% if block.data.caption %}<figcaption class="text-sm text-gray-500 mt-2">{{ block.data.caption }}</figcaption>{% endif %}
+            </figure>
+        {% elif block.type == "divider" %}
+            <hr class="my-8 border-gray-300">
+        {% else %}
+            <!-- Unknown block type: {{ block.type }} -->
+            <div class="bg-gray-100 p-4 rounded text-sm text-gray-600">
+                <strong>{{ block.type }}:</strong> {{ block.data }}
+            </div>
+        {% endif %}
+    </div>
+    {% empty %}
+    <p class="text-gray-500">This page has no content yet.</p>
+    {% endfor %}
+</article>
+{% endblock %}
