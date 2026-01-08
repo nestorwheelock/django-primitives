@@ -151,7 +151,7 @@ class ProfilePhotoView(LoginRequiredMixin, TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
-        from django_documents.services import create_document
+        from django_documents.services import attach_document
 
         user = request.user
         prefs = get_user_preferences(user)
@@ -161,12 +161,13 @@ class ProfilePhotoView(LoginRequiredMixin, TemplateView):
             messages.error(request, "Please select a photo to upload.")
             return redirect("profile:photo")
 
-        # Create document from uploaded file
-        document = create_document(
+        # Create document attached to user preferences
+        document = attach_document(
+            target=prefs,
             file=uploaded_file,
-            title=f"Profile photo for {user.get_full_name() or user.email}",
             document_type="profile_photo",
             uploaded_by=user,
+            description=f"Profile photo for {user.get_full_name() or user.email}",
         )
 
         # Set as user preferences profile photo
