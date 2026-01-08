@@ -19,6 +19,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Q
@@ -343,6 +344,107 @@ class DiverProfile(BaseModel):
     # Waiver tracking
     waiver_signed_at = models.DateTimeField(null=True, blank=True)
 
+    # Body Measurements / Gear Sizing
+    weight_kg = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="Weight in kilograms",
+    )
+    height_cm = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Height in centimeters",
+    )
+    wetsuit_size = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        help_text="Wetsuit size (XS, S, M, L, XL, XXL, or custom)",
+    )
+    bcd_size = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        help_text="BCD/jacket size (XS, S, M, L, XL, XXL)",
+    )
+    fin_size = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Fin size (e.g., S/M, M/L, or shoe size)",
+    )
+    mask_fit = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text="Mask fit notes (low volume, standard, etc.)",
+    )
+    glove_size = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        help_text="Glove size (XS, S, M, L, XL)",
+    )
+    weight_required_kg = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="Weight needed for neutral buoyancy in kg",
+    )
+    gear_notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Additional gear preferences or requirements",
+    )
+
+    # Equipment Ownership
+    EQUIPMENT_OWNERSHIP_CHOICES = [
+        ("none", "None - Rents All"),
+        ("partial", "Partial - Own Some Gear"),
+        ("full", "Full - Owns All Essential Gear"),
+    ]
+    equipment_ownership = models.CharField(
+        max_length=20,
+        choices=EQUIPMENT_OWNERSHIP_CHOICES,
+        default="none",
+        help_text="Equipment ownership status",
+    )
+
+    # Diver Type - Identity vs Activity
+    DIVER_TYPE_CHOICES = [
+        ("identity", "Diver (Identity)"),
+        ("activity", "Does Diving (Activity)"),
+    ]
+    diver_type = models.CharField(
+        max_length=20,
+        choices=DIVER_TYPE_CHOICES,
+        default="activity",
+        help_text="Is diving their identity or just an activity they do?",
+    )
+
+    # Profile Photo - selected from photos they're tagged in
+    profile_photo = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="diver_profile_photos",
+        help_text="Profile photo for this diver (selected from tagged photos)",
+    )
+
+    # Photo ID - uploaded during liability form completion
+    photo_id = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="diver_photo_ids",
+        help_text="Photo ID document uploaded during liability waiver signing",
+    )
+
     class Meta:
         constraints = [
             models.CheckConstraint(
@@ -353,6 +455,8 @@ class DiverProfile(BaseModel):
         indexes = [
             models.Index(fields=["certification_level"]),
             models.Index(fields=["person"]),
+            models.Index(fields=["equipment_ownership"]),
+            models.Index(fields=["diver_type"]),
         ]
 
     def __str__(self):
@@ -399,6 +503,239 @@ class DiverProfile(BaseModel):
         # Check if waiver was signed within validity period
         expiration_date = self.waiver_signed_at + timedelta(days=DIVEOPS_WAIVER_VALIDITY_DAYS)
         return as_of <= expiration_date
+
+    @property
+    def emergency_contacts(self):
+        """Get all active emergency contacts ordered by priority."""
+        return self.emergency_contact_entries.filter(
+            deleted_at__isnull=True
+        ).select_related("contact_person").order_by("priority")
+
+    @property
+    def primary_emergency_contact(self):
+        """Get the primary (highest priority) emergency contact."""
+        return self.emergency_contacts.first()
+
+    # Social Graph Methods
+    @property
+    def relationships(self):
+        """Get all relationships (outgoing) for this diver."""
+        return self.relationships_from.filter(
+            deleted_at__isnull=True
+        ).select_related("to_diver", "to_diver__person")
+
+    @property
+    def spouse(self):
+        """Get spouse/partner if relationship exists."""
+        rel = self.relationships_from.filter(
+            relationship_type="spouse",
+            deleted_at__isnull=True,
+        ).select_related("to_diver", "to_diver__person").first()
+        return rel.to_diver if rel else None
+
+    @property
+    def preferred_buddies(self):
+        """Get preferred dive buddies."""
+        return DiverProfile.objects.filter(
+            relationships_to__from_diver=self,
+            relationships_to__is_preferred_buddy=True,
+            relationships_to__deleted_at__isnull=True,
+            deleted_at__isnull=True,
+        ).select_related("person")
+
+    def get_related_divers(self, relationship_type=None):
+        """Get all divers with a relationship to this diver.
+
+        Args:
+            relationship_type: Filter by type (spouse, buddy, friend, etc.)
+        """
+        qs = self.relationships_from.filter(deleted_at__isnull=True)
+        if relationship_type:
+            qs = qs.filter(relationship_type=relationship_type)
+        return [rel.to_diver for rel in qs.select_related("to_diver", "to_diver__person")]
+
+    def is_related_to(self, other_diver, relationship_type=None):
+        """Check if this diver has a relationship with another diver."""
+        qs = self.relationships_from.filter(
+            to_diver=other_diver,
+            deleted_at__isnull=True,
+        )
+        if relationship_type:
+            qs = qs.filter(relationship_type=relationship_type)
+        return qs.exists()
+
+
+class EmergencyContact(BaseModel):
+    """Emergency contact for a diver.
+
+    Links to a Person from django-parties. Supports multiple contacts
+    with priority ordering. If the emergency contact is also a diver,
+    a secondary contact should be added for situations where both
+    might be on the same trip (e.g., spouses who dive together).
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at.
+    """
+
+    RELATIONSHIP_CHOICES = [
+        ("spouse", "Spouse/Partner"),
+        ("parent", "Parent"),
+        ("child", "Child (Adult)"),
+        ("sibling", "Sibling"),
+        ("friend", "Friend"),
+        ("other_family", "Other Family Member"),
+        ("employer", "Employer"),
+        ("other", "Other"),
+    ]
+
+    diver = models.ForeignKey(
+        DiverProfile,
+        on_delete=models.CASCADE,
+        related_name="emergency_contact_entries",
+    )
+    contact_person = models.ForeignKey(
+        "django_parties.Person",
+        on_delete=models.PROTECT,
+        related_name="emergency_contact_for",
+        help_text="The person to contact in an emergency",
+    )
+    relationship = models.CharField(
+        max_length=20,
+        choices=RELATIONSHIP_CHOICES,
+        help_text="Relationship to the diver",
+    )
+    priority = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Contact priority (1 = primary, 2 = secondary, etc.)",
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text="Additional notes (e.g., 'Also a diver - may be on same trip')",
+    )
+
+    class Meta:
+        ordering = ["diver", "priority"]
+        constraints = [
+            # Unique priority per diver (no duplicate priorities)
+            models.UniqueConstraint(
+                fields=["diver", "priority"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_emergency_contact_priority",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["diver", "priority"]),
+        ]
+
+    def __str__(self):
+        return f"{self.contact_person} ({self.get_relationship_display()}) for {self.diver.person}"
+
+    @property
+    def is_also_diver(self) -> bool:
+        """Check if the emergency contact is also a registered diver."""
+        return hasattr(self.contact_person, "diver_profile") and \
+               self.contact_person.diver_profile is not None and \
+               self.contact_person.diver_profile.deleted_at is None
+
+    def would_be_on_excursion(self, excursion) -> bool:
+        """Check if this emergency contact is on a specific excursion roster.
+
+        Use this to warn when both diver and emergency contact are on the
+        same trip (e.g., spouses who dive together need a third contact).
+        """
+        if not self.is_also_diver:
+            return False
+        # Check if the contact's diver profile is on this excursion
+        from .models import ExcursionGuest
+        return ExcursionGuest.objects.filter(
+            excursion=excursion,
+            diver=self.contact_person.diver_profile,
+            deleted_at__isnull=True,
+        ).exists()
+
+
+class DiverRelationship(BaseModel):
+    """Relationship between two divers.
+
+    Tracks social and diving connections between divers:
+    - Spouses/partners who dive together
+    - Regular dive buddies
+    - Friends who travel together
+    - Family members
+
+    Relationships are bidirectional - creating one creates the inverse.
+    Used for buddy pairing suggestions and group management.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at.
+    """
+
+    RELATIONSHIP_CHOICES = [
+        ("spouse", "Spouse/Partner"),
+        ("buddy", "Dive Buddy"),
+        ("friend", "Friend"),
+        ("family", "Family Member"),
+        ("instructor_student", "Instructor/Student"),
+        ("travel_companion", "Travel Companion"),
+    ]
+
+    from_diver = models.ForeignKey(
+        DiverProfile,
+        on_delete=models.CASCADE,
+        related_name="relationships_from",
+    )
+    to_diver = models.ForeignKey(
+        DiverProfile,
+        on_delete=models.CASCADE,
+        related_name="relationships_to",
+    )
+    relationship_type = models.CharField(
+        max_length=20,
+        choices=RELATIONSHIP_CHOICES,
+    )
+    is_preferred_buddy = models.BooleanField(
+        default=False,
+        help_text="Prefer to pair these divers together",
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["from_diver", "relationship_type"]
+        constraints = [
+            # No duplicate relationships (same pair, same type)
+            models.UniqueConstraint(
+                fields=["from_diver", "to_diver", "relationship_type"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_diver_relationship",
+            ),
+            # Can't have relationship with self
+            models.CheckConstraint(
+                condition=~Q(from_diver=models.F("to_diver")),
+                name="diveops_no_self_relationship",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["from_diver", "to_diver"]),
+            models.Index(fields=["relationship_type"]),
+        ]
+
+    def __str__(self):
+        return f"{self.from_diver.person} - {self.get_relationship_type_display()} - {self.to_diver.person}"
+
+    @classmethod
+    def get_or_create_bidirectional(cls, diver1, diver2, relationship_type, **kwargs):
+        """Create relationship in both directions."""
+        rel1, created1 = cls.objects.get_or_create(
+            from_diver=diver1,
+            to_diver=diver2,
+            relationship_type=relationship_type,
+            defaults=kwargs,
+        )
+        rel2, created2 = cls.objects.get_or_create(
+            from_diver=diver2,
+            to_diver=diver1,
+            relationship_type=relationship_type,
+            defaults=kwargs,
+        )
+        return rel1, rel2, created1 or created2
 
 
 class DiveSite(BaseModel):
@@ -491,6 +828,16 @@ class DiveSite(BaseModel):
         related_name="dive_sites",
     )
 
+    # Photos
+    profile_photo = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="dive_site_profile_photos",
+        help_text="Primary profile photo for this dive site",
+    )
+
     class Meta:
         constraints = [
             models.CheckConstraint(
@@ -528,6 +875,114 @@ class DiveSite(BaseModel):
                 raise ValidationError(
                     "Zone must belong to the selected protected area."
                 )
+
+    # Photo helpers
+    @property
+    def featured_photos(self):
+        """Get the 4 featured preview photos, ordered by position."""
+        return self.site_photos.filter(
+            is_featured=True,
+            deleted_at__isnull=True,
+        ).select_related("document").order_by("position")[:4]
+
+    @property
+    def gallery_photos(self):
+        """Get all gallery photos (non-featured), ordered by position."""
+        return self.site_photos.filter(
+            is_featured=False,
+            deleted_at__isnull=True,
+        ).select_related("document").order_by("position")
+
+    @property
+    def all_photos(self):
+        """Get all photos for this site, featured first then gallery."""
+        return self.site_photos.filter(
+            deleted_at__isnull=True,
+        ).select_related("document").order_by("-is_featured", "position")
+
+
+class DiveSitePhoto(BaseModel):
+    """A photo associated with a dive site.
+
+    Photos can be marked as 'featured' (shown in preview carousel)
+    or regular gallery photos. Position determines display order.
+
+    Usage:
+        # Add a featured photo (positions 1-4 for carousel)
+        DiveSitePhoto.objects.create(
+            dive_site=site,
+            document=photo_doc,
+            position=1,
+            is_featured=True,
+            caption="Beautiful coral reef",
+            uploaded_by=request.user,
+        )
+
+        # Get featured photos for preview
+        site.featured_photos  # Returns up to 4 photos
+
+        # Get full gallery
+        site.gallery_photos   # Returns non-featured photos
+        site.all_photos       # Returns all photos
+    """
+
+    dive_site = models.ForeignKey(
+        DiveSite,
+        on_delete=models.CASCADE,
+        related_name="site_photos",
+        help_text="The dive site this photo belongs to",
+    )
+    document = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.CASCADE,
+        related_name="dive_site_photos",
+        help_text="The photo document",
+    )
+    position = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Display order (lower = first). Featured photos use 1-4.",
+    )
+    is_featured = models.BooleanField(
+        default=False,
+        help_text="Featured photos appear in the preview carousel (max 4)",
+    )
+    caption = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Optional caption for this photo",
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="dive_site_photos_uploaded",
+        help_text="User who uploaded this photo",
+    )
+
+    class Meta:
+        constraints = [
+            # Position must be unique per dive site for featured photos
+            models.UniqueConstraint(
+                fields=["dive_site", "position"],
+                condition=Q(is_featured=True, deleted_at__isnull=True),
+                name="diveops_site_photo_unique_featured_position",
+            ),
+            # Same document can't be added twice to the same site
+            models.UniqueConstraint(
+                fields=["dive_site", "document"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_site_photo_unique_document",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["dive_site", "is_featured", "position"]),
+        ]
+        ordering = ["-is_featured", "position"]
+
+    def __str__(self):
+        featured = " (featured)" if self.is_featured else ""
+        return f"{self.dive_site.name} - Photo #{self.position}{featured}"
 
 
 class Trip(BaseModel):
@@ -4041,6 +4496,225 @@ class PhotoTag(BaseModel):
         return f"{self.diver} in {self.document.filename}"
 
 
+class DiveSitePhotoTagQuerySet(models.QuerySet):
+    """Custom queryset for DiveSitePhotoTag model."""
+
+    def for_document(self, document):
+        """Return tags for a specific document."""
+        return self.filter(document=document)
+
+    def for_dive_site(self, dive_site):
+        """Return tags for a specific dive site."""
+        return self.filter(dive_site=dive_site)
+
+
+class DiveSitePhotoTag(BaseModel):
+    """Tag a dive site in a photo.
+
+    Links documents (photos) to dive sites, allowing photos to be
+    associated with locations shown in them.
+
+    Usage:
+        DiveSitePhotoTag.objects.create(
+            document=photo_doc,
+            dive_site=dive_site,
+            tagged_by=request.user,
+        )
+
+        # Get all dive sites tagged in a photo
+        tags = DiveSitePhotoTag.objects.for_document(photo)
+        sites = [tag.dive_site for tag in tags]
+
+        # Get all photos of a dive site (via tags, not DiveSitePhoto)
+        tags = DiveSitePhotoTag.objects.for_dive_site(site)
+        photos = [tag.document for tag in tags]
+    """
+
+    document = models.ForeignKey(
+        "django_documents.Document",
+        on_delete=models.CASCADE,
+        related_name="dive_site_tags",
+        help_text="The photo document",
+    )
+    dive_site = models.ForeignKey(
+        "DiveSite",
+        on_delete=models.CASCADE,
+        related_name="photo_tags",
+        help_text="The dive site tagged in this photo",
+    )
+    tagged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="dive_site_photo_tags_created",
+        help_text="User who created this tag",
+    )
+
+    objects = DiveSitePhotoTagQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Dive Site Photo Tag"
+        verbose_name_plural = "Dive Site Photo Tags"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["document"]),
+            models.Index(fields=["dive_site"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["document", "dive_site"],
+                name="divesitephototag_unique_site_per_photo",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.dive_site.name} in {self.document.filename}"
+
+
+# =============================================================================
+# Media Link (Generic Linking with Provenance)
+# =============================================================================
+
+
+class MediaLinkSource(models.TextChoices):
+    """How a media link was created."""
+    DIRECT = "direct", "Direct"
+    DERIVED_FROM_EXCURSION = "derived_from_excursion", "From Excursion"
+
+
+class MediaLinkQuerySet(models.QuerySet):
+    """Custom queryset for MediaLink model."""
+
+    def for_media_asset(self, media_asset):
+        """Return links for a specific media asset."""
+        return self.filter(media_asset=media_asset)
+
+    def direct(self):
+        """Return only direct links (not derived)."""
+        return self.filter(link_source=MediaLinkSource.DIRECT)
+
+    def derived(self):
+        """Return only derived links."""
+        return self.filter(link_source=MediaLinkSource.DERIVED_FROM_EXCURSION)
+
+    def for_target(self, target):
+        """Return links to a specific target object."""
+        ct = ContentType.objects.get_for_model(target)
+        return self.filter(content_type=ct, object_id=str(target.pk))
+
+
+class MediaLink(BaseModel):
+    """Link a MediaAsset to any entity via GenericFK.
+
+    IMPORTANT: Both direct and derived links can coexist for the same target.
+    This allows a user to directly link a photo to a diver, AND that same
+    photo can also have derived links from excursion tagging.
+
+    The UniqueConstraint includes link_source and source_excursion to allow:
+    - One direct link per (media_asset, target)
+    - One derived link per (media_asset, target, source_excursion)
+
+    Usage:
+        from django.contrib.contenttypes.models import ContentType
+
+        # Direct link
+        MediaLink.objects.create(
+            media_asset=asset,
+            content_type=ContentType.objects.get_for_model(DiverProfile),
+            object_id=str(diver.pk),
+            link_source=MediaLinkSource.DIRECT,
+            linked_by=user,
+        )
+
+        # Derived link from excursion
+        MediaLink.objects.create(
+            media_asset=asset,
+            content_type=ContentType.objects.get_for_model(DiverProfile),
+            object_id=str(diver.pk),
+            link_source=MediaLinkSource.DERIVED_FROM_EXCURSION,
+            source_excursion=excursion,
+            linked_by=user,
+        )
+    """
+
+    media_asset = models.ForeignKey(
+        "django_documents.MediaAsset",
+        on_delete=models.CASCADE,
+        related_name="links",
+        help_text="The media asset being linked",
+    )
+
+    # GenericFK to target entity
+    content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.CASCADE,
+        help_text="Content type of the target entity",
+    )
+    object_id = models.CharField(
+        max_length=255,
+        help_text="ID of the target entity (CharField for UUID support)",
+    )
+    target = GenericForeignKey("content_type", "object_id")
+
+    # Provenance tracking
+    link_source = models.CharField(
+        max_length=30,
+        choices=MediaLinkSource.choices,
+        default=MediaLinkSource.DIRECT,
+        help_text="How this link was created (direct or derived from excursion)",
+    )
+    source_excursion = models.ForeignKey(
+        "Excursion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="derived_media_links",
+        help_text="Set when link_source=derived_from_excursion",
+    )
+
+    # Who created this link
+    linked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="media_links_created",
+        help_text="User who created this link",
+    )
+
+    objects = MediaLinkQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Media Link"
+        verbose_name_plural = "Media Links"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["content_type", "object_id"]),
+            models.Index(fields=["media_asset"]),
+            models.Index(fields=["link_source"]),
+            models.Index(fields=["source_excursion"]),
+        ]
+        constraints = [
+            # Direct links: unique per (media_asset, target) when source=direct
+            # (Partial constraint because source_excursion is NULL for direct links)
+            models.UniqueConstraint(
+                fields=["media_asset", "content_type", "object_id"],
+                condition=Q(link_source="direct"),
+                name="medialink_unique_direct",
+            ),
+            # Derived links: unique per (media_asset, target, source_excursion)
+            models.UniqueConstraint(
+                fields=["media_asset", "content_type", "object_id", "source_excursion"],
+                condition=Q(link_source="derived_from_excursion"),
+                name="medialink_unique_derived",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.media_asset} → {self.content_type.model}:{self.object_id}"
+
+
 # =============================================================================
 # AI Settings (Singleton Configuration)
 # =============================================================================
@@ -4110,6 +4784,299 @@ class AISettings(EnvFallbackMixin, SingletonModel):
         return self.has_value("openrouter_api_key") or self.has_value("openai_api_key")
 
 
+# =============================================================================
+# Medical Provider Models
+# =============================================================================
+
+
+class MedicalProviderProfile(BaseModel):
+    """Dive-specific extension for medical provider organizations.
+
+    Links to django_parties.Organization (1:1) and stores dive-specific
+    attributes like hyperbaric chamber availability, languages spoken,
+    and certifications.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    PROVIDER_TYPE_CHOICES = [
+        ("clinic", "Clinic"),
+        ("hospital", "Hospital"),
+        ("urgent_care", "Urgent Care"),
+        ("chamber", "Hyperbaric Chamber Facility"),
+        ("physician", "Individual Physician"),
+    ]
+
+    organization = models.OneToOneField(
+        "django_parties.Organization",
+        on_delete=models.CASCADE,
+        related_name="medical_provider_profile",
+        help_text="Base organization record",
+    )
+    provider_type = models.CharField(
+        max_length=20,
+        choices=PROVIDER_TYPE_CHOICES,
+        help_text="Type of medical provider",
+    )
+
+    # Capabilities
+    has_hyperbaric_chamber = models.BooleanField(
+        default=False,
+        help_text="Whether facility has a hyperbaric chamber",
+    )
+    hyperbaric_details = models.TextField(
+        blank=True,
+        help_text="Details about hyperbaric chamber (type, depth rating, etc.)",
+    )
+    accepts_divers = models.BooleanField(
+        default=True,
+        help_text="Whether provider accepts diving-related cases",
+    )
+    accepts_emergencies = models.BooleanField(
+        default=False,
+        help_text="Whether provider accepts emergency cases",
+    )
+    is_dan_affiliated = models.BooleanField(
+        default=False,
+        help_text="Whether provider is affiliated with Divers Alert Network",
+    )
+
+    # Languages and certifications (stored as arrays for simplicity)
+    languages = ArrayField(
+        models.CharField(max_length=50),
+        default=list,
+        blank=True,
+        help_text="Languages spoken by staff",
+    )
+    certifications = ArrayField(
+        models.CharField(max_length=100),
+        default=list,
+        blank=True,
+        help_text="Relevant medical certifications (DAN, UHMS, etc.)",
+    )
+
+    # Contact
+    after_hours_phone = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text="After-hours emergency contact number",
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text="Special instructions or notes about this provider",
+    )
+
+    # Display ordering
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Sort order for display (lower = first)",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this provider is currently active",
+    )
+
+    class Meta:
+        ordering = ["sort_order", "created_at"]
+        verbose_name = "Medical Provider Profile"
+        verbose_name_plural = "Medical Provider Profiles"
+
+    def __str__(self):
+        return f"{self.organization.name} ({self.get_provider_type_display()})"
+
+
+class MedicalProviderLocation(BaseModel):
+    """Physical location for a medical provider.
+
+    Supports multi-location providers with different addresses and hours.
+    Stores coordinates for map links in PDFs.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    profile = models.ForeignKey(
+        MedicalProviderProfile,
+        on_delete=models.CASCADE,
+        related_name="locations",
+        help_text="Parent medical provider profile",
+    )
+    name = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Location name (e.g., 'Main Office', 'Chamber Facility')",
+    )
+
+    # Address fields (inline for simplicity)
+    address_line1 = models.CharField(
+        max_length=255,
+        help_text="Street address line 1",
+    )
+    address_line2 = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Street address line 2",
+    )
+    city = models.CharField(
+        max_length=100,
+        help_text="City",
+    )
+    state = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="State or province",
+    )
+    postal_code = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Postal/ZIP code",
+    )
+    country = models.CharField(
+        max_length=100,
+        default="Mexico",
+        help_text="Country",
+    )
+
+    # Coordinates for map links (9 digits, 6 decimal places per django_geo pattern)
+    latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text="Latitude coordinate",
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text="Longitude coordinate",
+    )
+
+    # Operating hours
+    hours_text = models.CharField(
+        max_length=255,
+        help_text="Hours of operation (e.g., 'Mon-Fri 9:00 AM - 5:00 PM')",
+    )
+    is_24_7 = models.BooleanField(
+        default=False,
+        help_text="Whether location is open 24/7",
+    )
+
+    # Contact overrides (if different from main org)
+    phone = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text="Phone number for this location",
+    )
+    email = models.EmailField(
+        blank=True,
+        help_text="Email address for this location",
+    )
+
+    # Flags
+    is_primary = models.BooleanField(
+        default=False,
+        help_text="Whether this is the primary/main location",
+    )
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Sort order for display (lower = first)",
+    )
+
+    class Meta:
+        ordering = ["sort_order", "created_at"]
+        verbose_name = "Medical Provider Location"
+        verbose_name_plural = "Medical Provider Locations"
+
+    def __str__(self):
+        if self.name:
+            return f"{self.profile.organization.name} - {self.name}"
+        return f"{self.profile.organization.name} - {self.city}"
+
+    @property
+    def full_address(self):
+        """Return formatted full address."""
+        parts = [self.address_line1]
+        if self.address_line2:
+            parts.append(self.address_line2)
+        city_state_zip = f"{self.city}"
+        if self.state:
+            city_state_zip += f", {self.state}"
+        if self.postal_code:
+            city_state_zip += f" {self.postal_code}"
+        parts.append(city_state_zip)
+        if self.country:
+            parts.append(self.country)
+        return "\n".join(parts)
+
+    @property
+    def google_maps_url(self):
+        """Return Google Maps URL if coordinates are available."""
+        if self.latitude and self.longitude:
+            return f"https://maps.google.com/?q={self.latitude},{self.longitude}"
+        return None
+
+
+class MedicalProviderRelationship(BaseModel):
+    """Links a dive shop to its recommended medical providers.
+
+    Allows dive operators to configure their preferred medical providers
+    for customer referrals. Supports ordering and marking a primary provider.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    dive_shop = models.ForeignKey(
+        "django_parties.Organization",
+        on_delete=models.CASCADE,
+        related_name="medical_provider_relationships",
+        help_text="The dive shop/operator",
+    )
+    provider = models.ForeignKey(
+        MedicalProviderProfile,
+        on_delete=models.CASCADE,
+        related_name="dive_shop_relationships",
+        help_text="The medical provider",
+    )
+
+    # Relationship attributes
+    is_primary = models.BooleanField(
+        default=False,
+        help_text="Whether this is the primary/preferred provider",
+    )
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Sort order for display (lower = first)",
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text="Notes about this provider relationship (e.g., 'Preferred for complex cases')",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this relationship is currently active",
+    )
+
+    class Meta:
+        ordering = ["sort_order", "created_at"]
+        verbose_name = "Medical Provider Relationship"
+        verbose_name_plural = "Medical Provider Relationships"
+        constraints = [
+            # Only one relationship per dive_shop + provider (among active records)
+            models.UniqueConstraint(
+                fields=["dive_shop", "provider"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_shop_provider_relationship",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.dive_shop.name} -> {self.provider.organization.name}"
+
+
 __all__ = [
     "CertificationLevel",
     "DiverCertification",
@@ -4162,6 +5129,10 @@ __all__ = [
     "PhotoTag",
     # AI Configuration
     "AISettings",
+    # Medical Provider Models
+    "MedicalProviderProfile",
+    "MedicalProviderLocation",
+    "MedicalProviderRelationship",
 ]
 
 

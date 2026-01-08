@@ -33,6 +33,14 @@ urlpatterns = [
     path("sites/<uuid:pk>/", staff_views.DiveSiteDetailView.as_view(), name="staff-site-detail"),
     path("sites/<uuid:pk>/edit/", staff_views.DiveSiteUpdateView.as_view(), name="staff-site-edit"),
     path("sites/<uuid:pk>/delete/", staff_views.DiveSiteDeleteView.as_view(), name="staff-site-delete"),
+    # Dive Site Photos
+    path("sites/<uuid:pk>/photos/", staff_views.DiveSitePhotoManageView.as_view(), name="site-photo-manage"),
+    path("sites/<uuid:pk>/photos/upload/", staff_views.DiveSitePhotoUploadView.as_view(), name="site-photo-upload"),
+    path("sites/<uuid:pk>/photos/clear-profile/", staff_views.DiveSiteClearProfilePhotoView.as_view(), name="site-clear-profile-photo"),
+    path("sites/<uuid:pk>/photos/<uuid:photo_pk>/set-profile/", staff_views.DiveSiteSetProfilePhotoView.as_view(), name="site-photo-set-profile"),
+    path("sites/<uuid:pk>/photos/<uuid:photo_pk>/set-featured/", staff_views.DiveSiteSetFeaturedPhotoView.as_view(), name="site-photo-set-featured"),
+    path("sites/<uuid:pk>/photos/<uuid:photo_pk>/unfeature/", staff_views.DiveSiteUnfeaturePhotoView.as_view(), name="site-photo-unfeature"),
+    path("sites/<uuid:pk>/photos/<uuid:photo_pk>/remove/", staff_views.DiveSiteRemovePhotoView.as_view(), name="site-photo-remove"),
     # System
     path("audit-log/", staff_views.AuditLogView.as_view(), name="audit-log"),
     # Dive Logs
@@ -204,9 +212,12 @@ urlpatterns = [
     path("documents/<uuid:pk>/extract-metadata/", document_views.DocumentExtractMetadataView.as_view(), name="document-extract-metadata"),
     path("documents/<uuid:pk>/convert-pdf/", document_views.DocumentConvertToPdfView.as_view(), name="document-convert-pdf"),
     path("documents/<uuid:pk>/preview-pdf/", document_views.DocumentPreviewPdfView.as_view(), name="document-preview-pdf"),
-    # Photo Tagging
+    # Photo Tagging (Divers)
     path("documents/<uuid:pk>/tag-diver/", document_views.PhotoTagAddView.as_view(), name="photo-tag-add"),
     path("documents/<uuid:pk>/untag/<uuid:tag_pk>/", document_views.PhotoTagRemoveView.as_view(), name="photo-tag-remove"),
+    # Photo Tagging (Dive Sites)
+    path("documents/<uuid:pk>/tag-dive-site/", document_views.DiveSitePhotoTagAddView.as_view(), name="dive-site-tag-add"),
+    path("documents/<uuid:pk>/untag-dive-site/<uuid:tag_pk>/", document_views.DiveSitePhotoTagRemoveView.as_view(), name="dive-site-tag-remove"),
     # Configuration
     path("settings/ai/", staff_views.AISettingsView.as_view(), name="ai-settings"),
     # Medical Questionnaires
@@ -214,7 +225,37 @@ urlpatterns = [
     path("medical/send/", staff_views.SendMedicalQuestionnaireCreateView.as_view(), name="medical-send-create"),
     path("medical/<uuid:pk>/", staff_views.MedicalQuestionnaireDetailView.as_view(), name="medical-detail"),
     path("medical/<uuid:pk>/clear/", staff_views.MedicalClearanceUploadView.as_view(), name="medical-clearance"),
+    path("medical/<uuid:pk>/void/", staff_views.MedicalQuestionnaireVoidView.as_view(), name="medical-void"),
     path("medical/<uuid:pk>/pdf/", staff_views.MedicalQuestionnairePDFDownloadView.as_view(), name="medical-pdf-download"),
     path("divers/<uuid:pk>/medical/", staff_views.DiverMedicalStatusView.as_view(), name="diver-medical-status"),
     path("divers/<uuid:diver_pk>/medical/send/", staff_views.SendMedicalQuestionnaireView.as_view(), name="send-medical-questionnaire"),
+    # Diver Notes (using django-notes primitive)
+    path("divers/<uuid:diver_pk>/notes/add/", staff_views.DiverAddNoteView.as_view(), name="diver-add-note"),
+    path("divers/<uuid:diver_pk>/notes/<uuid:note_pk>/delete/", staff_views.DiverDeleteNoteView.as_view(), name="diver-delete-note"),
+    # Diver Documents (using django-documents primitive)
+    path("divers/<uuid:diver_pk>/documents/upload/", staff_views.DiverUploadDocumentView.as_view(), name="diver-upload-document"),
+    path("divers/<uuid:diver_pk>/documents/<uuid:doc_pk>/delete/", staff_views.DiverDeleteDocumentView.as_view(), name="diver-delete-document"),
+    # Diver Profile Photo
+    path("divers/<uuid:diver_pk>/profile-photo/<uuid:photo_pk>/set/", staff_views.DiverSetProfilePhotoView.as_view(), name="diver-set-profile-photo"),
+    path("divers/<uuid:diver_pk>/profile-photo/remove/", staff_views.DiverRemoveProfilePhotoView.as_view(), name="diver-remove-profile-photo"),
+    # Diver Photo ID
+    path("divers/<uuid:diver_pk>/photo-id/upload/", staff_views.DiverUploadPhotoIdView.as_view(), name="diver-upload-photo-id"),
+    # Emergency Contacts
+    path("divers/<uuid:diver_pk>/emergency-contacts/add/", staff_views.EmergencyContactAddView.as_view(), name="emergency-contact-add"),
+    # Diver Inline Gear Update
+    path("divers/<uuid:pk>/update-gear/", staff_views.DiverUpdateGearView.as_view(), name="diver-update-gear"),
+    # Media Library
+    path("media/", staff_views.MediaLibraryView.as_view(), name="media-library"),
+    path("media/upload/", staff_views.MediaUploadView.as_view(), name="media-upload"),
+    path("media/<uuid:pk>/", staff_views.MediaDetailView.as_view(), name="media-detail"),
+    # Media Photo Tagging (Divers)
+    path("media/<uuid:pk>/tag/", staff_views.MediaPhotoTagAddView.as_view(), name="media-tag-add"),
+    path("media/<uuid:pk>/tag/<uuid:tag_pk>/remove/", staff_views.MediaPhotoTagRemoveView.as_view(), name="media-tag-remove"),
+    # Media Photo Tagging (Dive Sites)
+    path("media/<uuid:pk>/tag-dive-site/", staff_views.MediaDiveSiteTagAddView.as_view(), name="media-dive-site-tag-add"),
+    path("media/<uuid:pk>/tag-dive-site/<uuid:tag_pk>/remove/", staff_views.MediaDiveSiteTagRemoveView.as_view(), name="media-dive-site-tag-remove"),
+    # Media Linking (Generic)
+    path("media/<uuid:pk>/link-excursion/", staff_views.MediaLinkExcursionView.as_view(), name="media-link-excursion"),
+    path("media/<uuid:pk>/unlink-excursion/", staff_views.MediaUnlinkExcursionView.as_view(), name="media-unlink-excursion"),
+    path("media/<uuid:pk>/metadata/", staff_views.MediaMetadataUpdateView.as_view(), name="media-metadata"),
 ]

@@ -6152,34 +6152,211 @@ class SendMedicalQuestionnaireCreateView(StaffPortalMixin, View):
 
 
 class MediaLibraryView(StaffPortalMixin, ListView):
-    """Media Library - browse all images and videos."""
+    """Media Library - browse all images and videos with virtual folder filtering."""
 
     template_name = "diveops/staff/media_library.html"
     context_object_name = "media_assets"
     paginate_by = 24
 
     def get_queryset(self):
+        from django.contrib.contenttypes.models import ContentType
         from django_documents.models import MediaAsset, MediaKind
+        from .models import MediaLink, MediaLinkSource, Excursion, DiverProfile, DiveSite
 
         queryset = MediaAsset.objects.select_related(
             "document",
         ).filter(
             document__deleted_at__isnull=True,
-        ).order_by("-created_at")
+        ).exclude(
+            # Exclude generated thumbnails (from legacy thumbnail system)
+            document__filename__startswith="thumb_",
+        ).exclude(
+            # Exclude signature images (operational, not for media library)
+            document__filename__startswith="signature_",
+        ).exclude(
+            # Exclude signed agreement PDFs
+            document__filename__startswith="signed_agreement_",
+        )
 
-        # Filter by kind
+        # Virtual folder filtering
+        view_by = self.request.GET.get("view_by", "all")
+        filter_id = self.request.GET.get("filter_id")
+
+        if view_by == "excursion" and filter_id:
+            excursion_ct = ContentType.objects.get_for_model(Excursion)
+            queryset = queryset.filter(
+                links__content_type=excursion_ct,
+                links__object_id=filter_id,
+                links__link_source=MediaLinkSource.DIRECT,
+            )
+        elif view_by == "date" and filter_id:
+            queryset = queryset.filter(captured_at__date=filter_id)
+        elif view_by == "diver" and filter_id:
+            diver_ct = ContentType.objects.get_for_model(DiverProfile)
+            queryset = queryset.filter(
+                links__content_type=diver_ct,
+                links__object_id=filter_id,
+            )
+        elif view_by == "dive_site" and filter_id:
+            site_ct = ContentType.objects.get_for_model(DiveSite)
+            queryset = queryset.filter(
+                links__content_type=site_ct,
+                links__object_id=filter_id,
+            )
+        elif view_by == "unused":
+            queryset = queryset.filter(links__isnull=True)
+        elif view_by == "visibility" and filter_id:
+            queryset = queryset.filter(visibility=filter_id)
+
+        # Filter by kind (image/video)
         kind = self.request.GET.get("kind")
         if kind == "image":
             queryset = queryset.filter(kind=MediaKind.IMAGE)
         elif kind == "video":
             queryset = queryset.filter(kind=MediaKind.VIDEO)
 
-        return queryset
+        return queryset.distinct().order_by("-created_at")
+
+    def _get_excursion_folders(self):
+        """Get recent excursions with media counts."""
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Count
+        from .models import MediaLink, MediaLinkSource, Excursion
+
+        excursion_ct = ContentType.objects.get_for_model(Excursion)
+
+        # Get excursion IDs that have direct media links
+        excursion_counts = MediaLink.objects.filter(
+            content_type=excursion_ct,
+            link_source=MediaLinkSource.DIRECT,
+            media_asset__document__deleted_at__isnull=True,
+        ).values("object_id").annotate(
+            media_count=Count("media_asset", distinct=True)
+        ).order_by("-media_count")[:20]
+
+        # Fetch excursion objects
+        excursion_ids = [e["object_id"] for e in excursion_counts]
+        excursions = {str(e.pk): e for e in Excursion.objects.filter(pk__in=excursion_ids).select_related("dive_site")}
+
+        result = []
+        for ec in excursion_counts:
+            if ec["object_id"] in excursions:
+                exc = excursions[ec["object_id"]]
+                exc.media_count = ec["media_count"]
+                result.append(exc)
+        return result
+
+    def _get_date_folders(self):
+        """Get dates with media counts."""
+        from django.db.models import Count
+        from django.db.models.functions import TruncDate
+        from django_documents.models import MediaAsset
+
+        return MediaAsset.objects.filter(
+            captured_at__isnull=False,
+            document__deleted_at__isnull=True,
+        ).exclude(
+            document__filename__startswith="thumb_",
+        ).exclude(
+            document__filename__startswith="signature_",
+        ).annotate(
+            date=TruncDate("captured_at")
+        ).values("date").annotate(
+            media_count=Count("id")
+        ).order_by("-date")[:20]
+
+    def _get_diver_folders(self):
+        """Get divers with media counts."""
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Count
+        from .models import MediaLink, DiverProfile
+
+        diver_ct = ContentType.objects.get_for_model(DiverProfile)
+
+        diver_counts = MediaLink.objects.filter(
+            content_type=diver_ct,
+            media_asset__document__deleted_at__isnull=True,
+        ).values("object_id").annotate(
+            media_count=Count("media_asset", distinct=True)
+        ).order_by("-media_count")[:20]
+
+        diver_ids = [d["object_id"] for d in diver_counts]
+        divers = {str(d.pk): d for d in DiverProfile.objects.filter(pk__in=diver_ids).select_related("person")}
+
+        result = []
+        for dc in diver_counts:
+            if dc["object_id"] in divers:
+                diver = divers[dc["object_id"]]
+                diver.media_count = dc["media_count"]
+                result.append(diver)
+        return result
+
+    def _get_dive_site_folders(self):
+        """Get dive sites with media counts."""
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Count
+        from .models import MediaLink, DiveSite
+
+        site_ct = ContentType.objects.get_for_model(DiveSite)
+
+        site_counts = MediaLink.objects.filter(
+            content_type=site_ct,
+            media_asset__document__deleted_at__isnull=True,
+        ).values("object_id").annotate(
+            media_count=Count("media_asset", distinct=True)
+        ).order_by("-media_count")[:20]
+
+        site_ids = [s["object_id"] for s in site_counts]
+        sites = {str(s.pk): s for s in DiveSite.objects.filter(pk__in=site_ids)}
+
+        result = []
+        for sc in site_counts:
+            if sc["object_id"] in sites:
+                site = sites[sc["object_id"]]
+                site.media_count = sc["media_count"]
+                result.append(site)
+        return result
+
+    def _get_unused_count(self):
+        """Count media with no links."""
+        from django_documents.models import MediaAsset
+
+        return MediaAsset.objects.filter(
+            links__isnull=True,
+            document__deleted_at__isnull=True,
+        ).exclude(
+            document__filename__startswith="thumb_",
+        ).exclude(
+            document__filename__startswith="signature_",
+        ).count()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["page_title"] = "Media Library"
         context["current_kind"] = self.request.GET.get("kind", "")
+
+        # Current folder filter
+        context["view_by"] = self.request.GET.get("view_by", "all")
+        context["filter_id"] = self.request.GET.get("filter_id", "")
+
+        # Folder sidebar data
+        context["excursion_folders"] = self._get_excursion_folders()
+        context["date_folders"] = self._get_date_folders()
+        context["diver_folders"] = self._get_diver_folders()
+        context["dive_site_folders"] = self._get_dive_site_folders()
+        context["unused_count"] = self._get_unused_count()
+
+        # Get the current filter object for display
+        if context["view_by"] == "excursion" and context["filter_id"]:
+            from .models import Excursion
+            context["current_excursion"] = Excursion.objects.filter(pk=context["filter_id"]).select_related("dive_site").first()
+        elif context["view_by"] == "diver" and context["filter_id"]:
+            from .models import DiverProfile
+            context["current_diver"] = DiverProfile.objects.filter(pk=context["filter_id"]).select_related("person").first()
+        elif context["view_by"] == "dive_site" and context["filter_id"]:
+            from .models import DiveSite
+            context["current_dive_site"] = DiveSite.objects.filter(pk=context["filter_id"]).first()
+
         return context
 
 
@@ -6200,15 +6377,79 @@ class MediaDetailView(StaffPortalMixin, DetailView):
         )
 
     def get_context_data(self, **kwargs):
+        from django.contrib.contenttypes.models import ContentType
+        from .models import (
+            PhotoTag, DiverProfile, DiveSitePhotoTag, DiveSite,
+            MediaLink, MediaLinkSource, Excursion
+        )
+        from django.utils import timezone
+        from datetime import timedelta
+
         context = super().get_context_data(**kwargs)
         context["page_title"] = self.object.document.filename
-
-        # Photo tagging - get divers tagged in this photo
         doc = self.object.document
-        if doc.category == "image" or self.object.kind == "image":
-            from .models import PhotoTag, DiverProfile, DiveSitePhotoTag, DiveSite
 
-            # Diver tagging
+        # MediaLink data
+        excursion_ct = ContentType.objects.get_for_model(Excursion)
+        diver_ct = ContentType.objects.get_for_model(DiverProfile)
+        site_ct = ContentType.objects.get_for_model(DiveSite)
+
+        # Get all links for this media asset
+        all_links = MediaLink.objects.filter(
+            media_asset=self.object,
+            deleted_at__isnull=True,
+        ).select_related("content_type", "source_excursion", "linked_by")
+
+        # Excursion links (direct only)
+        excursion_links = [
+            link for link in all_links
+            if link.content_type == excursion_ct and link.link_source == MediaLinkSource.DIRECT
+        ]
+        context["excursion_links"] = excursion_links
+
+        # Get excursion objects for linked excursions
+        linked_excursion_ids = [link.object_id for link in excursion_links]
+        context["linked_excursions"] = {
+            str(e.pk): e for e in Excursion.objects.filter(
+                pk__in=linked_excursion_ids
+            ).select_related("dive_site")
+        }
+
+        # Recent excursions for linking (last 30 days, not already linked)
+        context["available_excursions"] = Excursion.objects.filter(
+            departure_time__gte=timezone.now() - timedelta(days=30),
+            deleted_at__isnull=True,
+        ).exclude(
+            pk__in=linked_excursion_ids
+        ).select_related("dive_site").order_by("-departure_time")[:20]
+
+        # Diver links (from MediaLink)
+        diver_links = [
+            link for link in all_links
+            if link.content_type == diver_ct
+        ]
+        linked_diver_ids = [link.object_id for link in diver_links]
+        context["diver_links"] = diver_links
+        context["linked_divers"] = {
+            str(d.pk): d for d in DiverProfile.objects.filter(
+                pk__in=linked_diver_ids
+            ).select_related("person")
+        }
+
+        # Dive site links (from MediaLink)
+        site_links = [
+            link for link in all_links
+            if link.content_type == site_ct
+        ]
+        linked_site_ids = [link.object_id for link in site_links]
+        context["site_links"] = site_links
+        context["linked_sites"] = {
+            str(s.pk): s for s in DiveSite.objects.filter(pk__in=linked_site_ids)
+        }
+
+        # Photo tagging - get divers tagged in this photo (legacy)
+        if doc.category == "image" or self.object.kind == "image":
+            # Diver tagging (legacy PhotoTag)
             context["photo_tags"] = PhotoTag.objects.filter(
                 document=doc, deleted_at__isnull=True
             ).select_related("diver__person", "tagged_by")
@@ -6222,7 +6463,7 @@ class MediaDetailView(StaffPortalMixin, DetailView):
             ).select_related("person").order_by("person__last_name", "person__first_name")[:100]
             context["can_tag_divers"] = True
 
-            # Dive site tagging
+            # Dive site tagging (legacy DiveSitePhotoTag)
             context["dive_site_tags"] = DiveSitePhotoTag.objects.filter(
                 document=doc, deleted_at__isnull=True
             ).select_related("dive_site", "tagged_by")
@@ -6581,6 +6822,108 @@ class MediaDiveSiteTagRemoveView(StaffPortalMixin, View):
         tag.delete()
 
         messages.success(request, f"Removed {site_name} from this photo.")
+        return redirect("diveops:media-detail", pk=pk)
+
+
+# =============================================================================
+# Media Link Views (Generic Linking)
+# =============================================================================
+
+
+class MediaLinkExcursionView(StaffPortalMixin, View):
+    """Link a media asset to an excursion (with cascade to divers/sites)."""
+
+    def post(self, request, pk):
+        from django_documents.models import MediaAsset
+        from .models import Excursion
+        from .media_link_service import link_media_to_excursion
+
+        media_asset = get_object_or_404(MediaAsset, pk=pk)
+
+        excursion_id = request.POST.get("excursion_id")
+        if not excursion_id:
+            messages.error(request, "Please select an excursion.")
+            return redirect("diveops:media-detail", pk=pk)
+
+        excursion = get_object_or_404(Excursion, pk=excursion_id)
+
+        cascade = request.POST.get("cascade", "true").lower() == "true"
+
+        link = link_media_to_excursion(
+            media_asset=media_asset,
+            excursion=excursion,
+            linked_by=request.user,
+            cascade=cascade,
+        )
+
+        if cascade:
+            messages.success(
+                request,
+                f"Linked to {excursion} and cascaded to divers and dive site."
+            )
+        else:
+            messages.success(request, f"Linked to {excursion}.")
+
+        return redirect("diveops:media-detail", pk=pk)
+
+
+class MediaUnlinkExcursionView(StaffPortalMixin, View):
+    """Unlink a media asset from an excursion."""
+
+    def post(self, request, pk):
+        from django_documents.models import MediaAsset
+        from .models import Excursion
+        from .media_link_service import unlink_media_from_excursion
+
+        media_asset = get_object_or_404(MediaAsset, pk=pk)
+
+        excursion_id = request.POST.get("excursion_id")
+        if not excursion_id:
+            messages.error(request, "Please specify an excursion.")
+            return redirect("diveops:media-detail", pk=pk)
+
+        excursion = get_object_or_404(Excursion, pk=excursion_id)
+
+        cascade = request.POST.get("cascade_derived", "true").lower() == "true"
+
+        deleted = unlink_media_from_excursion(
+            media_asset=media_asset,
+            excursion=excursion,
+            cascade_derived=cascade,
+        )
+
+        if deleted > 0:
+            messages.success(request, f"Removed {deleted} link(s) from {excursion}.")
+        else:
+            messages.info(request, "No links found to remove.")
+
+        return redirect("diveops:media-detail", pk=pk)
+
+
+class MediaMetadataUpdateView(StaffPortalMixin, View):
+    """Update media metadata (captured_at, visibility)."""
+
+    def post(self, request, pk):
+        from django_documents.models import MediaAsset
+        from django.utils.dateparse import parse_datetime
+
+        media_asset = get_object_or_404(MediaAsset, pk=pk)
+
+        # Update captured_at
+        captured_at_str = request.POST.get("captured_at")
+        if captured_at_str:
+            captured_at = parse_datetime(captured_at_str)
+            if captured_at:
+                media_asset.captured_at = captured_at
+
+        # Update visibility
+        visibility = request.POST.get("visibility")
+        if visibility in ["private", "internal", "public"]:
+            media_asset.visibility = visibility
+
+        media_asset.save(update_fields=["captured_at", "visibility", "updated_at"])
+
+        messages.success(request, "Media metadata updated.")
         return redirect("diveops:media-detail", pk=pk)
 
 

@@ -1,0 +1,455 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:media-library' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Media Library</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ media_asset.document.filename }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <div class="flex items-center space-x-3">
+                <h1 class="text-2xl font-bold text-gray-900">{{ media_asset.document.filename }}</h1>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                    {% if media_asset.kind == 'video' %}bg-purple-100 text-purple-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+                    {% if media_asset.kind == 'video' %}Video{% else %}Image{% endif %}
+                </span>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                    {% if media_asset.status == 'completed' %}bg-green-100 text-green-800
+                    {% elif media_asset.status == 'processing' %}bg-yellow-100 text-yellow-800
+                    {% elif media_asset.status == 'failed' %}bg-red-100 text-red-800
+                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                    {{ media_asset.get_status_display }}
+                </span>
+            </div>
+            {% if media_asset.alt_text %}
+            <p class="text-gray-600">{{ media_asset.alt_text }}</p>
+            {% endif %}
+        </div>
+        <div class="flex items-center space-x-3">
+            {% if media_asset.document.file %}
+            <a href="{{ media_asset.document.file.url }}" download
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "download" "w-4 h-4 mr-2" %}
+                Download
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Preview -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-medium text-gray-900">Preview</h3>
+                </div>
+                <div class="p-4">
+                    <div class="bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center" style="min-height: 300px;">
+                        {% if media_asset.kind == 'video' %}
+                        {% if media_asset.document.file %}
+                        <video controls class="max-w-full max-h-96">
+                            <source src="{{ media_asset.document.file.url }}" type="{{ media_asset.document.content_type }}">
+                            Your browser does not support the video tag.
+                        </video>
+                        {% else %}
+                        <div class="text-center p-6">
+                            {% icon "film" "w-12 h-12 text-gray-400 mx-auto mb-3" %}
+                            <p class="text-gray-500">Video preview not available</p>
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        {% if media_asset.document.file %}
+                        <img src="{{ media_asset.document.file.url }}"
+                             alt="{{ media_asset.alt_text|default:media_asset.document.filename }}"
+                             class="max-w-full max-h-96 object-contain">
+                        {% else %}
+                        <div class="text-center p-6">
+                            {% icon "image" "w-12 h-12 text-gray-400 mx-auto mb-3" %}
+                            <p class="text-gray-500">Image preview not available</p>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Details Panel -->
+        <div class="space-y-6">
+            <!-- Dimensions -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-medium text-gray-900">Dimensions</h3>
+                </div>
+                <div class="p-4 space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Width</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ media_asset.width|default:"-" }}px</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Height</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ media_asset.height|default:"-" }}px</dd>
+                        </div>
+                    </div>
+                    {% if media_asset.aspect_ratio %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Aspect Ratio</dt>
+                        <dd class="mt-1 text-sm text-gray-900">
+                            {{ media_asset.aspect_ratio|floatformat:2 }}:1
+                            {% if media_asset.is_landscape %}
+                            <span class="text-xs text-gray-500">(Landscape)</span>
+                            {% elif media_asset.is_portrait %}
+                            <span class="text-xs text-gray-500">(Portrait)</span>
+                            {% else %}
+                            <span class="text-xs text-gray-500">(Square)</span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                    {% endif %}
+                    {% if media_asset.duration_seconds %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Duration</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ media_asset.duration_seconds|floatformat:1 }}s</dd>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- File Info -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-medium text-gray-900">File Info</h3>
+                </div>
+                <div class="p-4 space-y-4">
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Filename</dt>
+                        <dd class="mt-1 text-sm text-gray-900 break-all">{{ media_asset.document.filename }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Content Type</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ media_asset.document.content_type }}</dd>
+                    </div>
+                    {% if media_asset.document.file_size %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">File Size</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ media_asset.document.file_size|filesizeformat }}</dd>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Camera Info (if available) -->
+            {% if media_asset.camera_make or media_asset.camera_model or media_asset.taken_at %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-medium text-gray-900">Camera Info</h3>
+                </div>
+                <div class="p-4 space-y-4">
+                    {% if media_asset.camera_make %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Camera Make</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ media_asset.camera_make }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if media_asset.camera_model %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Camera Model</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ media_asset.camera_model }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if media_asset.taken_at %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Taken At</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ media_asset.taken_at|date:"M d, Y H:i" }}</dd>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- GPS Info (if available) -->
+            {% if media_asset.gps_latitude and media_asset.gps_longitude %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-medium text-gray-900">Location</h3>
+                </div>
+                <div class="p-4 space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Latitude</dt>
+                            <dd class="mt-1 text-sm text-gray-900 font-mono">{{ media_asset.gps_latitude|floatformat:6 }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Longitude</dt>
+                            <dd class="mt-1 text-sm text-gray-900 font-mono">{{ media_asset.gps_longitude|floatformat:6 }}</dd>
+                        </div>
+                    </div>
+                    <a href="https://www.openstreetmap.org/?mlat={{ media_asset.gps_latitude }}&mlon={{ media_asset.gps_longitude }}#map=15/{{ media_asset.gps_latitude }}/{{ media_asset.gps_longitude }}"
+                       target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center text-sm text-blue-600 hover:text-blue-800">
+                        {% icon "map-pin" "w-4 h-4 mr-1" %}
+                        View on Map
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Metadata -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-medium text-gray-900">Metadata</h3>
+                </div>
+                <div class="p-4 space-y-4">
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Asset ID</dt>
+                        <dd class="mt-1 text-sm text-gray-900 font-mono text-xs">{{ media_asset.pk }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Document ID</dt>
+                        <dd class="mt-1 text-sm text-gray-900 font-mono text-xs">{{ media_asset.document.pk }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Uploaded</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ media_asset.created_at|date:"M d, Y H:i" }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Last Updated</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ media_asset.updated_at|date:"M d, Y H:i" }}</dd>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tagged Divers Section -->
+    {% if can_tag_divers %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div class="flex items-center">
+                {% icon "users" "w-5 h-5 text-gray-400 mr-2" %}
+                <h3 class="text-lg font-medium text-gray-900">Tagged Divers</h3>
+                {% if photo_tags %}
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {{ photo_tags|length }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="p-4">
+            <!-- Add Tag Form -->
+            <form method="post" action="{% url 'diveops:media-tag-add' pk=media_asset.pk %}" class="mb-4">
+                {% csrf_token %}
+                <div class="flex items-center space-x-2">
+                    <select name="diver_id" required
+                            class="flex-1 rounded-lg border-gray-300 text-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select a diver to tag...</option>
+                        {% for diver in available_divers %}
+                        <option value="{{ diver.pk }}">{{ diver.person.get_full_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit"
+                            class="inline-flex items-center px-3 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                        {% icon "user-plus" "w-4 h-4 mr-1" %}
+                        Tag
+                    </button>
+                </div>
+            </form>
+
+            <!-- Tagged Divers List -->
+            {% if photo_tags %}
+            <div class="space-y-2">
+                {% for tag in photo_tags %}
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center space-x-3">
+                        <div class="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            {% icon "user" "w-4 h-4 text-blue-600" %}
+                        </div>
+                        <div>
+                            <a href="{% url 'diveops:diver-detail' pk=tag.diver.pk %}"
+                               class="text-sm font-medium text-gray-900 hover:text-blue-600">
+                                {{ tag.diver.person.get_full_name }}
+                            </a>
+                            <p class="text-xs text-gray-500">
+                                Tagged by {{ tag.tagged_by.get_full_name|default:tag.tagged_by.username }}
+                                on {{ tag.created_at|date:"M j, Y" }}
+                            </p>
+                        </div>
+                    </div>
+                    <form method="post" action="{% url 'diveops:media-tag-remove' pk=media_asset.pk tag_pk=tag.pk %}"
+                          onsubmit="return confirm('Remove {{ tag.diver.person.get_full_name }} from this photo?')">
+                        {% csrf_token %}
+                        <button type="submit" class="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600" title="Remove tag">
+                            {% icon "x" "w-4 h-4" %}
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <p class="text-sm text-gray-500">No divers tagged in this photo yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tagged Dive Sites Section -->
+    {% if can_tag_dive_sites %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div class="flex items-center">
+                {% icon "map-pin" "w-5 h-5 text-gray-400 mr-2" %}
+                <h3 class="text-lg font-medium text-gray-900">Tagged Dive Sites</h3>
+                {% if dive_site_tags %}
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    {{ dive_site_tags|length }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="p-4">
+            <!-- Add Dive Site Tag Form -->
+            <form method="post" action="{% url 'diveops:media-dive-site-tag-add' pk=media_asset.pk %}" class="mb-4">
+                {% csrf_token %}
+                <div class="flex items-center space-x-2">
+                    <select name="dive_site_id" required
+                            class="flex-1 rounded-lg border-gray-300 text-sm focus:ring-green-500 focus:border-green-500">
+                        <option value="">Select a dive site to tag...</option>
+                        {% for site in available_dive_sites %}
+                        <option value="{{ site.pk }}">{{ site.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit"
+                            class="inline-flex items-center px-3 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700">
+                        {% icon "map-pin" "w-4 h-4 mr-1" %}
+                        Tag
+                    </button>
+                </div>
+            </form>
+
+            <!-- Tagged Dive Sites List -->
+            {% if dive_site_tags %}
+            <div class="space-y-2">
+                {% for tag in dive_site_tags %}
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center space-x-3">
+                        <div class="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                            {% icon "map-pin" "w-4 h-4 text-green-600" %}
+                        </div>
+                        <div>
+                            <a href="{% url 'diveops:staff-site-detail' pk=tag.dive_site.pk %}"
+                               class="text-sm font-medium text-gray-900 hover:text-green-600">
+                                {{ tag.dive_site.name }}
+                            </a>
+                            <p class="text-xs text-gray-500">
+                                Tagged by {{ tag.tagged_by.get_full_name|default:tag.tagged_by.username }}
+                                on {{ tag.created_at|date:"M j, Y" }}
+                            </p>
+                        </div>
+                    </div>
+                    <form method="post" action="{% url 'diveops:media-dive-site-tag-remove' pk=media_asset.pk tag_pk=tag.pk %}"
+                          onsubmit="return confirm('Remove {{ tag.dive_site.name }} from this photo?')">
+                        {% csrf_token %}
+                        <button type="submit" class="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600" title="Remove tag">
+                            {% icon "x" "w-4 h-4" %}
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <p class="text-sm text-gray-500">No dive sites tagged in this photo yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Renditions Section -->
+    {% if media_asset.renditions.exists %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+            <h3 class="text-lg font-medium text-gray-900">Renditions</h3>
+        </div>
+        <div class="p-4">
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {% for rendition in media_asset.renditions.all %}
+                <div class="relative">
+                    <div class="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                        <img src="{{ rendition.file.url }}"
+                             alt="{{ rendition.get_role_display }}"
+                             class="w-full h-full object-cover">
+                    </div>
+                    <div class="mt-2">
+                        <p class="text-sm font-medium text-gray-900">{{ rendition.get_role_display }}</p>
+                        <p class="text-xs text-gray-500">{{ rendition.width }}x{{ rendition.height }}</p>
+                        <p class="text-xs text-gray-400">{{ rendition.file_size|filesizeformat }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Attachments Section -->
+    {% if media_asset.document.attachments.exists %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+            <h3 class="text-lg font-medium text-gray-900">Attached To</h3>
+        </div>
+        <div class="p-4">
+            <div class="space-y-2">
+                {% for attachment in media_asset.document.attachments.all %}
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-800 mr-2">
+                            {{ attachment.get_purpose_display }}
+                        </span>
+                        <span class="text-sm text-gray-900">{{ attachment.content_type.model|title }}</span>
+                        {% if attachment.caption %}
+                        <span class="text-sm text-gray-500">- {{ attachment.caption }}</span>
+                        {% endif %}
+                    </div>
+                    {% if attachment.is_primary %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        Primary
+                    </span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Back Link -->
+    <div class="flex justify-start">
+        <a href="{% url 'diveops:media-library' %}"
+           class="text-gray-600 hover:text-gray-900 text-sm">
+            &larr; Back to Media Library
+        </a>
+    </div>
+</div>
+{% endblock %}

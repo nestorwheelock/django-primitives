@@ -531,6 +531,40 @@ class Document(BaseModel):
         return self.created_at + timedelta(days=self.retention_days)
 
 
+class MediaKind(models.TextChoices):
+    """Types of media assets."""
+    IMAGE = "image", "Image"
+    VIDEO = "video", "Video"
+
+
+class MediaProcessingStatus(models.TextChoices):
+    """Status of media processing pipeline."""
+    PENDING = "pending", "Pending"
+    PROCESSING = "processing", "Processing"
+    COMPLETED = "completed", "Completed"
+    FAILED = "failed", "Failed"
+
+
+class RenditionRole(models.TextChoices):
+    """Standard rendition sizes/roles."""
+    THUMB = "thumb", "Thumbnail (150px)"
+    SMALL = "small", "Small (320px)"
+    MEDIUM = "medium", "Medium (640px)"
+    LARGE = "large", "Large (1280px)"
+    POSTER = "poster", "Video Poster"
+
+
+class AttachmentPurpose(models.TextChoices):
+    """Purpose of attachment to an entity."""
+    GALLERY = "gallery", "Gallery"
+    AVATAR = "avatar", "Avatar"
+    COVER = "cover", "Cover Image"
+    HERO = "hero", "Hero Image"
+    CERTIFICATE = "certificate", "Certificate"
+    EVIDENCE = "evidence", "Evidence"
+    MARKETING = "marketing", "Marketing"
+
+
 class ExtractionStatus(models.TextChoices):
     """Status of text extraction processing."""
 
@@ -661,3 +695,332 @@ class DocumentContent(BaseModel):
     def is_searchable(self) -> bool:
         """Check if document content is searchable."""
         return self.status == ExtractionStatus.COMPLETED and self.has_text
+
+
+class MediaAsset(BaseModel):
+    """
+    Media-specific metadata overlay for Documents containing images or videos.
+
+    This is a 1:1 extension of Document that adds media-specific fields like
+    dimensions, EXIF data, and processing status. The actual file is stored
+    in the related Document.
+
+    Usage:
+        from django_documents.models import Document, MediaAsset, MediaKind
+
+        # Create document first
+        doc = Document.objects.create(
+            file=uploaded_image,
+            filename="photo.jpg",
+            content_type="image/jpeg",
+            document_type="photo",
+            category="image",
+        )
+
+        # Add media asset metadata
+        asset = MediaAsset.objects.create(
+            document=doc,
+            kind=MediaKind.IMAGE,
+            width=1920,
+            height=1080,
+        )
+    """
+
+    document = models.OneToOneField(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="media_asset",
+        help_text="The document containing the media file",
+    )
+
+    kind = models.CharField(
+        max_length=10,
+        choices=MediaKind.choices,
+        help_text="Type of media (image or video)",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=MediaProcessingStatus.choices,
+        default=MediaProcessingStatus.PENDING,
+        help_text="Processing status",
+    )
+
+    # Dimensions
+    width = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Width in pixels",
+    )
+    height = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Height in pixels",
+    )
+
+    # Video-specific
+    duration_seconds = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Duration in seconds (video only)",
+    )
+
+    # EXIF/metadata
+    taken_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the photo/video was taken (from EXIF)",
+    )
+    camera_make = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Camera manufacturer (from EXIF)",
+    )
+    camera_model = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Camera model (from EXIF)",
+    )
+
+    # GPS coordinates
+    gps_latitude = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="GPS latitude (from EXIF)",
+    )
+    gps_longitude = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="GPS longitude (from EXIF)",
+    )
+
+    # Accessibility
+    alt_text = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Alt text for accessibility",
+    )
+
+    # User-settable metadata (vs EXIF-extracted)
+    captured_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="User-settable capture date (vs EXIF taken_at)",
+    )
+
+    # Visibility control
+    visibility = models.CharField(
+        max_length=20,
+        choices=[
+            ("private", "Private"),       # Staff only
+            ("internal", "Internal"),     # Divers can see their own
+            ("public", "Public"),         # Website/marketing use
+        ],
+        default="private",
+        db_index=True,
+        help_text="Visibility level for this media",
+    )
+
+    class Meta:
+        app_label = "django_documents"
+        verbose_name = "Media Asset"
+        verbose_name_plural = "Media Assets"
+        indexes = [
+            models.Index(fields=["kind"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["taken_at"]),
+        ]
+
+    def __str__(self):
+        return f"MediaAsset for {self.document.filename}"
+
+    @property
+    def aspect_ratio(self) -> float | None:
+        """Calculate aspect ratio (width/height)."""
+        if self.width and self.height:
+            return self.width / self.height
+        return None
+
+    @property
+    def is_landscape(self) -> bool | None:
+        """Check if media is landscape orientation."""
+        if self.width and self.height:
+            return self.width > self.height
+        return None
+
+    @property
+    def is_portrait(self) -> bool | None:
+        """Check if media is portrait orientation."""
+        if self.width and self.height:
+            return self.height > self.width
+        return None
+
+
+class MediaRendition(BaseModel):
+    """
+    Generated rendition (thumbnail, resized version) of a MediaAsset.
+
+    Each MediaAsset can have multiple renditions at different sizes/roles.
+    Renditions are generated server-side using Pillow for images and
+    ffmpeg for video posters.
+
+    Usage:
+        from django_documents.models import MediaRendition, RenditionRole
+
+        # Generate thumbnail
+        rendition = MediaRendition.objects.create(
+            media_asset=asset,
+            role=RenditionRole.THUMB,
+            file=thumb_file,
+            width=150,
+            height=84,
+            file_size=12345,
+        )
+    """
+
+    media_asset = models.ForeignKey(
+        MediaAsset,
+        on_delete=models.CASCADE,
+        related_name="renditions",
+        help_text="The media asset this rendition belongs to",
+    )
+
+    role = models.CharField(
+        max_length=20,
+        choices=RenditionRole.choices,
+        help_text="Role/size of this rendition",
+    )
+
+    file = models.FileField(
+        upload_to="documents/renditions/%Y/%m/%d/",
+        help_text="The generated rendition file",
+    )
+
+    # Rendition dimensions
+    width = models.PositiveIntegerField(
+        help_text="Width in pixels",
+    )
+    height = models.PositiveIntegerField(
+        help_text="Height in pixels",
+    )
+    file_size = models.PositiveBigIntegerField(
+        help_text="File size in bytes",
+    )
+
+    format = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        help_text="Output format (jpeg, webp, png)",
+    )
+
+    class Meta:
+        app_label = "django_documents"
+        verbose_name = "Media Rendition"
+        verbose_name_plural = "Media Renditions"
+        unique_together = [["media_asset", "role"]]
+        indexes = [
+            models.Index(fields=["media_asset", "role"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_role_display()} for {self.media_asset.document.filename}"
+
+
+class Attachment(BaseModel):
+    """
+    Generic association between a Document and any entity.
+
+    Attachments allow a single Document to be attached to multiple entities
+    with different purposes (gallery, avatar, cover, etc.) and ordering.
+
+    Usage:
+        from django.contrib.contenttypes.models import ContentType
+        from django_documents.models import Attachment, AttachmentPurpose
+
+        # Attach document to a dive site as gallery image
+        ct = ContentType.objects.get_for_model(DiveSite)
+        attachment = Attachment.objects.create(
+            document=doc,
+            content_type=ct,
+            object_id=str(dive_site.pk),
+            purpose=AttachmentPurpose.GALLERY,
+            sort_order=1,
+        )
+    """
+
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+        help_text="The document being attached",
+    )
+
+    # GenericFK to target entity
+    content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.CASCADE,
+        help_text="Content type of the target entity",
+    )
+    object_id = models.CharField(
+        max_length=255,
+        help_text="ID of the target entity",
+    )
+    content_object = GenericForeignKey("content_type", "object_id")
+
+    purpose = models.CharField(
+        max_length=20,
+        choices=AttachmentPurpose.choices,
+        help_text="Purpose of this attachment",
+    )
+
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Sort order for galleries",
+    )
+
+    is_primary = models.BooleanField(
+        default=False,
+        help_text="Is this the primary attachment for this purpose",
+    )
+
+    caption = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Caption for the attachment",
+    )
+
+    alt_text = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Alt text for accessibility",
+    )
+
+    attached_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="User who created this attachment",
+    )
+
+    class Meta:
+        app_label = "django_documents"
+        verbose_name = "Attachment"
+        verbose_name_plural = "Attachments"
+        ordering = ["purpose", "sort_order", "created_at"]
+        unique_together = [["document", "content_type", "object_id", "purpose"]]
+        indexes = [
+            models.Index(fields=["content_type", "object_id"]),
+            models.Index(fields=["purpose", "sort_order"]),
+        ]
+
+    def __str__(self):
+        return f"{self.document.filename} attached as {self.get_purpose_display()}"
