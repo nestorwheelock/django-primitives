@@ -98,6 +98,7 @@ TEMPLATES = [
                 "django_portal_ui.context_processors.portal_ui",
                 "primitives_testbed.diveops.context_processors.diveops_context",
                 "primitives_testbed.impersonation.impersonation_context",
+                "primitives_testbed.store.context_processors.cart_context",
             ],
         },
     },
@@ -228,6 +229,12 @@ PORTAL_UI = {
             "section": "Shop",
             "label": "Browse Store",
             "url": "store:list",
+            "icon": "gift",
+        },
+        {
+            "section": "Shop",
+            "label": "My Cart",
+            "url": "store:cart",
             "icon": "shopping-cart",
         },
         {

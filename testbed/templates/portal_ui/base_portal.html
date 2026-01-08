@@ -49,6 +49,16 @@
                 <div class="flex items-center space-x-4">
                     {% block header_actions %}{% endblock %}
 
+                    <!-- Shopping Cart -->
+                    <a href="{% url 'store:cart' %}" class="relative p-2 text-gray-500 hover:text-primary-600" title="Shopping Cart">
+                        {% icon "shopping-cart" "w-6 h-6" %}
+                        {% if cart_item_count > 0 %}
+                        <span class="absolute -top-1 -right-1 bg-primary-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                            {{ cart_item_count }}
+                        </span>
+                        {% endif %}
+                    </a>
+
                     <!-- Profile dropdown -->
                     <div class="relative" x-data="{ open: false }">
                         <button @click="open = !open" class="flex items-center text-gray-600 hover:text-primary-500">
@@ -86,10 +96,10 @@
                             </a>
                             {% endif %}
                             {% endif %}
-                            <a href="{{ portal_ui.login_url }}profile/" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                {% icon "user" "w-4 h-4 inline mr-2" %} Profile
+                            <a href="{% url 'portal:dashboard' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                {% icon "user" "w-4 h-4 inline mr-2" %} My Dashboard
                             </a>
-                            <a href="{{ portal_ui.login_url }}logout/" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                            <a href="{% url 'logout' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                 {% icon "log-out" "w-4 h-4 inline mr-2" %} Logout
                             </a>
                         </div>
