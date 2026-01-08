@@ -96,8 +96,11 @@
                             </a>
                             {% endif %}
                             {% endif %}
+                            <a href="{% url 'profile:view' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                {% icon "user" "w-4 h-4 inline mr-2" %} My Profile
+                            </a>
                             <a href="{% url 'portal:dashboard' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                {% icon "user" "w-4 h-4 inline mr-2" %} My Dashboard
+                                {% icon "home" "w-4 h-4 inline mr-2" %} Dashboard
                             </a>
                             <a href="{% url 'logout' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                 {% icon "log-out" "w-4 h-4 inline mr-2" %} Logout

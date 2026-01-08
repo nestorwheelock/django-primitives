@@ -1,24 +1,20 @@
 {% load portal_ui_tags %}
-{# Customer portal navigation sidebar #}
-<aside id="portal-sidebar"
-       class="fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform -translate-x-full transition-transform duration-300 lg:translate-x-0"
+{# Staff portal navigation sidebar #}
+<aside id="staff-sidebar"
+       class="fixed inset-y-0 left-0 z-30 w-64 bg-gray-900 text-white transform -translate-x-full transition-transform duration-300 lg:translate-x-0 lg:static lg:flex-shrink-0"
        x-data="{ collapsed: false }"
        :class="{ 'lg:w-20': collapsed, 'lg:w-64': !collapsed }"
        x-cloak>
 
     <!-- Sidebar Header -->
-    <div class="flex items-center justify-between h-16 px-4 border-b border-gray-200">
-        <a href="{{ portal_ui.portal_prefix }}" class="flex items-center space-x-3" x-show="!collapsed">
-            {% if portal_ui.site_logo %}
-            <img src="{{ portal_ui.site_logo }}" alt="{{ portal_ui.site_name }}" class="h-8 w-auto">
-            {% else %}
-            <span class="text-lg font-bold text-primary-600">My Portal</span>
-            {% endif %}
+    <div class="flex items-center justify-between h-16 px-4 bg-gray-800">
+        <a href="{{ portal_ui.staff_prefix }}" class="flex items-center space-x-3" x-show="!collapsed">
+            <span class="text-lg font-bold text-white">Staff Portal</span>
         </a>
         <button @click="collapsed = !collapsed"
-                class="p-2 rounded-lg hover:bg-gray-100 lg:block hidden"
+                class="p-2 rounded-lg hover:bg-gray-700 lg:block hidden"
                 title="Toggle sidebar">
-            <svg class="w-5 h-5 text-gray-500 transition-transform" :class="{ 'rotate-180': collapsed }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 transition-transform" :class="{ 'rotate-180': collapsed }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
             </svg>
         </button>
@@ -36,7 +32,7 @@
                 <li>
                     <a href="{{ item.resolved_url }}"
                        class="flex items-center px-4 py-2.5 text-sm font-medium transition-colors
-                              {% if item.is_active %}bg-primary-50 text-primary-700 border-r-2 border-primary-600{% else %}text-gray-600 hover:bg-gray-50 hover:text-gray-900{% endif %}"
+                              {% if item.is_active %}bg-primary-600 text-white{% else %}text-gray-300 hover:bg-gray-800 hover:text-white{% endif %}"
                        :class="{ 'justify-center': collapsed }"
                        title="{{ item.label }}">
                         {% if item.icon %}{% icon item.icon "w-5 h-5 flex-shrink-0" %}{% endif %}
@@ -47,7 +43,7 @@
             </ul>
         </div>
         {% empty %}
-        <div class="px-4 py-2 text-sm text-gray-500">
+        <div class="px-4 py-2 text-sm text-gray-400">
             No navigation items configured.
         </div>
         {% endfor %}
@@ -55,26 +51,26 @@
 
     <!-- User Info -->
     {% if user.is_authenticated %}
-    <div class="border-t border-gray-200 p-4">
+    <div class="border-t border-gray-700 p-4">
         <div class="flex items-center" :class="{ 'justify-center': collapsed }">
-            <div class="w-10 h-10 rounded-full {% if is_impersonating %}bg-amber-100 text-amber-600{% else %}bg-primary-100 text-primary-600{% endif %} flex items-center justify-center font-medium">
+            <div class="w-8 h-8 rounded-full {% if is_impersonating %}bg-amber-500{% else %}bg-primary-500{% endif %} flex items-center justify-center text-sm font-medium">
                 {{ user.email|slice:":1"|upper }}
             </div>
             <div class="ml-3" x-show="!collapsed">
-                <p class="text-sm font-medium text-gray-900 truncate">{{ user.get_full_name|default:user.email }}</p>
+                <p class="text-sm font-medium text-white truncate">{{ user.get_full_name|default:user.email }}</p>
                 {% if is_impersonating %}
-                <p class="text-xs text-amber-600">Impersonating</p>
+                <p class="text-xs text-amber-400">Impersonating</p>
                 {% endif %}
-                <div class="flex items-center space-x-2 text-xs text-gray-500">
-                    <a href="{% url 'profile:view' %}" class="hover:text-primary-600">Profile</a>
+                <div class="flex items-center space-x-2 text-xs text-gray-400">
+                    <a href="{% url 'profile:view' %}" class="hover:text-white">Profile</a>
                     <span>|</span>
                     {% if is_impersonating %}
                     <form action="{% url 'impersonate-stop' %}" method="post" class="inline">
                         {% csrf_token %}
-                        <button type="submit" class="hover:text-amber-600 text-amber-500">Stop</button>
+                        <button type="submit" class="text-amber-400 hover:text-amber-300">Stop</button>
                     </form>
                     {% else %}
-                    <a href="{% url 'logout' %}" class="hover:text-primary-600">Log out</a>
+                    <a href="{% url 'logout' %}" class="hover:text-white">Log out</a>
                     {% endif %}
                 </div>
             </div>
@@ -84,6 +80,6 @@
 </aside>
 
 <!-- Mobile Overlay -->
-<div id="portal-sidebar-overlay"
+<div id="sidebar-overlay"
      class="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden hidden"
-     onclick="closePortalSidebar()"></div>
+     onclick="closeSidebar()"></div>

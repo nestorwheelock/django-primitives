@@ -46,6 +46,9 @@ urlpatterns = [
     # Store (public catalog + logged-in cart/checkout)
     path("shop/", include("primitives_testbed.store.urls", namespace="store")),
 
+    # User profile (all authenticated users)
+    path("profile/", include("primitives_testbed.profile.urls", namespace="profile")),
+
     # CMS API (before catch-all)
     path("api/cms/", include((cms_api_urlpatterns, "cms"), namespace="cms-api")),
 

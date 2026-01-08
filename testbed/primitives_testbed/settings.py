@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     "primitives_testbed.checkin",
     "primitives_testbed.diveops",
     "primitives_testbed.store",
+    "primitives_testbed.profile",
 ]
 
 MIDDLEWARE = [

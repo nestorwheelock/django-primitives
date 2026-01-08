@@ -1,0 +1,184 @@
+{% extends "portal_ui/base_portal.html" %}
+{% load static portal_ui_tags %}
+
+{% block page_title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Profile Header -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <div class="flex items-start justify-between">
+            <div class="flex items-center space-x-4">
+                <!-- Profile Photo -->
+                <div class="relative">
+                    {% if preferences.profile_photo %}
+                    <img src="{{ preferences.profile_photo.file.url }}"
+                         alt="Profile photo"
+                         class="w-24 h-24 rounded-full object-cover border-4 border-white shadow">
+                    {% elif diver and diver.profile_photo %}
+                    <img src="{{ diver.profile_photo.file.url }}"
+                         alt="Profile photo"
+                         class="w-24 h-24 rounded-full object-cover border-4 border-white shadow">
+                    {% else %}
+                    <div class="w-24 h-24 rounded-full bg-primary-100 flex items-center justify-center border-4 border-white shadow">
+                        <span class="text-3xl font-bold text-primary-600">
+                            {{ profile_user.email|slice:":1"|upper }}
+                        </span>
+                    </div>
+                    {% endif %}
+                    <a href="{% url 'profile:photo' %}"
+                       class="absolute bottom-0 right-0 bg-white rounded-full p-1.5 shadow border border-gray-200 hover:bg-gray-50"
+                       title="Change photo">
+                        {% icon "camera" "w-4 h-4 text-gray-600" %}
+                    </a>
+                </div>
+
+                <!-- User Info -->
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">
+                        {{ profile_user.get_full_name|default:profile_user.email }}
+                    </h1>
+                    <p class="text-gray-500">{{ profile_user.email }}</p>
+                    {% if profile_user.is_staff %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">
+                        {% icon "shield" "w-3 h-3 mr-1" %} Staff
+                    </span>
+                    {% endif %}
+                    {% if profile_user.is_superuser %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 mt-1">
+                        {% icon "star" "w-3 h-3 mr-1" %} Admin
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <a href="{% url 'profile:edit' %}" class="btn btn-primary">
+                {% icon "edit-2" "w-4 h-4 mr-2" %} Edit Profile
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Account Information -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                {% icon "user" "w-5 h-5 mr-2 text-gray-400" %}
+                Account Information
+            </h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Email</dt>
+                    <dd class="text-gray-900">{{ profile_user.email }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">First Name</dt>
+                    <dd class="text-gray-900">{{ profile_user.first_name|default:"—" }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Last Name</dt>
+                    <dd class="text-gray-900">{{ profile_user.last_name|default:"—" }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Member Since</dt>
+                    <dd class="text-gray-900">{{ profile_user.date_joined|date:"M d, Y" }}</dd>
+                </div>
+            </dl>
+            <div class="mt-4 pt-4 border-t border-gray-100">
+                <a href="{% url 'profile:password' %}" class="text-primary-600 hover:text-primary-700 text-sm font-medium">
+                    {% icon "lock" "w-4 h-4 inline mr-1" %} Change Password
+                </a>
+            </div>
+        </div>
+
+        <!-- Preferences -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                {% icon "settings" "w-5 h-5 mr-2 text-gray-400" %}
+                Preferences
+            </h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Timezone</dt>
+                    <dd class="text-gray-900">{{ preferences.timezone }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Email Notifications</dt>
+                    <dd>
+                        {% if preferences.email_notifications %}
+                        <span class="text-green-600">{% icon "check" "w-4 h-4" %}</span>
+                        {% else %}
+                        <span class="text-gray-400">{% icon "x" "w-4 h-4" %}</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Marketing Emails</dt>
+                    <dd>
+                        {% if preferences.marketing_emails %}
+                        <span class="text-green-600">{% icon "check" "w-4 h-4" %}</span>
+                        {% else %}
+                        <span class="text-gray-400">{% icon "x" "w-4 h-4" %}</span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+
+        {% if diver %}
+        <!-- Diver Information -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                {% icon "anchor" "w-5 h-5 mr-2 text-gray-400" %}
+                Diver Profile
+            </h2>
+            <dl class="space-y-3">
+                {% if diver.person.phone %}
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Phone</dt>
+                    <dd class="text-gray-900">{{ diver.person.phone }}</dd>
+                </div>
+                {% endif %}
+                {% if diver.emergency_contact_name %}
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Emergency Contact</dt>
+                    <dd class="text-gray-900">{{ diver.emergency_contact_name }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+
+            {% if diver_certs %}
+            <div class="mt-4 pt-4 border-t border-gray-100">
+                <h3 class="text-sm font-medium text-gray-700 mb-2">Certifications</h3>
+                <div class="space-y-2">
+                    {% for cert in diver_certs %}
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-900">{{ cert.certification_level.name }}</span>
+                        <span class="text-gray-500">{{ cert.certification_level.agency }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if profile_user.is_staff and staff_modules %}
+        <!-- Staff Permissions -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                {% icon "shield" "w-5 h-5 mr-2 text-gray-400" %}
+                Staff Permissions
+            </h2>
+            <div class="space-y-2">
+                {% for membership in staff_modules %}
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-gray-900">{{ membership.module.name }}</span>
+                    <span class="text-gray-500">{{ membership.role }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

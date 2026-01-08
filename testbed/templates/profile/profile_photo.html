@@ -1,0 +1,71 @@
+{% extends "portal_ui/base_portal.html" %}
+{% load static portal_ui_tags %}
+
+{% block page_title %}Profile Photo{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-xl font-semibold text-gray-900">Profile Photo</h1>
+            <a href="{% url 'profile:view' %}" class="text-gray-500 hover:text-gray-700">
+                {% icon "x" "w-5 h-5" %}
+            </a>
+        </div>
+
+        <!-- Current Photo -->
+        <div class="text-center mb-6">
+            {% if preferences.profile_photo %}
+            <img src="{{ preferences.profile_photo.file.url }}"
+                 alt="Current profile photo"
+                 class="w-32 h-32 rounded-full object-cover mx-auto border-4 border-gray-100 shadow">
+            {% elif diver and diver.profile_photo %}
+            <img src="{{ diver.profile_photo.file.url }}"
+                 alt="Current profile photo"
+                 class="w-32 h-32 rounded-full object-cover mx-auto border-4 border-gray-100 shadow">
+            {% else %}
+            <div class="w-32 h-32 rounded-full bg-primary-100 flex items-center justify-center mx-auto border-4 border-gray-100 shadow">
+                <span class="text-4xl font-bold text-primary-600">
+                    {{ profile_user.email|slice:":1"|upper }}
+                </span>
+            </div>
+            {% endif %}
+            <p class="mt-2 text-sm text-gray-500">Current photo</p>
+        </div>
+
+        <!-- Upload Form -->
+        <form method="post" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+
+            <div>
+                <label for="photo" class="block text-sm font-medium text-gray-700 mb-1">Upload New Photo</label>
+                <input type="file" name="photo" id="photo" accept="image/*"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                <p class="mt-1 text-xs text-gray-500">JPG, PNG, or GIF. Max 5MB.</p>
+            </div>
+
+            <div class="flex items-center justify-between pt-4 border-t border-gray-200">
+                {% if preferences.profile_photo or diver and diver.profile_photo %}
+                <form method="post" action="{% url 'profile:photo_delete' %}" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="text-red-600 hover:text-red-700 text-sm font-medium">
+                        {% icon "trash-2" "w-4 h-4 inline mr-1" %} Remove Photo
+                    </button>
+                </form>
+                {% else %}
+                <span></span>
+                {% endif %}
+
+                <div class="flex items-center space-x-3">
+                    <a href="{% url 'profile:view' %}" class="px-4 py-2 text-gray-700 hover:text-gray-900">
+                        Cancel
+                    </a>
+                    <button type="submit" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 font-medium">
+                        Upload Photo
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
