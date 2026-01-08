@@ -386,14 +386,14 @@
                         <tbody class="divide-y divide-gray-100">
                             {% for log in dive_logs %}
                             <tr class="text-sm">
-                                <td class="py-2 text-gray-500">{{ log.dive.dive_number|default:"-" }}</td>
-                                <td class="py-2 text-gray-800">{{ log.dive.dive_date|date:"M j, Y" }}</td>
+                                <td class="py-2 text-gray-500">{{ log.dive.sequence|default:"-" }}</td>
+                                <td class="py-2 text-gray-800">{{ log.dive.actual_start|date:"M j, Y"|default:"-" }}</td>
                                 <td class="py-2 text-gray-800">{{ log.dive.dive_site.name|default:"Unknown" }}</td>
                                 <td class="py-2 text-gray-600">
-                                    {% if log.max_depth %}{{ log.max_depth }}m{% elif log.dive.max_depth %}{{ log.dive.max_depth }}m{% else %}-{% endif %}
+                                    {% if log.max_depth_meters %}{{ log.max_depth_meters }}m{% elif log.dive.max_depth_meters %}{{ log.dive.max_depth_meters }}m{% else %}-{% endif %}
                                 </td>
                                 <td class="py-2 text-gray-600">
-                                    {% if log.bottom_time %}{{ log.bottom_time }} min{% elif log.dive.bottom_time %}{{ log.dive.bottom_time }} min{% else %}-{% endif %}
+                                    {% if log.bottom_time_minutes %}{{ log.bottom_time_minutes }} min{% elif log.dive.bottom_time_minutes %}{{ log.dive.bottom_time_minutes }} min{% else %}-{% endif %}
                                 </td>
                             </tr>
                             {% endfor %}

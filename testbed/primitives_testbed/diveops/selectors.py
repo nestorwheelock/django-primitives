@@ -641,7 +641,7 @@ def list_diver_dive_logs(
             "dive__excursion",
             "assignment",
         )
-        .order_by("-dive__dive_date", "-dive__dive_number")[:limit]
+        .order_by("-dive__actual_start", "-dive__sequence")[:limit]
     )
 
 
@@ -664,8 +664,8 @@ def get_diver_dive_stats(diver: DiverProfile) -> dict:
 
     stats = logs.aggregate(
         total_logged_dives=Count("id"),
-        deepest_depth=Max("max_depth"),
-        longest_dive=Max("bottom_time"),
+        deepest_depth=Max("max_depth_meters"),
+        longest_dive=Max("bottom_time_minutes"),
     )
 
     return {
