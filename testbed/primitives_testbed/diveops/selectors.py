@@ -18,10 +18,12 @@ from .models import (
     Dive,
     DiverCertification,
     DiverProfile,
+    DiveLog,
     DiveSite,
     Excursion,
     ExcursionRequirement,
     ExcursionRoster,
+    SignableAgreement,
 )
 
 # Backwards compatibility aliases
@@ -470,3 +472,205 @@ def excursion_audit_feed(excursion: Excursion, limit: int = 100) -> list:
 
 # Backwards compatibility alias
 trip_audit_feed = excursion_audit_feed
+
+
+# =============================================================================
+# Medical Clearance Selectors
+# =============================================================================
+
+
+def get_diver_medical_status(diver: DiverProfile) -> dict:
+    """Get diver's medical clearance status.
+
+    Args:
+        diver: DiverProfile
+
+    Returns:
+        Dict with medical clearance status:
+        - has_clearance: bool
+        - clearance_date: date or None
+        - valid_until: date or None
+        - is_expired: bool
+        - days_until_expiry: int or None
+    """
+    from datetime import date
+
+    today = date.today()
+
+    if not diver.medical_clearance_date:
+        return {
+            "has_clearance": False,
+            "clearance_date": None,
+            "valid_until": None,
+            "is_expired": False,
+            "days_until_expiry": None,
+        }
+
+    valid_until = diver.medical_clearance_valid_until
+    is_expired = valid_until and valid_until < today
+
+    days_until_expiry = None
+    if valid_until and not is_expired:
+        days_until_expiry = (valid_until - today).days
+
+    return {
+        "has_clearance": True,
+        "clearance_date": diver.medical_clearance_date,
+        "valid_until": valid_until,
+        "is_expired": is_expired,
+        "days_until_expiry": days_until_expiry,
+    }
+
+
+# =============================================================================
+# Agreement Selectors
+# =============================================================================
+
+
+def list_diver_signed_agreements(
+    diver: DiverProfile,
+    template_type: Optional[str] = None,
+    limit: int = 50,
+) -> list[SignableAgreement]:
+    """Get signed agreements for a diver.
+
+    Args:
+        diver: DiverProfile
+        template_type: Filter by template type (waiver, medical, briefing, etc.)
+        limit: Maximum results
+
+    Returns:
+        List of SignableAgreement objects that are signed
+    """
+    from django.contrib.contenttypes.models import ContentType
+
+    diver_ct = ContentType.objects.get_for_model(DiverProfile)
+
+    qs = (
+        SignableAgreement.objects.filter(
+            party_a_content_type=diver_ct,
+            party_a_id=str(diver.pk),
+            status=SignableAgreement.Status.SIGNED,
+        )
+        .select_related("template", "signed_document")
+        .order_by("-signed_at")
+    )
+
+    if template_type:
+        qs = qs.filter(template__template_type=template_type)
+
+    return list(qs[:limit])
+
+
+def list_diver_briefings(diver: DiverProfile, limit: int = 10) -> list[SignableAgreement]:
+    """Get signed briefing acknowledgments for a diver.
+
+    Args:
+        diver: DiverProfile
+        limit: Maximum results
+
+    Returns:
+        List of SignableAgreement objects of type briefing
+    """
+    return list_diver_signed_agreements(diver, template_type="briefing", limit=limit)
+
+
+def list_diver_waivers(diver: DiverProfile, limit: int = 10) -> list[SignableAgreement]:
+    """Get signed waivers for a diver.
+
+    Args:
+        diver: DiverProfile
+        limit: Maximum results
+
+    Returns:
+        List of SignableAgreement objects of type waiver
+    """
+    return list_diver_signed_agreements(diver, template_type="waiver", limit=limit)
+
+
+def list_diver_pending_agreements(
+    diver: DiverProfile,
+    limit: int = 20,
+) -> list[SignableAgreement]:
+    """Get pending (unsigned) agreements for a diver.
+
+    Args:
+        diver: DiverProfile
+        limit: Maximum results
+
+    Returns:
+        List of SignableAgreement objects that need signing
+    """
+    from django.contrib.contenttypes.models import ContentType
+
+    diver_ct = ContentType.objects.get_for_model(DiverProfile)
+
+    return list(
+        SignableAgreement.objects.filter(
+            party_a_content_type=diver_ct,
+            party_a_id=str(diver.pk),
+            status__in=[SignableAgreement.Status.DRAFT, SignableAgreement.Status.SENT],
+        )
+        .select_related("template")
+        .order_by("-created_at")[:limit]
+    )
+
+
+# =============================================================================
+# Dive Log Selectors
+# =============================================================================
+
+
+def list_diver_dive_logs(
+    diver: DiverProfile,
+    limit: int = 50,
+) -> list[DiveLog]:
+    """Get dive logs for a diver.
+
+    Args:
+        diver: DiverProfile
+        limit: Maximum results
+
+    Returns:
+        List of DiveLog objects ordered by dive date (newest first)
+    """
+    return list(
+        DiveLog.objects.filter(diver=diver)
+        .select_related(
+            "dive__dive_site",
+            "dive__excursion",
+            "assignment",
+        )
+        .order_by("-dive__dive_date", "-dive__dive_number")[:limit]
+    )
+
+
+def get_diver_dive_stats(diver: DiverProfile) -> dict:
+    """Get dive statistics for a diver.
+
+    Args:
+        diver: DiverProfile
+
+    Returns:
+        Dict with dive statistics:
+        - total_dives: int
+        - total_logged_dives: int
+        - deepest_depth: Decimal or None
+        - longest_dive: int (minutes) or None
+    """
+    from django.db.models import Max, Count
+
+    logs = DiveLog.objects.filter(diver=diver)
+
+    stats = logs.aggregate(
+        total_logged_dives=Count("id"),
+        deepest_depth=Max("max_depth"),
+        longest_dive=Max("bottom_time"),
+    )
+
+    return {
+        "total_dives": diver.total_dives or stats["total_logged_dives"] or 0,
+        "total_logged_dives": stats["total_logged_dives"] or 0,
+        "deepest_depth": stats["deepest_depth"],
+        "longest_dive": stats["longest_dive"],
+    }

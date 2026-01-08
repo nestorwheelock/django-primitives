@@ -12,9 +12,15 @@ from primitives_testbed.store.models import StoreOrder
 
 from .selectors import (
     get_current_diver,
+    get_diver_dive_stats,
     get_diver_highest_certification,
+    get_diver_medical_status,
     get_diver_with_certifications,
     list_diver_bookings,
+    list_diver_briefings,
+    list_diver_dive_logs,
+    list_diver_pending_agreements,
+    list_diver_signed_agreements,
 )
 
 
@@ -34,6 +40,14 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
         upcoming_bookings = []
         past_bookings = []
 
+        # Initialize diver-related data
+        medical_status = None
+        signed_agreements = []
+        pending_agreements = []
+        briefings = []
+        dive_logs = []
+        dive_stats = None
+
         if diver:
             # Get full diver with certifications
             diver_with_certs = get_diver_with_certifications(diver.pk)
@@ -48,6 +62,20 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
                 b for b in past_bookings
                 if b.excursion.departure_time <= timezone.now()
             ][:3]
+
+            # Medical clearance status
+            medical_status = get_diver_medical_status(diver)
+
+            # Agreements (waivers, medical forms, etc.)
+            signed_agreements = list_diver_signed_agreements(diver, limit=10)
+            pending_agreements = list_diver_pending_agreements(diver, limit=10)
+
+            # Briefings (subset of signed agreements)
+            briefings = list_diver_briefings(diver, limit=5)
+
+            # Dive logs and stats
+            dive_logs = list_diver_dive_logs(diver, limit=10)
+            dive_stats = get_diver_dive_stats(diver)
 
         # Get recent orders for this user
         orders = StoreOrder.objects.filter(user=user).order_by("-created_at")[:5]
@@ -78,6 +106,13 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
             "orders": orders,
             "entitlements": entitlements,
             "courseware_pages": courseware_pages,
+            # New dashboard sections
+            "medical_status": medical_status,
+            "signed_agreements": signed_agreements,
+            "pending_agreements": pending_agreements,
+            "briefings": briefings,
+            "dive_logs": dive_logs,
+            "dive_stats": dive_stats,
         })
         return context
 

@@ -32,6 +32,63 @@
     </div>
 
     {% if diver %}
+    <!-- Status Cards Row -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Medical Clearance Card -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    {% icon "heart" "w-8 h-8 mr-3 {% if medical_status.has_clearance and not medical_status.is_expired %}text-green-500{% elif medical_status.is_expired %}text-red-500{% else %}text-gray-400{% endif %}" %}
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">Medical Clearance</h4>
+                        {% if medical_status.has_clearance %}
+                            {% if medical_status.is_expired %}
+                                <p class="text-lg font-semibold text-red-600">Expired</p>
+                            {% elif medical_status.days_until_expiry and medical_status.days_until_expiry <= 30 %}
+                                <p class="text-lg font-semibold text-yellow-600">Expires in {{ medical_status.days_until_expiry }} days</p>
+                            {% else %}
+                                <p class="text-lg font-semibold text-green-600">Valid</p>
+                            {% endif %}
+                        {% else %}
+                            <p class="text-lg font-semibold text-gray-400">Not on file</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if medical_status.valid_until %}
+                <span class="text-xs text-gray-400">Until {{ medical_status.valid_until|date:"M j, Y" }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Pending Agreements Card -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    {% icon "file-text" "w-8 h-8 mr-3 {% if pending_agreements %}text-yellow-500{% else %}text-green-500{% endif %}" %}
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">Agreements</h4>
+                        {% if pending_agreements %}
+                            <p class="text-lg font-semibold text-yellow-600">{{ pending_agreements|length }} pending</p>
+                        {% else %}
+                            <p class="text-lg font-semibold text-green-600">All signed</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dive Stats Card -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <div class="flex items-center">
+                {% icon "anchor" "w-8 h-8 mr-3 text-primary-500" %}
+                <div>
+                    <h4 class="text-sm font-medium text-gray-500">Logged Dives</h4>
+                    <p class="text-lg font-semibold text-gray-800">{{ dive_stats.total_dives|default:0 }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Upcoming Dives -->
     <div class="bg-white shadow rounded-lg">
         <div class="p-6 border-b border-gray-200">
@@ -210,6 +267,146 @@
                 </span>
                 {% endfor %}
             </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if diver %}
+    <!-- Briefings, Agreements, and Dive Logs Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Briefings -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    {% icon "clipboard" "w-5 h-5 mr-2 text-primary-500" %}
+                    Briefings
+                </h3>
+            </div>
+            <div class="p-6">
+                {% if briefings %}
+                    <ul class="space-y-3">
+                        {% for agreement in briefings %}
+                        <li class="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                            <div>
+                                <span class="font-medium text-gray-800">{{ agreement.template.name }}</span>
+                                <span class="text-xs text-gray-500 ml-2">{{ agreement.signed_at|date:"M j, Y" }}</span>
+                            </div>
+                            {% if agreement.signed_document %}
+                            <a href="{{ agreement.signed_document.file.url }}" target="_blank" class="text-primary-600 hover:text-primary-800">
+                                {% icon "download" "w-4 h-4" %}
+                            </a>
+                            {% else %}
+                            {% icon "check-circle" "w-4 h-4 text-green-500" %}
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-gray-500 text-sm">No briefings signed yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Signed Agreements -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    {% icon "file-check" "w-5 h-5 mr-2 text-primary-500" %}
+                    Signed Agreements
+                </h3>
+            </div>
+            <div class="p-6">
+                {% if signed_agreements %}
+                    <ul class="space-y-3">
+                        {% for agreement in signed_agreements %}
+                        <li class="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                            <div>
+                                <span class="font-medium text-gray-800">{{ agreement.template.name }}</span>
+                                <div class="text-xs text-gray-500">
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600 mr-1">
+                                        {{ agreement.template.get_template_type_display }}
+                                    </span>
+                                    {{ agreement.signed_at|date:"M j, Y" }}
+                                </div>
+                            </div>
+                            {% if agreement.signed_document %}
+                            <a href="{{ agreement.signed_document.file.url }}" target="_blank" class="text-primary-600 hover:text-primary-800" title="Download PDF">
+                                {% icon "download" "w-4 h-4" %}
+                            </a>
+                            {% else %}
+                            {% icon "check-circle" "w-4 h-4 text-green-500" %}
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-gray-500 text-sm">No agreements signed yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Dive Logs -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    {% icon "book" "w-5 h-5 mr-2 text-primary-500" %}
+                    Dive Log
+                </h3>
+                {% if dive_stats %}
+                <div class="flex items-center space-x-4 text-sm text-gray-500">
+                    {% if dive_stats.deepest_depth %}
+                    <span title="Deepest dive">
+                        {% icon "arrow-down" "w-4 h-4 inline" %} {{ dive_stats.deepest_depth }}m
+                    </span>
+                    {% endif %}
+                    {% if dive_stats.longest_dive %}
+                    <span title="Longest dive">
+                        {% icon "clock" "w-4 h-4 inline" %} {{ dive_stats.longest_dive }} min
+                    </span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="p-6">
+            {% if dive_logs %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead>
+                            <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th class="pb-3">#</th>
+                                <th class="pb-3">Date</th>
+                                <th class="pb-3">Site</th>
+                                <th class="pb-3">Depth</th>
+                                <th class="pb-3">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            {% for log in dive_logs %}
+                            <tr class="text-sm">
+                                <td class="py-2 text-gray-500">{{ log.dive.dive_number|default:"-" }}</td>
+                                <td class="py-2 text-gray-800">{{ log.dive.dive_date|date:"M j, Y" }}</td>
+                                <td class="py-2 text-gray-800">{{ log.dive.dive_site.name|default:"Unknown" }}</td>
+                                <td class="py-2 text-gray-600">
+                                    {% if log.max_depth %}{{ log.max_depth }}m{% elif log.dive.max_depth %}{{ log.dive.max_depth }}m{% else %}-{% endif %}
+                                </td>
+                                <td class="py-2 text-gray-600">
+                                    {% if log.bottom_time %}{{ log.bottom_time }} min{% elif log.dive.bottom_time %}{{ log.dive.bottom_time }} min{% else %}-{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if dive_stats.total_logged_dives > 10 %}
+                <p class="mt-4 text-sm text-gray-500">Showing most recent 10 of {{ dive_stats.total_logged_dives }} logged dives.</p>
+                {% endif %}
+            {% else %}
+                <p class="text-gray-500 text-sm">No dives logged yet.</p>
+                <p class="text-sm text-gray-400 mt-1">Your dive logs will appear here after your dives are recorded.</p>
+            {% endif %}
         </div>
     </div>
     {% endif %}
