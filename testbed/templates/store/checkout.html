@@ -1,0 +1,83 @@
+{% extends "portal_ui/base_public.html" %}
+{% load portal_ui_tags %}
+
+{% block title %}Checkout - {{ portal_ui.site_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Checkout</h1>
+    </div>
+
+    {% if cart_items %}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Order Summary -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                <div class="p-6 border-b border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900">Order Summary</h2>
+                </div>
+                <div class="divide-y divide-gray-200">
+                    {% for entry in cart_items %}
+                    <div class="p-4 flex items-center justify-between">
+                        <div>
+                            <span class="font-medium text-gray-900">{{ entry.catalog_item.display_name }}</span>
+                            <span class="text-gray-500 ml-2">x {{ entry.quantity }}</span>
+                        </div>
+                        <span class="font-medium text-gray-900">${{ entry.line_total }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Summary -->
+        <div class="lg:col-span-1">
+            <div class="bg-white rounded-lg shadow-md p-6 sticky top-4">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Payment Summary</h2>
+
+                <div class="space-y-3 mb-6">
+                    <div class="flex justify-between text-gray-600">
+                        <span>Subtotal</span>
+                        <span>${{ cart_total }}</span>
+                    </div>
+                    <div class="flex justify-between text-gray-600">
+                        <span>Tax</span>
+                        <span>$0.00</span>
+                    </div>
+                    <div class="border-t border-gray-200 pt-3">
+                        <div class="flex justify-between text-lg font-semibold text-gray-900">
+                            <span>Total</span>
+                            <span>${{ cart_total }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 font-medium">
+                        Place Order
+                    </button>
+                </form>
+
+                <p class="mt-4 text-xs text-gray-500 text-center">
+                    By placing your order, you agree to our terms and conditions.
+                </p>
+
+                <a href="{% url 'store:cart' %}" class="block mt-4 text-center text-primary-600 hover:text-primary-800 text-sm">
+                    &larr; Back to Cart
+                </a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white rounded-lg shadow-md p-12 text-center">
+        <p class="text-gray-500 text-lg mb-6">Your cart is empty.</p>
+        <a href="{% url 'store:list' %}" class="inline-block px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 font-medium">
+            Browse Shop
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

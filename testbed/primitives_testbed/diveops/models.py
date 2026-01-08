@@ -5141,6 +5141,11 @@ __all__ = [
     "MedicalProviderProfile",
     "MedicalProviderLocation",
     "MedicalProviderRelationship",
+    # Entitlements
+    "EntitlementGrant",
 ]
+
+# Import EntitlementGrant from submodule for migration discovery
+from .entitlements.models import EntitlementGrant
 
 

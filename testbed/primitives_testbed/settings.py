@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "primitives_testbed.invoicing",
     "primitives_testbed.checkin",
     "primitives_testbed.diveops",
+    "primitives_testbed.store",
 ]
 
 MIDDLEWARE = [
@@ -137,6 +138,10 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# Login redirects
+LOGIN_REDIRECT_URL = "/portal/"
+LOGOUT_REDIRECT_URL = "/"
+
 # Internationalization
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
@@ -198,6 +203,39 @@ DIVE_SHOP_LONGITUDE = -80.1918
 # Portal UI configuration
 PORTAL_UI = {
     "SITE_NAME": "Primitives Testbed",
+    "PORTAL_NAV": [
+        {
+            "section": "Main",
+            "label": "Dashboard",
+            "url": "portal:dashboard",
+            "icon": "home",
+        },
+        {
+            "section": "Main",
+            "label": "My Orders",
+            "url": "portal:orders",
+            "icon": "receipt",
+        },
+        {
+            "section": "Learning",
+            "label": "My Courseware",
+            "url": "portal:dashboard",
+            "icon": "book-open",
+        },
+        {
+            "section": "Shop",
+            "label": "Browse Store",
+            "url": "store:list",
+            "icon": "shopping-cart",
+        },
+        {
+            "section": "Help",
+            "label": "Help Center",
+            "url": "portal:content",
+            "url_kwargs": {"path": "help"},
+            "icon": "help-circle",
+        },
+    ],
     "STAFF_NAV": [
         {
             "section": "Dive Operations",

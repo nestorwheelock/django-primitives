@@ -32,8 +32,14 @@ urlpatterns = [
     path("staff/", RedirectView.as_view(url="/staff/diveops/", permanent=False), name="staff-index"),
     path("staff/diveops/", include("primitives_testbed.diveops.staff_urls")),
 
+    # Customer portal (authenticated customers)
+    path("portal/", include("primitives_testbed.diveops.customer_urls", namespace="portal")),
+
     # Public agreement signing (no login required)
     path("sign/", include("primitives_testbed.diveops.public_urls")),
+
+    # Store (public catalog + logged-in cart/checkout)
+    path("shop/", include("primitives_testbed.store.urls", namespace="store")),
 
     # CMS API (before catch-all)
     path("api/cms/", include((cms_api_urlpatterns, "cms"), namespace="cms-api")),

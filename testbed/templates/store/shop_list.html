@@ -1,0 +1,72 @@
+{% extends "portal_ui/base_public.html" %}
+{% load portal_ui_tags %}
+
+{% block title %}Shop - {{ portal_ui.site_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Shop</h1>
+        <p class="mt-2 text-gray-600">Browse our courses, certifications, and dive materials.</p>
+    </div>
+
+    <!-- Products Grid -->
+    {% if items_with_prices %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for entry in items_with_prices %}
+        <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition">
+            <div class="p-6">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <span class="inline-block px-2 py-1 text-xs font-medium rounded-full
+                            {% if entry.item.kind == 'service' %}bg-blue-100 text-blue-700{% else %}bg-green-100 text-green-700{% endif %}">
+                            {{ entry.item.get_kind_display }}
+                        </span>
+                    </div>
+                    {% if entry.price %}
+                    <span class="text-xl font-bold text-gray-900">${{ entry.price }}</span>
+                    {% endif %}
+                </div>
+
+                <h3 class="mt-4 text-lg font-semibold text-gray-900">
+                    {{ entry.item.display_name }}
+                </h3>
+
+                {% if entry.item.display_name_es %}
+                <p class="text-sm text-gray-500 italic">{{ entry.item.display_name_es }}</p>
+                {% endif %}
+
+                <div class="mt-4 flex items-center justify-between">
+                    <a href="{% url 'store:detail' item_id=entry.item.pk %}" class="text-primary-600 hover:text-primary-800 text-sm font-medium">
+                        View Details
+                    </a>
+
+                    {% if user.is_authenticated %}
+                    <form method="post" action="{% url 'store:add_to_cart' item_id=entry.item.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{% url 'store:list' %}">
+                        <button type="submit" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 text-sm font-medium">
+                            Add to Cart
+                        </button>
+                    </form>
+                    {% else %}
+                    <a href="{% url 'login' %}?next={% url 'store:list' %}" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium">
+                        Login to Buy
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-12">
+        <div class="text-gray-400 mb-4">
+            {% icon "shopping-bag" "w-16 h-16 mx-auto" %}
+        </div>
+        <p class="text-gray-500 text-lg">No products available at the moment.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

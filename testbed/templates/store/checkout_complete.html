@@ -1,0 +1,107 @@
+{% extends "portal_ui/base_public.html" %}
+{% load portal_ui_tags %}
+
+{% block title %}Order Confirmed - {{ portal_ui.site_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-8">
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <!-- Success Header -->
+        <div class="p-8 text-center border-b border-gray-200
+            {% if order.status == 'paid' or order.status == 'fulfilled' %}bg-green-50{% else %}bg-blue-50{% endif %}">
+            {% if order.status == 'paid' or order.status == 'fulfilled' %}
+            <div class="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                {% icon "check" "w-8 h-8 text-green-600" %}
+            </div>
+            <h1 class="text-2xl font-bold text-green-800">Payment Complete!</h1>
+            <p class="text-green-600 mt-2">Your entitlements have been granted.</p>
+            {% else %}
+            <div class="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
+                {% icon "clock" "w-8 h-8 text-blue-600" %}
+            </div>
+            <h1 class="text-2xl font-bold text-blue-800">Order Created</h1>
+            <p class="text-blue-600 mt-2">Awaiting payment confirmation.</p>
+            {% endif %}
+        </div>
+
+        <!-- Order Details -->
+        <div class="p-8">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">Order {{ order.order_number }}</h2>
+                    <p class="text-sm text-gray-500">Placed on {{ order.created_at|date:"F j, Y, g:i a" }}</p>
+                </div>
+                <span class="px-3 py-1 text-sm font-medium rounded-full
+                    {% if order.status == 'paid' %}bg-green-100 text-green-700
+                    {% elif order.status == 'fulfilled' %}bg-purple-100 text-purple-700
+                    {% elif order.status == 'pending' %}bg-yellow-100 text-yellow-700
+                    {% else %}bg-gray-100 text-gray-700{% endif %}">
+                    {{ order.get_status_display }}
+                </span>
+            </div>
+
+            <!-- Items -->
+            <div class="border-t border-gray-200 pt-6">
+                <h3 class="font-medium text-gray-900 mb-4">Items</h3>
+                <div class="space-y-3">
+                    {% for item in order.items.all %}
+                    <div class="flex items-center justify-between py-2 border-b border-gray-100">
+                        <div>
+                            <span class="text-gray-900">{{ item.description }}</span>
+                            <span class="text-gray-500 ml-2">x {{ item.quantity }}</span>
+                        </div>
+                        <span class="text-gray-900">${{ item.line_total }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Totals -->
+            <div class="border-t border-gray-200 mt-6 pt-6">
+                <div class="space-y-2">
+                    <div class="flex justify-between text-gray-600">
+                        <span>Subtotal</span>
+                        <span>${{ order.subtotal_amount }}</span>
+                    </div>
+                    {% if order.tax_amount %}
+                    <div class="flex justify-between text-gray-600">
+                        <span>Tax</span>
+                        <span>${{ order.tax_amount }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex justify-between text-lg font-semibold text-gray-900 pt-2 border-t border-gray-200">
+                        <span>Total</span>
+                        <span>${{ order.total_amount }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="border-t border-gray-200 mt-6 pt-6">
+                {% if order.status == 'pending' %}
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                    <p class="text-yellow-700 text-sm">
+                        <strong>Demo Mode:</strong> Click the button below to simulate payment and receive your entitlements.
+                    </p>
+                </div>
+                <form method="post" action="{% url 'store:mark_paid' order_id=order.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">
+                        Mark as Paid (Demo)
+                    </button>
+                </form>
+                {% else %}
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <a href="{% url 'portal:dashboard' %}" class="flex-1 px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 font-medium text-center">
+                        Go to My Dashboard
+                    </a>
+                    <a href="{% url 'store:list' %}" class="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium text-center">
+                        Continue Shopping
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

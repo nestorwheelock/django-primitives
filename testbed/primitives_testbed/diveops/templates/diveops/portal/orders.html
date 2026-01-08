@@ -1,0 +1,61 @@
+{% extends "portal_ui/base_portal.html" %}
+{% load portal_ui_tags %}
+
+{% block page_title %}My Orders{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-xl font-semibold text-gray-800">Order History</h2>
+        <p class="text-gray-600 mt-1">View all your orders and invoices.</p>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        {% if orders %}
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order #</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for order in orders %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="font-medium text-gray-900">{{ order.order_number }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ order.created_at|date:"M j, Y" }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 text-xs rounded-full {% if order.status == 'fulfilled' %}bg-green-100 text-green-700{% elif order.status == 'paid' %}bg-blue-100 text-blue-700{% elif order.status == 'pending' %}bg-yellow-100 text-yellow-700{% else %}bg-gray-100 text-gray-600{% endif %}">
+                            {{ order.status|title }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
+                        ${{ order.total_amount }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-8 text-center">
+            <div class="text-gray-400 mb-4">
+                {% icon "receipt" "w-12 h-12 mx-auto" %}
+            </div>
+            <p class="text-gray-500">No orders found.</p>
+            <a href="{% url 'store:list' %}" class="mt-4 inline-flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">
+                {% icon "shopping-cart" "w-4 h-4 mr-2" %}
+                Browse Store
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
