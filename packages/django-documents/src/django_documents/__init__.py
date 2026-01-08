@@ -12,6 +12,14 @@ __all__ = [
     "ExtractionStatus",
     "PermissionLevel",
     "AccessAction",
+    # Media models
+    "MediaAsset",
+    "MediaRendition",
+    "Attachment",
+    "MediaKind",
+    "MediaProcessingStatus",
+    "RenditionRole",
+    "AttachmentPurpose",
 ]
 
 
@@ -27,6 +35,13 @@ def __getattr__(name):
         "ExtractionStatus",
         "PermissionLevel",
         "AccessAction",
+        "MediaAsset",
+        "MediaRendition",
+        "Attachment",
+        "MediaKind",
+        "MediaProcessingStatus",
+        "RenditionRole",
+        "AttachmentPurpose",
     ):
         from .models import (
             Document,
@@ -38,6 +53,13 @@ def __getattr__(name):
             ExtractionStatus,
             PermissionLevel,
             AccessAction,
+            MediaAsset,
+            MediaRendition,
+            Attachment,
+            MediaKind,
+            MediaProcessingStatus,
+            RenditionRole,
+            AttachmentPurpose,
         )
         return locals()[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
