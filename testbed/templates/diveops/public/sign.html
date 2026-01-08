@@ -61,6 +61,13 @@
         <div class="text-center mb-8 no-print">
             <h1 class="text-2xl font-bold text-gray-900">{{ agreement.template.name }}</h1>
             <p class="text-gray-600 mt-1">Please review and sign this agreement</p>
+            <button type="button" onclick="window.print()"
+                    class="mt-3 inline-flex items-center px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                </svg>
+                Print to sign manually
+            </button>
         </div>
 
         {% if errors %}
@@ -94,6 +101,30 @@
             </div>
         </div>
 
+        <!-- Print-Only Signature Block (shown only when printing) -->
+        <div class="print-only" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Signature</h3>
+            <div style="display: flex; gap: 2rem; margin-bottom: 1.5rem;">
+                <div style="flex: 1;">
+                    <p style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem;">Full Legal Name (Print)</p>
+                    <div style="border-bottom: 1px solid #000; height: 2rem;"></div>
+                </div>
+                <div style="width: 10rem;">
+                    <p style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem;">Date</p>
+                    <div style="border-bottom: 1px solid #000; height: 2rem;"></div>
+                </div>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <p style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem;">Signature</p>
+                <div style="border: 1px solid #000; height: 4rem; border-radius: 0.25rem;"></div>
+            </div>
+            <div style="margin-top: 1rem; padding: 0.75rem; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 0.25rem;">
+                <p style="font-size: 0.75rem; color: #6b7280;">
+                    By signing above, I confirm that I have read and understand the agreement and agree to be bound by its terms.
+                </p>
+            </div>
+        </div>
+
         <!-- Signing Form (hidden when printing) -->
         <form method="post" id="signing-form" class="no-print">
             {% csrf_token %}
@@ -103,31 +134,44 @@
                     <h2 class="text-lg font-medium text-gray-900">Your Signature</h2>
                 </div>
                 <div class="px-6 py-6 space-y-6">
-                    <!-- Geolocation Requirement -->
-                    <div id="geolocation-section" class="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <!-- Geolocation (Optional) -->
+                    <div id="geolocation-section" class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                         <div class="flex items-start">
-                            <svg class="h-5 w-5 text-amber-500 mr-3 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <svg class="h-5 w-5 text-gray-500 mr-3 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
                             </svg>
                             <div class="flex-1">
-                                <h4 class="text-sm font-medium text-amber-800">Location Verification Required</h4>
-                                <p class="mt-1 text-sm text-amber-700">
-                                    For legal validity, we need to verify your location when signing this agreement.
-                                    Please enable location access when prompted.
+                                <h4 class="text-sm font-medium text-gray-800">Location Verification</h4>
+                                <p id="location-detecting" class="mt-1 text-sm text-gray-600">
+                                    <span class="inline-flex items-center">
+                                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Detecting your location...
+                                    </span>
                                 </p>
-                                <button type="button" id="enable-location-btn"
-                                        class="mt-3 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700">
-                                    Enable Location Access
-                                </button>
-                                <div id="location-status" class="mt-2 text-sm hidden">
+                                <div id="location-status" class="mt-1 text-sm hidden">
                                     <span class="text-green-600 flex items-center">
                                         <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                         </svg>
-                                        Location verified
+                                        <span id="location-coords"></span>
                                     </span>
                                 </div>
-                                <div id="location-error" class="mt-2 text-sm text-red-600 hidden"></div>
+                                <div id="location-unavailable" class="mt-1 text-sm text-gray-500 hidden">
+                                    <span class="flex items-center">
+                                        <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                        Location unavailable - you can still sign without it
+                                    </span>
+                                </div>
+                                <button type="button" id="enable-location-btn"
+                                        class="mt-3 px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 hidden">
+                                    Retry Location
+                                </button>
+                                <div id="location-error" class="mt-2 text-xs text-gray-500 hidden"></div>
                             </div>
                         </div>
                     </div>
@@ -235,7 +279,10 @@
         let lastX = 0;
         let lastY = 0;
         let hasSignature = false;
-        let hasGeolocation = false;
+
+        // Location elements
+        const locationDetecting = document.getElementById('location-detecting');
+        const locationUnavailable = document.getElementById('location-unavailable');
 
         // Collect device fingerprint on page load
         function collectFingerprint() {
@@ -312,16 +359,26 @@
             }
         }
 
-        // Request geolocation
+        // Request geolocation (non-blocking)
         function requestGeolocation() {
+            // Check if geolocation is available
             if (!navigator.geolocation) {
-                locationError.textContent = 'Geolocation is not supported by your browser.';
-                locationError.classList.remove('hidden');
+                showLocationUnavailable('Geolocation not supported by browser');
                 return;
             }
 
-            enableLocationBtn.disabled = true;
-            enableLocationBtn.textContent = 'Requesting...';
+            // Check for secure context (HTTPS required for geolocation on most mobile browsers)
+            if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                showLocationUnavailable('HTTPS required for location on mobile (HTTP detected)');
+                return;
+            }
+
+            // Show detecting state
+            locationDetecting.classList.remove('hidden');
+            locationUnavailable.classList.add('hidden');
+            locationStatus.classList.add('hidden');
+            enableLocationBtn.classList.add('hidden');
+            locationError.classList.add('hidden');
 
             navigator.geolocation.getCurrentPosition(
                 function(position) {
@@ -333,46 +390,59 @@
                         timestamp: position.timestamp
                     };
                     document.getElementById('fp-geolocation').value = JSON.stringify(geoData);
-                    hasGeolocation = true;
 
-                    // Update UI
-                    enableLocationBtn.classList.add('hidden');
+                    // Update UI - show success
+                    locationDetecting.classList.add('hidden');
                     locationStatus.classList.remove('hidden');
-                    geoSection.classList.remove('bg-amber-50', 'border-amber-200');
+                    document.getElementById('location-coords').textContent =
+                        `Location captured (${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)})`;
+                    geoSection.classList.remove('bg-gray-50', 'border-gray-200');
                     geoSection.classList.add('bg-green-50', 'border-green-200');
                 },
                 function(error) {
-                    // Error
-                    enableLocationBtn.disabled = false;
-                    enableLocationBtn.textContent = 'Enable Location Access';
-                    locationError.classList.remove('hidden');
-
+                    // Error - but don't block signing
+                    let reason = '';
                     switch(error.code) {
                         case error.PERMISSION_DENIED:
-                            locationError.textContent = 'Location access denied. Please enable location in your browser settings and try again.';
+                            reason = 'Permission denied';
                             break;
                         case error.POSITION_UNAVAILABLE:
-                            locationError.textContent = 'Location information unavailable. Please try again.';
+                            reason = 'Position unavailable';
                             break;
                         case error.TIMEOUT:
-                            locationError.textContent = 'Location request timed out. Please try again.';
+                            reason = 'Request timed out';
                             break;
                         default:
-                            locationError.textContent = 'An error occurred getting your location. Please try again.';
+                            reason = 'Unknown error';
                     }
+                    showLocationUnavailable(reason);
                 },
                 {
                     enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
+                    timeout: 15000,  // 15 seconds for mobile GPS
+                    maximumAge: 60000  // Accept cached position up to 1 minute old
                 }
             );
+        }
+
+        function showLocationUnavailable(reason) {
+            locationDetecting.classList.add('hidden');
+            locationUnavailable.classList.remove('hidden');
+            locationStatus.classList.add('hidden');
+            enableLocationBtn.classList.remove('hidden');
+            if (reason) {
+                locationError.textContent = reason;
+                locationError.classList.remove('hidden');
+            }
         }
 
         // Initialize fingerprint collection
         collectFingerprint();
 
-        // Location button click
+        // Auto-request geolocation on page load (non-blocking)
+        requestGeolocation();
+
+        // Location button click (retry)
         enableLocationBtn.addEventListener('click', requestGeolocation);
 
         // Set canvas size
@@ -451,20 +521,14 @@
 
         // Form validation
         form.addEventListener('submit', function(e) {
-            // Check geolocation
-            if (!hasGeolocation) {
-                e.preventDefault();
-                alert('Please enable location access before signing. This is required for legal validity.');
-                enableLocationBtn.focus();
-                return false;
-            }
-
-            // Check signature
+            // Check signature (required)
             if (!hasSignature) {
                 e.preventDefault();
                 alert('Please provide your signature before submitting.');
                 return false;
             }
+
+            // Location is optional - just captured if available
 
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Signing...';
