@@ -75,16 +75,20 @@
                     <div class="w-8 h-8 mr-3 flex items-center justify-center">
                         {% if pending_agreements %}
                             {% icon "file-text" "w-8 h-8 text-yellow-500" %}
-                        {% else %}
+                        {% elif signed_agreements %}
                             {% icon "file-text" "w-8 h-8 text-green-500" %}
+                        {% else %}
+                            {% icon "file-text" "w-8 h-8 text-gray-400" %}
                         {% endif %}
                     </div>
                     <div>
                         <h4 class="text-sm font-medium text-gray-500">Agreements</h4>
                         {% if pending_agreements %}
                             <p class="text-lg font-semibold text-yellow-600">{{ pending_agreements|length }} pending</p>
-                        {% else %}
+                        {% elif signed_agreements %}
                             <p class="text-lg font-semibold text-green-600">All signed</p>
+                        {% else %}
+                            <p class="text-lg font-semibold text-gray-400">None</p>
                         {% endif %}
                     </div>
                 </div>
