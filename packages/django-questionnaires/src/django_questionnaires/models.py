@@ -40,6 +40,7 @@ class InstanceStatus(models.TextChoices):
     FLAGGED = "flagged", "Flagged"
     CLEARED = "cleared", "Cleared"
     EXPIRED = "expired", "Expired"
+    VOIDED = "voided", "Voided"
 
 
 class QuestionnaireDefinition(BaseModel):
@@ -191,6 +192,17 @@ class QuestionnaireInstance(BaseModel):
         related_name="cleared_questionnaires",
     )
     clearance_notes = models.TextField(blank=True, default="")
+
+    # Voiding fields
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="voided_questionnaires",
+    )
+    void_reason = models.TextField(blank=True, default="")
 
     # GenericFK for clearance document (optional)
     clearance_document_content_type = models.ForeignKey(

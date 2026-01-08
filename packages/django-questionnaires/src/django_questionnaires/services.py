@@ -386,25 +386,33 @@ def clear_instance(
 def get_current_instance(
     respondent: Any,
     definition_slug: str,
+    include_voided: bool = False,
 ) -> QuestionnaireInstance | None:
     """Get the most recent questionnaire instance for a respondent.
+
+    Voided instances are excluded by default. When the most recent instance
+    is voided, this returns the previous non-voided instance.
 
     Args:
         respondent: The respondent model instance
         definition_slug: Slug of the definition to look for
+        include_voided: If True, include voided instances in results
 
     Returns:
-        The most recent instance, or None if none exist
+        The most recent non-voided instance, or None if none exist
     """
     content_type = ContentType.objects.get_for_model(respondent)
 
     try:
-        return QuestionnaireInstance.objects.filter(
+        queryset = QuestionnaireInstance.objects.filter(
             definition__slug=definition_slug,
             respondent_content_type=content_type,
             respondent_object_id=str(respondent.pk),
             deleted_at__isnull=True,
-        ).order_by("-created_at").first()
+        )
+        if not include_voided:
+            queryset = queryset.exclude(status=InstanceStatus.VOIDED)
+        return queryset.order_by("-created_at").first()
     except QuestionnaireInstance.DoesNotExist:
         return None
 
@@ -453,3 +461,36 @@ def get_flagged_questions(
     """
     flagged_responses = instance.responses.filter(triggered_flag=True)
     return [r.question for r in flagged_responses]
+
+
+def void_instance(
+    instance: QuestionnaireInstance,
+    voided_by: Any,
+    reason: str = "",
+) -> QuestionnaireInstance:
+    """Void a questionnaire instance.
+
+    Voiding an instance marks it as invalid. When determining medical status,
+    voided instances are skipped and the system falls back to the previous
+    valid questionnaire on file.
+
+    Args:
+        instance: The instance to void
+        voided_by: User who is voiding the instance
+        reason: Optional reason for voiding
+
+    Returns:
+        The voided instance
+
+    Raises:
+        ValueError: If instance is already voided
+    """
+    if instance.status == InstanceStatus.VOIDED:
+        raise ValueError("Instance is already voided")
+
+    instance.status = InstanceStatus.VOIDED
+    instance.voided_at = timezone.now()
+    instance.voided_by = voided_by
+    instance.void_reason = reason
+    instance.save()
+    return instance
