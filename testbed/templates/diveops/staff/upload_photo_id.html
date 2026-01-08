@@ -1,0 +1,85 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:diver-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Divers</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:diver-detail' pk=diver.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ diver.person }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Upload Photo ID</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-xl space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">Upload Photo ID</h1>
+        <p class="text-gray-600">Upload a photo ID for {{ diver.person }}</p>
+    </div>
+
+    <!-- Current Photo ID -->
+    {% if diver.photo_id and diver.photo_id.file %}
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div class="flex items-start space-x-3">
+            <div class="flex-shrink-0">
+                {% icon "alert-triangle" "w-5 h-5 text-amber-600" %}
+            </div>
+            <div>
+                <p class="text-sm font-medium text-amber-800">Existing Photo ID</p>
+                <p class="text-sm text-amber-700 mb-3">This diver already has a photo ID on file. Uploading a new one will replace it.</p>
+                <a href="{{ diver.photo_id.file.url }}" target="_blank" class="inline-block">
+                    <img src="{{ diver.photo_id.file.url }}"
+                         alt="Current Photo ID"
+                         class="max-h-32 rounded border border-amber-300 hover:border-amber-500">
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Upload Form -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <form method="post" enctype="multipart/form-data" class="p-6 space-y-6">
+            {% csrf_token %}
+
+            <div>
+                <label for="photo_id" class="block text-sm font-medium text-gray-700">Photo ID Image</label>
+                <input type="file" name="photo_id" id="photo_id" accept="image/*"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                       required>
+                <p class="mt-1 text-sm text-gray-500">Upload a clear photo or scan of the diver's government-issued ID (passport, driver's license, etc.)</p>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="border-t pt-6 flex items-center justify-end space-x-3">
+                <a href="{% url 'diveops:diver-detail' pk=diver.pk %}" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </a>
+                <button type="submit" class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    {% icon "upload" "w-4 h-4 mr-2 inline" %}
+                    Upload Photo ID
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
