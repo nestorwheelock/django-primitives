@@ -10,6 +10,13 @@ from django_portal_ui.mixins import CustomerPortalMixin
 
 from primitives_testbed.store.models import StoreOrder
 
+from .selectors import (
+    get_current_diver,
+    get_diver_highest_certification,
+    get_diver_with_certifications,
+    list_diver_bookings,
+)
+
 
 class CustomerDashboardView(CustomerPortalMixin, TemplateView):
     """Customer portal dashboard showing bookings, orders, and courseware."""
@@ -19,6 +26,28 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
+
+        # Get diver profile for current user
+        diver = get_current_diver(user)
+        diver_with_certs = None
+        highest_cert = None
+        upcoming_bookings = []
+        past_bookings = []
+
+        if diver:
+            # Get full diver with certifications
+            diver_with_certs = get_diver_with_certifications(diver.pk)
+            highest_cert = get_diver_highest_certification(diver)
+            # Get upcoming bookings (future excursions)
+            upcoming_bookings = list_diver_bookings(diver, include_past=False, limit=5)
+            # Get recent past bookings
+            past_bookings = list_diver_bookings(diver, include_past=True, limit=5)
+            # Filter to only past ones
+            from django.utils import timezone
+            past_bookings = [
+                b for b in past_bookings
+                if b.excursion.departure_time <= timezone.now()
+            ][:3]
 
         # Get recent orders for this user
         orders = StoreOrder.objects.filter(user=user).order_by("-created_at")[:5]
@@ -42,6 +71,10 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
                     courseware_pages.append(page)
 
         context.update({
+            "diver": diver_with_certs or diver,
+            "highest_cert": highest_cert,
+            "upcoming_bookings": upcoming_bookings,
+            "past_bookings": past_bookings,
             "orders": orders,
             "entitlements": entitlements,
             "courseware_pages": courseware_pages,

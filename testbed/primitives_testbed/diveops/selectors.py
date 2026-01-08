@@ -10,6 +10,8 @@ from typing import Optional
 from django.db.models import Count, Prefetch, Q
 from django.utils import timezone
 
+from django_parties.models import Person
+
 from .models import (
     Booking,
     CertificationLevel,
@@ -170,6 +172,38 @@ def get_diver_profile(person) -> Optional[DiverProfile]:
     person_id = person.pk if hasattr(person, "pk") else person
     return (
         DiverProfile.objects.filter(person_id=person_id)
+        .select_related("person")
+        .first()
+    )
+
+
+def get_current_diver(user) -> Optional[DiverProfile]:
+    """Get DiverProfile for a logged-in user.
+
+    Links User -> Person -> DiverProfile via email matching.
+    This is the primary selector for portal views.
+
+    Args:
+        user: Django User object (from request.user)
+
+    Returns:
+        DiverProfile or None if no matching person/diver exists
+    """
+    if not user or not user.is_authenticated:
+        return None
+
+    # Find Person by matching email
+    person = (
+        Person.objects.filter(email__iexact=user.email, deleted_at__isnull=True)
+        .first()
+    )
+
+    if not person:
+        return None
+
+    # Get DiverProfile for that Person
+    return (
+        DiverProfile.objects.filter(person=person, deleted_at__isnull=True)
         .select_related("person")
         .first()
     )
