@@ -345,6 +345,14 @@ class Actions:
     PHOTO_DIVER_UNTAGGED = "photo_diver_untagged"
 
     # -------------------------------------------------------------------------
+    # Media Link Actions
+    # -------------------------------------------------------------------------
+    MEDIA_LINKED_TO_EXCURSION = "media_linked_to_excursion"
+    MEDIA_UNLINKED_FROM_EXCURSION = "media_unlinked_from_excursion"
+    MEDIA_LINKED_DIRECT = "media_linked_direct"
+    MEDIA_UNLINKED_DIRECT = "media_unlinked_direct"
+
+    # -------------------------------------------------------------------------
     # Diver Staff Note Actions
     # -------------------------------------------------------------------------
     DIVER_NOTE_ADDED = "diver_note_added"

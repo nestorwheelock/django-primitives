@@ -4709,6 +4709,14 @@ class MediaLink(BaseModel):
                 condition=Q(link_source="derived_from_excursion"),
                 name="medialink_unique_derived",
             ),
+            # Derived links must have source_excursion set
+            models.CheckConstraint(
+                condition=(
+                    Q(link_source="direct") |
+                    Q(link_source="derived_from_excursion", source_excursion__isnull=False)
+                ),
+                name="medialink_derived_requires_source_excursion",
+            ),
         ]
 
     def __str__(self):

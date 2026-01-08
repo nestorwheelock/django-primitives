@@ -11,11 +11,12 @@ Key features:
 """
 
 from django.contrib.contenttypes.models import ContentType
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import QuerySet
 from django_documents.models import MediaAsset
 
 from .models import MediaLink, MediaLinkSource, Excursion, DiverProfile, DiveSite
+from .audit import log_event, Actions
 
 
 @transaction.atomic
@@ -72,20 +73,39 @@ def link_media_to_excursion(
                 ).values_list('diver_id', flat=True)
             )
 
-        for diver_id in diver_ids:
-            MediaLink.objects.get_or_create(
-                media_asset=media_asset,
-                content_type=diver_ct,
-                object_id=str(diver_id),
-                link_source=MediaLinkSource.DERIVED_FROM_EXCURSION,
-                source_excursion=excursion,
-                defaults={"linked_by": linked_by},
-            )
+        # Bulk create diver links (ignore conflicts for idempotency)
+        if diver_ids:
+            diver_links = [
+                MediaLink(
+                    media_asset=media_asset,
+                    content_type=diver_ct,
+                    object_id=str(diver_id),
+                    link_source=MediaLinkSource.DERIVED_FROM_EXCURSION,
+                    source_excursion=excursion,
+                    linked_by=linked_by,
+                )
+                for diver_id in diver_ids
+            ]
+            MediaLink.objects.bulk_create(diver_links, ignore_conflicts=True)
 
     # Set captured_at if not set
     if not media_asset.captured_at and excursion.departure_time:
         media_asset.captured_at = excursion.departure_time
         media_asset.save(update_fields=["captured_at", "updated_at"])
+
+    # Audit logging
+    if created:
+        log_event(
+            action=Actions.MEDIA_LINKED_TO_EXCURSION,
+            target=media_asset,
+            actor=linked_by,
+            data={
+                "excursion_id": str(excursion.pk),
+                "excursion_name": str(excursion),
+                "cascade": cascade,
+                "diver_count": len(diver_ids) if cascade else 0,
+            },
+        )
 
     return exc_link
 
@@ -127,9 +147,24 @@ def unlink_media_from_excursion(
         ).delete()
         deleted_count += deleted
 
+    # Audit logging
+    if deleted_count > 0:
+        log_event(
+            action=Actions.MEDIA_UNLINKED_FROM_EXCURSION,
+            target=media_asset,
+            actor=None,  # Actor tracked at view layer
+            data={
+                "excursion_id": str(excursion.pk),
+                "excursion_name": str(excursion),
+                "cascade_derived": cascade_derived,
+                "deleted_count": deleted_count,
+            },
+        )
+
     return deleted_count
 
 
+@transaction.atomic
 def link_media_direct(media_asset: MediaAsset, target, linked_by=None) -> MediaLink:
     """Create a direct link to any entity.
 
@@ -142,22 +177,37 @@ def link_media_direct(media_asset: MediaAsset, target, linked_by=None) -> MediaL
         The created or existing MediaLink
     """
     ct = ContentType.objects.get_for_model(target)
-    link, _ = MediaLink.objects.get_or_create(
+    link, created = MediaLink.objects.get_or_create(
         media_asset=media_asset,
         content_type=ct,
         object_id=str(target.pk),
         link_source=MediaLinkSource.DIRECT,
         defaults={"linked_by": linked_by, "source_excursion": None},
     )
+
+    # Audit logging
+    if created:
+        log_event(
+            action=Actions.MEDIA_LINKED_DIRECT,
+            target=media_asset,
+            actor=linked_by,
+            data={
+                "target_type": ct.model,
+                "target_id": str(target.pk),
+            },
+        )
+
     return link
 
 
-def unlink_media_direct(media_asset: MediaAsset, target) -> int:
+@transaction.atomic
+def unlink_media_direct(media_asset: MediaAsset, target, actor=None) -> int:
     """Remove a direct link to an entity.
 
     Args:
         media_asset: The MediaAsset to unlink
         target: The target entity
+        actor: Optional user who performed the action
 
     Returns:
         Number of links deleted (0 or 1)
@@ -169,6 +219,19 @@ def unlink_media_direct(media_asset: MediaAsset, target) -> int:
         object_id=str(target.pk),
         link_source=MediaLinkSource.DIRECT,
     ).delete()
+
+    # Audit logging
+    if deleted > 0:
+        log_event(
+            action=Actions.MEDIA_UNLINKED_DIRECT,
+            target=media_asset,
+            actor=actor,
+            data={
+                "target_type": ct.model,
+                "target_id": str(target.pk),
+            },
+        )
+
     return deleted
 
 
