@@ -8,7 +8,7 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 
-from django_portal_ui.mixins import StaffPortalMixin
+from primitives_testbed.mixins import ImpersonationAwareStaffMixin as StaffPortalMixin
 
 from django_catalog.models import CatalogItem
 
