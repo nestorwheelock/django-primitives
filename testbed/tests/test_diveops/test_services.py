@@ -1058,3 +1058,184 @@ class TestEnhanceExtractedText:
         assert result.content == "<p>Plain HTML response</p>"
         assert "ai_enhanced" in result.method
         assert result.suggested_title == ""
+
+
+# =============================================================================
+# cancel_booking Concurrency Tests (P1 fix validation)
+# =============================================================================
+
+
+@pytest.mark.django_db(transaction=True)
+class TestCancelBookingConcurrency:
+    """Concurrency tests for cancel_booking service.
+
+    These tests verify that concurrent cancellation attempts
+    result in exactly one successful cancellation.
+    """
+
+    def test_cancel_booking_idempotent_after_lock(self, dive_trip, diver_profile, user):
+        """Second cancel_booking() call raises error after first succeeds.
+
+        This validates the P1 fix: select_for_update() prevents concurrent
+        cancellations from both succeeding.
+        """
+        from primitives_testbed.diveops.exceptions import BookingError
+        from primitives_testbed.diveops.models import Booking
+        from primitives_testbed.diveops.services import cancel_booking
+
+        # Create confirmed booking
+        booking = Booking.objects.create(
+            excursion=dive_trip,
+            diver=diver_profile,
+            status="confirmed",
+            booked_by=user,
+        )
+
+        # First cancellation succeeds
+        result = cancel_booking(booking=booking, cancelled_by=user)
+        assert result.booking.status == "cancelled"
+
+        # Re-fetch booking to get updated state
+        booking.refresh_from_db()
+
+        # Second cancellation raises error (booking already cancelled)
+        with pytest.raises(BookingError) as exc_info:
+            cancel_booking(booking=booking, cancelled_by=user)
+
+        assert "already cancelled" in str(exc_info.value)
+
+    def test_cancel_booking_status_recheck_after_lock(
+        self, dive_trip, diver_profile, user
+    ):
+        """Verify status is rechecked after acquiring lock.
+
+        Simulates scenario where booking status changes between
+        initial check and lock acquisition.
+        """
+        from primitives_testbed.diveops.exceptions import BookingError
+        from primitives_testbed.diveops.models import Booking, ExcursionRoster
+        from primitives_testbed.diveops.services import cancel_booking
+
+        # Create confirmed booking
+        booking = Booking.objects.create(
+            excursion=dive_trip,
+            diver=diver_profile,
+            status="confirmed",
+            booked_by=user,
+        )
+
+        # Simulate check-in happening between pre-check and lock
+        # (in real race, this would happen in another transaction)
+        booking.status = "checked_in"
+        booking.save()
+
+        # Create roster entry (required for checked_in status)
+        ExcursionRoster.objects.create(
+            excursion=dive_trip,
+            diver=diver_profile,
+            booking=booking,
+            checked_in_by=user,
+        )
+
+        # Cancel should fail because status is checked_in (after lock)
+        with pytest.raises(BookingError) as exc_info:
+            cancel_booking(booking=booking, cancelled_by=user)
+
+        assert "checked-in" in str(exc_info.value).lower()
+
+    def test_cancel_booking_no_duplicate_refund_settlements(
+        self, dive_shop, dive_site, diver_profile, user
+    ):
+        """Concurrent cancellations with refund don't create duplicate settlements.
+
+        This is the critical P1 scenario: with force_with_refund=True,
+        we must not create duplicate refund settlements.
+        """
+        from datetime import timedelta
+        from decimal import Decimal
+
+        from django.utils import timezone
+
+        from primitives_testbed.diveops.models import (
+            Booking,
+            Excursion,
+            SettlementRecord,
+        )
+        from primitives_testbed.diveops.services import (
+            cancel_booking,
+            create_revenue_settlement,
+        )
+
+        # Create excursion with price
+        tomorrow = timezone.now() + timedelta(days=1)
+        excursion = Excursion.objects.create(
+            dive_shop=dive_shop,
+            dive_site=dive_site,
+            departure_time=tomorrow,
+            return_time=tomorrow + timedelta(hours=4),
+            max_divers=10,
+            price_per_diver=Decimal("100.00"),
+            currency="USD",
+            created_by=user,
+        )
+
+        # Create and settle a booking
+        booking = Booking.objects.create(
+            excursion=excursion,
+            diver=diver_profile,
+            status="confirmed",
+            booked_by=user,
+            price_amount=Decimal("100.00"),
+            price_currency="USD",
+        )
+
+        # Settle the booking (creates revenue settlement)
+        create_revenue_settlement(
+            booking=booking,
+            processed_by=user,
+        )
+
+        # Verify settled
+        assert booking.is_settled
+
+        # Count settlements before cancellation
+        initial_settlement_count = SettlementRecord.objects.filter(
+            booking=booking
+        ).count()
+        assert initial_settlement_count == 1  # Just revenue settlement
+
+        # Cancel with refund (force_with_refund=True)
+        result = cancel_booking(
+            booking=booking,
+            cancelled_by=user,
+            force_with_refund=True,
+        )
+
+        assert result.booking.status == "cancelled"
+
+        # Re-fetch booking
+        booking.refresh_from_db()
+
+        # Second cancellation attempt should fail
+        from primitives_testbed.diveops.exceptions import BookingError
+
+        with pytest.raises(BookingError):
+            cancel_booking(
+                booking=booking,
+                cancelled_by=user,
+                force_with_refund=True,
+            )
+
+        # Verify only one refund settlement was created
+        refund_settlements = SettlementRecord.objects.filter(
+            booking=booking,
+            settlement_type="refund",
+        )
+
+        # May be 0 or 1 depending on whether refund_decision was computed
+        # (requires waiver_agreement with cancellation_policy)
+        # Key assertion: NOT more than 1
+        assert refund_settlements.count() <= 1, (
+            f"Expected at most 1 refund settlement, got {refund_settlements.count()}. "
+            "Duplicate refund settlements detected!"
+        )

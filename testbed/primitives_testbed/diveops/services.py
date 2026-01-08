@@ -643,6 +643,17 @@ def _cancel_booking_atomic(
     force_with_refund: bool,
 ) -> CancellationResult:
     """Internal atomic implementation of cancel_booking."""
+    # Lock booking row to prevent concurrent cancellations (P1 fix)
+    # Re-fetch with lock to ensure we have latest state
+    booking = Booking.objects.select_for_update().get(pk=booking.pk)
+
+    # Re-check status after acquiring lock (may have changed)
+    if booking.status == "cancelled":
+        raise BookingError("Booking is already cancelled")
+
+    if booking.status == "checked_in":
+        raise BookingError("Cannot cancel a checked-in booking")
+
     cancellation_time = timezone.now()
     refund_decision = None
     audit_data = {}
