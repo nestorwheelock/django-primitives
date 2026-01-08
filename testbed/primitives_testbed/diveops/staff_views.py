@@ -5456,12 +5456,12 @@ class MedicalQuestionnaireDetailView(StaffPortalMixin, DetailView):
 
 
 class MedicalQuestionnairePDFDownloadView(StaffPortalMixin, View):
-    """Download or generate PDF for a completed medical questionnaire."""
+    """Download the stored PDF for a completed medical questionnaire."""
 
     def get(self, request, pk):
-        from django.http import HttpResponse
+        from django.http import HttpResponse, Http404, FileResponse
         from django_questionnaires.models import QuestionnaireInstance
-        from .medical.pdf_service import MedicalQuestionnairePDFService
+        from django_documents.models import Document
 
         instance = get_object_or_404(
             QuestionnaireInstance,
@@ -5471,17 +5471,25 @@ class MedicalQuestionnairePDFDownloadView(StaffPortalMixin, View):
 
         # Only allow PDF download for completed, flagged, or cleared questionnaires
         if instance.status not in ('completed', 'flagged', 'cleared'):
-            from django.http import Http404
             raise Http404("PDF not available for pending questionnaires")
 
-        # Generate PDF
-        service = MedicalQuestionnairePDFService(instance)
-        pdf_bytes = service.render_pdf()
-        filename = service.generate_filename()
+        # Get the stored PDF document
+        pdf_document_id = instance.metadata.get('pdf_document_id') if instance.metadata else None
+        if not pdf_document_id:
+            raise Http404("No PDF document found for this questionnaire")
 
-        # Return as downloadable PDF
-        response = HttpResponse(pdf_bytes, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        try:
+            document = Document.objects.get(pk=pdf_document_id, deleted_at__isnull=True)
+        except Document.DoesNotExist:
+            raise Http404("PDF document not found")
+
+        # Serve the stored file
+        response = FileResponse(
+            document.file.open('rb'),
+            content_type='application/pdf',
+            as_attachment=True,
+            filename=document.filename,
+        )
         return response
 
 

@@ -309,6 +309,8 @@ def get_or_create_folder_path(
     Usage:
         folder = get_or_create_folder_path("Medical/Medical Questionnaires")
     """
+    from django.db import IntegrityError
+
     parts = [p.strip() for p in path.split("/") if p.strip()]
     if not parts:
         raise ValueError("Path cannot be empty")
@@ -316,22 +318,29 @@ def get_or_create_folder_path(
     parent = None
     for part in parts:
         slug = slugify(part)
-        # Try to find existing folder
-        try:
-            folder = DocumentFolder.objects.get(
-                slug=slug,
-                parent=parent,
-                deleted_at__isnull=True,
-            )
-        except DocumentFolder.DoesNotExist:
-            # Create the folder
-            folder = create_folder(
-                name=part,
-                parent=parent,
-                slug=slug,
-                owner=owner,
-                actor=actor,
-            )
+        # Try to find existing folder (including any with same parent/slug)
+        folder = DocumentFolder.objects.filter(
+            slug=slug,
+            parent=parent,
+        ).first()
+
+        if folder is None:
+            # Try to create the folder, handle race condition
+            try:
+                folder = create_folder(
+                    name=part,
+                    parent=parent,
+                    slug=slug,
+                    owner=owner,
+                    actor=actor,
+                )
+            except IntegrityError:
+                # Another process created it, fetch it
+                folder = DocumentFolder.objects.get(
+                    slug=slug,
+                    parent=parent,
+                )
+
         parent = folder
 
     return folder
