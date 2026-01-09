@@ -258,4 +258,13 @@ urlpatterns = [
     path("media/<uuid:pk>/link-excursion/", staff_views.MediaLinkExcursionView.as_view(), name="media-link-excursion"),
     path("media/<uuid:pk>/unlink-excursion/", staff_views.MediaUnlinkExcursionView.as_view(), name="media-unlink-excursion"),
     path("media/<uuid:pk>/metadata/", staff_views.MediaMetadataUpdateView.as_view(), name="media-metadata"),
+    # Excursion Series (Recurring Excursions)
+    path("series/", staff_views.ExcursionSeriesListView.as_view(), name="series-list"),
+    path("series/add/", staff_views.ExcursionSeriesCreateView.as_view(), name="series-create"),
+    path("series/<uuid:pk>/", staff_views.ExcursionSeriesDetailView.as_view(), name="series-detail"),
+    path("series/<uuid:pk>/edit/", staff_views.ExcursionSeriesUpdateView.as_view(), name="series-edit"),
+    path("series/<uuid:pk>/delete/", staff_views.ExcursionSeriesDeleteView.as_view(), name="series-delete"),
+    path("series/<uuid:pk>/sync/", staff_views.ExcursionSeriesSyncView.as_view(), name="series-sync"),
+    path("series/<uuid:pk>/pause/", staff_views.ExcursionSeriesPauseView.as_view(), name="series-pause"),
+    path("series/<uuid:pk>/activate/", staff_views.ExcursionSeriesActivateView.as_view(), name="series-activate"),
 ]

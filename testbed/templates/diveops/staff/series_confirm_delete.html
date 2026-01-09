@@ -1,0 +1,72 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:series-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Excursion Series</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Delete Series</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-lg mx-auto space-y-6">
+    <!-- Warning Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-red-200 overflow-hidden">
+        <div class="px-6 py-4 bg-red-50 border-b border-red-200">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    {% icon "alert-triangle" "h-6 w-6 text-red-600" %}
+                </div>
+                <h2 class="ml-3 text-lg font-medium text-red-900">Delete Excursion Series</h2>
+            </div>
+        </div>
+        <div class="px-6 py-4">
+            <p class="text-sm text-gray-700">
+                Are you sure you want to delete the series <strong>"{{ series.name }}"</strong>?
+            </p>
+            <div class="mt-4 bg-gray-50 rounded-lg p-4">
+                <h3 class="text-sm font-medium text-gray-900 mb-2">This will:</h3>
+                <ul class="text-sm text-gray-600 space-y-1">
+                    <li class="flex items-start">
+                        {% icon "x" "h-4 w-4 text-red-500 mr-2 mt-0.5" %}
+                        Stop generating new occurrences
+                    </li>
+                    <li class="flex items-start">
+                        {% icon "check" "h-4 w-4 text-green-500 mr-2 mt-0.5" %}
+                        Preserve existing excursions and bookings
+                    </li>
+                    <li class="flex items-start">
+                        {% icon "check" "h-4 w-4 text-green-500 mr-2 mt-0.5" %}
+                        Can be restored later if needed
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-end space-x-3">
+            <a href="{% url 'diveops:series-detail' pk=series.pk %}"
+               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit"
+                        class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700">
+                    Delete Series
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

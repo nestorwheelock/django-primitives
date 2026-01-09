@@ -23,6 +23,7 @@ from .models import (
     DiveSite,
     Excursion,
     ExcursionRequirement,
+    ExcursionSeries,
     ExcursionType,
     ExcursionTypeDive,
     GuidePermitDetails,
@@ -32,6 +33,7 @@ from .models import (
     ProtectedAreaPermit,
     ProtectedAreaRule,
     ProtectedAreaZone,
+    RecurrenceRule,
     SitePriceAdjustment,
 )
 
@@ -3401,3 +3403,248 @@ class DivingPermitForm(forms.ModelForm):
             instance.save()
             self.save_m2m()
         return instance
+
+
+# =============================================================================
+# ExcursionSeries Forms (Recurring Excursions)
+# =============================================================================
+
+
+class ExcursionSeriesForm(forms.Form):
+    """Form to create or edit an ExcursionSeries.
+
+    Handles both ExcursionSeries fields and RecurrenceRule fields in a unified form.
+    """
+
+    # Basic Information
+    name = forms.CharField(
+        max_length=200,
+        label="Series Name",
+        help_text="Display name for this series (e.g., 'Saturday Morning 2-Tank')",
+    )
+    excursion_type = forms.ModelChoiceField(
+        queryset=ExcursionType.objects.filter(is_active=True).order_by("name"),
+        label="Excursion Type",
+        help_text="Product template for generated excursions",
+    )
+    dive_site = forms.ModelChoiceField(
+        queryset=DiveSite.objects.filter(deleted_at__isnull=True).order_by("name"),
+        required=False,
+        empty_label="Select default site (optional)",
+        label="Default Dive Site",
+        help_text="Can be overridden per occurrence",
+    )
+
+    # Recurrence Settings
+    day_of_week = forms.ChoiceField(
+        choices=[
+            ("MO", "Monday"),
+            ("TU", "Tuesday"),
+            ("WE", "Wednesday"),
+            ("TH", "Thursday"),
+            ("FR", "Friday"),
+            ("SA", "Saturday"),
+            ("SU", "Sunday"),
+        ],
+        label="Day of Week",
+    )
+    start_time = forms.TimeField(
+        label="Departure Time",
+        widget=forms.TimeInput(attrs={"type": "time"}),
+        help_text="Time excursions depart",
+    )
+    series_start_date = forms.DateField(
+        label="First Occurrence",
+        widget=forms.DateInput(attrs={"type": "date"}),
+        help_text="Date of the first occurrence",
+    )
+    series_end_date = forms.DateField(
+        required=False,
+        label="Last Occurrence",
+        widget=forms.DateInput(attrs={"type": "date"}),
+        help_text="Leave blank for indefinite series",
+    )
+    timezone = forms.ChoiceField(
+        choices=[
+            ("America/Cancun", "Cancun (EST - no DST)"),
+            ("America/Mexico_City", "Mexico City (CST)"),
+            ("America/New_York", "New York (EST)"),
+            ("America/Los_Angeles", "Los Angeles (PST)"),
+            ("UTC", "UTC"),
+        ],
+        initial="America/Cancun",
+        label="Timezone",
+    )
+
+    # Defaults
+    duration_minutes = forms.IntegerField(
+        min_value=60,
+        max_value=720,
+        initial=240,
+        label="Duration (minutes)",
+        help_text="Default excursion duration (4 hours = 240)",
+    )
+    capacity_default = forms.IntegerField(
+        min_value=1,
+        max_value=50,
+        initial=12,
+        label="Max Divers",
+        help_text="Default capacity per occurrence",
+    )
+    price_default = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        label="Price Override",
+        help_text="Leave blank to use excursion type base price",
+    )
+    currency = forms.ChoiceField(
+        choices=[("USD", "USD"), ("MXN", "MXN"), ("EUR", "EUR")],
+        initial="USD",
+        label="Currency",
+    )
+    meeting_place = forms.CharField(
+        required=False,
+        max_length=500,
+        label="Meeting Place",
+        help_text="Default meeting location",
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        label="Internal Notes",
+    )
+
+    # Generation Control
+    status = forms.ChoiceField(
+        choices=ExcursionSeries.Status.choices,
+        initial="draft",
+        label="Status",
+        help_text="Active series generate occurrences automatically",
+    )
+    window_days = forms.IntegerField(
+        min_value=7,
+        max_value=365,
+        initial=60,
+        label="Booking Window (days)",
+        help_text="Generate occurrences this many days ahead",
+    )
+
+    def __init__(self, *args, instance=None, dive_shop=None, **kwargs):
+        self.instance = instance
+        self.dive_shop = dive_shop
+        super().__init__(*args, **kwargs)
+
+        # If editing, populate from instance
+        if instance:
+            self.fields["name"].initial = instance.name
+            self.fields["excursion_type"].initial = instance.excursion_type_id
+            self.fields["dive_site"].initial = instance.dive_site_id
+            self.fields["duration_minutes"].initial = instance.duration_minutes
+            self.fields["capacity_default"].initial = instance.capacity_default
+            self.fields["price_default"].initial = instance.price_default
+            self.fields["currency"].initial = instance.currency
+            self.fields["meeting_place"].initial = instance.meeting_place
+            self.fields["notes"].initial = instance.notes
+            self.fields["status"].initial = instance.status
+            self.fields["window_days"].initial = instance.window_days
+
+            # Parse recurrence rule
+            rule = instance.recurrence_rule
+            self.fields["timezone"].initial = rule.timezone
+            self.fields["series_start_date"].initial = rule.dtstart.date()
+            if rule.dtend:
+                self.fields["series_end_date"].initial = rule.dtend.date()
+            # Extract time from dtstart
+            self.fields["start_time"].initial = rule.dtstart.time()
+            # Parse BYDAY from rrule_text
+            if "BYDAY=" in rule.rrule_text:
+                byday = rule.rrule_text.split("BYDAY=")[1].split(";")[0]
+                self.fields["day_of_week"].initial = byday
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start_date = cleaned_data.get("series_start_date")
+        end_date = cleaned_data.get("series_end_date")
+
+        if start_date and end_date and end_date < start_date:
+            raise forms.ValidationError("End date must be after start date.")
+
+        return cleaned_data
+
+    def save(self, actor=None):
+        """Create or update ExcursionSeries and its RecurrenceRule."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        data = self.cleaned_data
+        tz = ZoneInfo(data["timezone"])
+
+        # Build dtstart datetime
+        dtstart = datetime.combine(
+            data["series_start_date"],
+            data["start_time"],
+            tzinfo=tz,
+        )
+
+        # Build dtend if provided
+        dtend = None
+        if data.get("series_end_date"):
+            dtend = datetime.combine(
+                data["series_end_date"],
+                data["start_time"],
+                tzinfo=tz,
+            )
+
+        # Build RRULE string
+        rrule_text = f"FREQ=WEEKLY;BYDAY={data['day_of_week']}"
+
+        with transaction.atomic():
+            if self.instance:
+                # Update existing
+                rule = self.instance.recurrence_rule
+                rule.rrule_text = rrule_text
+                rule.dtstart = dtstart
+                rule.dtend = dtend
+                rule.timezone = data["timezone"]
+                rule.save()
+
+                self.instance.name = data["name"]
+                self.instance.excursion_type = data["excursion_type"]
+                self.instance.dive_site = data.get("dive_site")
+                self.instance.duration_minutes = data["duration_minutes"]
+                self.instance.capacity_default = data["capacity_default"]
+                self.instance.price_default = data.get("price_default")
+                self.instance.currency = data["currency"]
+                self.instance.meeting_place = data.get("meeting_place", "")
+                self.instance.notes = data.get("notes", "")
+                self.instance.status = data["status"]
+                self.instance.window_days = data["window_days"]
+                self.instance.save()
+                return self.instance
+            else:
+                # Create new
+                rule = RecurrenceRule.objects.create(
+                    rrule_text=rrule_text,
+                    dtstart=dtstart,
+                    dtend=dtend,
+                    timezone=data["timezone"],
+                )
+
+                series = ExcursionSeries.objects.create(
+                    name=data["name"],
+                    dive_shop=self.dive_shop,
+                    recurrence_rule=rule,
+                    excursion_type=data["excursion_type"],
+                    dive_site=data.get("dive_site"),
+                    duration_minutes=data["duration_minutes"],
+                    capacity_default=data["capacity_default"],
+                    price_default=data.get("price_default"),
+                    currency=data["currency"],
+                    meeting_place=data.get("meeting_place", ""),
+                    notes=data.get("notes", ""),
+                    status=data["status"],
+                    window_days=data["window_days"],
+                    created_by=actor,
+                )
+                return series

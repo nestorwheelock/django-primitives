@@ -22,6 +22,7 @@ from .forms import (
     DiverForm,
     DiveSiteForm,
     DivingPermitForm,
+    ExcursionSeriesForm,
     ExcursionTypeDiveForm,
     ExcursionTypeForm,
     GuidePermitForm,
@@ -48,6 +49,7 @@ from .models import (
     DiveLog,
     DiveSite,
     Excursion,
+    ExcursionSeries,
     ExcursionType,
     ExcursionTypeDive,
     GuidePermitDetails,
@@ -444,6 +446,11 @@ class DiverDetailView(StaffPortalMixin, DetailView):
         context["preferences_by_category"] = list_diver_preferences_by_category(
             self.object, include_sensitive=False  # Staff sees internal, not sensitive
         )
+
+        # Add buddy pairs and groups
+        from .services import list_buddy_pairs, list_buddy_groups
+        context["buddy_pairs"] = list_buddy_pairs(self.object.person)
+        context["buddy_groups"] = list_buddy_groups(self.object.person)
 
         return context
 
@@ -7301,3 +7308,221 @@ class EmergencyContactAddView(StaffPortalMixin, View):
 
         messages.success(request, f"Emergency contact {contact_person} added.")
         return redirect("diveops:diver-detail", pk=diver_pk)
+
+
+# =============================================================================
+# ExcursionSeries (Recurring Excursions) Views
+# =============================================================================
+
+
+class ExcursionSeriesListView(StaffPortalMixin, ListView):
+    """List all excursion series for staff."""
+
+    model = ExcursionSeries
+    template_name = "diveops/staff/series_list.html"
+    context_object_name = "series_list"
+
+    def get_queryset(self):
+        """Return active series with related data."""
+        return (
+            ExcursionSeries.objects.filter(deleted_at__isnull=True)
+            .select_related("recurrence_rule", "excursion_type", "dive_site", "dive_shop")
+            .prefetch_related("excursions")
+            .order_by("name")
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add page title and upcoming occurrences to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Excursion Series"
+
+        # For each series, get upcoming occurrences count
+        now = timezone.now()
+        for series in context["series_list"]:
+            series.upcoming_count = series.excursions.filter(
+                departure_time__gt=now, deleted_at__isnull=True
+            ).count()
+
+        return context
+
+
+class ExcursionSeriesDetailView(StaffPortalMixin, DetailView):
+    """View excursion series details with occurrences."""
+
+    model = ExcursionSeries
+    template_name = "diveops/staff/series_detail.html"
+    context_object_name = "series"
+
+    def get_queryset(self):
+        return ExcursionSeries.objects.filter(deleted_at__isnull=True).select_related(
+            "recurrence_rule", "excursion_type", "dive_site", "dive_shop", "created_by"
+        )
+
+    def get_context_data(self, **kwargs):
+        """Add occurrences and page title to context."""
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = self.object.name
+
+        # Get all excursions for this series
+        now = timezone.now()
+        context["upcoming_excursions"] = (
+            self.object.excursions.filter(departure_time__gt=now, deleted_at__isnull=True)
+            .select_related("dive_site")
+            .prefetch_related("bookings")
+            .order_by("departure_time")[:20]
+        )
+        context["past_excursions"] = (
+            self.object.excursions.filter(departure_time__lte=now, deleted_at__isnull=True)
+            .select_related("dive_site")
+            .order_by("-departure_time")[:10]
+        )
+
+        # Parse recurrence rule for display
+        rule = self.object.recurrence_rule
+        context["recurrence_desc"] = self._describe_recurrence(rule)
+
+        return context
+
+    def _describe_recurrence(self, rule):
+        """Generate human-readable recurrence description."""
+        day_names = {
+            "MO": "Monday",
+            "TU": "Tuesday",
+            "WE": "Wednesday",
+            "TH": "Thursday",
+            "FR": "Friday",
+            "SA": "Saturday",
+            "SU": "Sunday",
+        }
+        desc = "Weekly"
+        if "BYDAY=" in rule.rrule_text:
+            byday = rule.rrule_text.split("BYDAY=")[1].split(";")[0]
+            day = day_names.get(byday, byday)
+            desc = f"Every {day}"
+        time_str = rule.dtstart.strftime("%I:%M %p")
+        return f"{desc} at {time_str}"
+
+
+class ExcursionSeriesCreateView(StaffPortalMixin, FormView):
+    """Create a new excursion series."""
+
+    template_name = "diveops/staff/series_form.html"
+    form_class = ExcursionSeriesForm
+    success_url = reverse_lazy("diveops:series-list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        # Get the dive shop from the session/user context
+        # For now, use the first dive shop (in production, this would be from user's org)
+        from django_parties.models import Organization
+
+        dive_shop = Organization.objects.filter(org_type="dive_shop").first()
+        kwargs["dive_shop"] = dive_shop
+        return kwargs
+
+    def form_valid(self, form):
+        series = form.save(actor=self.request.user)
+        messages.success(self.request, f"Series '{series.name}' has been created.")
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = True
+        context["page_title"] = "Create Excursion Series"
+        return context
+
+
+class ExcursionSeriesUpdateView(StaffPortalMixin, FormView):
+    """Edit an existing excursion series."""
+
+    template_name = "diveops/staff/series_form.html"
+    form_class = ExcursionSeriesForm
+    success_url = reverse_lazy("diveops:series-list")
+
+    def dispatch(self, request, *args, **kwargs):
+        self.series = get_object_or_404(
+            ExcursionSeries.objects.select_related("recurrence_rule", "excursion_type", "dive_site"),
+            pk=kwargs["pk"],
+            deleted_at__isnull=True,
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["instance"] = self.series
+        kwargs["dive_shop"] = self.series.dive_shop
+        return kwargs
+
+    def form_valid(self, form):
+        series = form.save(actor=self.request.user)
+        messages.success(self.request, f"Series '{series.name}' has been updated.")
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_create"] = False
+        context["page_title"] = f"Edit {self.series.name}"
+        context["series"] = self.series
+        return context
+
+
+class ExcursionSeriesDeleteView(StaffPortalMixin, DeleteView):
+    """Soft-delete an excursion series."""
+
+    model = ExcursionSeries
+    template_name = "diveops/staff/series_confirm_delete.html"
+    success_url = reverse_lazy("diveops:series-list")
+    context_object_name = "series"
+
+    def get_queryset(self):
+        return ExcursionSeries.objects.filter(deleted_at__isnull=True)
+
+    def form_valid(self, form):
+        series = self.get_object()
+        series.delete()  # Soft delete
+        messages.success(self.request, f"Series '{series.name}' has been deleted.")
+        return HttpResponseRedirect(self.success_url)
+
+
+class ExcursionSeriesSyncView(StaffPortalMixin, View):
+    """Sync occurrences for a series (generate upcoming excursions)."""
+
+    def post(self, request, pk):
+        series = get_object_or_404(
+            ExcursionSeries.objects.filter(deleted_at__isnull=True),
+            pk=pk,
+        )
+
+        from .services import sync_series_occurrences
+
+        created = sync_series_occurrences(series)
+        messages.success(request, f"Generated {len(created)} new occurrence(s).")
+        return redirect("diveops:series-detail", pk=pk)
+
+
+class ExcursionSeriesPauseView(StaffPortalMixin, View):
+    """Pause a series (stop generating new occurrences)."""
+
+    def post(self, request, pk):
+        series = get_object_or_404(
+            ExcursionSeries.objects.filter(deleted_at__isnull=True),
+            pk=pk,
+        )
+        series.status = "paused"
+        series.save(update_fields=["status", "updated_at"])
+        messages.info(request, f"Series '{series.name}' has been paused.")
+        return redirect("diveops:series-detail", pk=pk)
+
+
+class ExcursionSeriesActivateView(StaffPortalMixin, View):
+    """Activate a series (start generating occurrences)."""
+
+    def post(self, request, pk):
+        series = get_object_or_404(
+            ExcursionSeries.objects.filter(deleted_at__isnull=True),
+            pk=pk,
+        )
+        series.status = "active"
+        series.save(update_fields=["status", "updated_at"])
+        messages.success(request, f"Series '{series.name}' is now active.")
+        return redirect("diveops:series-detail", pk=pk)

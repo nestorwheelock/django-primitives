@@ -1114,6 +1114,30 @@ class Excursion(BaseModel):
         help_text="Trip package this excursion belongs to (null = standalone)",
     )
 
+    # Optional link to ExcursionSeries (for recurring excursions)
+    series = models.ForeignKey(
+        "ExcursionSeries",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="excursions",
+        help_text="Series this excursion was generated from (null = standalone)",
+    )
+    occurrence_start = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Original occurrence datetime from RRULE (stable identity)",
+    )
+    is_override = models.BooleanField(
+        default=False,
+        help_text="True if this excursion was individually modified",
+    )
+    override_fields = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Which fields were overridden: {'capacity': true, 'price': true}",
+    )
+
     # Optional link to ExcursionType (product template)
     excursion_type = models.ForeignKey(
         "ExcursionType",
@@ -1868,6 +1892,253 @@ class ExcursionType(BaseModel):
             max_depth=models.Max("planned_depth_meters")
         )["max_depth"]
         return max_depth
+
+
+# =============================================================================
+# Recurring Excursion Models
+# =============================================================================
+
+
+class RecurrenceRule(BaseModel):
+    """RRULE-based recurrence pattern for scheduling.
+
+    Stores an iCalendar RRULE string and provides occurrence generation using
+    python-dateutil. Can be linked to ExcursionSeries or other recurring patterns.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at.
+    """
+
+    rrule_text = models.CharField(
+        max_length=500,
+        help_text="RFC 5545 RRULE string (e.g., 'FREQ=WEEKLY;BYDAY=SA;BYHOUR=8')",
+    )
+    dtstart = models.DateTimeField(
+        help_text="Series start date/time (anchor for RRULE calculation)",
+    )
+    dtend = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Optional series end date (no occurrences after this)",
+    )
+    timezone = models.CharField(
+        max_length=50,
+        default="America/Cancun",
+        help_text="IANA timezone for occurrence calculation",
+    )
+    description = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Human-readable description (e.g., 'Every Saturday at 8am')",
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["dtstart"]),
+        ]
+
+    def __str__(self):
+        return self.description or self.rrule_text[:50]
+
+    def get_occurrences(self, start_dt, end_dt):
+        """Generate occurrences between start_dt and end_dt.
+
+        Uses python-dateutil's rrulestr parser. Respects dtend if set.
+
+        Args:
+            start_dt: Start of query window (inclusive)
+            end_dt: End of query window (inclusive)
+
+        Returns:
+            List of datetime objects for each occurrence
+        """
+        from dateutil.rrule import rrulestr
+
+        # Parse the RRULE with dtstart
+        rule = rrulestr(self.rrule_text, dtstart=self.dtstart)
+
+        # Respect dtend if set
+        effective_end = end_dt
+        if self.dtend and self.dtend < end_dt:
+            effective_end = self.dtend
+
+        # Get occurrences in range
+        occurrences = list(rule.between(start_dt, effective_end, inc=True))
+        return occurrences
+
+
+class RecurrenceException(BaseModel):
+    """Exception to a recurrence pattern (cancel, reschedule, add).
+
+    Used to modify individual occurrences without changing the overall pattern.
+    Each exception targets a specific original occurrence by its start time.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at.
+    """
+
+    class ExceptionType(models.TextChoices):
+        CANCELLED = "cancelled", "Cancelled"
+        RESCHEDULED = "rescheduled", "Rescheduled"
+        ADDED = "added", "Added (extra)"
+
+    rule = models.ForeignKey(
+        RecurrenceRule,
+        on_delete=models.CASCADE,
+        related_name="exceptions",
+        help_text="The recurrence rule this exception modifies",
+    )
+    original_start = models.DateTimeField(
+        help_text="The occurrence being modified (its original start time)",
+    )
+    exception_type = models.CharField(
+        max_length=20,
+        choices=ExceptionType.choices,
+        help_text="Type of exception",
+    )
+    new_start = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="New start time (for rescheduled exceptions)",
+    )
+    reason = models.TextField(
+        blank=True,
+        help_text="Reason for the exception (e.g., 'Weather conditions')",
+    )
+
+    class Meta:
+        constraints = [
+            # One exception per occurrence
+            models.UniqueConstraint(
+                fields=["rule", "original_start"],
+                condition=Q(deleted_at__isnull=True),
+                name="diveops_unique_recurrence_exception",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["rule", "original_start"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_exception_type_display()}: {self.original_start}"
+
+
+class ExcursionSeries(BaseModel):
+    """Template for generating recurring excursions.
+
+    Links a recurrence pattern with excursion defaults. The sync service
+    generates concrete Excursion instances in a rolling window.
+
+    Edit behaviors:
+    - "This occurrence only": Edit the Excursion, mark is_override=True
+    - "All occurrences": Edit the series template, re-sync unbooked future
+    - "This and future": Split the series at cutoff date
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        ACTIVE = "active", "Active"
+        PAUSED = "paused", "Paused"
+        RETIRED = "retired", "Retired"
+
+    # Core identity
+    name = models.CharField(
+        max_length=200,
+        help_text="Series name (e.g., 'Saturday Morning 2-Tank')",
+    )
+    dive_shop = models.ForeignKey(
+        "django_parties.Organization",
+        on_delete=models.CASCADE,
+        related_name="excursion_series",
+    )
+
+    # Recurrence pattern (one-to-one with rule)
+    recurrence_rule = models.OneToOneField(
+        RecurrenceRule,
+        on_delete=models.CASCADE,
+        related_name="excursion_series",
+    )
+
+    # Template linkage
+    excursion_type = models.ForeignKey(
+        ExcursionType,
+        on_delete=models.PROTECT,
+        related_name="series",
+        help_text="Product type template for generated excursions",
+    )
+    dive_site = models.ForeignKey(
+        DiveSite,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="series",
+        help_text="Default dive site (can be overridden per occurrence)",
+    )
+
+    # Defaults for generated excursions
+    duration_minutes = models.PositiveIntegerField(
+        default=240,
+        help_text="Default excursion duration (4 hours default)",
+    )
+    capacity_default = models.PositiveIntegerField(
+        default=12,
+        help_text="Default max divers per occurrence",
+    )
+    price_default = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Default price (null = use excursion_type base_price)",
+    )
+    currency = models.CharField(
+        max_length=3,
+        default="USD",
+    )
+    meeting_place = models.TextField(
+        blank=True,
+        help_text="Default meeting location",
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text="Internal notes about this series",
+    )
+
+    # Generation control
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+    )
+    window_days = models.PositiveIntegerField(
+        default=60,
+        help_text="Generate occurrences this many days ahead",
+    )
+    last_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When occurrences were last synchronized",
+    )
+
+    # Audit
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="excursion_series_created",
+    )
+
+    class Meta:
+        verbose_name_plural = "Excursion series"
+        indexes = [
+            models.Index(fields=["dive_shop", "status"]),
+            models.Index(fields=["status"]),
+        ]
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_status_display()})"
 
 
 class DiveSegmentType(BaseModel):
@@ -5483,6 +5754,10 @@ __all__ = [
     "DiveTeam",
     "DiveTeamMember",
     "DiveBuddy",
+    # Recurring Excursion Models
+    "RecurrenceRule",
+    "RecurrenceException",
+    "ExcursionSeries",
 ]
 
 # Import EntitlementGrant from submodule for migration discovery

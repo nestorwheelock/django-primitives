@@ -6336,3 +6336,350 @@ def remove_buddy(*, me_person, team_id):
             # Group - just remove membership
             membership = team.members.get(identity=my_identity)
             membership.delete()
+
+
+# =============================================================================
+# Recurring Excursion Services
+# =============================================================================
+
+
+def sync_series_occurrences(series, actor, *, reference_date=None, update_existing=False):
+    """Generate Excursion instances for each occurrence in the rolling window.
+
+    Creates concrete Excursion records for each occurrence defined by the series'
+    recurrence rule, within the configured window_days. Respects exceptions
+    (cancelled, rescheduled, added) and preserves excursions with bookings or
+    that have been individually modified (is_override=True).
+
+    Args:
+        series: ExcursionSeries to synchronize
+        actor: User performing the sync (used for created_by)
+        reference_date: Optional start date for the window (default: now)
+        update_existing: If True, update unbooked non-override excursions
+
+    Returns:
+        List of created Excursion instances
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+    from .models import Excursion, RecurrenceException
+
+    # Only sync active series
+    if series.status != "active":
+        return []
+
+    # Calculate window
+    if reference_date is None:
+        reference_date = timezone.now()
+
+    window_end = reference_date + timedelta(days=series.window_days)
+
+    # Get occurrences from recurrence rule
+    occurrences = series.recurrence_rule.get_occurrences(reference_date, window_end)
+
+    # Load exceptions
+    exceptions = {
+        exc.original_start: exc
+        for exc in RecurrenceException.objects.filter(
+            rule=series.recurrence_rule,
+            deleted_at__isnull=True,
+        )
+    }
+
+    # Get existing excursions for this series (by occurrence_start)
+    existing = {
+        exc.occurrence_start: exc
+        for exc in Excursion.objects.filter(
+            series=series,
+            deleted_at__isnull=True,
+        )
+    }
+
+    created = []
+
+    with transaction.atomic():
+        # Process each occurrence from the rule
+        for occ in occurrences:
+            # Check for exceptions
+            exc_record = exceptions.get(occ)
+            if exc_record:
+                if exc_record.exception_type == "cancelled":
+                    # Skip cancelled occurrences
+                    continue
+                elif exc_record.exception_type == "rescheduled":
+                    # Use new start time
+                    departure_time = exc_record.new_start
+                else:
+                    # Regular occurrence
+                    departure_time = occ
+            else:
+                departure_time = occ
+
+            # Check if excursion already exists
+            if occ in existing:
+                if update_existing:
+                    exc = existing[occ]
+                    # Only update if no bookings and not an override
+                    if not exc.is_override and not _has_bookings(exc):
+                        _update_excursion_from_series(exc, series, departure_time)
+                continue
+
+            # Create new excursion
+            return_time = departure_time + timedelta(minutes=series.duration_minutes)
+            excursion = Excursion.objects.create(
+                dive_shop=series.dive_shop,
+                dive_site=series.dive_site,
+                excursion_type=series.excursion_type,
+                departure_time=departure_time,
+                return_time=return_time,
+                max_divers=series.capacity_default,
+                price_per_diver=series.price_default or series.excursion_type.base_price,
+                currency=series.currency,
+                series=series,
+                occurrence_start=occ,
+                is_override=False,
+                created_by=actor,
+            )
+            created.append(excursion)
+
+        # Process added exceptions (extra occurrences)
+        for exc_record in exceptions.values():
+            if exc_record.exception_type == "added":
+                occ = exc_record.original_start
+                if occ in existing:
+                    continue
+                if occ < reference_date or occ > window_end:
+                    continue
+
+                return_time = occ + timedelta(minutes=series.duration_minutes)
+                excursion = Excursion.objects.create(
+                    dive_shop=series.dive_shop,
+                    dive_site=series.dive_site,
+                    excursion_type=series.excursion_type,
+                    departure_time=occ,
+                    return_time=return_time,
+                    max_divers=series.capacity_default,
+                    price_per_diver=series.price_default or series.excursion_type.base_price,
+                    currency=series.currency,
+                    series=series,
+                    occurrence_start=occ,
+                    is_override=False,
+                    created_by=actor,
+                )
+                created.append(excursion)
+
+        # Update last_synced_at
+        series.last_synced_at = timezone.now()
+        series.save(update_fields=["last_synced_at", "updated_at"])
+
+    return created
+
+
+def _has_bookings(excursion):
+    """Check if an excursion has any bookings."""
+    from .models import Booking
+    return Booking.objects.filter(
+        excursion=excursion,
+        deleted_at__isnull=True,
+    ).exclude(status="cancelled").exists()
+
+
+def _update_excursion_from_series(excursion, series, departure_time):
+    """Update an excursion from series defaults."""
+    from datetime import timedelta
+
+    excursion.max_divers = series.capacity_default
+    excursion.price_per_diver = series.price_default or series.excursion_type.base_price
+    excursion.currency = series.currency
+    excursion.departure_time = departure_time
+    excursion.return_time = departure_time + timedelta(minutes=series.duration_minutes)
+    excursion.dive_site = series.dive_site
+    excursion.save()
+
+
+def cancel_occurrence(excursion, *, reason="", actor):
+    """Cancel a single excursion occurrence.
+
+    Creates a RecurrenceException with type=CANCELLED for the series,
+    sets the excursion status to cancelled, and cancels all bookings.
+
+    Args:
+        excursion: The Excursion to cancel
+        reason: Reason for cancellation
+        actor: User performing the cancellation
+
+    Returns:
+        The cancelled Excursion
+    """
+    from .models import RecurrenceException, Booking
+
+    with transaction.atomic():
+        # Create exception record if this is a series excursion
+        if excursion.series and excursion.occurrence_start:
+            RecurrenceException.objects.create(
+                rule=excursion.series.recurrence_rule,
+                original_start=excursion.occurrence_start,
+                exception_type=RecurrenceException.ExceptionType.CANCELLED,
+                reason=reason,
+            )
+
+        # Set excursion status to cancelled
+        excursion.status = "cancelled"
+        excursion.save(update_fields=["status", "updated_at"])
+
+        # Cancel all bookings
+        Booking.objects.filter(
+            excursion=excursion,
+            deleted_at__isnull=True,
+        ).exclude(status="cancelled").update(status="cancelled")
+
+    return excursion
+
+
+def edit_occurrence(excursion, *, changes, actor):
+    """Edit a single excursion occurrence.
+
+    Applies changes to the excursion and marks it as an override so that
+    future series edits won't overwrite the custom values.
+
+    Args:
+        excursion: The Excursion to edit
+        changes: Dict of field_name -> new_value
+        actor: User performing the edit
+
+    Returns:
+        The modified Excursion
+    """
+    with transaction.atomic():
+        # Apply changes
+        for field_name, value in changes.items():
+            if hasattr(excursion, field_name):
+                setattr(excursion, field_name, value)
+
+        # Mark as override and track overridden fields
+        excursion.is_override = True
+
+        # Merge with existing override_fields
+        current_overrides = excursion.override_fields or {}
+        for field_name in changes.keys():
+            current_overrides[field_name] = True
+        excursion.override_fields = current_overrides
+
+        excursion.save()
+
+    return excursion
+
+
+def edit_series(series, *, changes, actor):
+    """Edit a series template and update applicable excursions.
+
+    Updates the series defaults and propagates changes to future excursions
+    that haven't been individually overridden and don't have bookings.
+
+    Args:
+        series: The ExcursionSeries to edit
+        changes: Dict of field_name -> new_value for series fields
+        actor: User performing the edit
+
+    Returns:
+        The modified ExcursionSeries
+    """
+    from .models import Excursion
+
+    # Mapping from series fields to excursion fields
+    FIELD_MAPPING = {
+        "capacity_default": "max_divers",
+        "price_default": "price_per_diver",
+        "currency": "currency",
+        "dive_site": "dive_site",
+    }
+
+    with transaction.atomic():
+        # Update series template
+        for field_name, value in changes.items():
+            if hasattr(series, field_name):
+                setattr(series, field_name, value)
+        series.save()
+
+        # Get excursions that can be updated
+        excursions = Excursion.objects.filter(
+            series=series,
+            is_override=False,
+            deleted_at__isnull=True,
+        )
+
+        # Filter out booked excursions
+        updatable = [exc for exc in excursions if not _has_bookings(exc)]
+
+        # Apply mapped changes to excursions
+        for exc in updatable:
+            for series_field, exc_field in FIELD_MAPPING.items():
+                if series_field in changes:
+                    value = changes[series_field]
+                    # Handle price_default -> price_per_diver fallback
+                    if series_field == "price_default" and value is None:
+                        value = series.excursion_type.base_price
+                    setattr(exc, exc_field, value)
+            exc.save()
+
+    return series
+
+
+def split_series(series, cutoff_date, *, actor):
+    """Split a series at a cutoff date ("this and future" edit).
+
+    Creates a new series starting at the cutoff date and reassigns future
+    excursions to it. The original series ends just before the cutoff.
+
+    Args:
+        series: The ExcursionSeries to split
+        cutoff_date: DateTime at which the new series starts
+        actor: User performing the split
+
+    Returns:
+        The new ExcursionSeries
+    """
+    from datetime import timedelta
+    from .models import ExcursionSeries, RecurrenceRule, Excursion
+
+    with transaction.atomic():
+        # Set dtend on original series rule (day before cutoff)
+        original_rule = series.recurrence_rule
+        original_rule.dtend = cutoff_date - timedelta(days=1)
+        original_rule.save()
+
+        # Create new recurrence rule starting at cutoff
+        new_rule = RecurrenceRule.objects.create(
+            rrule_text=original_rule.rrule_text,
+            dtstart=cutoff_date,
+            dtend=None,
+            timezone=original_rule.timezone,
+            description=original_rule.description,
+        )
+
+        # Create new series with same settings
+        new_series = ExcursionSeries.objects.create(
+            name=f"{series.name} (from {cutoff_date.strftime('%b %-d')})",
+            dive_shop=series.dive_shop,
+            recurrence_rule=new_rule,
+            excursion_type=series.excursion_type,
+            dive_site=series.dive_site,
+            duration_minutes=series.duration_minutes,
+            capacity_default=series.capacity_default,
+            price_default=series.price_default,
+            currency=series.currency,
+            meeting_place=series.meeting_place,
+            notes=series.notes,
+            status=series.status,
+            window_days=series.window_days,
+            created_by=actor,
+        )
+
+        # Reassign future excursions to new series
+        Excursion.objects.filter(
+            series=series,
+            departure_time__gte=cutoff_date,
+            deleted_at__isnull=True,
+        ).update(series=new_series)
+
+    return new_series
