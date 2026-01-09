@@ -7643,7 +7643,7 @@ class ExcursionMakeRecurringView(StaffPortalMixin, FormView):
             "capacity_default": exc.max_divers,
             "price_default": exc.price_per_diver,
             "currency": exc.currency or "USD",
-            "meeting_place": exc.meeting_place or "",
+            "meeting_place": "",
             "notes": f"Created from excursion on {exc.departure_time.strftime('%Y-%m-%d')}",
             "status": "active",
         }
