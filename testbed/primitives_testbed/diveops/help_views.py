@@ -90,6 +90,7 @@ HELP_SECTIONS = [
             {"slug": "document-management", "title": "Document Management"},
             {"slug": "audit-log", "title": "Audit Log"},
             {"slug": "ai-settings", "title": "AI Settings"},
+            {"slug": "automated-documentation", "title": "Automated Documentation"},
         ],
     },
 ]
