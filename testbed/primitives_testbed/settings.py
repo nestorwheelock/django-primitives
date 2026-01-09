@@ -157,9 +157,10 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Media files (uploaded documents, images, etc.)
-# Documents are stored in BASE_DIR/media/ with upload_to paths
+# Documents are stored in BASE_DIR with upload_to='documents/%Y/%m/%d/'
+# So the actual path is BASE_DIR/documents/YYYY/MM/DD/filename
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = BASE_DIR
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
