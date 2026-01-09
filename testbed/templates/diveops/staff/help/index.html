@@ -1,0 +1,105 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Help Center</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-8">
+    <!-- Page Header -->
+    <div class="text-center max-w-2xl mx-auto">
+        <div class="mx-auto w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+            {% icon "help-circle" "w-8 h-8 text-blue-600" %}
+        </div>
+        <h1 class="text-3xl font-bold text-gray-900">Help Center</h1>
+        <p class="mt-2 text-lg text-gray-600">
+            Find guides and documentation for using the DiveOps staff dashboard
+        </p>
+    </div>
+
+    <!-- Search (placeholder for future) -->
+    <div class="max-w-xl mx-auto">
+        <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                {% icon "search" "h-5 w-5 text-gray-400" %}
+            </div>
+            <input type="text"
+                   placeholder="Search help articles..."
+                   disabled
+                   class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                   title="Search coming soon">
+        </div>
+        <p class="text-center text-xs text-gray-400 mt-2">Search coming soon</p>
+    </div>
+
+    <!-- Help Sections Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for section in sections %}
+        <a href="{% url 'diveops:help-section' section=section.slug %}"
+           class="group bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 transition-all">
+            <div class="flex items-start space-x-4">
+                <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-blue-50 group-hover:bg-blue-100 flex items-center justify-center transition-colors">
+                    {% icon section.icon "w-6 h-6 text-blue-600" %}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                        {{ section.title }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500">
+                        {{ section.description }}
+                    </p>
+                    <p class="mt-2 text-xs text-gray-400">
+                        {{ section.articles|length }} article{{ section.articles|length|pluralize }}
+                    </p>
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- Quick Links -->
+    <div class="bg-gray-50 rounded-xl p-6 border border-gray-200">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Quick Links</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <a href="{% url 'diveops:help-article' section='agreements' article='creating-agreements' %}"
+               class="flex items-center text-sm text-gray-600 hover:text-blue-600">
+                {% icon "file-plus" "w-4 h-4 mr-2" %}
+                Create an Agreement
+            </a>
+            <a href="{% url 'diveops:help-article' section='bookings' article='scheduling-excursions' %}"
+               class="flex items-center text-sm text-gray-600 hover:text-blue-600">
+                {% icon "calendar-plus" "w-4 h-4 mr-2" %}
+                Schedule an Excursion
+            </a>
+            <a href="{% url 'diveops:help-article' section='divers' article='creating-profiles' %}"
+               class="flex items-center text-sm text-gray-600 hover:text-blue-600">
+                {% icon "user-plus" "w-4 h-4 mr-2" %}
+                Add a Diver
+            </a>
+            <a href="{% url 'diveops:help-article' section='medical' article='medical-questionnaires' %}"
+               class="flex items-center text-sm text-gray-600 hover:text-blue-600">
+                {% icon "clipboard-list" "w-4 h-4 mr-2" %}
+                Send Medical Form
+            </a>
+        </div>
+    </div>
+
+    <!-- Contact Support -->
+    <div class="text-center py-8 border-t border-gray-200">
+        <p class="text-gray-600">
+            Can't find what you're looking for?
+        </p>
+        <p class="text-sm text-gray-500 mt-1">
+            Contact your system administrator for assistance
+        </p>
+    </div>
+</div>
+{% endblock %}

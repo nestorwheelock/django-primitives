@@ -1,0 +1,116 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:help-center' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+            Help Center
+        </a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ section.title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="flex gap-8">
+    <!-- Sidebar Navigation -->
+    <aside class="hidden lg:block w-64 flex-shrink-0">
+        <nav class="sticky top-4 space-y-1">
+            <a href="{% url 'diveops:help-center' %}"
+               class="flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg">
+                {% icon "arrow-left" "w-4 h-4 mr-2" %}
+                All Topics
+            </a>
+            <div class="border-t border-gray-200 my-3"></div>
+            {% for nav_section in all_sections %}
+            <a href="{% url 'diveops:help-section' section=nav_section.slug %}"
+               class="flex items-center px-3 py-2 text-sm rounded-lg {% if nav_section.slug == section.slug %}bg-blue-50 text-blue-700 font-medium{% else %}text-gray-600 hover:text-gray-900 hover:bg-gray-50{% endif %}">
+                {% icon nav_section.icon "w-4 h-4 mr-2" %}
+                {{ nav_section.title }}
+            </a>
+            {% endfor %}
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 min-w-0">
+        {% if section %}
+        <!-- Section Header -->
+        <div class="mb-8">
+            <div class="flex items-center space-x-4">
+                <div class="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
+                    {% icon section.icon "w-6 h-6 text-blue-600" %}
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">{{ section.title }}</h1>
+                    <p class="text-gray-600">{{ section.description }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Articles List -->
+        <div class="space-y-4">
+            {% for article in articles %}
+            <a href="{% url 'diveops:help-article' section=section.slug article=article.slug %}"
+               class="block bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-blue-300 transition-all group">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <h3 class="text-lg font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                            {{ article.title }}
+                        </h3>
+                        {% if article.excerpt %}
+                        <p class="mt-1 text-sm text-gray-500 line-clamp-2">
+                            {{ article.excerpt }}
+                        </p>
+                        {% elif not article.has_content %}
+                        <p class="mt-1 text-sm text-gray-400 italic">
+                            Content coming soon
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="flex-shrink-0 ml-4">
+                        {% if article.has_content %}
+                        {% icon "chevron-right" "w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" %}
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">
+                            Draft
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </a>
+            {% empty %}
+            <div class="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                <p class="text-gray-500">No articles in this section yet.</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <!-- Section Not Found -->
+        <div class="text-center py-12">
+            <div class="mx-auto w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                {% icon "alert-circle" "w-8 h-8 text-gray-400" %}
+            </div>
+            <h2 class="text-xl font-medium text-gray-900">Section Not Found</h2>
+            <p class="mt-2 text-gray-600">The help section you're looking for doesn't exist.</p>
+            <a href="{% url 'diveops:help-center' %}"
+               class="mt-4 inline-flex items-center text-blue-600 hover:text-blue-800">
+                {% icon "arrow-left" "w-4 h-4 mr-2" %}
+                Back to Help Center
+            </a>
+        </div>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}

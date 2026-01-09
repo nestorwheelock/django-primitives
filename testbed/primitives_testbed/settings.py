@@ -357,6 +357,12 @@ PORTAL_UI = {
             "url": "diveops:payables-summary",
             "icon": "credit-card",
         },
+        {
+            "section": "Help",
+            "label": "Help Center",
+            "url": "diveops:help-center",
+            "icon": "help-circle",
+        },
     ],
 }
 

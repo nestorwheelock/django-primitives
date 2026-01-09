@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from . import document_views, staff_views
+from . import document_views, help_views, staff_views
 
 app_name = "diveops"
 
@@ -268,4 +268,8 @@ urlpatterns = [
     path("series/<uuid:pk>/sync/", staff_views.ExcursionSeriesSyncView.as_view(), name="series-sync"),
     path("series/<uuid:pk>/pause/", staff_views.ExcursionSeriesPauseView.as_view(), name="series-pause"),
     path("series/<uuid:pk>/activate/", staff_views.ExcursionSeriesActivateView.as_view(), name="series-activate"),
+    # Help Center
+    path("help/", help_views.HelpCenterView.as_view(), name="help-center"),
+    path("help/<slug:section>/", help_views.HelpSectionView.as_view(), name="help-section"),
+    path("help/<slug:section>/<slug:article>/", help_views.HelpArticleView.as_view(), name="help-article"),
 ]
