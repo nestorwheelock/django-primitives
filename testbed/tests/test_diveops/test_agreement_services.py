@@ -384,6 +384,99 @@ class TestVoidAgreement:
                 actor=staff_user,
             )
 
+    def test_cannot_void_signed_agreement_service_layer(
+        self, agreement_template, diver, staff_user
+    ):
+        """Service layer rejects voiding signed agreements."""
+        from primitives_testbed.diveops.exceptions import InvalidStateTransition
+        from primitives_testbed.diveops.services import (
+            create_agreement_from_template,
+            send_agreement,
+            sign_agreement,
+            void_agreement,
+        )
+
+        agreement = create_agreement_from_template(
+            template=agreement_template,
+            party_a=diver,
+            actor=staff_user,
+        )
+        agreement, token = send_agreement(
+            agreement=agreement,
+            delivery_method="email",
+            actor=staff_user,
+        )
+        # Create a minimal signature image (1x1 white PNG)
+        signature_image = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+            b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00"
+            b"\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18"
+            b"\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        signed = sign_agreement(
+            agreement=agreement,
+            raw_token=token,
+            signature_image=signature_image,
+            signed_by_name="John Doe",
+            ip_address="192.168.1.1",
+            user_agent="Test Browser",
+        )
+
+        with pytest.raises(InvalidStateTransition) as exc_info:
+            void_agreement(
+                agreement=signed,
+                reason="Want to void",
+                actor=staff_user,
+            )
+
+        assert "legally binding" in str(exc_info.value)
+        assert "revocation agreement" in str(exc_info.value)
+
+    def test_cannot_void_signed_agreement_database_trigger(
+        self, agreement_template, diver, staff_user
+    ):
+        """Database trigger prevents voiding signed agreements even if bypassing service."""
+        from django.db import IntegrityError
+
+        from primitives_testbed.diveops.services import (
+            create_agreement_from_template,
+            send_agreement,
+            sign_agreement,
+        )
+
+        agreement = create_agreement_from_template(
+            template=agreement_template,
+            party_a=diver,
+            actor=staff_user,
+        )
+        agreement, token = send_agreement(
+            agreement=agreement,
+            delivery_method="email",
+            actor=staff_user,
+        )
+        # Create a minimal signature image (1x1 white PNG)
+        signature_image = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+            b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00"
+            b"\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18"
+            b"\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        signed = sign_agreement(
+            agreement=agreement,
+            raw_token=token,
+            signature_image=signature_image,
+            signed_by_name="John Doe",
+            ip_address="192.168.1.1",
+            user_agent="Test Browser",
+        )
+
+        # Attempt to bypass service layer and update directly
+        with pytest.raises(IntegrityError) as exc_info:
+            signed.status = "void"
+            signed.save()
+
+        assert "Cannot change status of signed agreement" in str(exc_info.value)
+
 
 @pytest.mark.django_db
 class TestGetAgreementByToken:

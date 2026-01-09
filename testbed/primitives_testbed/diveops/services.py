@@ -5116,7 +5116,8 @@ def void_agreement(
 
     if agreement.status == "signed":
         raise InvalidStateTransition(
-            "Signed agreements cannot be voided. They are legally binding records."
+            "Signed agreements cannot be voided. They are legally binding records. "
+            "To revoke, create and sign a new revocation agreement."
         )
 
     if agreement.status == "void":
