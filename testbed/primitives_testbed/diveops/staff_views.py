@@ -7632,8 +7632,9 @@ class ExcursionMakeRecurringView(StaffPortalMixin, FormView):
             5: "SA",
             6: "SU",
         }
+        type_name = exc.excursion_type.name if exc.excursion_type else "Excursion"
         kwargs["initial"] = {
-            "name": f"{exc.excursion_type.name} - {exc.departure_time.strftime('%A')}s",
+            "name": f"{type_name} - {exc.departure_time.strftime('%A')}s",
             "excursion_type": exc.excursion_type_id,
             "dive_site": exc.dive_site_id if exc.dive_site else None,
             "day_of_week": day_map.get(exc.departure_time.weekday(), "SA"),
