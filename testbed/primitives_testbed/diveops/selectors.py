@@ -13,9 +13,11 @@ from django.utils import timezone
 from django_parties.models import Person
 
 from .models import (
+    AgreementTemplate,
     Booking,
     CertificationLevel,
     Dive,
+    DiveAssignment,
     DiverCertification,
     DiverProfile,
     DiveLog,
@@ -482,6 +484,8 @@ trip_audit_feed = excursion_audit_feed
 def get_diver_medical_status(diver: DiverProfile) -> dict:
     """Get diver's medical clearance status.
 
+    Checks both DiverProfile fields and QuestionnaireInstance records.
+
     Args:
         diver: DiverProfile
 
@@ -492,11 +496,43 @@ def get_diver_medical_status(diver: DiverProfile) -> dict:
         - valid_until: date or None
         - is_expired: bool
         - days_until_expiry: int or None
+        - questionnaire: QuestionnaireInstance or None (the cleared questionnaire)
     """
-    from datetime import date
+    from datetime import date, timedelta
+    from django.contrib.contenttypes.models import ContentType
+    from django_questionnaires.models import QuestionnaireInstance
 
     today = date.today()
 
+    # First check QuestionnaireInstance for cleared medical questionnaires
+    diver_ct = ContentType.objects.get_for_model(DiverProfile)
+    cleared_questionnaire = QuestionnaireInstance.objects.filter(
+        respondent_content_type=diver_ct,
+        respondent_object_id=str(diver.pk),
+        status="cleared",
+        deleted_at__isnull=True,
+    ).order_by("-cleared_at").first()
+
+    if cleared_questionnaire:
+        clearance_date = cleared_questionnaire.cleared_at.date() if cleared_questionnaire.cleared_at else None
+        # Medical clearance typically valid for 1 year
+        valid_until = clearance_date + timedelta(days=365) if clearance_date else None
+        is_expired = valid_until and valid_until < today
+
+        days_until_expiry = None
+        if valid_until and not is_expired:
+            days_until_expiry = (valid_until - today).days
+
+        return {
+            "has_clearance": True,
+            "clearance_date": clearance_date,
+            "valid_until": valid_until,
+            "is_expired": is_expired,
+            "days_until_expiry": days_until_expiry,
+            "questionnaire": cleared_questionnaire,
+        }
+
+    # Fall back to DiverProfile fields
     if not diver.medical_clearance_date:
         return {
             "has_clearance": False,
@@ -504,9 +540,13 @@ def get_diver_medical_status(diver: DiverProfile) -> dict:
             "valid_until": None,
             "is_expired": False,
             "days_until_expiry": None,
+            "questionnaire": None,
         }
 
+    # Use explicit valid_until if set, otherwise calculate 1 year from clearance date
     valid_until = diver.medical_clearance_valid_until
+    if not valid_until and diver.medical_clearance_date:
+        valid_until = diver.medical_clearance_date + timedelta(days=365)
     is_expired = valid_until and valid_until < today
 
     days_until_expiry = None
@@ -519,7 +559,35 @@ def get_diver_medical_status(diver: DiverProfile) -> dict:
         "valid_until": valid_until,
         "is_expired": is_expired,
         "days_until_expiry": days_until_expiry,
+        "questionnaire": None,
     }
+
+
+def list_diver_documents(diver: DiverProfile, limit: int = 50) -> list:
+    """Get documents attached to a diver's profile.
+
+    Includes medical questionnaire PDFs, photo ID, physician clearances, etc.
+
+    Args:
+        diver: DiverProfile
+        limit: Maximum results
+
+    Returns:
+        List of Document objects ordered by creation date (newest first)
+    """
+    from django.contrib.contenttypes.models import ContentType
+    from django_documents.models import Document
+
+    diver_ct = ContentType.objects.get_for_model(DiverProfile)
+
+    return list(
+        Document.objects.filter(
+            target_content_type=diver_ct,
+            target_id=str(diver.pk),
+            deleted_at__isnull=True,
+        )
+        .order_by("-created_at")[:limit]
+    )
 
 
 # =============================================================================
@@ -543,13 +611,15 @@ def list_diver_signed_agreements(
         List of SignableAgreement objects that are signed
     """
     from django.contrib.contenttypes.models import ContentType
+    from django_parties.models import Person
 
-    diver_ct = ContentType.objects.get_for_model(DiverProfile)
+    # Agreements are linked to Person, not DiverProfile
+    person_ct = ContentType.objects.get_for_model(Person)
 
     qs = (
         SignableAgreement.objects.filter(
-            party_a_content_type=diver_ct,
-            party_a_object_id=str(diver.pk),
+            party_a_content_type=person_ct,
+            party_a_object_id=str(diver.person_id),
             status=SignableAgreement.Status.SIGNED,
         )
         .select_related("template", "signed_document")
@@ -602,13 +672,15 @@ def list_diver_pending_agreements(
         List of SignableAgreement objects that need signing
     """
     from django.contrib.contenttypes.models import ContentType
+    from django_parties.models import Person
 
-    diver_ct = ContentType.objects.get_for_model(DiverProfile)
+    # Agreements are linked to Person, not DiverProfile
+    person_ct = ContentType.objects.get_for_model(Person)
 
     return list(
         SignableAgreement.objects.filter(
-            party_a_content_type=diver_ct,
-            party_a_object_id=str(diver.pk),
+            party_a_content_type=person_ct,
+            party_a_object_id=str(diver.person_id),
             status__in=[SignableAgreement.Status.DRAFT, SignableAgreement.Status.SENT],
         )
         .select_related("template")
@@ -653,8 +725,8 @@ def get_diver_dive_stats(diver: DiverProfile) -> dict:
 
     Returns:
         Dict with dive statistics:
-        - total_dives: int
-        - total_logged_dives: int
+        - total_dives: int (actual logged dives at this shop)
+        - self_reported_dives: int (lifetime dives from profile)
         - deepest_depth: Decimal or None
         - longest_dive: int (minutes) or None
     """
@@ -669,8 +741,214 @@ def get_diver_dive_stats(diver: DiverProfile) -> dict:
     )
 
     return {
-        "total_dives": diver.total_dives or stats["total_logged_dives"] or 0,
-        "total_logged_dives": stats["total_logged_dives"] or 0,
+        "total_dives": stats["total_logged_dives"] or 0,
+        "self_reported_dives": diver.total_dives or 0,
         "deepest_depth": stats["deepest_depth"],
         "longest_dive": stats["longest_dive"],
+    }
+
+
+# =============================================================================
+# Diver Category and Required Agreements
+# =============================================================================
+
+
+def get_diver_category(diver: DiverProfile) -> str:
+    """Determine the diver's category for agreement purposes.
+
+    Categories (in order of precedence):
+    - 'dsd': Has an upcoming DSD/try dive booking (no cert required)
+    - 'student': Currently enrolled in training or has student assignments
+    - 'certified': Has valid certification(s)
+    - 'all': Fallback - no specific category
+
+    Args:
+        diver: DiverProfile
+
+    Returns:
+        Category string: 'dsd', 'student', 'certified', or 'all'
+    """
+    now = timezone.now()
+
+    # Check for upcoming DSD bookings (is_training=True on excursion_type)
+    dsd_bookings = Booking.objects.filter(
+        diver=diver,
+        status__in=["confirmed", "checked_in"],
+        excursion__departure_time__gt=now,
+        excursion__excursion_type__is_training=True,
+    ).exists()
+
+    if dsd_bookings:
+        return "dsd"
+
+    # Check for student assignments in upcoming dives
+    student_assignments = DiveAssignment.objects.filter(
+        diver=diver,
+        role=DiveAssignment.Role.STUDENT,
+        dive__excursion__departure_time__gt=now,
+        status__in=["assigned", "checked_in"],
+    ).exists()
+
+    if student_assignments:
+        return "student"
+
+    # Check for valid certifications
+    from datetime import date
+    has_cert = diver.certifications.filter(
+        Q(expires_on__isnull=True) | Q(expires_on__gt=date.today())
+    ).exists()
+
+    if has_cert:
+        return "certified"
+
+    return "all"
+
+
+def get_required_agreements_for_diver(
+    diver: DiverProfile,
+    dive_shop=None,
+) -> list[dict]:
+    """Get agreements the diver needs but hasn't signed.
+
+    Checks:
+    1. Medical questionnaire if no valid medical clearance
+    2. Liability waiver matching their diver category
+    3. Any other required-for-booking templates
+
+    Args:
+        diver: DiverProfile
+        dive_shop: Optional Organization to filter templates
+
+    Returns:
+        List of dicts with template info and reason
+    """
+    from django.contrib.contenttypes.models import ContentType
+    from django_parties.models import Person
+    from datetime import date
+
+    required = []
+    # Agreements are linked to Person, not DiverProfile
+    person_ct = ContentType.objects.get_for_model(Person)
+    category = get_diver_category(diver)
+
+    # Get the dive shop(s) the diver is associated with
+    if dive_shop:
+        shops = [dive_shop]
+    else:
+        # Get shops from diver's bookings
+        shop_ids = Booking.objects.filter(
+            diver=diver,
+        ).values_list("excursion__dive_shop_id", flat=True).distinct()
+        from django_parties.models import Organization
+        shops = list(Organization.objects.filter(pk__in=shop_ids))
+
+        # Fall back to shops with published agreement templates
+        if not shops:
+            template_shop_ids = AgreementTemplate.objects.filter(
+                status=AgreementTemplate.Status.PUBLISHED,
+                deleted_at__isnull=True,
+            ).values_list("dive_shop_id", flat=True).distinct()
+            shops = list(Organization.objects.filter(pk__in=template_shop_ids))
+
+    if not shops:
+        return []
+
+    for shop in shops:
+        # 1. Check medical questionnaire
+        medical_status = get_diver_medical_status(diver)
+        if not medical_status["has_clearance"] or medical_status["is_expired"]:
+            medical_template = AgreementTemplate.objects.filter(
+                dive_shop=shop,
+                template_type=AgreementTemplate.TemplateType.MEDICAL,
+                status=AgreementTemplate.Status.PUBLISHED,
+            ).first()
+
+            if medical_template:
+                # Check if already signed and still valid
+                signed = SignableAgreement.objects.filter(
+                    party_a_content_type=person_ct,
+                    party_a_object_id=str(diver.person_id),
+                    template=medical_template,
+                    status=SignableAgreement.Status.SIGNED,
+                ).first()
+
+                if not signed:
+                    required.append({
+                        "template": medical_template,
+                        "reason": "Medical questionnaire required",
+                        "priority": "high",
+                    })
+
+        # 2. Check liability waiver for their category
+        # Try specific category first, fall back to 'all'
+        categories_to_check = [category, "all"] if category != "all" else ["all"]
+
+        for cat in categories_to_check:
+            waiver_template = AgreementTemplate.objects.filter(
+                dive_shop=shop,
+                template_type=AgreementTemplate.TemplateType.WAIVER,
+                diver_category=cat,
+                status=AgreementTemplate.Status.PUBLISHED,
+            ).first()
+
+            if waiver_template:
+                # Check if signed and still valid
+                signed = SignableAgreement.objects.filter(
+                    party_a_content_type=person_ct,
+                    party_a_object_id=str(diver.person_id),
+                    template=waiver_template,
+                    status=SignableAgreement.Status.SIGNED,
+                )
+
+                # Check validity period
+                if waiver_template.validity_days:
+                    cutoff = timezone.now() - timezone.timedelta(days=waiver_template.validity_days)
+                    signed = signed.filter(signed_at__gte=cutoff)
+
+                if not signed.exists():
+                    category_labels = {
+                        "certified": "Certified Diver",
+                        "student": "Student",
+                        "dsd": "Discover Scuba",
+                        "all": "",
+                    }
+                    label = category_labels.get(cat, "")
+                    required.append({
+                        "template": waiver_template,
+                        "reason": f"{label} Liability Release required".strip(),
+                        "priority": "high",
+                    })
+                break  # Only need one waiver
+
+    return required
+
+
+def get_diver_agreement_status(diver: DiverProfile, dive_shop=None) -> dict:
+    """Get complete agreement status for a diver.
+
+    Returns:
+        Dict with:
+        - category: diver's category (certified, student, dsd, all)
+        - required: list of required but unsigned agreements
+        - signed_count: number of signed agreements
+        - has_valid_medical: bool
+        - has_valid_waiver: bool
+    """
+    category = get_diver_category(diver)
+    required = get_required_agreements_for_diver(diver, dive_shop)
+    signed = list_diver_signed_agreements(diver, limit=100)
+    medical_status = get_diver_medical_status(diver)
+
+    has_valid_waiver = not any(
+        r["template"].template_type == AgreementTemplate.TemplateType.WAIVER
+        for r in required
+    )
+
+    return {
+        "category": category,
+        "category_display": dict(AgreementTemplate.DiverCategory.choices).get(category, category),
+        "required": required,
+        "signed_count": len(signed),
+        "has_valid_medical": medical_status["has_clearance"] and not medical_status["is_expired"],
+        "has_valid_waiver": has_valid_waiver,
     }

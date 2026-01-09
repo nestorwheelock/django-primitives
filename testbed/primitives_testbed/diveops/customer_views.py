@@ -2,6 +2,8 @@
 
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
+from django.utils import timezone
+from django.views import View
 from django.views.generic import TemplateView
 
 from django_cms_core.models import AccessLevel, ContentPage, PageStatus
@@ -12,6 +14,7 @@ from primitives_testbed.store.models import StoreOrder
 
 from .selectors import (
     get_current_diver,
+    get_diver_agreement_status,
     get_diver_dive_stats,
     get_diver_highest_certification,
     get_diver_medical_status,
@@ -19,8 +22,17 @@ from .selectors import (
     list_diver_bookings,
     list_diver_briefings,
     list_diver_dive_logs,
+    list_diver_documents,
     list_diver_pending_agreements,
     list_diver_signed_agreements,
+    list_upcoming_excursions,
+)
+from .preferences.selectors import (
+    get_diver_preference_status,
+    get_recommended_certifications,
+    get_recommended_courseware,
+    get_recommended_gear,
+    list_diver_preferences_by_category,
 )
 
 
@@ -47,6 +59,9 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
         briefings = []
         dive_logs = []
         dive_stats = None
+        documents = []
+        photo_tags = []
+        emergency_contacts = []
 
         if diver:
             # Get full diver with certifications
@@ -77,6 +92,72 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
             dive_logs = list_diver_dive_logs(diver, limit=10)
             dive_stats = get_diver_dive_stats(diver)
 
+            # Documents (medical questionnaire PDFs, photo ID, etc.)
+            documents = list_diver_documents(diver, limit=20)
+
+            # Combine documents and signed agreements for unified display
+            # Each item gets a 'item_type' and 'item_date' for sorting
+            combined_docs = []
+            for doc in documents:
+                combined_docs.append({
+                    'type': 'document',
+                    'item': doc,
+                    'date': doc.created_at,
+                })
+            for agreement in signed_agreements:
+                combined_docs.append({
+                    'type': 'agreement',
+                    'item': agreement,
+                    'date': agreement.signed_at,
+                })
+            # Sort by date, most recent first
+            combined_docs.sort(key=lambda x: x['date'] if x['date'] else timezone.now(), reverse=True)
+
+            # Required agreements (medical, waiver based on category)
+            agreement_status = get_diver_agreement_status(diver)
+
+            # Preference status for progressive preference collection
+            preference_status = get_diver_preference_status(diver)
+
+            # Certification recommendations based on progression and preferences
+            recommended_certifications = get_recommended_certifications(diver, limit=3)
+
+            # Courseware recommendations based on certification progression
+            recommended_courseware = get_recommended_courseware(diver, limit=3)
+
+            # Gear recommendations based on diving interests
+            recommended_gear = get_recommended_gear(diver, limit=3)
+
+            # Briefings status (upcoming excursions with briefings to review)
+            from .models import Booking
+            from django.utils import timezone as tz
+
+            # Upcoming bookings = briefings to review
+            upcoming_briefings = Booking.objects.filter(
+                diver=diver,
+                status="confirmed",
+                excursion__departure_time__gte=tz.now(),
+                deleted_at__isnull=True,
+            ).select_related("excursion", "excursion__dive_site")
+
+            # Photos where diver is tagged (for photo gallery/store)
+            from .models import PhotoTag
+            photo_tags = PhotoTag.objects.filter(
+                diver=diver,
+                deleted_at__isnull=True,
+            ).select_related("document").order_by("-created_at")[:24]
+
+            # Emergency contacts
+            emergency_contacts = diver.emergency_contacts
+        else:
+            agreement_status = None
+            combined_docs = []
+            preference_status = None
+            recommended_certifications = []
+            recommended_courseware = []
+            recommended_gear = []
+            upcoming_briefings = []
+
         # Get recent orders for this user
         orders = StoreOrder.objects.filter(user=user).order_by("-created_at")[:5]
 
@@ -98,6 +179,21 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
                 if allowed:
                     courseware_pages.append(page)
 
+        # Get recommended excursions if user has no upcoming bookings
+        # Priority: actual scheduled excursions with spots > excursion types
+        recommended_excursions = []
+        recommended_types = []
+        if not upcoming_bookings:
+            recommended_excursions = list_upcoming_excursions(min_spots=1, limit=2)
+            if not recommended_excursions:
+                # Fall back to excursion types
+                from .models import ExcursionType
+                recommended_types = list(
+                    ExcursionType.objects.filter(is_active=True)
+                    .select_related("min_certification_level")
+                    .prefetch_related("suitable_sites")[:2]
+                )
+
         context.update({
             "diver": diver_with_certs or diver,
             "highest_cert": highest_cert,
@@ -113,6 +209,18 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
             "briefings": briefings,
             "dive_logs": dive_logs,
             "dive_stats": dive_stats,
+            "agreement_status": agreement_status,
+            "preference_status": preference_status,
+            "documents": documents,
+            "combined_docs": combined_docs,
+            "photo_tags": photo_tags,
+            "emergency_contacts": emergency_contacts,
+            "recommended_excursions": recommended_excursions,
+            "recommended_types": recommended_types,
+            "recommended_certifications": recommended_certifications,
+            "recommended_courseware": recommended_courseware,
+            "recommended_gear": recommended_gear,
+            "upcoming_briefings": upcoming_briefings,
         })
         return context
 
@@ -130,6 +238,170 @@ class CustomerOrdersView(CustomerPortalMixin, TemplateView):
         orders = StoreOrder.objects.filter(user=user).order_by("-created_at")
 
         context["orders"] = orders
+        return context
+
+
+class UpdateGearSizingView(CustomerPortalMixin, View):
+    """Update diver gear sizing from dashboard modal."""
+
+    def post(self, request, *args, **kwargs):
+        diver = get_current_diver(request.user)
+        if not diver:
+            return redirect("portal:dashboard")
+
+        # Update gear sizing fields
+        diver.height_cm = request.POST.get("height_cm") or None
+        diver.weight_kg = request.POST.get("weight_kg") or None
+        diver.wetsuit_size = request.POST.get("wetsuit_size", "")
+        diver.bcd_size = request.POST.get("bcd_size", "")
+        diver.fin_size = request.POST.get("fin_size", "")
+        diver.glove_size = request.POST.get("glove_size", "")
+        diver.mask_fit = request.POST.get("mask_fit", "")
+        diver.weight_required_kg = request.POST.get("weight_required_kg") or None
+        diver.gear_notes = request.POST.get("gear_notes", "")
+
+        diver.save(update_fields=[
+            "height_cm", "weight_kg", "wetsuit_size", "bcd_size",
+            "fin_size", "glove_size", "mask_fit", "weight_required_kg",
+            "gear_notes", "updated_at"
+        ])
+
+        return redirect("portal:dashboard")
+
+
+class AddEmergencyContactView(CustomerPortalMixin, View):
+    """Add an emergency contact from dashboard modal."""
+
+    def post(self, request, *args, **kwargs):
+        from django_parties.models import Person
+
+        from .models import EmergencyContact
+
+        diver = get_current_diver(request.user)
+        if not diver:
+            return redirect("portal:dashboard")
+
+        # Create the contact person
+        contact_person = Person.objects.create(
+            first_name=request.POST.get("first_name", "").strip(),
+            last_name=request.POST.get("last_name", "").strip(),
+            phone=request.POST.get("phone", "").strip(),
+            email=request.POST.get("email", "").strip() or None,
+        )
+
+        # Get next priority
+        existing_count = EmergencyContact.objects.filter(
+            diver=diver, deleted_at__isnull=True
+        ).count()
+
+        # Create the emergency contact
+        EmergencyContact.objects.create(
+            diver=diver,
+            contact_person=contact_person,
+            relationship=request.POST.get("relationship", "other"),
+            priority=existing_count + 1,
+            notes=request.POST.get("notes", "").strip(),
+        )
+
+        return redirect("portal:dashboard")
+
+
+class StartFormView(CustomerPortalMixin, View):
+    """Start a required form (questionnaire or agreement) and redirect to it."""
+
+    def get(self, request, template_id, *args, **kwargs):
+        import uuid
+        from django.contrib.contenttypes.models import ContentType
+        from django.urls import reverse
+
+        from .models import AgreementTemplate, DiverProfile
+
+        diver = get_current_diver(request.user)
+        if not diver:
+            return redirect("portal:dashboard")
+
+        # Get the template
+        template = get_object_or_404(AgreementTemplate, pk=template_id)
+
+        # Handle based on template type
+        if template.template_type == AgreementTemplate.TemplateType.MEDICAL:
+            # Create a questionnaire instance
+            from django_questionnaires.models import QuestionnaireInstance
+
+            diver_ct = ContentType.objects.get_for_model(DiverProfile)
+
+            # Check for existing pending instance
+            existing = QuestionnaireInstance.objects.filter(
+                respondent_content_type=diver_ct,
+                respondent_object_id=str(diver.pk),
+                status__in=["pending", "in_progress"],
+                deleted_at__isnull=True,
+            ).first()
+
+            if existing:
+                instance = existing
+            else:
+                # Create new questionnaire instance
+                instance = QuestionnaireInstance.objects.create(
+                    questionnaire=template.questionnaire,
+                    respondent_content_type=diver_ct,
+                    respondent_object_id=str(diver.pk),
+                    status="pending",
+                )
+
+            # Redirect to the public questionnaire URL
+            return redirect(reverse("diveops_public:medical-questionnaire", args=[instance.pk]))
+
+        else:
+            # Create a signable agreement
+            from django_parties.models import Person
+
+            from .models import SignableAgreement
+
+            person_ct = ContentType.objects.get_for_model(Person)
+
+            # Check for existing pending agreement
+            existing = SignableAgreement.objects.filter(
+                template=template,
+                party_a_content_type=person_ct,
+                party_a_object_id=str(diver.person_id),
+                status=SignableAgreement.Status.PENDING,
+            ).first()
+
+            if existing:
+                agreement = existing
+            else:
+                # Create new signable agreement with token
+                agreement = SignableAgreement.objects.create(
+                    template=template,
+                    party_a_content_type=person_ct,
+                    party_a_object_id=str(diver.person_id),
+                    access_token=uuid.uuid4().hex[:32],
+                    status=SignableAgreement.Status.PENDING,
+                )
+
+            # Redirect to the public signing URL
+            return redirect(reverse("diveops_public:sign", args=[agreement.access_token]))
+
+
+class CustomerOrderDetailView(CustomerPortalMixin, TemplateView):
+    """Customer view of a single order detail."""
+
+    template_name = "diveops/portal/order_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        order_number = self.kwargs.get("order_number")
+
+        # Get the order for this user only
+        order = get_object_or_404(
+            StoreOrder.objects.prefetch_related("items__catalog_item"),
+            order_number=order_number,
+            user=user,
+        )
+
+        context["order"] = order
         return context
 
 
@@ -175,5 +447,31 @@ class PortalCMSPageView(CustomerPortalMixin, TemplateView):
             "page_title": page.title,
             "blocks": snapshot.get("blocks", []),
             "meta": snapshot.get("meta", {}),
+        })
+        return context
+
+
+class CustomerPreferencesView(CustomerPortalMixin, TemplateView):
+    """Customer view for viewing and managing preferences."""
+
+    template_name = "diveops/portal/preferences.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+
+        diver = get_current_diver(user)
+
+        preferences_by_category = {}
+        preference_status = None
+
+        if diver:
+            preference_status = get_diver_preference_status(diver)
+            preferences_by_category = list_diver_preferences_by_category(diver)
+
+        context.update({
+            "diver": diver,
+            "preference_status": preference_status,
+            "preferences_by_category": preferences_by_category,
         })
         return context

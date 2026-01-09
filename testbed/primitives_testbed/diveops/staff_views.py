@@ -60,6 +60,7 @@ from .models import (
     SitePriceAdjustment,
 )
 from .selectors import get_diver_with_certifications, get_excursion_with_roster, list_upcoming_excursions
+from .preferences.selectors import get_diver_preference_status, list_diver_preferences_by_category
 
 
 class DashboardView(StaffPortalMixin, TemplateView):
@@ -437,6 +438,12 @@ class DiverDetailView(StaffPortalMixin, DetailView):
             context["diver_user"] = User.objects.filter(
                 email__iexact=self.object.person.email
             ).first()
+
+        # Add preference status and data for staff view
+        context["preference_status"] = get_diver_preference_status(self.object)
+        context["preferences_by_category"] = list_diver_preferences_by_category(
+            self.object, include_sensitive=False  # Staff sees internal, not sensitive
+        )
 
         return context
 

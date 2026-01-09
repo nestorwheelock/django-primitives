@@ -223,8 +223,16 @@ PORTAL_UI = {
         {
             "section": "Learning",
             "label": "My Courseware",
-            "url": "portal:dashboard",
+            "url": "portal:content",
+            "url_kwargs": {"path": "open-water-courseware"},
             "icon": "book-open",
+        },
+        {
+            "section": "Learning",
+            "label": "Dive Site Guides",
+            "url": "portal:content",
+            "url_kwargs": {"path": "dive-sites"},
+            "icon": "map-pin",
         },
         {
             "section": "Shop",

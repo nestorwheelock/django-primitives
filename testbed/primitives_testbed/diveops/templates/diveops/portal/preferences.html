@@ -1,0 +1,132 @@
+{% extends "portal_ui/base_portal.html" %}
+{% load portal_ui_tags %}
+
+{% block page_title %}My Preferences{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with Progress -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex justify-between items-start">
+            <div>
+                <h2 class="text-xl font-semibold text-gray-800">My Preferences</h2>
+                <p class="text-gray-600 mt-1">Help us personalize your dive experience.</p>
+            </div>
+            {% if preference_status %}
+            <div class="text-right">
+                <div class="text-2xl font-bold text-primary-600">{{ preference_status.completion_percent }}%</div>
+                <div class="text-sm text-gray-500">{{ preference_status.collected_count }} of {{ preference_status.total_definitions }} complete</div>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if preference_status %}
+        <!-- Progress Bar -->
+        <div class="mt-4">
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-primary-500 h-2 rounded-full transition-all duration-500" style="width: {{ preference_status.completion_percent }}%"></div>
+            </div>
+        </div>
+
+        {% if preference_status.needs_intake_survey %}
+        <div class="mt-4 p-4 bg-primary-50 rounded-lg border border-primary-100">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    {% icon "clipboard-document-list" "w-6 h-6 text-primary-600" %}
+                </div>
+                <div class="ml-3 flex-1">
+                    <p class="text-sm text-primary-800">
+                        Help us learn more about your diving preferences to personalize recommendations.
+                    </p>
+                </div>
+                <div class="ml-4">
+                    <a href="#" class="inline-flex items-center px-4 py-2 bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-600">
+                        Complete Survey
+                        {% icon "arrow-right" "w-4 h-4 ml-2" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    <!-- Category Completion Overview -->
+    {% if preference_status.categories %}
+    <div class="bg-white shadow rounded-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Categories</h3>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {% for cat_name, cat_data in preference_status.categories.items %}
+            <div class="p-4 rounded-lg {% if cat_data.complete %}bg-green-50 border border-green-200{% else %}bg-gray-50 border border-gray-200{% endif %}">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium capitalize">{{ cat_name }}</span>
+                    {% if cat_data.complete %}
+                    {% icon "check-circle" "w-5 h-5 text-green-500" %}
+                    {% else %}
+                    <span class="text-xs text-gray-500">{{ cat_data.collected }}/{{ cat_data.total }}</span>
+                    {% endif %}
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-1">
+                    {% widthratio cat_data.collected cat_data.total 100 as pct %}
+                    <div class="{% if cat_data.complete %}bg-green-500{% else %}bg-primary-500{% endif %} h-1 rounded-full" style="width: {{ pct }}%"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Collected Preferences by Category -->
+    {% if preferences_by_category %}
+    {% for category, prefs in preferences_by_category.items %}
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-800 capitalize">{{ category }}</h3>
+        </div>
+        <div class="divide-y divide-gray-200">
+            {% for pref in prefs %}
+            <div class="px-6 py-4 flex justify-between items-center">
+                <div>
+                    <p class="text-sm font-medium text-gray-900">{{ pref.label }}</p>
+                    <p class="text-sm text-gray-500">
+                        {% if pref.value_type == "multi_choice" %}
+                            {% for item in pref.value %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-800 mr-1">{{ item }}</span>
+                            {% empty %}
+                                <span class="text-gray-400">Not set</span>
+                            {% endfor %}
+                        {% elif pref.value_type == "bool" %}
+                            {% if pref.value %}
+                                <span class="text-green-600">Yes</span>
+                            {% else %}
+                                <span class="text-gray-500">No</span>
+                            {% endif %}
+                        {% else %}
+                            {{ pref.value|default:"Not set" }}
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="text-xs text-gray-400">
+                    Updated {{ pref.collected_at|date:"M j, Y" }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <!-- Empty State -->
+    <div class="bg-white shadow rounded-lg p-8 text-center">
+        <div class="text-gray-400 mb-4">
+            {% icon "user-circle" "w-12 h-12 mx-auto" %}
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No Preferences Collected Yet</h3>
+        <p class="text-gray-500 mb-4">Complete a quick survey to help us personalize your dive experience.</p>
+        <a href="#" class="inline-flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">
+            {% icon "clipboard-document-list" "w-4 h-4 mr-2" %}
+            Complete Preferences Survey
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -55,16 +55,13 @@
                             {% elif medical_status.days_until_expiry and medical_status.days_until_expiry <= 30 %}
                                 <p class="text-lg font-semibold text-yellow-600">Expires in {{ medical_status.days_until_expiry }} days</p>
                             {% else %}
-                                <p class="text-lg font-semibold text-green-600">Valid</p>
+                                <p class="text-lg font-semibold text-green-600">Valid until {{ medical_status.valid_until|date:"M j, Y" }}</p>
                             {% endif %}
                         {% else %}
                             <p class="text-lg font-semibold text-gray-400">Not on file</p>
                         {% endif %}
                     </div>
                 </div>
-                {% if medical_status.valid_until %}
-                <span class="text-xs text-gray-400">Until {{ medical_status.valid_until|date:"M j, Y" }}</span>
-                {% endif %}
             </div>
         </div>
 
@@ -95,80 +92,619 @@
             </div>
         </div>
 
-        <!-- Dive Stats Card -->
+        <!-- Briefings Card -->
         <div class="bg-white shadow rounded-lg p-4">
-            <div class="flex items-center">
-                {% icon "anchor" "w-8 h-8 mr-3 text-primary-500" %}
-                <div>
-                    <h4 class="text-sm font-medium text-gray-500">Logged Dives</h4>
-                    <p class="text-lg font-semibold text-gray-800">{{ dive_stats.total_dives|default:0 }}</p>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <div class="w-8 h-8 mr-3 flex items-center justify-center">
+                        {% if upcoming_briefings %}
+                            {% icon "clipboard" "w-8 h-8 text-blue-500" %}
+                        {% else %}
+                            {% icon "clipboard" "w-8 h-8 text-gray-400" %}
+                        {% endif %}
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">Briefings</h4>
+                        {% if upcoming_briefings %}
+                            <p class="text-lg font-semibold text-blue-600">{{ upcoming_briefings|length }} to review</p>
+                        {% else %}
+                            <p class="text-sm text-gray-400">Dive briefings will appear here</p>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Upcoming Dives -->
-    <div class="bg-white shadow rounded-lg">
-        <div class="p-6 border-b border-gray-200">
-            <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-                {% icon "calendar" "w-5 h-5 mr-2 text-primary-500" %}
-                Upcoming Dives
-            </h3>
-        </div>
-        <div class="p-6">
-            {% if upcoming_bookings %}
-                <ul class="space-y-4">
-                    {% for booking in upcoming_bookings %}
-                    <li class="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
-                        <div>
-                            <div class="font-medium text-gray-800">
-                                {{ booking.excursion.dive_site.name }}
-                            </div>
-                            <div class="text-sm text-gray-500">
-                                {{ booking.excursion.departure_time|date:"l, M j" }} at {{ booking.excursion.departure_time|time:"g:i A" }}
+    <!-- Required Documents Alert (templates needing new forms OR pending agreements needing signature) -->
+    {% if agreement_status.required or pending_agreements or preference_status.needs_intake_survey %}
+    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div class="flex items-start">
+            <div class="flex-shrink-0">
+                {% icon "alert-triangle" "w-5 h-5 text-yellow-600" %}
+            </div>
+            <div class="ml-3 flex-1">
+                <h3 class="text-sm font-medium text-yellow-800">Action Required</h3>
+                <p class="mt-1 text-sm text-yellow-700">
+                    Please complete the following before your next dive:
+                </p>
+                <ul class="mt-3 space-y-2">
+                    {% if preference_status.needs_intake_survey %}
+                    <li class="flex items-center justify-between py-2 px-3 bg-white rounded-md border border-yellow-200">
+                        <div class="flex items-center">
+                            {% icon "clipboard-document-list" "w-4 h-4 text-primary-500 mr-2" %}
+                            <div>
+                                <span class="font-medium text-gray-800">Preferences Survey</span>
+                                <span class="ml-2 text-xs text-gray-500">{{ preference_status.completion_percent }}% complete</span>
                             </div>
                         </div>
-                        <span class="px-2 py-1 text-xs rounded-full {% if booking.status == 'confirmed' %}bg-green-100 text-green-700{% elif booking.status == 'checked_in' %}bg-blue-100 text-blue-700{% else %}bg-gray-100 text-gray-600{% endif %}">
-                            {{ booking.status|title }}
-                        </span>
+                        <a href="{% url 'portal:preferences' %}"
+                           class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-primary-100 text-primary-700 hover:bg-primary-200">
+                            {% icon "arrow-right" "w-3 h-3 mr-1" %}
+                            Complete
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% for item in agreement_status.required %}
+                    <li class="flex items-center justify-between py-2 px-3 bg-white rounded-md border border-yellow-200">
+                        <div class="flex items-center">
+                            {% if item.template.template_type == 'medical_questionnaire' %}
+                                {% icon "heart" "w-4 h-4 text-red-500 mr-2" %}
+                            {% elif item.template.template_type == 'waiver' %}
+                                {% icon "file-text" "w-4 h-4 text-blue-500 mr-2" %}
+                            {% else %}
+                                {% icon "file" "w-4 h-4 text-gray-500 mr-2" %}
+                            {% endif %}
+                            <div>
+                                <span class="font-medium text-gray-800">{{ item.template.name }}</span>
+                                <span class="ml-2 text-xs text-gray-500">{{ item.template.get_template_type_display }}</span>
+                            </div>
+                        </div>
+                        <a href="{% url 'portal:start_form' item.template.pk %}"
+                           target="_blank"
+                           class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-primary-100 text-primary-700 hover:bg-primary-200">
+                            {% icon "external-link" "w-3 h-3 mr-1" %}
+                            Start
+                        </a>
+                    </li>
+                    {% endfor %}
+                    {% for agreement in pending_agreements %}
+                    <li class="flex items-center justify-between py-2 px-3 bg-white rounded-md border border-yellow-200">
+                        <div class="flex items-center">
+                            {% if agreement.template.template_type == 'medical_questionnaire' %}
+                                {% icon "heart" "w-4 h-4 text-red-500 mr-2" %}
+                            {% elif agreement.template.template_type == 'waiver' %}
+                                {% icon "file-text" "w-4 h-4 text-blue-500 mr-2" %}
+                            {% elif agreement.template.template_type == 'briefing' %}
+                                {% icon "clipboard" "w-4 h-4 text-purple-500 mr-2" %}
+                            {% else %}
+                                {% icon "file" "w-4 h-4 text-gray-500 mr-2" %}
+                            {% endif %}
+                            <div>
+                                <span class="font-medium text-gray-800">{{ agreement.template.name }}</span>
+                                <span class="ml-2 text-xs text-gray-500">{{ agreement.template.get_template_type_display }}</span>
+                            </div>
+                        </div>
+                        {% if agreement.access_token %}
+                        <a href="{% url 'diveops_public:sign' agreement.access_token %}"
+                           target="_blank"
+                           class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-primary-100 text-primary-700 hover:bg-primary-200">
+                            {% icon "external-link" "w-3 h-3 mr-1" %}
+                            Sign
+                        </a>
+                        {% else %}
+                        <span class="text-xs text-gray-400">Contact staff</span>
+                        {% endif %}
                     </li>
                     {% endfor %}
                 </ul>
-            {% else %}
-                <p class="text-gray-500 text-sm">No upcoming dives scheduled.</p>
-                <p class="text-sm text-gray-400 mt-1">Contact the dive shop to book your next adventure!</p>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- My Certifications -->
-    {% if diver.certifications.all %}
-    <div class="bg-white shadow rounded-lg">
-        <div class="p-6 border-b border-gray-200">
-            <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-                {% icon "award" "w-5 h-5 mr-2 text-primary-500" %}
-                My Certifications
-            </h3>
-        </div>
-        <div class="p-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {% for cert in diver.certifications.all %}
-                <div class="flex items-center p-3 bg-gray-50 rounded-lg">
-                    <div class="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        {% icon "award" "w-5 h-5 text-blue-600" %}
-                    </div>
-                    <div class="ml-3">
-                        <div class="font-medium text-gray-800">{{ cert.level.name }}</div>
-                        <div class="text-xs text-gray-500">
-                            {{ cert.level.agency.name }} &middot; {{ cert.issued_on|date:"M Y" }}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
             </div>
         </div>
     </div>
     {% endif %}
+
+    <!-- Upcoming Excursions & Certifications Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Upcoming Excursions -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    {% icon "calendar" "w-5 h-5 mr-2 text-primary-500" %}
+                    Upcoming Excursions
+                </h3>
+            </div>
+            <div class="p-6">
+                {% if upcoming_bookings %}
+                    <ul class="space-y-4">
+                        {% for booking in upcoming_bookings %}
+                        <li class="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
+                            <div>
+                                <div class="font-medium text-gray-800">
+                                    {{ booking.excursion.dive_site.name }}
+                                </div>
+                                <div class="text-sm text-gray-500">
+                                    {{ booking.excursion.departure_time|date:"l, M j" }} at {{ booking.excursion.departure_time|time:"g:i A" }}
+                                </div>
+                            </div>
+                            <span class="px-2 py-1 text-xs rounded-full {% if booking.status == 'confirmed' %}bg-green-100 text-green-700{% elif booking.status == 'checked_in' %}bg-blue-100 text-blue-700{% else %}bg-gray-100 text-gray-600{% endif %}">
+                                {{ booking.status|title }}
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-gray-500 text-sm">No upcoming excursions scheduled.</p>
+                    <p class="text-sm mt-2">
+                        <a href="{% url 'store:list' %}" class="text-primary-600 hover:text-primary-700 hover:underline">
+                            Click here to explore and schedule your next excursion!
+                        </a>
+                    </p>
+
+                    {% if recommended_excursions or recommended_types %}
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Recommended for you</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {% if recommended_excursions %}
+                                {% for excursion in recommended_excursions %}
+                                <a href="{% url 'store:list' %}" class="block group">
+                                    <div class="bg-gray-50 rounded-lg overflow-hidden hover:shadow-md transition">
+                                        {% if excursion.dive_site.profile_photo %}
+                                        <div class="h-24 overflow-hidden">
+                                            <img src="{{ excursion.dive_site.profile_photo.file.url }}"
+                                                 alt="{{ excursion.dive_site.name }}"
+                                                 class="w-full h-full object-cover group-hover:scale-105 transition-transform">
+                                        </div>
+                                        {% else %}
+                                        <div class="h-24 bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+                                            {% icon "anchor" "w-8 h-8 text-white/50" %}
+                                        </div>
+                                        {% endif %}
+                                        <div class="p-3">
+                                            <h4 class="font-medium text-gray-800 text-sm truncate">
+                                                {{ excursion.dive_site.name|default:"Dive Excursion" }}
+                                            </h4>
+                                            <p class="text-xs text-gray-500 mt-1">
+                                                {{ excursion.departure_time|date:"D, M j" }} &bull; {{ excursion.spots_available }} spots
+                                            </p>
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                            {% else %}
+                                {% for etype in recommended_types %}
+                                <a href="{% url 'store:list' %}" class="block group">
+                                    <div class="bg-gray-50 rounded-lg overflow-hidden hover:shadow-md transition">
+                                        <div class="h-24 flex items-center justify-center
+                                            {% if etype.dive_mode == 'boat' %}bg-gradient-to-br from-blue-400 to-blue-600
+                                            {% elif etype.dive_mode == 'cenote' %}bg-gradient-to-br from-teal-400 to-teal-600
+                                            {% elif etype.dive_mode == 'cavern' %}bg-gradient-to-br from-slate-500 to-slate-700
+                                            {% else %}bg-gradient-to-br from-cyan-400 to-cyan-600{% endif %}">
+                                            {% if etype.dive_mode == 'boat' %}
+                                                {% icon "anchor" "w-8 h-8 text-white/50" %}
+                                            {% elif etype.dive_mode == 'cenote' %}
+                                                {% icon "droplet" "w-8 h-8 text-white/50" %}
+                                            {% elif etype.dive_mode == 'cavern' %}
+                                                {% icon "mountain" "w-8 h-8 text-white/50" %}
+                                            {% else %}
+                                                {% icon "compass" "w-8 h-8 text-white/50" %}
+                                            {% endif %}
+                                        </div>
+                                        <div class="p-3">
+                                            <h4 class="font-medium text-gray-800 text-sm truncate">{{ etype.name }}</h4>
+                                            <p class="text-xs text-gray-500 mt-1">
+                                                {{ etype.get_dive_mode_display }} &bull; ${{ etype.base_price }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- My Certifications -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    {% icon "award" "w-5 h-5 mr-2 text-primary-500" %}
+                    My Certifications
+                </h3>
+            </div>
+            <div class="p-6">
+                {% if diver.certifications.all %}
+                    <ul class="space-y-3">
+                        {% for cert in diver.certifications.all %}
+                        <li class="flex items-center p-3 bg-gray-50 rounded-lg">
+                            <div class="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                {% icon "award" "w-5 h-5 text-blue-600" %}
+                            </div>
+                            <div class="ml-3">
+                                <div class="font-medium text-gray-800">{{ cert.level.name }}</div>
+                                <div class="text-xs text-gray-500">
+                                    {{ cert.level.agency.name }} &middot; {{ cert.issued_on|date:"M Y" }}
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-gray-500 text-sm">No certifications on file.</p>
+                {% endif %}
+
+                {% if recommended_certifications %}
+                <div class="mt-4 pt-4 border-t border-gray-100">
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Recommended Next Steps</p>
+                    <ul class="space-y-2">
+                        {% for rec in recommended_certifications %}
+                        <li class="flex items-start p-3 bg-gradient-to-r from-primary-50 to-blue-50 rounded-lg border border-primary-100">
+                            <div class="flex-shrink-0 w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                                {% icon "trending-up" "w-4 h-4 text-primary-600" %}
+                            </div>
+                            <div class="ml-3 flex-1">
+                                <div class="font-medium text-gray-800">{{ rec.level.name }}</div>
+                                <div class="text-xs text-gray-600 mt-0.5">{{ rec.reason }}</div>
+                                {% if rec.level.agency %}
+                                <div class="text-xs text-gray-400 mt-1">{{ rec.level.agency.name }}</div>
+                                {% endif %}
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Gear Sizing & Emergency Contacts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Gear Sizing -->
+        <div class="bg-white shadow rounded-lg" x-data="{ showGearModal: false }">
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    {% icon "sliders" "w-5 h-5 mr-2 text-primary-500" %}
+                    My Gear Sizing
+                </h3>
+                <button @click="showGearModal = true"
+                        class="text-sm text-primary-600 hover:text-primary-800">
+                    {% icon "edit" "w-4 h-4 inline mr-1" %}Edit
+                </button>
+            </div>
+        </div>
+
+        <!-- Gear Sizing Modal -->
+        <div x-show="showGearModal" x-cloak
+             class="fixed inset-0 z-50 overflow-y-auto"
+             x-transition:enter="ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0">
+            <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="showGearModal = false"></div>
+                <div class="relative bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full"
+                     x-transition:enter="ease-out duration-300"
+                     x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                     x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                     x-transition:leave="ease-in duration-200"
+                     x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                     x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
+                    <form method="post" action="{% url 'portal:update_gear_sizing' %}">
+                        {% csrf_token %}
+                        <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Edit Gear Sizing</h3>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Height (cm)</label>
+                                    <input type="number" name="height_cm" value="{{ diver.height_cm|default:'' }}"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Weight (kg)</label>
+                                    <input type="number" name="weight_kg" value="{{ diver.weight_kg|default:'' }}" step="0.1"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Wetsuit Size</label>
+                                    <select name="wetsuit_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                        <option value="">--</option>
+                                        <option value="XS" {% if diver.wetsuit_size == "XS" %}selected{% endif %}>XS</option>
+                                        <option value="S" {% if diver.wetsuit_size == "S" %}selected{% endif %}>S</option>
+                                        <option value="M" {% if diver.wetsuit_size == "M" %}selected{% endif %}>M</option>
+                                        <option value="L" {% if diver.wetsuit_size == "L" %}selected{% endif %}>L</option>
+                                        <option value="XL" {% if diver.wetsuit_size == "XL" %}selected{% endif %}>XL</option>
+                                        <option value="XXL" {% if diver.wetsuit_size == "XXL" %}selected{% endif %}>XXL</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">BCD Size</label>
+                                    <select name="bcd_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                        <option value="">--</option>
+                                        <option value="XS" {% if diver.bcd_size == "XS" %}selected{% endif %}>XS</option>
+                                        <option value="S" {% if diver.bcd_size == "S" %}selected{% endif %}>S</option>
+                                        <option value="M" {% if diver.bcd_size == "M" %}selected{% endif %}>M</option>
+                                        <option value="L" {% if diver.bcd_size == "L" %}selected{% endif %}>L</option>
+                                        <option value="XL" {% if diver.bcd_size == "XL" %}selected{% endif %}>XL</option>
+                                        <option value="XXL" {% if diver.bcd_size == "XXL" %}selected{% endif %}>XXL</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Fin Size</label>
+                                    <input type="text" name="fin_size" value="{{ diver.fin_size|default:'' }}" placeholder="e.g., M/L or 42"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Glove Size</label>
+                                    <select name="glove_size" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                        <option value="">--</option>
+                                        <option value="XS" {% if diver.glove_size == "XS" %}selected{% endif %}>XS</option>
+                                        <option value="S" {% if diver.glove_size == "S" %}selected{% endif %}>S</option>
+                                        <option value="M" {% if diver.glove_size == "M" %}selected{% endif %}>M</option>
+                                        <option value="L" {% if diver.glove_size == "L" %}selected{% endif %}>L</option>
+                                        <option value="XL" {% if diver.glove_size == "XL" %}selected{% endif %}>XL</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Mask Fit</label>
+                                    <input type="text" name="mask_fit" value="{{ diver.mask_fit|default:'' }}" placeholder="e.g., low volume"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Dive Weight (kg)</label>
+                                    <input type="number" name="weight_required_kg" value="{{ diver.weight_required_kg|default:'' }}" step="0.5"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                </div>
+                                <div class="col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Gear Notes</label>
+                                    <textarea name="gear_notes" rows="2" placeholder="Any preferences or requirements..."
+                                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">{{ diver.gear_notes|default:'' }}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                            <button type="submit" class="w-full sm:w-auto inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-primary-600 text-white font-medium hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                Save Changes
+                            </button>
+                            <button type="button" @click="showGearModal = false" class="mt-3 sm:mt-0 w-full sm:w-auto inline-flex justify-center rounded-lg border border-gray-300 px-4 py-2 bg-white text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="p-6">
+            {% if diver.wetsuit_size or diver.bcd_size or diver.fin_size or diver.weight_kg or diver.height_cm %}
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {% if diver.height_cm %}
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">Height</div>
+                    <div class="text-sm font-semibold text-gray-800">{{ diver.height_cm }} cm</div>
+                </div>
+                {% endif %}
+                {% if diver.weight_kg %}
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">Weight</div>
+                    <div class="text-sm font-semibold text-gray-800">{{ diver.weight_kg }} kg</div>
+                </div>
+                {% endif %}
+                {% if diver.wetsuit_size %}
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">Wetsuit</div>
+                    <div class="text-sm font-semibold text-gray-800">{{ diver.wetsuit_size }}</div>
+                </div>
+                {% endif %}
+                {% if diver.bcd_size %}
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">BCD</div>
+                    <div class="text-sm font-semibold text-gray-800">{{ diver.bcd_size }}</div>
+                </div>
+                {% endif %}
+                {% if diver.fin_size %}
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">Fins</div>
+                    <div class="text-sm font-semibold text-gray-800">{{ diver.fin_size }}</div>
+                </div>
+                {% endif %}
+                {% if diver.glove_size %}
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">Gloves</div>
+                    <div class="text-sm font-semibold text-gray-800">{{ diver.glove_size }}</div>
+                </div>
+                {% endif %}
+                {% if diver.mask_fit %}
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">Mask</div>
+                    <div class="text-sm font-semibold text-gray-800">{{ diver.mask_fit }}</div>
+                </div>
+                {% endif %}
+                {% if diver.weight_required_kg %}
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide">Dive Wt</div>
+                    <div class="text-sm font-semibold text-gray-800">{{ diver.weight_required_kg }} kg</div>
+                </div>
+                {% endif %}
+            </div>
+            {% if diver.gear_notes %}
+            <div class="mt-3 p-2 bg-gray-50 rounded-lg">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Notes</div>
+                <p class="text-xs text-gray-700">{{ diver.gear_notes }}</p>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="text-center py-6">
+                <div class="text-gray-300 mb-3">
+                    {% icon "sliders" "w-10 h-10 mx-auto" %}
+                </div>
+                <p class="text-gray-500 text-sm">No gear sizing on file.</p>
+                <p class="text-sm text-gray-400 mt-1">Add your measurements so we can prepare the right equipment for your dives.</p>
+                <button @click="showGearModal = true"
+                        class="mt-3 inline-flex items-center px-4 py-2 border border-primary-300 rounded-lg text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100">
+                    {% icon "plus" "w-4 h-4 mr-1.5" %}
+                    Add My Sizes
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        </div>
+
+        <!-- Emergency Contacts -->
+        <div class="bg-white shadow rounded-lg" x-data="{ showContactModal: false }">
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    {% icon "phone" "w-5 h-5 mr-2 text-primary-500" %}
+                    Emergency Contacts
+                </h3>
+                <button @click="showContactModal = true"
+                        class="text-sm text-primary-600 hover:text-primary-800">
+                    {% icon "plus" "w-4 h-4 inline mr-1" %}Add
+                </button>
+            </div>
+        </div>
+
+        <!-- Add Emergency Contact Modal -->
+        <div x-show="showContactModal" x-cloak
+             class="fixed inset-0 z-50 overflow-y-auto"
+             x-transition:enter="ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0">
+            <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="showContactModal = false"></div>
+                <div class="relative bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full"
+                     x-transition:enter="ease-out duration-300"
+                     x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                     x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                     x-transition:leave="ease-in duration-200"
+                     x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                     x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
+                    <form method="post" action="{% url 'portal:add_emergency_contact' %}">
+                        {% csrf_token %}
+                        <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Add Emergency Contact</h3>
+                            <div class="space-y-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                                        <input type="text" name="first_name" required
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                                        <input type="text" name="last_name" required
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
+                                    <input type="tel" name="phone" required placeholder="+1 234 567 8900"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                    <input type="email" name="email" placeholder="optional"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Relationship *</label>
+                                    <select name="relationship" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                                        <option value="">Select...</option>
+                                        <option value="spouse">Spouse/Partner</option>
+                                        <option value="parent">Parent</option>
+                                        <option value="child">Child (Adult)</option>
+                                        <option value="sibling">Sibling</option>
+                                        <option value="friend">Friend</option>
+                                        <option value="other_family">Other Family Member</option>
+                                        <option value="employer">Employer</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                                    <textarea name="notes" rows="2" placeholder="Any special instructions..."
+                                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                            <button type="submit" class="w-full sm:w-auto inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-primary-600 text-white font-medium hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                Add Contact
+                            </button>
+                            <button type="button" @click="showContactModal = false" class="mt-3 sm:mt-0 w-full sm:w-auto inline-flex justify-center rounded-lg border border-gray-300 px-4 py-2 bg-white text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6">
+            {% if emergency_contacts %}
+            <ul class="space-y-3">
+                {% for ec in emergency_contacts %}
+                <li class="p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center mb-2">
+                        <div class="flex-shrink-0 w-6 h-6 bg-red-100 rounded-full flex items-center justify-center mr-2">
+                            <span class="text-red-600 text-xs font-bold">{{ ec.priority }}</span>
+                        </div>
+                        <span class="font-medium text-gray-800 text-sm">{{ ec.contact_person.first_name }} {{ ec.contact_person.last_name }}</span>
+                        <span class="ml-2 px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-600">
+                            {{ ec.get_relationship_display }}
+                        </span>
+                    </div>
+                    <div class="space-y-1 text-sm text-gray-600">
+                        {% if ec.contact_person.phone %}
+                        <a href="tel:{{ ec.contact_person.phone }}" class="flex items-center hover:text-primary-600">
+                            {% icon "phone" "w-3 h-3 mr-1.5" %}
+                            {{ ec.contact_person.phone }}
+                        </a>
+                        {% endif %}
+                        {% if ec.contact_person.email %}
+                        <a href="mailto:{{ ec.contact_person.email }}" class="flex items-center hover:text-primary-600 truncate">
+                            {% icon "mail" "w-3 h-3 mr-1.5" %}
+                            {{ ec.contact_person.email }}
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% if ec.notes %}
+                    <p class="mt-2 text-xs text-gray-500">{{ ec.notes }}</p>
+                    {% endif %}
+                    {% if ec.is_also_diver %}
+                    <p class="mt-1 text-xs text-yellow-600 flex items-center">
+                        {% icon "alert-triangle" "w-3 h-3 mr-1" %}
+                        Also a diver
+                    </p>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="text-center py-6">
+                <div class="text-gray-300 mb-3">
+                    {% icon "users" "w-10 h-10 mx-auto" %}
+                </div>
+                <p class="text-gray-500 text-sm">No emergency contacts on file.</p>
+                <p class="text-sm text-gray-400 mt-1">Add at least one emergency contact for your safety.</p>
+                <button @click="showContactModal = true"
+                        class="mt-3 inline-flex items-center px-4 py-2 border border-primary-300 rounded-lg text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100">
+                    {% icon "plus" "w-4 h-4 mr-1.5" %}
+                    Add Contact
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        </div>
+    </div>
 
     <!-- Recent Dive History -->
     {% if past_bookings %}
@@ -223,6 +759,34 @@
                     </ul>
                 {% else %}
                     <p class="text-gray-500 text-sm">No courseware available yet.</p>
+                {% endif %}
+
+                {% if recommended_courseware %}
+                <div class="mt-4 pt-4 border-t border-gray-100">
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Recommended Courses</p>
+                    <ul class="space-y-2">
+                        {% for rec in recommended_courseware %}
+                        <li class="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-100">
+                            <div class="flex items-center flex-1 min-w-0">
+                                <div class="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                    {% icon "book-open" "w-4 h-4 text-green-600" %}
+                                </div>
+                                <div class="ml-3 min-w-0">
+                                    <div class="font-medium text-gray-800 text-sm truncate">{{ rec.item.display_name }}</div>
+                                    <div class="text-xs text-gray-600">{{ rec.reason }}</div>
+                                </div>
+                            </div>
+                            <div class="flex-shrink-0 ml-3 text-right">
+                                {% if rec.price %}
+                                <div class="text-sm font-semibold text-green-700">${{ rec.price }}</div>
+                                {% endif %}
+                                <a href="{% url 'store:list' %}" class="text-xs text-green-600 hover:text-green-800">View</a>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% elif not courseware_pages %}
                     <a href="{% url 'store:list' %}" class="mt-3 inline-flex items-center text-primary-600 hover:text-primary-800 text-sm">
                         {% icon "shopping-cart" "w-4 h-4 mr-1" %}
                         Browse our courses
@@ -245,7 +809,7 @@
                         {% for order in orders %}
                         <li class="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
                             <div>
-                                <span class="font-medium text-gray-800">{{ order.order_number }}</span>
+                                <a href="{% url 'portal:order_detail' order.order_number %}" class="font-medium text-primary-600 hover:text-primary-800">{{ order.order_number }}</a>
                                 <span class="text-sm text-gray-500 ml-2">{{ order.created_at|date:"M j, Y" }}</span>
                             </div>
                             <div class="flex items-center">
@@ -267,6 +831,42 @@
             </div>
         </div>
     </div>
+
+    <!-- Recommended Gear -->
+    {% if recommended_gear %}
+    <div class="bg-white shadow rounded-lg">
+        <div class="p-6 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                {% icon "shopping-bag" "w-5 h-5 mr-2 text-primary-500" %}
+                Recommended Gear
+            </h3>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {% for rec in recommended_gear %}
+                <div class="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border border-amber-100">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                            {% icon "package" "w-5 h-5 text-amber-600" %}
+                        </div>
+                        <div class="ml-3 flex-1 min-w-0">
+                            <div class="font-medium text-gray-800 text-sm truncate">{{ rec.item.display_name }}</div>
+                            <div class="text-xs text-gray-600 mt-1">{{ rec.reason }}</div>
+                            {% if rec.price %}
+                            <div class="text-sm font-semibold text-amber-700 mt-2">${{ rec.price }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <a href="{% url 'store:list' %}" class="mt-4 inline-flex items-center text-primary-600 hover:text-primary-800 text-sm">
+                Browse all gear
+                {% icon "arrow-right" "w-4 h-4 ml-1" %}
+            </a>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Entitlements -->
     {% if entitlements %}
@@ -325,40 +925,82 @@
             </div>
         </div>
 
-        <!-- Signed Agreements -->
-        <div class="bg-white shadow rounded-lg">
+        <!-- My Documents & Agreements -->
+        <div class="bg-white shadow rounded-lg" x-data="{ expanded: false }">
             <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-                    {% icon "file-check" "w-5 h-5 mr-2 text-primary-500" %}
-                    Signed Agreements
-                </h3>
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                        {% icon "folder" "w-5 h-5 mr-2 text-primary-500" %}
+                        My Documents & Agreements
+                    </h3>
+                    {% if combined_docs|length > 4 %}
+                    <button @click="expanded = !expanded" class="text-sm text-primary-600 hover:text-primary-800">
+                        <span x-show="!expanded">View all ({{ combined_docs|length }})</span>
+                        <span x-show="expanded" x-cloak>Show less</span>
+                    </button>
+                    {% endif %}
+                </div>
             </div>
             <div class="p-6">
-                {% if signed_agreements %}
+                {% if combined_docs %}
                     <ul class="space-y-3">
-                        {% for agreement in signed_agreements %}
-                        <li class="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
-                            <div>
-                                <span class="font-medium text-gray-800">{{ agreement.template.name }}</span>
-                                <div class="text-xs text-gray-500">
-                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600 mr-1">
-                                        {{ agreement.template.get_template_type_display }}
-                                    </span>
-                                    {{ agreement.signed_at|date:"M j, Y" }}
+                        {% for entry in combined_docs %}
+                        <li class="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0"
+                            {% if forloop.counter > 4 %}x-show="expanded" x-cloak x-transition{% endif %}>
+                            {% if entry.type == 'document' %}
+                            <div class="flex items-center">
+                                {% if entry.item.document_type == 'signed_medical_questionnaire' %}
+                                    {% icon "heart" "w-5 h-5 text-red-500 mr-3" %}
+                                {% elif entry.item.document_type == 'physician_clearance' %}
+                                    {% icon "clipboard-check" "w-5 h-5 text-green-500 mr-3" %}
+                                {% elif entry.item.document_type == 'photo_id' %}
+                                    {% icon "user" "w-5 h-5 text-blue-500 mr-3" %}
+                                {% else %}
+                                    {% icon "file" "w-5 h-5 text-gray-500 mr-3" %}
+                                {% endif %}
+                                <div>
+                                    <span class="font-medium text-gray-800">{{ entry.item.name|default:entry.item.document_type|title }}</span>
+                                    <div class="text-xs text-gray-500">
+                                        {% if entry.item.document_type %}
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600 mr-1">
+                                            {{ entry.item.document_type|title }}
+                                        </span>
+                                        {% endif %}
+                                        {{ entry.date|date:"M j, Y" }}
+                                    </div>
                                 </div>
                             </div>
-                            {% if agreement.signed_document %}
-                            <a href="{{ agreement.signed_document.file.url }}" target="_blank" class="text-primary-600 hover:text-primary-800" title="Download PDF">
+                            {% if entry.item.file %}
+                            <a href="{{ entry.item.file.url }}" target="_blank" class="text-primary-600 hover:text-primary-800" title="Download">
+                                {% icon "download" "w-4 h-4" %}
+                            </a>
+                            {% endif %}
+                            {% else %}
+                            <div class="flex items-center">
+                                {% icon "file-check" "w-5 h-5 text-blue-500 mr-3" %}
+                                <div>
+                                    <span class="font-medium text-gray-800">{{ entry.item.template.name }}</span>
+                                    <div class="text-xs text-gray-500">
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-600 mr-1">
+                                            {{ entry.item.template.get_template_type_display }}
+                                        </span>
+                                        {{ entry.date|date:"M j, Y" }}
+                                    </div>
+                                </div>
+                            </div>
+                            {% if entry.item.signed_document %}
+                            <a href="{{ entry.item.signed_document.file.url }}" target="_blank" class="text-primary-600 hover:text-primary-800" title="Download PDF">
                                 {% icon "download" "w-4 h-4" %}
                             </a>
                             {% else %}
                             {% icon "check-circle" "w-4 h-4 text-green-500" %}
                             {% endif %}
+                            {% endif %}
                         </li>
                         {% endfor %}
                     </ul>
                 {% else %}
-                    <p class="text-gray-500 text-sm">No agreements signed yet.</p>
+                    <p class="text-gray-500 text-sm">No documents or agreements on file.</p>
                 {% endif %}
             </div>
         </div>
@@ -424,6 +1066,75 @@
             {% else %}
                 <p class="text-gray-500 text-sm">No dives logged yet.</p>
                 <p class="text-sm text-gray-400 mt-1">Your dive logs will appear here after your dives are recorded.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Photo Gallery -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    {% icon "camera" "w-5 h-5 mr-2 text-primary-500" %}
+                    My Photos
+                </h3>
+                <div class="flex items-center gap-3">
+                    {% if photo_tags %}
+                    <span class="text-sm text-gray-500">{{ photo_tags|length }} photo{{ photo_tags|length|pluralize }}</span>
+                    {% endif %}
+                    <button type="button"
+                            class="inline-flex items-center px-3 py-1.5 border border-primary-300 rounded-lg text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100"
+                            onclick="alert('Photo upload coming soon!')">
+                        {% icon "upload" "w-4 h-4 mr-1.5" %}
+                        Share Photos
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="p-6">
+            {% if photo_tags %}
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    {% for tag in photo_tags %}
+                    <div class="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                        {% if tag.document.file %}
+                        <img src="{{ tag.document.file.url }}"
+                             alt="Dive photo"
+                             class="w-full h-full object-cover">
+                        <!-- Watermark overlay (placeholder for future) -->
+                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center">
+                            <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                <a href="{{ tag.document.file.url }}"
+                                   target="_blank"
+                                   class="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100"
+                                   title="View full size">
+                                    {% icon "eye" "w-5 h-5 text-gray-700" %}
+                                </a>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="w-full h-full flex items-center justify-center">
+                            {% icon "image" "w-8 h-8 text-gray-300" %}
+                        </div>
+                        {% endif %}
+                        <!-- Photo date badge -->
+                        <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-2">
+                            <span class="text-xs text-white">{{ tag.document.created_at|date:"M j, Y" }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <p class="mt-4 text-sm text-gray-500">
+                    {% icon "info" "w-4 h-4 inline mr-1" %}
+                    Click to view. Full-resolution downloads coming soon!
+                </p>
+            {% else %}
+                <div class="text-center py-8">
+                    <div class="text-gray-300 mb-3">
+                        {% icon "camera" "w-12 h-12 mx-auto" %}
+                    </div>
+                    <p class="text-gray-500 text-sm">No photos yet.</p>
+                    <p class="text-sm text-gray-400 mt-1">Photos from your dives will appear here once they're uploaded.</p>
+                </div>
             {% endif %}
         </div>
     </div>

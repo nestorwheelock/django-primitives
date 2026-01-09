@@ -47,19 +47,45 @@
                 <div>
                     <dt class="text-sm font-medium text-gray-500">Medical Clearance</dt>
                     <dd class="mt-1 text-sm text-gray-900">
-                        {% if diver.is_medical_current %}
+                        {% if medical_status == 'cleared' and medical_instance %}
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Valid until {{ diver.medical_clearance_valid_until|date:"M d, Y" }}
+                            Valid until {{ medical_instance.expires_at|date:"M d, Y" }}
                         </span>
-                        {% elif diver.medical_clearance_valid_until %}
+                        {% if medical_instance.clearance_document %}
+                        <a href="{{ medical_instance.clearance_document.file.url }}" target="_blank" class="ml-2 text-blue-600 hover:text-blue-800 text-xs">
+                            View Document
+                        </a>
+                        {% endif %}
+                        {% elif medical_status == 'expired' %}
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            Expired {{ diver.medical_clearance_valid_until|date:"M d, Y" }}
+                            Expired
                         </span>
+                        {% elif medical_status == 'requires_clearance' %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Requires Physician Clearance
+                        </span>
+                        {% if medical_instance %}
+                        <a href="/sign/medical/{{ medical_instance.pk }}/" target="_blank" class="ml-2 text-blue-600 hover:text-blue-800 text-xs">
+                            Open Questionnaire
+                        </a>
+                        {% endif %}
+                        {% elif medical_status == 'pending' %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Pending
+                        </span>
+                        {% if medical_instance %}
+                        <a href="/sign/medical/{{ medical_instance.pk }}/" target="_blank" class="ml-2 text-blue-600 hover:text-blue-800 text-xs">
+                            Open Questionnaire
+                        </a>
+                        {% endif %}
                         {% else %}
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                             Not on file
                         </span>
                         {% endif %}
+                        <a href="{% url 'diveops:send-medical-questionnaire' diver_pk=diver.pk %}" class="ml-3 inline-flex items-center px-2 py-1 border border-blue-300 rounded text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100">
+                            Send New Screener
+                        </a>
                     </dd>
                 </div>
             </dl>
@@ -152,6 +178,65 @@
                 <a href="{% url 'diveops:certification-add' diver_pk=diver.pk %}" class="mt-2 inline-block text-blue-600 hover:text-blue-900">
                     Add the first certification
                 </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Preferences Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <div>
+                <h2 class="text-lg font-medium text-gray-900">Preferences</h2>
+                {% if preference_status %}
+                <p class="text-sm text-gray-500">{{ preference_status.completion_percent }}% complete ({{ preference_status.collected_count }}/{{ preference_status.total_definitions }})</p>
+                {% endif %}
+            </div>
+            {% if preference_status.needs_intake_survey %}
+            <button type="button" class="px-4 py-2 border border-blue-300 rounded-lg text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100">
+                Send Survey
+            </button>
+            {% endif %}
+        </div>
+        <div>
+            {% if preferences_by_category %}
+            <div class="divide-y divide-gray-200">
+                {% for category, prefs in preferences_by_category.items %}
+                <div class="px-6 py-4">
+                    <h3 class="text-sm font-medium text-gray-900 capitalize mb-3">{{ category }}</h3>
+                    <dl class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {% for pref in prefs %}
+                        <div>
+                            <dt class="text-xs text-gray-500">{{ pref.label }}</dt>
+                            <dd class="text-sm text-gray-900 mt-0.5">
+                                {% if pref.value_type == "multi_choice" %}
+                                    {% for item in pref.value %}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-1">{{ item }}</span>
+                                    {% empty %}
+                                        <span class="text-gray-400">Not set</span>
+                                    {% endfor %}
+                                {% elif pref.value_type == "bool" %}
+                                    {% if pref.value %}
+                                        <span class="text-green-600">Yes</span>
+                                    {% else %}
+                                        <span class="text-gray-500">No</span>
+                                    {% endif %}
+                                {% else %}
+                                    {{ pref.value|default:"Not set" }}
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% endfor %}
+                    </dl>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="p-6 text-center text-gray-500">
+                <p>No preferences collected yet.</p>
+                {% if preference_status.needs_intake_survey %}
+                <p class="mt-2 text-sm text-blue-600">Send a survey to collect preferences.</p>
+                {% endif %}
             </div>
             {% endif %}
         </div>
