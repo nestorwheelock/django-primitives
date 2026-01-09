@@ -68,3 +68,7 @@ class AgreementExpired(AgreementError):
 
 class AgreementAlreadySigned(AgreementError):
     """Agreement has already been signed."""
+
+
+class InvalidStateTransition(AgreementError):
+    """Invalid state transition attempted (e.g., voiding a signed agreement)."""

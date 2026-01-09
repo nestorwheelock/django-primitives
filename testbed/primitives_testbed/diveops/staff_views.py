@@ -5532,6 +5532,14 @@ class SignableAgreementVoidView(StaffPortalMixin, View):
 
         agreement = get_object_or_404(SignableAgreement, pk=pk)
 
+        # Only draft and sent agreements can be voided
+        if agreement.status not in ("draft", "sent"):
+            messages.error(
+                request,
+                f"Cannot void agreement: {agreement.get_status_display()} agreements cannot be voided."
+            )
+            return redirect("diveops:signable-agreement-detail", pk=pk)
+
         # Get party name for display
         party_a = agreement.party_a
         if party_a:

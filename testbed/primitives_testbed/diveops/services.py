@@ -4804,6 +4804,7 @@ from datetime import timedelta
 from .exceptions import (
     AgreementNotEditable,
     ChangeNoteRequired,
+    InvalidStateTransition,
     VoidReasonRequired,
 )
 
@@ -5093,9 +5094,9 @@ def void_agreement(
     reason: str,
     actor,
 ):
-    """Void agreement. Any status → void.
+    """Void agreement. Only draft or sent agreements can be voided.
 
-    Can void draft, sent, or even signed (for legal recall).
+    Signed agreements cannot be voided - they are legally binding records.
     Requires reason for audit trail.
 
     Args:
@@ -5108,9 +5109,21 @@ def void_agreement(
 
     Raises:
         VoidReasonRequired: If reason is empty
+        InvalidStateTransition: If agreement is already signed, void, or expired
     """
     if not reason or not reason.strip():
         raise VoidReasonRequired("Reason is required when voiding an agreement")
+
+    if agreement.status == "signed":
+        raise InvalidStateTransition(
+            "Signed agreements cannot be voided. They are legally binding records."
+        )
+
+    if agreement.status == "void":
+        raise InvalidStateTransition("Agreement is already voided.")
+
+    if agreement.status == "expired":
+        raise InvalidStateTransition("Expired agreements cannot be voided.")
 
     agreement.status = "void"
     agreement.save(update_fields=["status", "updated_at"])
