@@ -1,0 +1,296 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:excursion-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Excursions</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">{{ excursion.dive_site.name }}</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Make Recurring</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-3xl space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="text-gray-600">Convert this excursion into a recurring weekly series</p>
+    </div>
+
+    <!-- Source Excursion Info -->
+    <div class="bg-purple-50 rounded-lg border border-purple-200 p-4">
+        <div class="flex items-start">
+            <div class="flex-shrink-0">
+                {% icon "repeat" "h-6 w-6 text-purple-600" %}
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-purple-900">Creating series from excursion</h3>
+                <div class="mt-2 text-sm text-purple-700">
+                    <p><strong>{{ excursion.excursion_type.name }}</strong> at <strong>{{ excursion.dive_site.name }}</strong></p>
+                    <p class="mt-1">
+                        {{ excursion.departure_time|date:"l, M j, Y" }} at {{ excursion.departure_time|time:"g:i A" }}
+                    </p>
+                </div>
+                <p class="mt-2 text-xs text-purple-600">
+                    This excursion will become the first occurrence of the new series.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <form method="post" class="p-6 space-y-6">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="rounded-lg bg-red-50 p-4 border border-red-200">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        {% icon "alert-circle" "h-5 w-5 text-red-400" %}
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800">There were errors with your submission</h3>
+                        <div class="mt-2 text-sm text-red-700">
+                            <ul class="list-disc pl-5 space-y-1">
+                                {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Basic Info -->
+            <div>
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Series Information</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Name -->
+                    <div class="md:col-span-2">
+                        <label for="id_name" class="block text-sm font-medium text-gray-700">Series Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="name" id="id_name" value="{{ form.name.value|default:'' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.name.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="e.g., Saturday Morning 2-Tank">
+                        {% if form.name.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Excursion Type (read-only, inherited from excursion) -->
+                    <div>
+                        <label for="id_excursion_type" class="block text-sm font-medium text-gray-700">Excursion Type <span class="text-red-500">*</span></label>
+                        <select name="excursion_type" id="id_excursion_type"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Select type...</option>
+                            {% for choice in form.fields.excursion_type.queryset %}
+                            <option value="{{ choice.pk }}" {% if form.excursion_type.value|stringformat:'s' == choice.pk|stringformat:'s' %}selected{% endif %}>
+                                {{ choice.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if form.excursion_type.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.excursion_type.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Dive Site -->
+                    <div>
+                        <label for="id_dive_site" class="block text-sm font-medium text-gray-700">Default Dive Site</label>
+                        <select name="dive_site" id="id_dive_site"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Select site (optional)...</option>
+                            {% for choice in form.fields.dive_site.queryset %}
+                            <option value="{{ choice.pk }}" {% if form.dive_site.value|stringformat:'s' == choice.pk|stringformat:'s' %}selected{% endif %}>
+                                {{ choice.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">Can be overridden per occurrence</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Schedule -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Recurrence Schedule</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Day of Week -->
+                    <div>
+                        <label for="id_day_of_week" class="block text-sm font-medium text-gray-700">Day of Week <span class="text-red-500">*</span></label>
+                        <select name="day_of_week" id="id_day_of_week"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.day_of_week.choices %}
+                            <option value="{{ value }}" {% if form.day_of_week.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Start Time -->
+                    <div>
+                        <label for="id_start_time" class="block text-sm font-medium text-gray-700">Departure Time <span class="text-red-500">*</span></label>
+                        <input type="time" name="start_time" id="id_start_time" value="{{ form.start_time.value|default:'08:00' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Series Start Date (from excursion) -->
+                    <div>
+                        <label for="id_series_start_date" class="block text-sm font-medium text-gray-700">First Occurrence <span class="text-red-500">*</span></label>
+                        <input type="date" name="series_start_date" id="id_series_start_date" value="{{ form.series_start_date.value|date:'Y-m-d' }}"
+                               class="mt-1 block w-full px-3 py-2 border {% if form.series_start_date.errors %}border-red-300{% else %}border-gray-300{% endif %} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        {% if form.series_start_date.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.series_start_date.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Series End Date -->
+                    <div>
+                        <label for="id_series_end_date" class="block text-sm font-medium text-gray-700">Last Occurrence</label>
+                        <input type="date" name="series_end_date" id="id_series_end_date" value="{{ form.series_end_date.value|date:'Y-m-d' }}"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500">Leave blank for indefinite series</p>
+                    </div>
+
+                    <!-- Timezone -->
+                    <div>
+                        <label for="id_timezone" class="block text-sm font-medium text-gray-700">Timezone</label>
+                        <select name="timezone" id="id_timezone"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.timezone.choices %}
+                            <option value="{{ value }}" {% if form.timezone.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Defaults -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Default Settings</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Duration -->
+                    <div>
+                        <label for="id_duration_minutes" class="block text-sm font-medium text-gray-700">Duration (min)</label>
+                        <input type="number" name="duration_minutes" id="id_duration_minutes"
+                               value="{{ form.duration_minutes.value|default:'240' }}" min="60" max="720"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Capacity -->
+                    <div>
+                        <label for="id_capacity_default" class="block text-sm font-medium text-gray-700">Max Divers</label>
+                        <input type="number" name="capacity_default" id="id_capacity_default"
+                               value="{{ form.capacity_default.value|default:'12' }}" min="1" max="50"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Window Days -->
+                    <div>
+                        <label for="id_window_days" class="block text-sm font-medium text-gray-700">Booking Window</label>
+                        <div class="mt-1 relative rounded-lg shadow-sm">
+                            <input type="number" name="window_days" id="id_window_days"
+                                   value="{{ form.window_days.value|default:'60' }}" min="7" max="365"
+                                   class="block w-full pr-12 px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">days</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <!-- Price Override -->
+                    <div>
+                        <label for="id_price_default" class="block text-sm font-medium text-gray-700">Price Override</label>
+                        <div class="mt-1 relative rounded-lg shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" name="price_default" id="id_price_default"
+                                   value="{{ form.price_default.value|default:'' }}" step="0.01" min="0"
+                                   class="block w-full pl-7 px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="Use type price">
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">Leave blank to use excursion type base price</p>
+                    </div>
+
+                    <!-- Currency -->
+                    <div>
+                        <label for="id_currency" class="block text-sm font-medium text-gray-700">Currency</label>
+                        <select name="currency" id="id_currency"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            {% for value, label in form.fields.currency.choices %}
+                            <option value="{{ value }}" {% if form.currency.value == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Meeting Place -->
+                <div class="mt-4">
+                    <label for="id_meeting_place" class="block text-sm font-medium text-gray-700">Meeting Place</label>
+                    <input type="text" name="meeting_place" id="id_meeting_place" value="{{ form.meeting_place.value|default:'' }}"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="e.g., Marina dock #3">
+                </div>
+
+                <!-- Notes -->
+                <div class="mt-4">
+                    <label for="id_notes" class="block text-sm font-medium text-gray-700">Internal Notes</label>
+                    <textarea name="notes" id="id_notes" rows="3"
+                              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Notes about this series...">{{ form.notes.value|default:'' }}</textarea>
+                </div>
+            </div>
+
+            <!-- Status -->
+            <div class="border-t pt-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Status</h3>
+                <div>
+                    <label for="id_status" class="block text-sm font-medium text-gray-700">Series Status</label>
+                    <select name="status" id="id_status"
+                            class="mt-1 block w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        {% for value, label in form.fields.status.choices %}
+                        <option value="{{ value }}" {% if form.status.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Only active series generate occurrences automatically</p>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="border-t pt-6 flex items-center justify-end space-x-3">
+                <a href="{% url 'diveops:excursion-detail' pk=excursion.pk %}"
+                   class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-purple-600 hover:bg-purple-700">
+                    {% icon "repeat" "w-4 h-4 mr-2 inline" %}
+                    Create Recurring Series
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

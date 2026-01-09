@@ -226,11 +226,31 @@ class ExcursionListView(StaffPortalMixin, ListView):
         return list_upcoming_excursions()
 
     def get_context_data(self, **kwargs):
-        """Add excursion types for quick booking section."""
+        """Add excursion types and recurring series for dashboard."""
         context = super().get_context_data(**kwargs)
         context["excursion_types"] = ExcursionType.objects.filter(
             is_active=True
         ).order_by("name")
+
+        # Add active recurring series for the dashboard section
+        from django.db.models import Count
+        from django.utils import timezone
+
+        context["recurring_series"] = (
+            ExcursionSeries.objects.filter(deleted_at__isnull=True)
+            .exclude(status="retired")
+            .select_related("recurrence_rule", "excursion_type", "dive_site")
+            .annotate(
+                upcoming_count=Count(
+                    "excursions",
+                    filter=Q(
+                        excursions__departure_time__gte=timezone.now(),
+                        excursions__status__in=["scheduled", "boarding"],
+                    ),
+                )
+            )
+            .order_by("name")
+        )
         return context
 
 
@@ -7404,11 +7424,24 @@ class ExcursionSeriesDetailView(StaffPortalMixin, DetailView):
 
 
 class ExcursionSeriesCreateView(StaffPortalMixin, FormView):
-    """Create a new excursion series."""
+    """Create a new excursion series.
+
+    Accepts optional ?type=<uuid> to prefill from an excursion type.
+    """
 
     template_name = "diveops/staff/series_form.html"
     form_class = ExcursionSeriesForm
     success_url = reverse_lazy("diveops:series-list")
+
+    def dispatch(self, request, *args, **kwargs):
+        # Check for ?type= parameter to prefill from excursion type
+        type_pk = request.GET.get("type")
+        self.prefill_type = None
+        if type_pk:
+            self.prefill_type = ExcursionType.objects.filter(
+                pk=type_pk, is_active=True
+            ).first()
+        return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -7418,6 +7451,17 @@ class ExcursionSeriesCreateView(StaffPortalMixin, FormView):
 
         dive_shop = Organization.objects.filter(org_type="dive_shop").first()
         kwargs["dive_shop"] = dive_shop
+
+        # If prefilling from type, set initial data
+        if self.prefill_type:
+            kwargs["initial"] = kwargs.get("initial", {})
+            kwargs["initial"]["excursion_type"] = self.prefill_type.pk
+            kwargs["initial"]["name"] = f"{self.prefill_type.name} - Weekly"
+            if self.prefill_type.base_price:
+                kwargs["initial"]["price_default"] = self.prefill_type.base_price
+            if self.prefill_type.currency:
+                kwargs["initial"]["currency"] = self.prefill_type.currency
+
         return kwargs
 
     def form_valid(self, form):
@@ -7429,6 +7473,9 @@ class ExcursionSeriesCreateView(StaffPortalMixin, FormView):
         context = super().get_context_data(**kwargs)
         context["is_create"] = True
         context["page_title"] = "Create Excursion Series"
+        if self.prefill_type:
+            context["prefill_type"] = self.prefill_type
+            context["page_title"] = f"Create Series from {self.prefill_type.name}"
         return context
 
 
@@ -7526,3 +7573,94 @@ class ExcursionSeriesActivateView(StaffPortalMixin, View):
         series.save(update_fields=["status", "updated_at"])
         messages.success(request, f"Series '{series.name}' is now active.")
         return redirect("diveops:series-detail", pk=pk)
+
+
+class ExcursionMakeRecurringView(StaffPortalMixin, FormView):
+    """Convert a standalone excursion into a recurring series.
+
+    Creates a new series using the excursion's settings as defaults,
+    and optionally links the original excursion to the new series.
+    """
+
+    template_name = "diveops/staff/make_recurring.html"
+    form_class = ExcursionSeriesForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.excursion = get_object_or_404(
+            Excursion.objects.select_related(
+                "dive_site", "excursion_type", "dive_shop"
+            ),
+            pk=kwargs["pk"],
+        )
+        # Only allow making recurring if:
+        # - Not already part of a series
+        # - Not cancelled
+        # - Is a future excursion
+        from django.utils import timezone
+
+        if self.excursion.series:
+            messages.error(request, "This excursion is already part of a series.")
+            return redirect("diveops:excursion-detail", pk=self.excursion.pk)
+        if self.excursion.status == "cancelled":
+            messages.error(request, "Cannot make a cancelled excursion recurring.")
+            return redirect("diveops:excursion-detail", pk=self.excursion.pk)
+        if self.excursion.departure_time < timezone.now():
+            messages.error(request, "Cannot make a past excursion recurring.")
+            return redirect("diveops:excursion-detail", pk=self.excursion.pk)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["dive_shop"] = self.excursion.dive_shop
+
+        # Prefill from excursion
+        exc = self.excursion
+        day_map = {
+            0: "MO",
+            1: "TU",
+            2: "WE",
+            3: "TH",
+            4: "FR",
+            5: "SA",
+            6: "SU",
+        }
+        kwargs["initial"] = {
+            "name": f"{exc.excursion_type.name} - {exc.departure_time.strftime('%A')}s",
+            "excursion_type": exc.excursion_type_id,
+            "dive_site": exc.dive_site_id if exc.dive_site else None,
+            "day_of_week": day_map.get(exc.departure_time.weekday(), "SA"),
+            "start_time": exc.departure_time.time(),
+            "series_start_date": exc.departure_time.date(),
+            "capacity_default": exc.max_divers,
+            "price_default": exc.price,
+            "currency": exc.currency if exc.currency else "USD",
+            "meeting_place": exc.meeting_place or "",
+            "notes": f"Created from excursion on {exc.departure_time.strftime('%Y-%m-%d')}",
+            "status": "active",
+        }
+        return kwargs
+
+    def form_valid(self, form):
+        series = form.save(actor=self.request.user)
+
+        # Link the original excursion to this series
+        self.excursion.series = series
+        self.excursion.occurrence_start = self.excursion.departure_time
+        self.excursion.save(update_fields=["series", "occurrence_start", "updated_at"])
+
+        messages.success(
+            self.request,
+            f"Series '{series.name}' created. This excursion is now the first occurrence.",
+        )
+        return redirect("diveops:series-detail", pk=series.pk)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["excursion"] = self.excursion
+        context["is_create"] = True
+        context["is_make_recurring"] = True
+        context["page_title"] = "Make Excursion Recurring"
+        return context
+
+    def get_success_url(self):
+        return reverse("diveops:excursion-list")

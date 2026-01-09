@@ -52,6 +52,7 @@ urlpatterns = [
     path("excursions/add/", staff_views.ExcursionCreateView.as_view(), name="excursion-create"),
     path("excursions/<uuid:pk>/edit/", staff_views.ExcursionUpdateView.as_view(), name="excursion-edit"),
     path("excursions/<uuid:pk>/cancel/", staff_views.ExcursionCancelView.as_view(), name="excursion-cancel"),
+    path("excursions/<uuid:pk>/make-recurring/", staff_views.ExcursionMakeRecurringView.as_view(), name="excursion-make-recurring"),
     # Dive management
     path("excursions/<uuid:excursion_pk>/dives/add/", staff_views.DiveCreateView.as_view(), name="dive-add"),
     path("dives/<uuid:pk>/edit/", staff_views.DiveUpdateView.as_view(), name="dive-edit"),
