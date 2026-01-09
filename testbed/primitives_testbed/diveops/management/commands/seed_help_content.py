@@ -1,4 +1,8 @@
-"""Management command to seed help center content."""
+"""Management command to seed help center content.
+
+This content is derived from actual code analysis and interface crawling,
+not invented. Each section reflects the real functionality in the application.
+"""
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -6,99 +10,90 @@ from django.utils import timezone
 from django_cms_core.models import ContentPage, ContentBlock, PageStatus, AccessLevel
 
 
+# Help content derived from actual interface analysis and code examination
+# See: docs/interface_analysis/interface_analysis.json for extracted UI elements
+# See: primitives_testbed/diveops/models.py for model definitions
 HELP_CONTENT = {
     "getting-started": {
         "dashboard-overview": {
             "title": "Dashboard Overview",
             "content": """
-<p>Welcome to the DiveOps Staff Dashboard! This guide will help you navigate and use the dashboard effectively.</p>
+<p>The Dive Operations Dashboard is your central hub for managing daily operations.</p>
 
-<h3>Main Dashboard</h3>
-<p>When you first log in, you'll see the main dashboard with key metrics and quick actions:</p>
+<h3>Dashboard Statistics</h3>
+<p>The top of the dashboard displays key metrics:</p>
 <ul>
-    <li><strong>Today's Excursions</strong> - View upcoming trips for today with participant counts</li>
-    <li><strong>Recent Bookings</strong> - New bookings that may need attention</li>
-    <li><strong>Pending Medical</strong> - Medical questionnaires awaiting review</li>
-    <li><strong>Unsigned Agreements</strong> - Agreements sent but not yet signed</li>
+    <li><strong>Registered Divers</strong> - Total active diver profiles in the system</li>
+    <li><strong>Active Excursions</strong> - Scheduled and in-progress dive trips</li>
+    <li><strong>Pending Agreements</strong> - Waivers awaiting signature</li>
 </ul>
 
-<h3>Quick Actions</h3>
-<p>The dashboard provides quick access to common tasks:</p>
-<ul>
-    <li>Schedule a new excursion</li>
-    <li>Add a new diver</li>
-    <li>Send an agreement for signature</li>
-    <li>View today's manifest</li>
-</ul>
+<h3>Weather Forecast</h3>
+<p>The dashboard includes a weather widget showing current conditions and forecast for your dive shop location. Wind speed, direction, and conditions help with trip planning decisions.</p>
 
-<h3>Getting Help</h3>
-<p>You can access this Help Center anytime by clicking the Help link in the navigation sidebar.</p>
+<h3>Quick Navigation</h3>
+<p>The sidebar provides access to all major sections:</p>
+<ul>
+    <li><strong>Dive Operations</strong> - Excursions, Divers, Sites, Protected Areas, Agreements, Medical</li>
+    <li><strong>Planning</strong> - Dive Plans and Dive Logs</li>
+    <li><strong>System</strong> - Documents, Media, Audit Log</li>
+    <li><strong>Configuration</strong> - Excursion Types, Agreement Templates, Catalog Items, AI Settings</li>
+    <li><strong>Finance</strong> - Chart of Accounts, Payables</li>
+</ul>
 """,
         },
         "navigation-guide": {
             "title": "Navigation Guide",
             "content": """
-<p>The staff dashboard is organized into logical sections to help you find what you need quickly.</p>
+<p>The staff portal uses a consistent navigation structure across all pages.</p>
 
-<h3>Navigation Sections</h3>
+<h3>Sidebar Navigation</h3>
+<p>The left sidebar is organized into logical sections:</p>
 
 <h4>Dive Operations</h4>
 <ul>
-    <li><strong>Excursions</strong> - Manage dive trips, schedules, and manifests</li>
-    <li><strong>Divers</strong> - Diver profiles, certifications, and history</li>
-    <li><strong>Dive Sites</strong> - Location information and site details</li>
-    <li><strong>Protected Areas</strong> - Marine park permits and fees</li>
-    <li><strong>Agreements</strong> - Liability waivers and rental forms</li>
-    <li><strong>Medical Questionnaires</strong> - Health screening forms</li>
+    <li><strong>Excursions</strong> (<code>/staff/diveops/excursions/</code>) - Schedule and manage dive trips</li>
+    <li><strong>Divers</strong> (<code>/staff/diveops/divers/</code>) - Diver profiles and certifications</li>
+    <li><strong>Dive Sites</strong> (<code>/staff/diveops/sites/</code>) - Location details and photos</li>
+    <li><strong>Protected Areas</strong> (<code>/staff/diveops/protected-areas/</code>) - Marine parks, permits, fees</li>
+    <li><strong>Agreements</strong> (<code>/staff/diveops/signable-agreements/</code>) - Waivers and contracts</li>
+    <li><strong>Medical Questionnaires</strong> (<code>/staff/diveops/medical/</code>) - Health screening</li>
 </ul>
 
 <h4>Planning</h4>
 <ul>
-    <li><strong>Dive Plans</strong> - Pre-dive planning documents</li>
-    <li><strong>Dive Logs</strong> - Post-dive records</li>
-</ul>
-
-<h4>System</h4>
-<ul>
-    <li><strong>Documents</strong> - File storage and organization</li>
-    <li><strong>Media</strong> - Photo and video library</li>
-    <li><strong>Audit Log</strong> - Activity history</li>
+    <li><strong>Dive Plans</strong> (<code>/staff/diveops/dive-plans/</code>) - Pre-dive briefings and profiles</li>
+    <li><strong>Dive Logs</strong> (<code>/staff/diveops/dive-logs/</code>) - Post-dive records</li>
 </ul>
 
 <h4>Configuration</h4>
 <ul>
-    <li><strong>Excursion Types</strong> - Trip templates and pricing</li>
-    <li><strong>Agreement Types</strong> - Document templates</li>
-    <li><strong>Catalog Items</strong> - Products and services</li>
-    <li><strong>AI Settings</strong> - Configure AI assistance</li>
+    <li><strong>Excursion Types</strong> (<code>/staff/diveops/excursion-types/</code>) - Trip templates with pricing</li>
+    <li><strong>Agreement Types</strong> (<code>/staff/diveops/agreements/templates/</code>) - Document templates</li>
+    <li><strong>Catalog Items</strong> (<code>/staff/diveops/catalog/</code>) - Products and services</li>
+    <li><strong>AI Settings</strong> (<code>/staff/diveops/settings/ai/</code>) - AI feature configuration</li>
+</ul>
+
+<h4>Finance</h4>
+<ul>
+    <li><strong>Chart of Accounts</strong> (<code>/staff/diveops/accounts/</code>) - Ledger accounts</li>
+    <li><strong>Payables</strong> (<code>/staff/diveops/payables/</code>) - Vendor invoices and payments</li>
 </ul>
 """,
         },
         "your-account": {
             "title": "Your Account",
             "content": """
-<p>Manage your staff account settings and preferences.</p>
+<p>Staff accounts provide access to the dive operations dashboard based on assigned roles.</p>
 
-<h3>Profile Settings</h3>
-<p>Your profile includes:</p>
-<ul>
-    <li>Name and contact information</li>
-    <li>Profile photo</li>
-    <li>Notification preferences</li>
-    <li>Dashboard layout preferences</li>
-</ul>
+<h3>Account Access</h3>
+<p>Your account provides access based on your staff permissions. The system tracks all actions in the audit log for accountability.</p>
 
-<h3>Security</h3>
-<p>Keep your account secure by:</p>
-<ul>
-    <li>Using a strong, unique password</li>
-    <li>Enabling two-factor authentication if available</li>
-    <li>Logging out when using shared computers</li>
-    <li>Reporting suspicious activity to your administrator</li>
-</ul>
+<h3>Profile Link</h3>
+<p>Click <strong>Profile</strong> in the sidebar to access your personal settings. Click <strong>Log out</strong> to end your session.</p>
 
-<h3>Support</h3>
-<p>If you need help with your account, contact your system administrator.</p>
+<h3>Session Security</h3>
+<p>Sessions expire after a period of inactivity. For security, always log out when using shared computers.</p>
 """,
         },
     },
@@ -106,118 +101,176 @@ HELP_CONTENT = {
         "creating-profiles": {
             "title": "Creating Diver Profiles",
             "content": """
-<p>Diver profiles store all information about your customers, including contact details, certifications, and dive history.</p>
+<p>Diver profiles (DiverProfile model) store comprehensive information about each diver including contact details, certifications, medical status, and equipment sizing.</p>
 
 <h3>Creating a New Diver</h3>
 <ol>
     <li>Navigate to <strong>Divers</strong> in the sidebar</li>
-    <li>Click the <strong>Add Diver</strong> button</li>
-    <li>Fill in the required information:
-        <ul>
-            <li>Full name</li>
-            <li>Email address</li>
-            <li>Phone number</li>
-            <li>Date of birth</li>
-        </ul>
-    </li>
-    <li>Add optional information as available (certifications, emergency contacts)</li>
-    <li>Click <strong>Save</strong> to create the profile</li>
+    <li>Click <strong>Add Diver</strong></li>
+    <li>Complete the form sections described below</li>
+    <li>Click <strong>Create Diver</strong></li>
 </ol>
 
-<h3>Required vs Optional Fields</h3>
-<p>Only basic contact information is required initially. Certifications, medical information, and documents can be added later or by the diver themselves.</p>
+<h3>Personal Information (Required)</h3>
+<ul>
+    <li><strong>First Name</strong> - Diver's first name</li>
+    <li><strong>Last Name</strong> - Diver's last name</li>
+    <li><strong>Email</strong> - Primary contact email</li>
+</ul>
 
-<h3>Photo ID</h3>
-<p>For verification purposes, you can upload a photo of the diver's ID. This is stored securely and helps prevent identity issues.</p>
+<h3>Certification Section</h3>
+<ul>
+    <li><strong>Agency</strong> - Certification agency (PADI, SSI, NAUI, etc.)</li>
+    <li><strong>Level</strong> - Certification level (Open Water, Advanced, Rescue, Divemaster, etc.)</li>
+    <li><strong>Certification Number</strong> - Card number for verification</li>
+    <li><strong>Certification Date</strong> - Date certification was issued</li>
+</ul>
+
+<h3>Experience</h3>
+<ul>
+    <li><strong>Total Dives</strong> - Logged dive count for experience tracking</li>
+</ul>
+
+<h3>Medical Clearance</h3>
+<ul>
+    <li><strong>Clearance Date</strong> - When physician clearance was obtained</li>
+    <li><strong>Valid Until</strong> - Expiration date of medical clearance</li>
+</ul>
+
+<h3>Diver Profile</h3>
+<ul>
+    <li><strong>Diver Type</strong>:
+        <ul>
+            <li><em>Does Diving (Activity)</em> - Diving is an activity they do</li>
+            <li><em>Diver (Identity)</em> - Diving is core to their identity</li>
+        </ul>
+    </li>
+    <li><strong>Equipment Ownership</strong>:
+        <ul>
+            <li><em>None - Rents All</em> - Full rental customer</li>
+            <li><em>Partial - Owns Some Gear</em> - Hybrid rental</li>
+            <li><em>Full - Owns All Essential Gear</em> - Brings own equipment</li>
+        </ul>
+    </li>
+</ul>
+
+<h3>Body Measurements</h3>
+<p>Used for equipment fitting and weighting calculations:</p>
+<ul>
+    <li><strong>Weight (kg)</strong> - For buoyancy calculations</li>
+    <li><strong>Height (cm)</strong> - For wetsuit sizing</li>
+    <li><strong>Weight Required (kg)</strong> - Calculated neutral buoyancy weight</li>
+</ul>
+
+<h3>Gear Sizes</h3>
+<ul>
+    <li><strong>Wetsuit Size</strong> - e.g., M, L, XL</li>
+    <li><strong>BCD Size</strong> - e.g., M, L, XL</li>
+    <li><strong>Fin Size</strong> - e.g., M/L, 9-10</li>
+    <li><strong>Mask Fit</strong> - e.g., Low volume, Standard</li>
+    <li><strong>Glove Size</strong> - e.g., M, L, XL</li>
+    <li><strong>Gear Notes</strong> - Additional preferences or requirements</li>
+</ul>
 """,
         },
         "managing-certifications": {
             "title": "Managing Certifications",
             "content": """
-<p>Track and verify diver certifications to ensure safety and compliance.</p>
+<p>The certification system tracks diver qualifications using a normalized model with agency-scoped certification levels.</p>
 
-<h3>Adding a Certification</h3>
-<ol>
-    <li>Open the diver's profile</li>
-    <li>Go to the <strong>Certifications</strong> tab</li>
-    <li>Click <strong>Add Certification</strong></li>
-    <li>Select the certification agency (PADI, SSI, NAUI, etc.)</li>
-    <li>Choose the certification level</li>
-    <li>Enter the certification number and date</li>
-    <li>Upload a photo of the certification card if available</li>
-</ol>
-
-<h3>Verification</h3>
-<p>Certifications can be marked as:</p>
+<h3>Certification Levels</h3>
+<p>Certifications are ranked for eligibility checking:</p>
 <ul>
-    <li><strong>Unverified</strong> - Not yet checked</li>
-    <li><strong>Verified</strong> - Confirmed with agency or card photo</li>
-    <li><strong>Expired</strong> - Past expiration date</li>
+    <li><strong>Scuba Diver</strong> - Entry level (rank 1)</li>
+    <li><strong>Open Water Diver</strong> - Basic certification (rank 2)</li>
+    <li><strong>Advanced Open Water</strong> - Intermediate (rank 3)</li>
+    <li><strong>Rescue Diver</strong> - Advanced (rank 4)</li>
+    <li><strong>Divemaster</strong> - Professional (rank 5)</li>
+    <li><strong>Instructor</strong> - Teaching level (rank 6)</li>
 </ul>
 
-<h3>Eligibility</h3>
-<p>When booking divers for excursions, the system will check that they have appropriate certifications for the dive type.</p>
+<h3>Specialty Certifications</h3>
+<p>Additional certifications tracked include:</p>
+<ul>
+    <li>Enriched Air (Nitrox) Diver</li>
+    <li>Deep Diver</li>
+    <li>Night Diver</li>
+    <li>Wreck Diver</li>
+    <li>Cavern Diver</li>
+    <li>Underwater Photographer</li>
+    <li>Peak Performance Buoyancy</li>
+</ul>
+
+<h3>Verification Status</h3>
+<p>Each certification tracks:</p>
+<ul>
+    <li><strong>Verification status</strong> - Whether card has been verified</li>
+    <li><strong>Verified by</strong> - Staff member who verified</li>
+    <li><strong>Verified at</strong> - Date of verification</li>
+    <li><strong>Document proof</strong> - Uploaded certification card photo</li>
+</ul>
+
+<h3>Eligibility Checking</h3>
+<p>When booking divers for excursions, the system automatically checks certification requirements. The <code>is_current</code> property validates expiration dates.</p>
 """,
         },
         "emergency-contacts": {
             "title": "Emergency Contacts",
             "content": """
-<p>Every diver should have at least one emergency contact on file.</p>
+<p>The EmergencyContact model stores emergency contact information with priority ordering for each diver.</p>
 
-<h3>Adding an Emergency Contact</h3>
-<ol>
-    <li>Open the diver's profile</li>
-    <li>Go to the <strong>Emergency Contacts</strong> tab</li>
-    <li>Click <strong>Add Contact</strong></li>
-    <li>Enter:
-        <ul>
-            <li>Contact name</li>
-            <li>Relationship to diver</li>
-            <li>Phone number(s)</li>
-            <li>Email (optional)</li>
-        </ul>
-    </li>
-    <li>Mark as primary contact if this is the first person to call</li>
-</ol>
-
-<h3>Best Practices</h3>
+<h3>Contact Information</h3>
+<p>Each emergency contact includes:</p>
 <ul>
-    <li>Encourage divers to provide at least two contacts</li>
-    <li>Verify phone numbers are correct and reachable</li>
-    <li>Update contacts annually or when information changes</li>
+    <li><strong>Name</strong> - Contact's full name</li>
+    <li><strong>Relationship</strong> - Relationship to diver</li>
+    <li><strong>Phone numbers</strong> - Primary and alternate contact numbers</li>
+    <li><strong>Priority</strong> - Order of contact (primary, secondary, etc.)</li>
+</ul>
+
+<h3>Diver Relationships</h3>
+<p>The DiverRelationship model tracks connections between divers:</p>
+<ul>
+    <li><strong>Spouse</strong> - Married partner</li>
+    <li><strong>Buddy</strong> - Preferred dive buddy</li>
+    <li><strong>Friend</strong> - Social connection</li>
+    <li><strong>Family</strong> - Family member</li>
+    <li><strong>Instructor/Student</strong> - Training relationship</li>
+</ul>
+
+<h3>Buddy Preferences</h3>
+<p>Divers can mark preferred buddies. The system provides methods to query:</p>
+<ul>
+    <li><code>spouse</code> - Find spouse relationship</li>
+    <li><code>preferred_buddies</code> - List marked buddy preferences</li>
+    <li><code>related_divers</code> - All connected divers</li>
 </ul>
 """,
         },
         "diver-categories": {
             "title": "Diver Categories",
             "content": """
-<p>Categorize divers for easier management and targeted communications.</p>
+<p>Diver categorization is used for agreement template targeting and eligibility.</p>
 
-<h3>Default Categories</h3>
+<h3>Category Types</h3>
+<p>The DiverCategory enumeration defines:</p>
 <ul>
-    <li><strong>Regular</strong> - Standard customers</li>
-    <li><strong>VIP</strong> - High-value or frequent customers</li>
-    <li><strong>Instructor</strong> - Certified instructors</li>
-    <li><strong>Student</strong> - Currently in training</li>
-    <li><strong>Staff</strong> - Shop employees</li>
+    <li><strong>all</strong> - Applies to all divers</li>
+    <li><strong>certified</strong> - Certified divers only</li>
+    <li><strong>student</strong> - Divers in training</li>
+    <li><strong>dsd</strong> - Discover Scuba Diving participants</li>
 </ul>
 
-<h3>Custom Categories</h3>
-<p>Create custom categories for your specific needs, such as:</p>
-<ul>
-    <li>Resort guests</li>
-    <li>Club members</li>
-    <li>Group tour participants</li>
-</ul>
+<h3>Agreement Template Targeting</h3>
+<p>Agreement templates can be configured for specific diver categories. When creating agreements, the system presents only templates appropriate for the diver's category.</p>
 
-<h3>Using Categories</h3>
-<p>Categories can be used to:</p>
+<h3>Diver Type Classification</h3>
+<p>Separate from category, divers are classified by their relationship with diving:</p>
 <ul>
-    <li>Filter diver lists</li>
-    <li>Apply special pricing</li>
-    <li>Send targeted communications</li>
-    <li>Generate reports</li>
+    <li><strong>Activity</strong> - Does diving as an occasional activity</li>
+    <li><strong>Identity</strong> - Diving is core to their identity</li>
 </ul>
+<p>This classification helps with marketing and communication targeting.</p>
 """,
         },
     },
@@ -225,168 +278,205 @@ HELP_CONTENT = {
         "scheduling-excursions": {
             "title": "Scheduling Excursions",
             "content": """
-<p>Create and manage dive excursions for your customers.</p>
+<p>Excursions are single-day operational units representing scheduled dive trips.</p>
 
 <h3>Creating an Excursion</h3>
 <ol>
-    <li>Navigate to <strong>Excursions</strong> in the sidebar</li>
+    <li>Navigate to <strong>Excursions</strong></li>
     <li>Click <strong>New Excursion</strong></li>
-    <li>Select an excursion type (2-tank morning dive, night dive, etc.)</li>
-    <li>Choose the date and time</li>
-    <li>Select dive sites (primary and backup)</li>
-    <li>Set capacity limits</li>
-    <li>Add any special notes</li>
+    <li>Select an <strong>Excursion Type</strong> (template with defaults)</li>
+    <li>Set <strong>Date</strong> and <strong>Departure Time</strong></li>
+    <li>Choose <strong>Dive Site</strong> (optional - can have multiple via dives)</li>
+    <li>Set <strong>Maximum Divers</strong> capacity</li>
+    <li>Set <strong>Price per Diver</strong> (pre-filled from type)</li>
     <li>Click <strong>Create</strong></li>
 </ol>
 
 <h3>Excursion Types</h3>
-<p>Excursion types are templates that pre-fill common settings:</p>
+<p>ExcursionType models serve as templates defining:</p>
 <ul>
-    <li>Default pricing</li>
-    <li>Duration</li>
-    <li>Equipment requirements</li>
-    <li>Certification requirements</li>
+    <li><strong>Name and description</strong></li>
+    <li><strong>Dive mode</strong> - boat, shore, cenote, cavern</li>
+    <li><strong>Time of day</strong> - morning, afternoon, night</li>
+    <li><strong>Duration</strong> - typical_duration_minutes</li>
+    <li><strong>Dives per excursion</strong> - number of dives included</li>
+    <li><strong>Base price</strong> - default pricing</li>
+    <li><strong>Certification requirements</strong> - minimum level required</li>
+    <li><strong>Suitable sites</strong> - M2M relationship (empty = all sites)</li>
+</ul>
+
+<h3>Excursion Status Workflow</h3>
+<ul>
+    <li><strong>scheduled</strong> - Future trip, accepting bookings</li>
+    <li><strong>boarding</strong> - Check-in in progress</li>
+    <li><strong>in_progress</strong> - Trip underway</li>
+    <li><strong>completed</strong> - Trip finished</li>
+    <li><strong>cancelled</strong> - Trip cancelled</li>
 </ul>
 
 <h3>Capacity Management</h3>
-<p>Set maximum capacity based on:</p>
-<ul>
-    <li>Boat capacity</li>
-    <li>Guide-to-diver ratios</li>
-    <li>Site limitations</li>
-</ul>
+<p>The <code>spots_available</code> property calculates remaining capacity. The <code>is_full</code> property indicates when max_divers is reached.</p>
 """,
         },
         "managing-bookings": {
             "title": "Managing Bookings",
             "content": """
-<p>Add divers to excursions and manage their bookings.</p>
+<p>Bookings link divers to excursions and track reservation lifecycle.</p>
 
-<h3>Adding a Booking</h3>
+<h3>Creating a Booking</h3>
 <ol>
-    <li>Open the excursion</li>
+    <li>Open the excursion detail page</li>
     <li>Click <strong>Add Booking</strong></li>
-    <li>Search for the diver by name or email</li>
-    <li>Select the diver from results</li>
-    <li>The system checks eligibility automatically</li>
+    <li>Search for and select a diver</li>
+    <li>System performs eligibility checks automatically</li>
     <li>Confirm the booking</li>
 </ol>
 
-<h3>Eligibility Checks</h3>
-<p>Before a booking is confirmed, the system verifies:</p>
+<h3>Booking Status</h3>
 <ul>
-    <li>Valid certification for the dive type</li>
-    <li>Current medical clearance</li>
-    <li>Signed liability waiver</li>
+    <li><strong>pending</strong> - Reservation made, not confirmed</li>
+    <li><strong>confirmed</strong> - Booking confirmed</li>
+    <li><strong>checked_in</strong> - Diver arrived and checked in</li>
+    <li><strong>cancelled</strong> - Booking cancelled</li>
+    <li><strong>no_show</strong> - Diver didn't arrive</li>
+</ul>
+
+<h3>Eligibility Checking</h3>
+<p>Before booking confirmation, the system validates:</p>
+<ul>
+    <li>Diver has required certification level for excursion type</li>
+    <li>Medical clearance is current (if required)</li>
+    <li>Waiver is signed and valid</li>
     <li>No scheduling conflicts</li>
 </ul>
 
-<h3>Price Adjustments</h3>
-<p>You can override the default price for:</p>
+<h3>Eligibility Overrides</h3>
+<p>The EligibilityOverride model allows bypassing requirements:</p>
 <ul>
-    <li>Group discounts</li>
-    <li>VIP customers</li>
-    <li>Package deals</li>
-    <li>Promotional offers</li>
+    <li>One override per booking only</li>
+    <li>Requires <strong>approved_by</strong> staff member</li>
+    <li>Requires documented <strong>reason</strong></li>
+    <li>Tracks which requirement was bypassed</li>
+    <li>Creates immutable audit trail</li>
 </ul>
+
+<h3>Price Snapshot</h3>
+<p>The booking captures <code>price_snapshot</code> at creation time. This ensures price immutability even if the excursion price changes later.</p>
 """,
         },
         "check-in-process": {
             "title": "Check-in Process",
             "content": """
-<p>Manage the check-in process on dive day.</p>
+<p>Check-in is managed through the ExcursionRoster model which tracks actual participants.</p>
 
-<h3>Pre-Dive Checklist</h3>
-<p>Before departure, verify each diver has:</p>
+<h3>Check-in Workflow</h3>
+<ol>
+    <li>Open the excursion on departure day</li>
+    <li>View the booking list</li>
+    <li>For each arriving diver, click to mark check-in</li>
+    <li>System records <code>checked_in_at</code> timestamp and <code>checked_in_by</code> staff</li>
+</ol>
+
+<h3>Roster Roles</h3>
+<p>Each roster entry can have a role:</p>
 <ul>
-    <li>Signed liability waiver (current)</li>
-    <li>Medical clearance (if required)</li>
-    <li>Valid certification card</li>
-    <li>Paid or payment arranged</li>
+    <li><strong>Diver</strong> - Customer participant</li>
+    <li><strong>Divemaster</strong> - Professional leading the dive</li>
+    <li><strong>Instructor</strong> - Teaching role</li>
 </ul>
 
-<h3>Marking Check-in</h3>
-<ol>
-    <li>Open the excursion manifest</li>
-    <li>Find the diver in the list</li>
-    <li>Click the check-in checkbox</li>
-    <li>Note any equipment rentals</li>
-</ol>
+<h3>Dive Completion</h3>
+<p>After the excursion, mark <code>dive_completed</code> status for each participant. Notes can be added to individual roster entries.</p>
 
-<h3>No-Shows</h3>
-<p>If a diver doesn't arrive:</p>
-<ol>
-    <li>Attempt to contact them</li>
-    <li>Wait until departure time</li>
-    <li>Mark as no-show in the system</li>
-    <li>Apply cancellation policy as appropriate</li>
-</ol>
+<h3>Excursion Status Transitions</h3>
+<ul>
+    <li>Use <strong>Start Excursion</strong> to change status to <code>in_progress</code></li>
+    <li>Use <strong>Complete Excursion</strong> to change status to <code>completed</code></li>
+</ul>
 """,
         },
         "recurring-series": {
             "title": "Recurring Series",
             "content": """
-<p>Set up excursions that repeat on a regular schedule.</p>
+<p>ExcursionSeries enables scheduling recurring excursions using RFC 5545 recurrence rules.</p>
 
 <h3>Creating a Recurring Series</h3>
 <ol>
-    <li>Create a new excursion</li>
-    <li>Enable <strong>Recurring</strong> option</li>
-    <li>Choose the recurrence pattern:
-        <ul>
-            <li>Daily</li>
-            <li>Weekly (select days)</li>
-            <li>Bi-weekly</li>
-            <li>Monthly</li>
-        </ul>
-    </li>
-    <li>Set the end date or number of occurrences</li>
-    <li>Click <strong>Create Series</strong></li>
+    <li>Open an existing excursion</li>
+    <li>Click <strong>Make Recurring</strong></li>
+    <li>Configure the recurrence pattern</li>
+    <li>Set series defaults (capacity, price, meeting place)</li>
+    <li>Save the series</li>
 </ol>
 
-<h3>Editing Series</h3>
-<p>When editing a recurring excursion, you can:</p>
+<h3>Recurrence Rules</h3>
+<p>The RecurrenceRule model stores RFC 5545 RRULE strings:</p>
 <ul>
-    <li><strong>Edit this occurrence only</strong> - Changes apply to this date only</li>
-    <li><strong>Edit all future occurrences</strong> - Changes apply from this date forward</li>
-    <li><strong>Edit entire series</strong> - Changes apply to all occurrences</li>
+    <li><strong>FREQ=WEEKLY;BYDAY=SA</strong> - Every Saturday</li>
+    <li><strong>FREQ=DAILY</strong> - Every day</li>
+    <li><strong>FREQ=WEEKLY;BYDAY=MO,WE,FR</strong> - Monday, Wednesday, Friday</li>
 </ul>
 
-<h3>Syncing Occurrences</h3>
-<p>Use the sync feature to generate or update occurrences based on the series pattern.</p>
+<h3>Series Attributes</h3>
+<ul>
+    <li><strong>excursion_type</strong> - Template for generated excursions</li>
+    <li><strong>dive_site</strong> - Default site</li>
+    <li><strong>capacity_default</strong> - Default max divers</li>
+    <li><strong>price_default</strong> - Default price</li>
+    <li><strong>meeting_place</strong> - Where divers meet</li>
+    <li><strong>window_days</strong> - How far ahead to generate occurrences</li>
+</ul>
+
+<h3>Series Status</h3>
+<ul>
+    <li><strong>draft</strong> - Not yet active</li>
+    <li><strong>active</strong> - Generating occurrences</li>
+    <li><strong>paused</strong> - Temporarily stopped</li>
+    <li><strong>retired</strong> - Permanently ended</li>
+</ul>
+
+<h3>Exceptions</h3>
+<p>RecurrenceException handles individual date modifications:</p>
+<ul>
+    <li><strong>cancelled</strong> - Skip this occurrence</li>
+    <li><strong>rescheduled</strong> - Move to different time</li>
+    <li><strong>added</strong> - Extra occurrence</li>
+</ul>
 """,
         },
         "cancellations-refunds": {
             "title": "Cancellations & Refunds",
             "content": """
-<p>Handle booking cancellations and process refunds.</p>
+<p>Booking cancellations and financial settlements are handled through the SettlementRecord model.</p>
 
-<h3>Cancellation Policy</h3>
-<p>Review your shop's cancellation policy before processing:</p>
-<ul>
-    <li>Full refund period (e.g., 48+ hours before)</li>
-    <li>Partial refund period (e.g., 24-48 hours)</li>
-    <li>No refund period (e.g., less than 24 hours)</li>
-</ul>
-
-<h3>Processing a Cancellation</h3>
+<h3>Cancelling a Booking</h3>
 <ol>
     <li>Open the booking</li>
     <li>Click <strong>Cancel Booking</strong></li>
-    <li>Select the reason for cancellation</li>
-    <li>Choose refund amount based on policy</li>
-    <li>Add any notes</li>
-    <li>Confirm the cancellation</li>
+    <li>Booking status changes to <code>cancelled</code></li>
+    <li><code>cancelled_at</code> timestamp is recorded</li>
 </ol>
 
-<h3>Weather Cancellations</h3>
-<p>If an excursion is cancelled due to weather:</p>
+<h3>Settlement Types</h3>
+<p>SettlementRecord tracks financial transactions:</p>
 <ul>
-    <li>Notify all booked divers</li>
-    <li>Offer rescheduling options</li>
-    <li>Process refunds for those who can't reschedule</li>
-    <li>Document the cancellation reason</li>
+    <li><strong>revenue</strong> - Payment received</li>
+    <li><strong>refund</strong> - Payment returned</li>
 </ul>
+
+<h3>Idempotent Settlements</h3>
+<p>Each settlement has a unique <code>idempotency_key</code> preventing duplicate processing. The system generates deterministic keys based on booking and transaction type.</p>
+
+<h3>Financial State</h3>
+<p>Bookings track financial state through:</p>
+<ul>
+    <li><code>is_settled</code> - Whether payment is complete</li>
+    <li><code>has_refund</code> - Whether refund was issued</li>
+    <li><code>get_financial_state()</code> - Current state summary</li>
+</ul>
+
+<h3>Protection Against Deletion</h3>
+<p>Settled bookings cannot be deleted to preserve financial records. Use soft delete (<code>deleted_at</code>) instead.</p>
 """,
         },
     },
@@ -394,126 +484,149 @@ HELP_CONTENT = {
         "creating-agreements": {
             "title": "Creating Agreements",
             "content": """
-<p>Generate liability waivers and other agreements for divers to sign.</p>
+<p>SignableAgreement tracks the full workflow of liability waivers and other documents from creation through signature.</p>
 
-<h3>Creating from Template</h3>
+<h3>Creating a New Agreement</h3>
 <ol>
     <li>Navigate to <strong>Agreements</strong></li>
     <li>Click <strong>New Agreement</strong></li>
-    <li>Select the agreement template (e.g., PADI Liability Release)</li>
-    <li>Search for and select the diver</li>
-    <li>The system populates the agreement with diver information</li>
-    <li>Review the agreement</li>
-    <li>Click <strong>Create</strong></li>
+    <li>Select an <strong>Agreement Template</strong> (radio buttons)</li>
+    <li>Select the <strong>Diver</strong> from the dropdown</li>
+    <li>Choose <strong>Delivery Method</strong>:
+        <ul>
+            <li><em>Link (copy signing URL)</em> - Generate shareable link</li>
+            <li><em>Email (send to diver)</em> - Email the signing link</li>
+            <li><em>In Person (sign on device)</em> - Sign at the shop</li>
+        </ul>
+    </li>
+    <li>Set <strong>Expires In</strong> (7, 14, 30, 60, or 90 days)</li>
+    <li>Click <strong>Create & Send</strong> or <strong>Save as Draft</strong></li>
 </ol>
 
 <h3>Agreement Templates</h3>
-<p>Common templates include:</p>
+<p>AgreementTemplate defines reusable document types:</p>
 <ul>
-    <li>PADI Liability Release (standard diving)</li>
-    <li>Equipment Rental Agreement</li>
-    <li>Minor Consent Form</li>
-    <li>Nitrox/Enriched Air Acknowledgment</li>
+    <li><strong>waiver</strong> - Liability release</li>
+    <li><strong>medical</strong> - Medical disclosure</li>
+    <li><strong>briefing</strong> - Dive briefing acknowledgment</li>
+    <li><strong>code_of_conduct</strong> - Behavior agreement</li>
+    <li><strong>rental</strong> - Equipment rental terms</li>
+    <li><strong>training</strong> - Course enrollment</li>
 </ul>
 
-<h3>Validity Period</h3>
-<p>Most agreements are valid for one year from signing. The system tracks expiration dates automatically.</p>
+<h3>Template Targeting</h3>
+<p>Templates can target specific audiences:</p>
+<ul>
+    <li><strong>target_party_type</strong> - diver, employee, vendor, any</li>
+    <li><strong>diver_category</strong> - all, certified, student, dsd</li>
+</ul>
 """,
         },
         "sending-for-signature": {
             "title": "Sending for Signature",
             "content": """
-<p>Deliver agreements to divers for electronic signature.</p>
+<p>Agreements use secure token-based access for the signing process.</p>
+
+<h3>Access Token Security</h3>
+<p>Each agreement generates:</p>
+<ul>
+    <li>Cryptographically random access token</li>
+    <li>SHA-256 hash stored (raw token never stored)</li>
+    <li><code>token_consumed</code> flag for one-time use</li>
+    <li><code>expires_at</code> enforcement at signing time</li>
+</ul>
 
 <h3>Delivery Methods</h3>
 <ul>
-    <li><strong>Email</strong> - Send a link to the diver's email</li>
-    <li><strong>Direct Link</strong> - Copy a signing link to share via any method</li>
-    <li><strong>In-Person</strong> - Have diver sign on a tablet or computer at the shop</li>
+    <li><strong>Email</strong> - System sends email with secure signing link</li>
+    <li><strong>Link</strong> - Copy URL to share via text, WhatsApp, etc.</li>
+    <li><strong>In Person</strong> - Diver signs on shop device</li>
 </ul>
 
-<h3>Sending via Email</h3>
-<ol>
-    <li>Open the agreement</li>
-    <li>Click <strong>Send for Signature</strong></li>
-    <li>Verify the email address</li>
-    <li>Add a personal message (optional)</li>
-    <li>Click <strong>Send</strong></li>
-</ol>
+<h3>Resending</h3>
+<p>For agreements in <code>sent</code> status, use <strong>Resend</strong> to generate a new token and send again. Previous tokens are invalidated.</p>
 
-<h3>Setting Expiration</h3>
-<p>You can set when the signing link expires:</p>
+<h3>Expiration Options</h3>
+<p>Signing links can expire in:</p>
 <ul>
     <li>7 days (default)</li>
     <li>14 days</li>
     <li>30 days</li>
-    <li>Custom date</li>
+    <li>60 days</li>
+    <li>90 days</li>
 </ul>
-
-<h3>Copying the Signing Link</h3>
-<p>Use the <strong>Copy Link</strong> button to share the signing URL via text message, WhatsApp, or other channels.</p>
 """,
         },
         "tracking-status": {
             "title": "Tracking Status",
             "content": """
-<p>Monitor agreement status and follow up on unsigned documents.</p>
+<p>Monitor agreement progress through the defined status workflow.</p>
 
-<h3>Agreement Statuses</h3>
+<h3>Agreement Status</h3>
 <ul>
-    <li><strong>Draft</strong> - Created but not sent</li>
-    <li><strong>Sent</strong> - Delivered, awaiting signature</li>
-    <li><strong>Signed</strong> - Completed and valid</li>
-    <li><strong>Voided</strong> - Cancelled before signing</li>
-    <li><strong>Expired</strong> - Signing link has expired</li>
+    <li><strong>draft</strong> - Created but not sent, content editable</li>
+    <li><strong>sent</strong> - Delivered to signer, awaiting signature</li>
+    <li><strong>signed</strong> - Completed with digital signature</li>
+    <li><strong>void</strong> - Cancelled before signing</li>
+    <li><strong>expired</strong> - Signing link expired without signature</li>
 </ul>
 
-<h3>Filtering Agreements</h3>
-<p>Use filters to find specific agreements:</p>
+<h3>List Filtering</h3>
+<p>The agreements list provides filters to find specific documents:</p>
 <ul>
-    <li>By status</li>
-    <li>By diver name</li>
-    <li>By date range</li>
-    <li>By agreement type</li>
+    <li>Filter by status (dropdown)</li>
+    <li>Search by diver name</li>
+    <li>Date range filtering</li>
 </ul>
 
-<h3>Follow-up Actions</h3>
-<p>For unsigned agreements:</p>
+<h3>Agreement Detail View</h3>
+<p>Each agreement shows:</p>
 <ul>
-    <li>Resend the email</li>
-    <li>Generate a new link</li>
-    <li>Call the diver to remind them</li>
-    <li>Void and create a new agreement if needed</li>
+    <li>Status badge with color coding</li>
+    <li>Diver information</li>
+    <li>Template used and version</li>
+    <li>Timeline of status changes</li>
+    <li>Digital signature details (if signed)</li>
 </ul>
+
+<h3>Content Hash</h3>
+<p>Agreements maintain a SHA-256 <code>content_hash</code> for integrity verification. Any content changes create revision records.</p>
 """,
         },
         "voiding-agreements": {
             "title": "Voiding Agreements",
             "content": """
-<p>Cancel agreements that are no longer needed.</p>
+<p>Voiding cancels an agreement before it is signed.</p>
 
 <h3>When to Void</h3>
 <p>Void an agreement when:</p>
 <ul>
-    <li>Created by mistake</li>
-    <li>Wrong template was used</li>
-    <li>Diver information was incorrect</li>
-    <li>Booking was cancelled</li>
+    <li>Created in error</li>
+    <li>Wrong template selected</li>
+    <li>Wrong diver associated</li>
+    <li>Related booking cancelled</li>
 </ul>
 
-<h3>Important: Signed Agreements Cannot Be Voided</h3>
-<p>Once an agreement is signed, it becomes a legal document and cannot be voided. If you need to nullify a signed agreement, you must create a <strong>Revocation Agreement</strong> that the diver also signs.</p>
+<h3>Voiding Restrictions</h3>
+<p><strong>Important:</strong> Only agreements in <code>draft</code> or <code>sent</code> status can be voided.</p>
+<p>Signed agreements are legal documents and cannot be voided. To nullify a signed agreement, create a <strong>Revocation Agreement</strong> that the diver must also sign.</p>
 
 <h3>Voiding Process</h3>
 <ol>
-    <li>Open the agreement (must be Draft or Sent status)</li>
+    <li>Open the agreement (must be draft or sent)</li>
     <li>Click <strong>Void Agreement</strong></li>
-    <li>Enter a reason for voiding</li>
+    <li>Enter required reason for voiding</li>
     <li>Confirm the action</li>
 </ol>
 
-<h3>After Voiding</h3>
-<p>Voided agreements remain in the system for record-keeping but are clearly marked. You can create a new agreement to replace a voided one.</p>
+<h3>Revision History</h3>
+<p>SignableAgreementRevision maintains an immutable audit trail of all content changes, including voiding. Each revision records:</p>
+<ul>
+    <li><code>revision_number</code></li>
+    <li><code>previous</code> and <code>new content_hash</code></li>
+    <li><code>change_note</code> (required explanation)</li>
+    <li><code>changed_by</code> staff member</li>
+</ul>
 """,
         },
     },
@@ -521,116 +634,125 @@ HELP_CONTENT = {
         "medical-questionnaires": {
             "title": "Medical Questionnaires",
             "content": """
-<p>Manage health screening questionnaires for divers.</p>
+<p>Medical questionnaires screen divers for health conditions that may affect diving safety, based on RSTC/DAN Medical Statement guidelines.</p>
 
-<h3>Purpose</h3>
-<p>Medical questionnaires identify health conditions that may affect diving safety. They are based on the RSTC/DAN Medical Statement.</p>
-
-<h3>Sending a Questionnaire</h3>
-<ol>
-    <li>Open the diver's profile</li>
-    <li>Go to the <strong>Medical</strong> tab</li>
-    <li>Click <strong>Send Questionnaire</strong></li>
-    <li>The diver receives an email with the link</li>
-    <li>They complete it online</li>
-</ol>
-
-<h3>Automatic Triggers</h3>
-<p>Questionnaires can be sent automatically:</p>
+<h3>Questionnaire List</h3>
+<p>The medical questionnaires page (<code>/staff/diveops/medical/</code>) displays:</p>
 <ul>
-    <li>When creating a first booking</li>
-    <li>On annual renewal dates</li>
-    <li>When previous clearance expires</li>
+    <li>All submitted questionnaires</li>
+    <li>Status filters for reviewing</li>
+    <li>Diver information and submission date</li>
+    <li>Flagged conditions count</li>
 </ul>
+
+<h3>Sending Questionnaires</h3>
+<p>Questionnaires can be sent:</p>
+<ul>
+    <li>From diver profile medical tab</li>
+    <li>Automatically when creating first booking</li>
+    <li>On annual renewal dates</li>
+</ul>
+
+<h3>Integration with django-questionnaires</h3>
+<p>The medical system uses the django-questionnaires package for form rendering and response collection.</p>
 """,
         },
         "reviewing-responses": {
             "title": "Reviewing Responses",
             "content": """
-<p>Review and process medical questionnaire responses.</p>
+<p>Staff review completed questionnaires to determine diving eligibility.</p>
 
-<h3>Response Review</h3>
+<h3>Review Workflow</h3>
 <ol>
     <li>Navigate to <strong>Medical Questionnaires</strong></li>
-    <li>Filter for <strong>Pending Review</strong> status</li>
-    <li>Open a questionnaire</li>
-    <li>Review all answers</li>
-    <li>Note any flagged conditions</li>
+    <li>Filter for pending review status</li>
+    <li>Open questionnaire to see all responses</li>
+    <li>Review flagged conditions</li>
+    <li>Make clearance decision</li>
 </ol>
 
 <h3>Flagged Conditions</h3>
-<p>Certain "Yes" answers automatically flag the questionnaire:</p>
+<p>Certain "Yes" answers automatically flag for review:</p>
 <ul>
-    <li>Heart conditions</li>
-    <li>Lung conditions</li>
-    <li>Seizure disorders</li>
+    <li>Cardiovascular conditions</li>
+    <li>Respiratory conditions</li>
+    <li>Neurological conditions (seizures, blackouts)</li>
     <li>Diabetes requiring medication</li>
-    <li>Recent surgery</li>
+    <li>Recent surgery or illness</li>
+    <li>Current medications</li>
 </ul>
 
-<h3>Actions After Review</h3>
+<h3>Medical Status Determination</h3>
+<p>The <code>get_diver_medical_status()</code> service returns:</p>
 <ul>
-    <li><strong>Clear to Dive</strong> - No concerns, approved for diving</li>
-    <li><strong>Require Physician Clearance</strong> - Must get doctor approval</li>
-    <li><strong>Deny Diving</strong> - Cannot dive safely</li>
+    <li><strong>cleared</strong> - Approved for diving</li>
+    <li><strong>restricted</strong> - Approved with limitations</li>
+    <li><strong>needs_review</strong> - Requires staff evaluation</li>
+    <li><strong>denied</strong> - Not approved for diving</li>
 </ul>
 """,
         },
         "clearance-process": {
             "title": "Clearance Process",
             "content": """
-<p>Handle physician clearance requirements for flagged questionnaires.</p>
+<p>Physician clearance is required when questionnaire responses indicate potential health concerns.</p>
 
-<h3>When Clearance is Required</h3>
-<p>A physician clearance is needed when:</p>
+<h3>When Clearance Required</h3>
 <ul>
     <li>Questionnaire has flagged responses</li>
-    <li>Diver is over 45 years old (first time)</li>
-    <li>Significant health changes since last questionnaire</li>
+    <li>Diver reports significant medical conditions</li>
+    <li>Previous clearance has expired</li>
 </ul>
 
-<h3>Clearance Process</h3>
+<h3>Clearance Workflow</h3>
 <ol>
-    <li>Print the clearance form with flagged conditions</li>
-    <li>Diver takes form to their physician</li>
-    <li>Physician examines and signs the form</li>
+    <li>System generates PDF with flagged conditions</li>
+    <li>Diver takes form to physician</li>
+    <li>Physician examines and signs clearance</li>
     <li>Diver returns signed form</li>
-    <li>Staff uploads and verifies clearance</li>
+    <li>Staff uploads and records clearance</li>
 </ol>
 
 <h3>Recording Clearance</h3>
-<ol>
-    <li>Open the medical questionnaire</li>
-    <li>Click <strong>Record Physician Clearance</strong></li>
-    <li>Upload the signed form</li>
-    <li>Enter physician name and date</li>
-    <li>Set clearance expiration (typically 1 year)</li>
-</ol>
+<p>The DiverProfile stores:</p>
+<ul>
+    <li><code>medical_clearance_date</code> - When obtained</li>
+    <li><code>medical_clearance_valid_until</code> - Expiration</li>
+</ul>
+
+<h3>Medical Provider Integration</h3>
+<p>The MedicalProviderProfile and MedicalProviderRelationship models track relationships between divers and their healthcare providers.</p>
 """,
         },
         "retention-policies": {
             "title": "Retention Policies",
             "content": """
-<p>Understand medical record retention and privacy requirements.</p>
+<p>Medical records are subject to retention policies and privacy requirements.</p>
 
-<h3>Retention Periods</h3>
+<h3>Document Retention</h3>
+<p>The DocumentRetentionPolicy model manages automatic document lifecycle:</p>
 <ul>
-    <li><strong>Active Divers</strong> - Retain all medical records</li>
-    <li><strong>Inactive Divers</strong> - Retain for 7 years after last activity</li>
-    <li><strong>Minors</strong> - Retain until 7 years after 18th birthday</li>
+    <li>Retention period definition</li>
+    <li>Automatic purge scheduling</li>
+    <li>Legal hold capability (DocumentLegalHold)</li>
 </ul>
 
-<h3>Data Privacy</h3>
-<p>Medical information is sensitive and protected:</p>
+<h3>Privacy Considerations</h3>
+<p>Medical information is protected:</p>
 <ul>
     <li>Access limited to authorized staff</li>
-    <li>Never share with third parties without consent</li>
+    <li>Audit logging of all access</li>
     <li>Secure storage and transmission</li>
-    <li>Right to deletion upon request (after retention period)</li>
 </ul>
 
-<h3>Record Requests</h3>
-<p>Divers can request copies of their medical records. Verify identity before providing any records.</p>
+<h3>Retention Administration</h3>
+<p>Staff can manage retention policies through:</p>
+<ul>
+    <li>RetentionPolicyListView</li>
+    <li>RetentionPolicyCreateView</li>
+    <li>RetentionPolicyUpdateView</li>
+    <li>RetentionPolicyDeleteView</li>
+</ul>
 """,
         },
     },
@@ -638,88 +760,119 @@ HELP_CONTENT = {
         "managing-permits": {
             "title": "Managing Permits",
             "content": """
-<p>Track permits for diving in marine protected areas.</p>
+<p>ProtectedArea models represent marine parks, reserves, and other regulated diving areas.</p>
 
-<h3>Permit Types</h3>
+<h3>Protected Area Types</h3>
 <ul>
-    <li><strong>Operator Permit</strong> - Annual license to operate in the area</li>
-    <li><strong>Diver Fee</strong> - Per-diver daily or weekly fee</li>
-    <li><strong>Mooring Fee</strong> - Fee for using park moorings</li>
+    <li><strong>national_park</strong></li>
+    <li><strong>marine_park</strong></li>
+    <li><strong>reserve</strong></li>
+    <li><strong>biosphere_reserve</strong></li>
+    <li><strong>protected_area</strong></li>
+    <li><strong>sanctuary</strong></li>
 </ul>
 
-<h3>Adding a Protected Area</h3>
-<ol>
-    <li>Navigate to <strong>Protected Areas</strong></li>
-    <li>Click <strong>Add Protected Area</strong></li>
-    <li>Enter area name and managing authority</li>
-    <li>Add permit requirements and fees</li>
-    <li>Link associated dive sites</li>
-</ol>
+<h3>Hierarchical Structure</h3>
+<p>Protected areas support hierarchy through self-referential parent relationships. The <code>get_ancestors()</code> method returns the parent chain.</p>
 
-<h3>Automatic Fee Calculation</h3>
-<p>When booking excursions to protected areas, the system automatically:</p>
+<h3>Unified Permit System</h3>
+<p>ProtectedAreaPermit handles all permit types:</p>
 <ul>
-    <li>Calculates required fees</li>
-    <li>Adds fees to booking price</li>
-    <li>Tracks fee collection</li>
+    <li><strong>guide</strong> - Guide credential (requires diver)</li>
+    <li><strong>vessel</strong> - Boat permit (requires vessel_name, vessel_registration)</li>
+    <li><strong>photography</strong> - Commercial photography permit</li>
+    <li><strong>diving</strong> - Operator diving permit</li>
+</ul>
+
+<h3>Permit Attributes</h3>
+<ul>
+    <li><code>permit_number</code> - Unique per area+type</li>
+    <li><code>issued_at</code>, <code>expires_at</code> - Validity period</li>
+    <li><code>authorized_zones</code> - M2M (empty = all zones)</li>
 </ul>
 """,
         },
         "fee-schedules": {
             "title": "Fee Schedules",
             "content": """
-<p>Configure fee schedules for protected areas.</p>
+<p>ProtectedAreaFeeSchedule configures fees for diving activities in protected areas.</p>
 
 <h3>Fee Types</h3>
 <ul>
-    <li><strong>Daily Fee</strong> - Charged per day per diver</li>
-    <li><strong>Weekly Fee</strong> - Week pass option</li>
-    <li><strong>Annual Fee</strong> - Year pass option</li>
-    <li><strong>Mooring Fee</strong> - Per mooring use</li>
+    <li><strong>per_person</strong> - Charged per diver</li>
+    <li><strong>per_boat</strong> - Charged per vessel</li>
+    <li><strong>per_trip</strong> - Charged per excursion</li>
+    <li><strong>per_day</strong> - Daily fee</li>
+    <li><strong>per_activity</strong> - Activity-specific fee</li>
 </ul>
 
-<h3>Setting Up Fees</h3>
-<ol>
-    <li>Open the protected area</li>
-    <li>Go to <strong>Fee Schedule</strong></li>
-    <li>Add fee types and amounts</li>
-    <li>Set effective dates</li>
-    <li>Configure any discounts</li>
-</ol>
+<h3>Activity Scope</h3>
+<p>Fees can apply to:</p>
+<ul>
+    <li>diving</li>
+    <li>snorkeling</li>
+    <li>kayaking</li>
+    <li>fishing</li>
+    <li>all activities</li>
+</ul>
 
-<h3>Fee Changes</h3>
-<p>When fees change, create a new fee schedule with a future effective date. The system will automatically apply the correct fees based on booking dates.</p>
+<h3>Fee Tiers</h3>
+<p>ProtectedAreaFeeTier allows tiered pricing:</p>
+<ul>
+    <li><strong>tourist</strong> - Standard tourist rate</li>
+    <li><strong>national</strong> - National citizen rate</li>
+    <li><strong>local</strong> - Local resident rate</li>
+    <li><strong>student</strong> - Student discount</li>
+    <li><strong>senior</strong> - Senior discount</li>
+    <li><strong>child</strong> - Child rate (age_min, age_max)</li>
+    <li><strong>infant</strong> - Infant (usually free)</li>
+</ul>
+
+<h3>Eligibility Proof</h3>
+<p>DiverEligibilityProof tracks documentation for tier qualification:</p>
+<ul>
+    <li>Proof types: student_id, national_id, resident_card, passport, birth_cert</li>
+    <li>Status: pending, verified, rejected</li>
+    <li>Expiration tracking for time-limited proofs</li>
+</ul>
 """,
         },
         "zone-rules": {
             "title": "Zone Rules",
             "content": """
-<p>Configure diving rules for different zones within protected areas.</p>
+<p>ProtectedAreaZone divides protected areas into zones with specific regulations.</p>
 
 <h3>Zone Types</h3>
 <ul>
-    <li><strong>General Use</strong> - Standard diving allowed</li>
-    <li><strong>No-Take</strong> - No fishing or collecting</li>
-    <li><strong>Research Only</strong> - Limited access for research</li>
-    <li><strong>No-Entry</strong> - Closed to all diving</li>
+    <li><strong>core</strong> - No-take zone, highest protection</li>
+    <li><strong>buffer</strong> - Buffer zone around core</li>
+    <li><strong>use</strong> - Recreational use zone</li>
+    <li><strong>restoration</strong> - Restoration area</li>
+    <li><strong>research</strong> - Research-only access</li>
 </ul>
 
-<h3>Zone Restrictions</h3>
-<p>Configure restrictions per zone:</p>
+<h3>Zone Permissions</h3>
+<p>Each zone defines:</p>
 <ul>
-    <li>Maximum divers per day</li>
-    <li>Required certifications</li>
-    <li>Seasonal closures</li>
-    <li>Special equipment requirements</li>
+    <li><code>diving_allowed</code></li>
+    <li><code>anchoring_allowed</code></li>
+    <li><code>fishing_allowed</code></li>
+    <li><code>requires_guide</code></li>
+    <li><code>requires_permit</code></li>
+    <li><code>max_divers</code> - Capacity limit</li>
 </ul>
 
-<h3>Compliance</h3>
-<p>The system helps ensure compliance by:</p>
+<h3>Zone Rules</h3>
+<p>ProtectedAreaRule enforces specific regulations:</p>
 <ul>
-    <li>Warning when booking exceeds limits</li>
-    <li>Blocking bookings in closed zones</li>
-    <li>Tracking daily diver counts</li>
+    <li><strong>Rule types</strong>: max_depth, max_divers, certification, equipment, time, activity, conduct</li>
+    <li><strong>Applies to</strong>: diver, group, vessel, operator</li>
+    <li><strong>Enforcement levels</strong>: info, warn, block</li>
+    <li><strong>Effective dating</strong>: effective_start, effective_end</li>
 </ul>
+
+<h3>Compliance Checking</h3>
+<p>Rules use comparison operators (lte, gte, eq, in, contains, required_true) against values. The system can block bookings that violate blocking-level rules.</p>
 """,
         },
     },
@@ -727,10 +880,9 @@ HELP_CONTENT = {
         "document-management": {
             "title": "Document Management",
             "content": """
-<p>Organize and manage files in the document system.</p>
+<p>The document browser (<code>/staff/diveops/documents/</code>) provides file storage and organization.</p>
 
-<h3>Document Browser</h3>
-<p>The document browser provides:</p>
+<h3>Document Browser Features</h3>
 <ul>
     <li>Folder-based organization</li>
     <li>File upload and download</li>
@@ -738,89 +890,146 @@ HELP_CONTENT = {
     <li>Search functionality</li>
 </ul>
 
-<h3>Uploading Documents</h3>
-<ol>
-    <li>Navigate to <strong>Documents</strong></li>
-    <li>Select the target folder</li>
-    <li>Click <strong>Upload</strong></li>
-    <li>Select files from your computer</li>
-    <li>Add descriptions (optional)</li>
-</ol>
-
-<h3>File Organization</h3>
-<p>Common folder structure:</p>
+<h3>Document Types Used</h3>
 <ul>
-    <li><strong>Templates</strong> - Document templates</li>
-    <li><strong>Signed Agreements</strong> - Completed waivers</li>
-    <li><strong>Certifications</strong> - Certification card photos</li>
-    <li><strong>Medical</strong> - Medical clearance forms</li>
+    <li><strong>Certification cards</strong> - Proof of diver certification</li>
+    <li><strong>Profile photos</strong> - Diver identification</li>
+    <li><strong>Dive site photos</strong> - Site documentation and marketing</li>
+    <li><strong>Signature documents</strong> - Captured signatures</li>
+    <li><strong>Signed agreement PDFs</strong> - Completed waivers</li>
+    <li><strong>Medical clearances</strong> - Physician letters</li>
+    <li><strong>Eligibility proofs</strong> - ID documents for fee tiers</li>
+</ul>
+
+<h3>Folder Management</h3>
+<p>Views for folder organization:</p>
+<ul>
+    <li>FolderCreateView, FolderUpdateView, FolderDeleteView</li>
+    <li>FolderPermissionListView for access control</li>
+</ul>
+
+<h3>Soft Delete</h3>
+<p>Documents use soft delete with a trash feature:</p>
+<ul>
+    <li>DocumentDeleteView moves to trash</li>
+    <li>DocumentRestoreView recovers from trash</li>
+    <li>DocumentPermanentDeleteView for final deletion</li>
+    <li>EmptyTrashView clears all trashed documents</li>
 </ul>
 """,
         },
         "audit-log": {
             "title": "Audit Log",
             "content": """
-<p>Track all activity in the system for accountability and troubleshooting.</p>
+<p>The audit log (<code>/staff/diveops/audit-log/</code>) tracks all system activity for accountability and troubleshooting.</p>
 
 <h3>What's Logged</h3>
-<p>The audit log records:</p>
+<p>The django-audit-log package records:</p>
 <ul>
-    <li>User logins and logouts</li>
     <li>Record creation, updates, and deletions</li>
-    <li>Status changes (e.g., agreement signed)</li>
-    <li>Permission changes</li>
-    <li>System events</li>
+    <li>Status changes (booking confirmed, agreement signed, etc.)</li>
+    <li>User actions with timestamps</li>
+    <li>IP addresses and user agents</li>
 </ul>
 
 <h3>Viewing the Log</h3>
-<ol>
-    <li>Navigate to <strong>Audit Log</strong></li>
-    <li>Use filters to narrow results:
-        <ul>
-            <li>Date range</li>
-            <li>User</li>
-            <li>Action type</li>
-            <li>Record type</li>
-        </ul>
-    </li>
-    <li>Click an entry to see details</li>
-</ol>
+<p>The AuditLogView displays entries with filtering:</p>
+<ul>
+    <li>Date range</li>
+    <li>User who performed action</li>
+    <li>Action type</li>
+    <li>Record type (model)</li>
+</ul>
+
+<h3>Entry Details</h3>
+<p>Each audit entry includes:</p>
+<ul>
+    <li>Timestamp</li>
+    <li>Actor (user who performed action)</li>
+    <li>Action description</li>
+    <li>Affected record</li>
+    <li>Before/after values for changes</li>
+</ul>
 
 <h3>Use Cases</h3>
 <ul>
     <li>Investigate who made a change</li>
     <li>Track workflow progression</li>
     <li>Verify compliance actions</li>
-    <li>Troubleshoot issues</li>
+    <li>Debug issues</li>
+    <li>Security monitoring</li>
 </ul>
 """,
         },
         "ai-settings": {
             "title": "AI Settings",
             "content": """
-<p>Configure AI assistance features in the dashboard.</p>
+<p>Configure AI-assisted features through the AI Settings page (<code>/staff/diveops/settings/ai/</code>).</p>
 
 <h3>AI Features</h3>
+<p>The AISettings model configures:</p>
 <ul>
-    <li><strong>Smart Suggestions</strong> - Recommendations for common actions</li>
-    <li><strong>Natural Language Search</strong> - Search using plain English</li>
-    <li><strong>Automated Summaries</strong> - Generate activity summaries</li>
+    <li>Feature flags for AI capabilities</li>
+    <li>Parameters for AI behavior</li>
+    <li>Data access permissions</li>
 </ul>
 
 <h3>Configuration Options</h3>
+<p>Settings may include:</p>
 <ul>
-    <li>Enable/disable AI features</li>
-    <li>Set suggestion sensitivity</li>
+    <li>Enable/disable AI assistance</li>
     <li>Configure which data AI can access</li>
-    <li>Set rate limits</li>
+    <li>Set processing limits</li>
 </ul>
 
-<h3>Privacy</h3>
+<h3>Privacy Considerations</h3>
 <p>AI features are designed with privacy in mind:</p>
 <ul>
-    <li>Data processed locally when possible</li>
-    <li>Sensitive information excluded from AI processing</li>
-    <li>Configurable opt-out options</li>
+    <li>Configurable data access</li>
+    <li>Audit logging of AI operations</li>
+    <li>Opt-out options available</li>
+</ul>
+""",
+        },
+        "automated-documentation": {
+            "title": "Automated Documentation",
+            "content": """
+<p>DiveOps includes tools for automated documentation with screenshots.</p>
+
+<h3>Screenshot Capture</h3>
+<p>The <code>scripts/capture_help_screenshots.py</code> script uses Playwright to:</p>
+<ul>
+    <li>Navigate to application pages</li>
+    <li>Capture full-page screenshots</li>
+    <li>Capture cropped component screenshots</li>
+    <li>Organize by page type (lists, details, forms, system)</li>
+</ul>
+
+<h3>Interface Crawler</h3>
+<p>The <code>scripts/crawl_interface.py</code> extracts UI elements:</p>
+<ul>
+    <li>Form fields with labels and types</li>
+    <li>Buttons and actions</li>
+    <li>Table structures</li>
+    <li>Navigation links</li>
+</ul>
+
+<h3>Running the Tools</h3>
+<pre>
+# Capture screenshots
+python scripts/capture_help_screenshots.py --headed
+
+# Crawl interface
+python scripts/crawl_interface.py
+
+# Embed screenshots in CMS
+python manage.py embed_help_screenshots
+</pre>
+
+<h3>Output Locations</h3>
+<ul>
+    <li><code>media/help/screenshots/</code> - Screenshot images</li>
+    <li><code>docs/interface_analysis/</code> - Interface analysis JSON</li>
 </ul>
 """,
         },
