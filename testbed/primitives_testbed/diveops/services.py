@@ -6099,3 +6099,240 @@ Output ONLY valid JSON. No markdown, no explanations, no code fences.""",
     except Exception as e:
         logger.warning(f"AI enhancement error: {e}")
         return EnhancedDocument(content=text, method=method)
+
+
+# =============================================================================
+# Buddy Services
+# =============================================================================
+
+
+def get_or_create_identity(*, person=None, contact=None):
+    """Get or create a BuddyIdentity for a Person or Contact.
+
+    Args:
+        person: A Person instance (mutually exclusive with contact)
+        contact: A Contact instance (mutually exclusive with person)
+
+    Returns:
+        Tuple of (BuddyIdentity, created: bool)
+
+    Raises:
+        ValueError: If both person and contact provided, or neither provided
+    """
+    from .models import BuddyIdentity
+
+    if person is not None and contact is not None:
+        raise ValueError("Cannot provide both person and contact")
+    if person is None and contact is None:
+        raise ValueError("Must provide either person or contact")
+
+    if person is not None:
+        return BuddyIdentity.objects.get_or_create(person=person)
+    else:
+        return BuddyIdentity.objects.get_or_create(contact=contact)
+
+
+def add_buddy_pair(*, me_person, friend_person=None, friend_data=None):
+    """Create a buddy pair (team of 2).
+
+    Args:
+        me_person: The Person creating the buddy relationship
+        friend_person: Existing Person to add as buddy (optional)
+        friend_data: Dict with display_name, email, and/or phone to create Contact
+
+    Returns:
+        DiveTeam instance with 2 members
+
+    Raises:
+        ValueError: If trying to add yourself, or neither friend_person nor friend_data
+    """
+    from .models import BuddyIdentity, Contact, DiveTeam, DiveTeamMember
+
+    if friend_person is None and friend_data is None:
+        raise ValueError("Must provide either friend_person or friend_data")
+
+    if friend_person is not None and friend_person.pk == me_person.pk:
+        raise ValueError("Cannot add yourself as your own buddy")
+
+    with transaction.atomic():
+        # Get or create my identity
+        my_identity, _ = get_or_create_identity(person=me_person)
+
+        # Get or create friend's identity
+        if friend_person is not None:
+            friend_identity, _ = get_or_create_identity(person=friend_person)
+        else:
+            # Create Contact from friend_data
+            contact = Contact.objects.create(
+                created_by=me_person,
+                display_name=friend_data.get("display_name", ""),
+                email=friend_data.get("email"),
+                phone=friend_data.get("phone"),
+            )
+            friend_identity, _ = get_or_create_identity(contact=contact)
+
+        # Check if pair already exists
+        existing_team = _find_existing_pair(my_identity, friend_identity)
+        if existing_team:
+            return existing_team
+
+        # Create new team
+        team = DiveTeam.objects.create(
+            team_type=DiveTeam.TeamType.BUDDY,
+            created_by=me_person,
+        )
+
+        # Add both members
+        DiveTeamMember.objects.create(team=team, identity=my_identity)
+        DiveTeamMember.objects.create(team=team, identity=friend_identity)
+
+        return team
+
+
+def _find_existing_pair(identity1, identity2):
+    """Find existing buddy pair containing both identities."""
+    from .models import DiveTeam
+
+    # Find teams where identity1 is a member
+    teams_with_1 = DiveTeam.objects.filter(
+        members__identity=identity1,
+        deleted_at__isnull=True,
+    )
+
+    for team in teams_with_1:
+        if team.members.count() == 2:
+            if team.members.filter(identity=identity2).exists():
+                return team
+
+    return None
+
+
+def create_buddy_group(*, me_person, friend_persons, name=None):
+    """Create a buddy group (team of 3+).
+
+    Args:
+        me_person: The Person creating the group
+        friend_persons: List of Person instances to include
+        name: Optional name for the group
+
+    Returns:
+        DiveTeam instance with 3+ members
+    """
+    from .models import DiveTeam, DiveTeamMember
+
+    with transaction.atomic():
+        # Create team
+        team = DiveTeam.objects.create(
+            team_type=DiveTeam.TeamType.BUDDY,
+            name=name or "",
+            created_by=me_person,
+        )
+
+        # Add creator
+        my_identity, _ = get_or_create_identity(person=me_person)
+        DiveTeamMember.objects.create(team=team, identity=my_identity)
+
+        # Add friends
+        for friend in friend_persons:
+            friend_identity, _ = get_or_create_identity(person=friend)
+            DiveTeamMember.objects.create(team=team, identity=friend_identity)
+
+        return team
+
+
+def list_buddy_pairs(person):
+    """List buddy pairs (size=2) where person is a member.
+
+    Args:
+        person: Person to find pairs for
+
+    Returns:
+        List of dicts with team_id, buddy_name, is_registered
+    """
+    from .models import BuddyIdentity, DiveTeam
+
+    # Get person's identity
+    try:
+        my_identity = BuddyIdentity.objects.get(person=person)
+    except BuddyIdentity.DoesNotExist:
+        return []
+
+    # Find teams with exactly 2 members where person is one
+    pairs = []
+    teams = DiveTeam.objects.filter(
+        members__identity=my_identity,
+        deleted_at__isnull=True,
+    )
+
+    for team in teams:
+        if team.members.count() == 2:
+            # Find the other member
+            other_member = team.members.exclude(identity=my_identity).first()
+            if other_member:
+                pairs.append({
+                    "team_id": team.pk,
+                    "buddy_name": other_member.identity.display_name,
+                    "is_registered": other_member.identity.is_registered,
+                })
+
+    return pairs
+
+
+def list_buddy_groups(person):
+    """List buddy groups (size>=3) where person is a member.
+
+    Args:
+        person: Person to find groups for
+
+    Returns:
+        List of dicts with team_id, name, member_count
+    """
+    from .models import BuddyIdentity, DiveTeam
+
+    # Get person's identity
+    try:
+        my_identity = BuddyIdentity.objects.get(person=person)
+    except BuddyIdentity.DoesNotExist:
+        return []
+
+    # Find teams with 3+ members where person is one
+    groups = []
+    teams = DiveTeam.objects.filter(
+        members__identity=my_identity,
+        deleted_at__isnull=True,
+    )
+
+    for team in teams:
+        if team.members.count() >= 3:
+            groups.append({
+                "team_id": team.pk,
+                "name": team.name,
+                "member_count": team.members.count(),
+            })
+
+    return groups
+
+
+def remove_buddy(*, me_person, team_id):
+    """Remove person from a buddy team.
+
+    For pairs (size=2): soft-deletes the whole team
+    For groups (size>=3): removes person's membership
+
+    Args:
+        me_person: Person leaving the team
+        team_id: UUID of the team
+    """
+    from .models import BuddyIdentity, DiveTeam
+
+    with transaction.atomic():
+        team = DiveTeam.objects.select_for_update().get(pk=team_id)
+        my_identity = BuddyIdentity.objects.get(person=me_person)
+
+        if team.members.count() == 2:
+            # Pair - delete the whole team
+            team.delete()
+        else:
+            # Group - just remove membership
+            membership = team.members.get(identity=my_identity)
+            membership.delete()

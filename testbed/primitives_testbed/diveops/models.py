@@ -2939,6 +2939,13 @@ class AgreementTemplate(BaseModel):
         VENDOR = "vendor", "Vendor"
         ANY = "any", "Any Party"
 
+    class DiverCategory(models.TextChoices):
+        """Which category of diver needs this waiver/agreement."""
+        ALL = "all", "All Divers"
+        CERTIFIED = "certified", "Certified Divers Only"
+        STUDENT = "student", "Students in Training"
+        DSD = "dsd", "Discover Scuba (DSD/Try Dive)"
+
     # Ownership
     dive_shop = models.ForeignKey(
         "django_parties.Organization",
@@ -2961,6 +2968,12 @@ class AgreementTemplate(BaseModel):
         choices=TargetPartyType.choices,
         default=TargetPartyType.DIVER,
         help_text="Type of party who should sign this template (diver, employee, vendor)",
+    )
+    diver_category = models.CharField(
+        max_length=20,
+        choices=DiverCategory.choices,
+        default=DiverCategory.ALL,
+        help_text="Which diver category needs this agreement (for waivers)",
     )
     description = models.TextField(
         blank=True,
@@ -3017,16 +3030,17 @@ class AgreementTemplate(BaseModel):
 
     class Meta:
         constraints = [
-            # Only one published template of each type per shop
+            # Only one published template of each type+category per shop
             models.UniqueConstraint(
-                fields=["dive_shop", "template_type"],
+                fields=["dive_shop", "template_type", "diver_category"],
                 condition=Q(status="published") & Q(deleted_at__isnull=True),
-                name="diveops_unique_published_template_per_type",
+                name="diveops_unique_published_template_per_type_category",
             ),
         ]
         indexes = [
             models.Index(fields=["dive_shop", "template_type"]),
             models.Index(fields=["dive_shop", "target_party_type"]),
+            models.Index(fields=["dive_shop", "diver_category"]),
             models.Index(fields=["status"]),
         ]
         ordering = ["dive_shop", "template_type", "-version"]
@@ -5085,6 +5099,323 @@ class MedicalProviderRelationship(BaseModel):
         return f"{self.dive_shop.name} -> {self.provider.organization.name}"
 
 
+# =============================================================================
+# Buddy System Models
+# =============================================================================
+
+
+class Contact(BaseModel):
+    """Lightweight record for an unregistered friend/buddy.
+
+    Used when a diver wants to add a buddy who isn't on the platform yet.
+    Supports invite workflows: create contact → invite → they register → link.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class Status(models.TextChoices):
+        NEW = "new", "New"
+        INVITED = "invited", "Invited"
+        ACCEPTED = "accepted", "Accepted"
+        BOUNCED = "bounced", "Bounced"
+        OPTED_OUT = "opted_out", "Opted Out"
+
+    created_by = models.ForeignKey(
+        "django_parties.Person",
+        on_delete=models.CASCADE,
+        related_name="created_contacts",
+        help_text="Person who created this contact",
+    )
+    display_name = models.CharField(
+        max_length=200,
+        help_text="Display name for the contact",
+    )
+    email = models.EmailField(
+        null=True,
+        blank=True,
+        help_text="Contact email address",
+    )
+    phone = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Contact phone number",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.NEW,
+        help_text="Contact status in invite workflow",
+    )
+    linked_person = models.ForeignKey(
+        "django_parties.Person",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="contact_links",
+        help_text="Linked Person after they register",
+    )
+
+    class Meta:
+        ordering = ["display_name"]
+        constraints = [
+            # Must have at least email or phone
+            models.CheckConstraint(
+                condition=Q(email__isnull=False) | Q(phone__isnull=False),
+                name="contact_requires_email_or_phone",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["created_by"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return self.display_name
+
+
+class BuddyIdentity(BaseModel):
+    """Abstraction for team member identity: Person OR Contact.
+
+    Allows DiveTeamMember to reference either a registered Person
+    or an unregistered Contact, enabling invite-ready buddy system.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    person = models.OneToOneField(
+        "django_parties.Person",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="buddy_identity",
+        help_text="Reference to a registered Person",
+    )
+    contact = models.OneToOneField(
+        Contact,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="buddy_identity",
+        help_text="Reference to an unregistered Contact",
+    )
+
+    class Meta:
+        verbose_name = "Buddy Identity"
+        verbose_name_plural = "Buddy Identities"
+        constraints = [
+            # Must have exactly one of person or contact
+            models.CheckConstraint(
+                condition=(
+                    Q(person__isnull=False, contact__isnull=True) |
+                    Q(person__isnull=True, contact__isnull=False)
+                ),
+                name="identity_exactly_one_of_person_or_contact",
+            ),
+        ]
+
+    def __str__(self):
+        return self.display_name
+
+    @property
+    def display_name(self) -> str:
+        """Get display name from Person or Contact."""
+        if self.person:
+            return f"{self.person.first_name} {self.person.last_name}"
+        if self.contact:
+            return self.contact.display_name
+        return "Unknown"
+
+    @property
+    def is_registered(self) -> bool:
+        """Check if this identity represents a registered user.
+
+        True if:
+        - Identity references a Person directly, OR
+        - Identity references a Contact that has been linked to a Person
+        """
+        if self.person is not None:
+            return True
+        if self.contact and self.contact.linked_person is not None:
+            return True
+        return False
+
+
+class DiveTeam(BaseModel):
+    """Buddy pair or group.
+
+    Represents 2+ divers who typically dive together.
+    Size 2 = buddy pair, size 3+ = buddy group with optional name.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    class TeamType(models.TextChoices):
+        BUDDY = "buddy", "Buddy Group"
+
+    team_type = models.CharField(
+        max_length=20,
+        choices=TeamType.choices,
+        default=TeamType.BUDDY,
+        help_text="Type of team",
+    )
+    name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Optional name for groups (blank for pairs)",
+    )
+    created_by = models.ForeignKey(
+        "django_parties.Person",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_dive_teams",
+        help_text="Person who created this team",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this team is currently active",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["created_by"]),
+            models.Index(fields=["is_active"]),
+        ]
+
+    def __str__(self):
+        if self.name:
+            return self.name
+        return f"Buddy Team {self.pk}"
+
+
+class DiveTeamMember(BaseModel):
+    """Membership in a dive team.
+
+    Join table linking BuddyIdentity to DiveTeam.
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    team = models.ForeignKey(
+        DiveTeam,
+        on_delete=models.CASCADE,
+        related_name="members",
+        help_text="The dive team",
+    )
+    identity = models.ForeignKey(
+        BuddyIdentity,
+        on_delete=models.CASCADE,
+        related_name="team_memberships",
+        help_text="The team member identity",
+    )
+    role = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Optional role in the team",
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text="Notes about this team member",
+    )
+
+    class Meta:
+        ordering = ["team", "created_at"]
+        constraints = [
+            # Can't add same identity to team twice
+            models.UniqueConstraint(
+                fields=["team", "identity"],
+                name="unique_team_member",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["team", "identity"]),
+        ]
+
+    def __str__(self):
+        return f"{self.identity.display_name} in {self.team}"
+
+
+class DiveBuddy(BaseModel):
+    """Simple buddy relationship for a diver.
+
+    Links a diver to their buddies. Buddy can be:
+    - Another DiverProfile (buddy field), or
+    - Just a Person who isn't a diver yet (buddy_person field)
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    RELATIONSHIP_CHOICES = [
+        ("spouse", "Spouse/Partner"),
+        ("friend", "Friend"),
+        ("dive_club", "Dive Club Member"),
+        ("instructor", "Instructor"),
+        ("family", "Family Member"),
+        ("coworker", "Coworker"),
+        ("other", "Other"),
+    ]
+
+    diver = models.ForeignKey(
+        DiverProfile,
+        on_delete=models.CASCADE,
+        related_name="dive_buddies",
+        help_text="The diver who owns this buddy relationship",
+    )
+    buddy = models.ForeignKey(
+        DiverProfile,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="buddy_of",
+        help_text="The buddy (if they are a diver)",
+    )
+    buddy_person = models.ForeignKey(
+        "django_parties.Person",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="buddy_person_for",
+        help_text="The buddy (if they are just a person, not a diver)",
+    )
+    relationship = models.CharField(
+        max_length=20,
+        choices=RELATIONSHIP_CHOICES,
+        help_text="Type of relationship",
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text="Notes about this buddy",
+    )
+
+    class Meta:
+        ordering = ["diver", "relationship"]
+        verbose_name = "Dive Buddy"
+        verbose_name_plural = "Dive Buddies"
+        indexes = [
+            models.Index(fields=["diver"]),
+        ]
+
+    def __str__(self):
+        return f"{self.diver.person} -> {self.buddy_name} ({self.get_relationship_display()})"
+
+    @property
+    def buddy_name(self) -> str:
+        """Get the buddy's display name."""
+        if self.buddy:
+            person = self.buddy.person
+            return f"{person.first_name} {person.last_name}"
+        if self.buddy_person:
+            return f"{self.buddy_person.first_name} {self.buddy_person.last_name}"
+        return "Unknown"
+
+
 __all__ = [
     "CertificationLevel",
     "DiverCertification",
@@ -5143,9 +5474,19 @@ __all__ = [
     "MedicalProviderRelationship",
     # Entitlements
     "EntitlementGrant",
+    # Preferences
+    "PreferenceDefinition",
+    "PartyPreference",
+    # Buddy System Models
+    "Contact",
+    "BuddyIdentity",
+    "DiveTeam",
+    "DiveTeamMember",
+    "DiveBuddy",
 ]
 
 # Import EntitlementGrant from submodule for migration discovery
 from .entitlements.models import EntitlementGrant
 
-
+# Import Preference models from submodule for migration discovery
+from .preferences.models import PreferenceDefinition, PartyPreference

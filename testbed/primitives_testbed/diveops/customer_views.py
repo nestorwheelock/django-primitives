@@ -149,6 +149,11 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
 
             # Emergency contacts
             emergency_contacts = diver.emergency_contacts
+
+            # Buddy pairs and groups
+            from .services import list_buddy_pairs, list_buddy_groups
+            buddy_pairs = list_buddy_pairs(diver.person)
+            buddy_groups = list_buddy_groups(diver.person)
         else:
             agreement_status = None
             combined_docs = []
@@ -157,6 +162,8 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
             recommended_courseware = []
             recommended_gear = []
             upcoming_briefings = []
+            buddy_pairs = []
+            buddy_groups = []
 
         # Get recent orders for this user
         orders = StoreOrder.objects.filter(user=user).order_by("-created_at")[:5]
@@ -221,6 +228,8 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
             "recommended_courseware": recommended_courseware,
             "recommended_gear": recommended_gear,
             "upcoming_briefings": upcoming_briefings,
+            "buddy_pairs": buddy_pairs,
+            "buddy_groups": buddy_groups,
         })
         return context
 

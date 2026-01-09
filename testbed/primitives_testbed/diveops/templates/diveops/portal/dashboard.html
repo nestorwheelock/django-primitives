@@ -360,7 +360,7 @@
         </div>
     </div>
 
-    <!-- Gear Sizing & Emergency Contacts Row -->
+    <!-- Gear Sizing & Buddies Row -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Gear Sizing -->
         <div class="bg-white shadow rounded-lg" x-data="{ showGearModal: false }">
@@ -551,16 +551,56 @@
                 </button>
             </div>
             {% endif %}
+
+            <!-- Recommended Gear (inside gear sizing card) -->
+            {% if recommended_gear %}
+            <div class="mt-6 pt-4 border-t border-gray-200">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">Recommended Gear</h4>
+                <div class="grid grid-cols-3 gap-3">
+                    {% for rec in recommended_gear %}
+                    <div class="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                        <div class="h-20 flex items-center justify-center {% if 'Mask' in rec.item.display_name %}bg-gradient-to-br from-blue-100 to-cyan-100{% elif 'Snorkel' in rec.item.display_name %}bg-gradient-to-br from-teal-100 to-green-100{% elif 'Fins' in rec.item.display_name or 'Fin' in rec.item.display_name %}bg-gradient-to-br from-indigo-100 to-purple-100{% elif 'Light' in rec.item.display_name %}bg-gradient-to-br from-yellow-100 to-amber-100{% elif 'Camera' in rec.item.display_name %}bg-gradient-to-br from-pink-100 to-rose-100{% elif 'Computer' in rec.item.display_name %}bg-gradient-to-br from-gray-100 to-slate-200{% else %}bg-gradient-to-br from-amber-50 to-orange-100{% endif %}">
+                            {% if 'Mask' in rec.item.display_name %}
+                                {% icon "eye" "w-8 h-8 text-blue-500" %}
+                            {% elif 'Snorkel' in rec.item.display_name %}
+                                {% icon "wind" "w-8 h-8 text-teal-500" %}
+                            {% elif 'Fins' in rec.item.display_name or 'Fin' in rec.item.display_name %}
+                                {% icon "zap" "w-8 h-8 text-indigo-500" %}
+                            {% elif 'Light' in rec.item.display_name %}
+                                {% icon "sun" "w-8 h-8 text-amber-500" %}
+                            {% elif 'Camera' in rec.item.display_name %}
+                                {% icon "camera" "w-8 h-8 text-pink-500" %}
+                            {% elif 'Computer' in rec.item.display_name %}
+                                {% icon "cpu" "w-8 h-8 text-slate-500" %}
+                            {% else %}
+                                {% icon "package" "w-8 h-8 text-amber-500" %}
+                            {% endif %}
+                        </div>
+                        <div class="p-2 text-center">
+                            <div class="font-medium text-gray-800 text-xs truncate">{{ rec.item.display_name }}</div>
+                            {% if rec.price %}
+                            <div class="text-sm font-bold text-primary-600">${{ rec.price }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <a href="{% url 'store:list' %}" class="mt-3 inline-flex items-center text-primary-600 hover:text-primary-800 text-xs">
+                    Browse all gear
+                    {% icon "arrow-right" "w-3 h-3 ml-1" %}
+                </a>
+            </div>
+            {% endif %}
         </div>
         </div>
 
-        <!-- Emergency Contacts -->
+        <!-- Buddies -->
         <div class="bg-white shadow rounded-lg" x-data="{ showContactModal: false }">
         <div class="p-6 border-b border-gray-200">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-                    {% icon "phone" "w-5 h-5 mr-2 text-primary-500" %}
-                    Emergency Contacts
+                    {% icon "users" "w-5 h-5 mr-2 text-primary-500" %}
+                    Buddies
                 </h3>
                 <button @click="showContactModal = true"
                         class="text-sm text-primary-600 hover:text-primary-800">
@@ -569,7 +609,7 @@
             </div>
         </div>
 
-        <!-- Add Emergency Contact Modal -->
+        <!-- Add Dive Buddy Modal -->
         <div x-show="showContactModal" x-cloak
              class="fixed inset-0 z-50 overflow-y-auto"
              x-transition:enter="ease-out duration-300"
@@ -590,7 +630,7 @@
                     <form method="post" action="{% url 'portal:add_emergency_contact' %}">
                         {% csrf_token %}
                         <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
-                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Add Emergency Contact</h3>
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Add Dive Buddy</h3>
                             <div class="space-y-4">
                                 <div class="grid grid-cols-2 gap-4">
                                     <div>
@@ -615,29 +655,28 @@
                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Relationship *</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">How do you know them? *</label>
                                     <select name="relationship" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
                                         <option value="">Select...</option>
                                         <option value="spouse">Spouse/Partner</option>
-                                        <option value="parent">Parent</option>
-                                        <option value="child">Child (Adult)</option>
-                                        <option value="sibling">Sibling</option>
                                         <option value="friend">Friend</option>
-                                        <option value="other_family">Other Family Member</option>
-                                        <option value="employer">Employer</option>
+                                        <option value="dive_club">Dive Club Member</option>
+                                        <option value="instructor">Instructor</option>
+                                        <option value="sibling">Family Member</option>
+                                        <option value="coworker">Coworker</option>
                                         <option value="other">Other</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                                    <textarea name="notes" rows="2" placeholder="Any special instructions..."
+                                    <textarea name="notes" rows="2" placeholder="Certification level, preferred dive sites..."
                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"></textarea>
                                 </div>
                             </div>
                         </div>
                         <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
                             <button type="submit" class="w-full sm:w-auto inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-primary-600 text-white font-medium hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                                Add Contact
+                                Add Buddy
                             </button>
                             <button type="button" @click="showContactModal = false" class="mt-3 sm:mt-0 w-full sm:w-auto inline-flex justify-center rounded-lg border border-gray-300 px-4 py-2 bg-white text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                                 Cancel
@@ -649,56 +688,42 @@
         </div>
 
         <div class="p-6">
-            {% if emergency_contacts %}
-            <ul class="space-y-3">
-                {% for ec in emergency_contacts %}
-                <li class="p-3 bg-gray-50 rounded-lg">
-                    <div class="flex items-center mb-2">
-                        <div class="flex-shrink-0 w-6 h-6 bg-red-100 rounded-full flex items-center justify-center mr-2">
-                            <span class="text-red-600 text-xs font-bold">{{ ec.priority }}</span>
-                        </div>
-                        <span class="font-medium text-gray-800 text-sm">{{ ec.contact_person.first_name }} {{ ec.contact_person.last_name }}</span>
-                        <span class="ml-2 px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-600">
-                            {{ ec.get_relationship_display }}
-                        </span>
-                    </div>
-                    <div class="space-y-1 text-sm text-gray-600">
-                        {% if ec.contact_person.phone %}
-                        <a href="tel:{{ ec.contact_person.phone }}" class="flex items-center hover:text-primary-600">
-                            {% icon "phone" "w-3 h-3 mr-1.5" %}
-                            {{ ec.contact_person.phone }}
-                        </a>
-                        {% endif %}
-                        {% if ec.contact_person.email %}
-                        <a href="mailto:{{ ec.contact_person.email }}" class="flex items-center hover:text-primary-600 truncate">
-                            {% icon "mail" "w-3 h-3 mr-1.5" %}
-                            {{ ec.contact_person.email }}
-                        </a>
+            {% if buddy_pairs or buddy_groups %}
+            <div class="space-y-3">
+                {% for pair in buddy_pairs %}
+                <div class="p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+                    <div class="flex items-center">
+                        {% icon "user" "w-5 h-5 mr-2 text-primary-500" %}
+                        <span class="font-medium text-gray-800">{{ pair.buddy_name }}</span>
+                        {% if pair.is_registered %}
+                        <span class="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">On platform</span>
+                        {% else %}
+                        <span class="ml-2 px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">Not joined</span>
                         {% endif %}
                     </div>
-                    {% if ec.notes %}
-                    <p class="mt-2 text-xs text-gray-500">{{ ec.notes }}</p>
-                    {% endif %}
-                    {% if ec.is_also_diver %}
-                    <p class="mt-1 text-xs text-yellow-600 flex items-center">
-                        {% icon "alert-triangle" "w-3 h-3 mr-1" %}
-                        Also a diver
-                    </p>
-                    {% endif %}
-                </li>
+                </div>
                 {% endfor %}
-            </ul>
+                {% for group in buddy_groups %}
+                <div class="p-3 bg-blue-50 rounded-lg">
+                    <div class="flex items-center">
+                        {% icon "users" "w-5 h-5 mr-2 text-blue-500" %}
+                        <span class="font-medium text-gray-800">{{ group.name|default:"Buddy Group" }}</span>
+                        <span class="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">{{ group.member_count }} members</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
             {% else %}
             <div class="text-center py-6">
                 <div class="text-gray-300 mb-3">
                     {% icon "users" "w-10 h-10 mx-auto" %}
                 </div>
-                <p class="text-gray-500 text-sm">No emergency contacts on file.</p>
-                <p class="text-sm text-gray-400 mt-1">Add at least one emergency contact for your safety.</p>
+                <p class="text-gray-500 text-sm">No dive buddies added yet.</p>
+                <p class="text-sm text-gray-400 mt-1">Add friends you like to dive with.</p>
                 <button @click="showContactModal = true"
                         class="mt-3 inline-flex items-center px-4 py-2 border border-primary-300 rounded-lg text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100">
                     {% icon "plus" "w-4 h-4 mr-1.5" %}
-                    Add Contact
+                    Add Buddy
                 </button>
             </div>
             {% endif %}
@@ -831,42 +856,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Recommended Gear -->
-    {% if recommended_gear %}
-    <div class="bg-white shadow rounded-lg">
-        <div class="p-6 border-b border-gray-200">
-            <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-                {% icon "shopping-bag" "w-5 h-5 mr-2 text-primary-500" %}
-                Recommended Gear
-            </h3>
-        </div>
-        <div class="p-6">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {% for rec in recommended_gear %}
-                <div class="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border border-amber-100">
-                    <div class="flex items-start">
-                        <div class="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                            {% icon "package" "w-5 h-5 text-amber-600" %}
-                        </div>
-                        <div class="ml-3 flex-1 min-w-0">
-                            <div class="font-medium text-gray-800 text-sm truncate">{{ rec.item.display_name }}</div>
-                            <div class="text-xs text-gray-600 mt-1">{{ rec.reason }}</div>
-                            {% if rec.price %}
-                            <div class="text-sm font-semibold text-amber-700 mt-2">${{ rec.price }}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            <a href="{% url 'store:list' %}" class="mt-4 inline-flex items-center text-primary-600 hover:text-primary-800 text-sm">
-                Browse all gear
-                {% icon "arrow-right" "w-4 h-4 ml-1" %}
-            </a>
-        </div>
-    </div>
-    {% endif %}
 
     <!-- Entitlements -->
     {% if entitlements %}
