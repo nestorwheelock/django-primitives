@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from django_parties.models import Person
 
-from .models import (
+from ..models import (
     AgreementTemplate,
     Booking,
     CertificationLevel,

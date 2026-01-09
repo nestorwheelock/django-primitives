@@ -62,6 +62,15 @@ from .models import (
     SitePriceAdjustment,
 )
 from .selectors import get_diver_with_certifications, get_excursion_with_roster, list_upcoming_excursions
+from .selectors.divers import (
+    get_diver_person_details,
+    get_diver_normalized_contacts,
+    get_diver_emergency_contacts,
+    get_diver_relationships,
+    get_diver_booking_history,
+    get_diver_dive_history,
+    get_diver_medical_details,
+)
 from .preferences.selectors import get_diver_preference_status, list_diver_preferences_by_category
 
 
@@ -408,69 +417,99 @@ class DiverDetailView(StaffPortalMixin, DetailView):
         return diver
 
     def get_context_data(self, **kwargs):
-        """Add certifications, permits, medical status, notes, documents, and agreements to context."""
+        """Add full diver context including Person details, history, and relationships."""
         context = super().get_context_data(**kwargs)
-        context["certifications"] = self.object.certifications.filter(
+        diver = self.object
+        person = diver.person
+
+        # === PERSON DETAILS (from django-parties) ===
+        context["person_details"] = get_diver_person_details(person)
+
+        # === NORMALIZED CONTACTS (from django-parties) ===
+        context["normalized_contacts"] = get_diver_normalized_contacts(person)
+
+        # === DEMOGRAPHICS (from django-parties) ===
+        context["demographics"] = getattr(person, "demographics", None)
+
+        # === CERTIFICATIONS ===
+        context["certifications"] = diver.certifications.filter(
             deleted_at__isnull=True
         ).select_related("level__agency")
-        # Add unified permits (guide permits for this diver)
+
+        # === PERMITS (guide permits for this diver) ===
         context["permits"] = ProtectedAreaPermit.objects.filter(
-            diver=self.object,
+            diver=diver,
             permit_type=ProtectedAreaPermit.PermitType.GUIDE,
             deleted_at__isnull=True
         ).select_related("protected_area").prefetch_related("guide_details").order_by("protected_area__name")
-        # Add medical status and questionnaire instance
+
+        # === MEDICAL STATUS & DETAILS ===
         try:
             from .medical.services import get_diver_medical_status, get_diver_medical_instance
-            context["medical_status"] = get_diver_medical_status(self.object).value
-            context["medical_instance"] = get_diver_medical_instance(self.object)
+            context["medical_status"] = get_diver_medical_status(diver).value
+            context["medical_instance"] = get_diver_medical_instance(diver)
         except ImportError:
             context["medical_status"] = None
             context["medical_instance"] = None
 
-        # Add staff notes using django-notes primitive
+        # Full medical details with dates
+        context["medical_details"] = get_diver_medical_details(diver)
+
+        # === STAFF NOTES (django-notes primitive) ===
         from django_notes.models import Note
-        context["staff_notes"] = Note.objects.for_target(self.object).select_related("author")
+        context["staff_notes"] = Note.objects.for_target(diver).select_related("author")
 
-        # Add documents using django-documents primitive
+        # === DOCUMENTS (django-documents primitive) ===
         from django_documents.models import Document
-        context["documents"] = Document.objects.for_target(self.object).order_by("-created_at")
+        context["documents"] = Document.objects.for_target(diver).order_by("-created_at")
 
-        # Add signable agreements for this diver (linked via Person, not DiverProfile)
+        # === AGREEMENTS (linked via Person, not DiverProfile) ===
         from django.contrib.contenttypes.models import ContentType
         from .models import SignableAgreement
-        person_ct = ContentType.objects.get_for_model(self.object.person)
+        person_ct = ContentType.objects.get_for_model(person)
         context["agreements"] = SignableAgreement.objects.filter(
             party_a_content_type=person_ct,
-            party_a_object_id=str(self.object.person.pk),
+            party_a_object_id=str(person.pk),
             deleted_at__isnull=True,
         ).select_related("template").order_by("-created_at")
 
-        # Add photos where diver is tagged using PhotoTag
+        # === PHOTO TAGS ===
         from .models import PhotoTag
         context["photo_tags"] = PhotoTag.objects.filter(
-            diver=self.object,
+            diver=diver,
             deleted_at__isnull=True,
         ).select_related("document", "document__media_asset").order_by("-created_at")[:12]
 
-        # Add User for impersonation (if diver has email matching a user)
+        # === USER FOR IMPERSONATION ===
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        if self.object.person.email:
+        if person.email:
             context["diver_user"] = User.objects.filter(
-                email__iexact=self.object.person.email
+                email__iexact=person.email
             ).first()
 
-        # Add preference status and data for staff view
-        context["preference_status"] = get_diver_preference_status(self.object)
+        # === PREFERENCES ===
+        context["preference_status"] = get_diver_preference_status(diver)
         context["preferences_by_category"] = list_diver_preferences_by_category(
-            self.object, include_sensitive=False  # Staff sees internal, not sensitive
+            diver, include_sensitive=False  # Staff sees internal, not sensitive
         )
 
-        # Add buddy pairs and groups
+        # === EMERGENCY CONTACTS (via legacy model for now) ===
+        context["emergency_contacts"] = get_diver_emergency_contacts(diver)
+
+        # === DIVER RELATIONSHIPS (buddies, family, etc.) ===
+        context["diver_relationships"] = get_diver_relationships(diver)
+
+        # === BUDDY PAIRS AND GROUPS ===
         from .services import list_buddy_pairs, list_buddy_groups
-        context["buddy_pairs"] = list_buddy_pairs(self.object.person)
-        context["buddy_groups"] = list_buddy_groups(self.object.person)
+        context["buddy_pairs"] = list_buddy_pairs(person)
+        context["buddy_groups"] = list_buddy_groups(person)
+
+        # === BOOKING HISTORY ===
+        context["booking_history"] = get_diver_booking_history(diver, limit=10)
+
+        # === DIVE/CHECK-IN HISTORY ===
+        context["dive_history"] = get_diver_dive_history(diver, limit=10, completed_only=False)
 
         return context
 
