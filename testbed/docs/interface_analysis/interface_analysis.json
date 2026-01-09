@@ -1,0 +1,2941 @@
+{
+  "dashboard": {
+    "url": "/staff/diveops/",
+    "title": "Dive Operations Dashboard",
+    "breadcrumbs": [],
+    "form_fields": [],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "New Excursion",
+        "type": "link",
+        "href": "/staff/diveops/excursions/add/"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      },
+      {
+        "text": "Dive Operations",
+        "href": "/staff/diveops/excursions/"
+      }
+    ],
+    "tables": [],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Upcoming Excursions"
+      }
+    ],
+    "sections": [
+      {
+        "text": "Upcoming Excursions",
+        "level": "H3"
+      },
+      {
+        "text": "Today's Schedule",
+        "level": "H3"
+      },
+      {
+        "text": "Quick Actions",
+        "level": "H3"
+      }
+    ]
+  },
+  "diver_list": {
+    "url": "/staff/diveops/divers/",
+    "title": "Divers",
+    "breadcrumbs": [],
+    "form_fields": [],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Add Diver",
+        "type": "link",
+        "href": "/staff/diveops/divers/add/"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      }
+    ],
+    "tables": [
+      {
+        "headers": [
+          "NAME",
+          "EMAIL",
+          "MEDICAL",
+          "CERTIFICATION",
+          "TOTAL DIVES",
+          "ACTIONS"
+        ],
+        "row_count": 3
+      }
+    ],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      }
+    ],
+    "sections": []
+  },
+  "diver_add": {
+    "url": "/staff/diveops/divers/add/",
+    "title": "Add Diver",
+    "breadcrumbs": [],
+    "form_fields": [
+      {
+        "name": "first_name",
+        "label": "First Name *",
+        "field_type": "text",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "last_name",
+        "label": "Last Name *",
+        "field_type": "text",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "email",
+        "label": "Email *",
+        "field_type": "email",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "certification_number",
+        "label": "Certification Number",
+        "field_type": "text",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "certification_date",
+        "label": "Certification Date *",
+        "field_type": "date",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "total_dives",
+        "label": "Total Dives",
+        "field_type": "number",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "medical_clearance_date",
+        "label": "Clearance Date",
+        "field_type": "date",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "medical_clearance_valid_until",
+        "label": "Valid Until",
+        "field_type": "date",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "weight_kg",
+        "label": "Weight (kg)",
+        "field_type": "number",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "height_cm",
+        "label": "Height (cm)",
+        "field_type": "number",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "weight_required_kg",
+        "label": "Weight Required (kg)",
+        "field_type": "number",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "wetsuit_size",
+        "label": "Wetsuit Size",
+        "field_type": "text",
+        "required": false,
+        "placeholder": "e.g., M, L, XL",
+        "help_text": null
+      },
+      {
+        "name": "bcd_size",
+        "label": "BCD Size",
+        "field_type": "text",
+        "required": false,
+        "placeholder": "e.g., M, L, XL",
+        "help_text": null
+      },
+      {
+        "name": "fin_size",
+        "label": "Fin Size",
+        "field_type": "text",
+        "required": false,
+        "placeholder": "e.g., M/L, 9-10",
+        "help_text": null
+      },
+      {
+        "name": "mask_fit",
+        "label": "Mask Fit",
+        "field_type": "text",
+        "required": false,
+        "placeholder": "e.g., Low volume, Standard",
+        "help_text": null
+      },
+      {
+        "name": "glove_size",
+        "label": "Glove Size",
+        "field_type": "text",
+        "required": false,
+        "placeholder": "e.g., M, L, XL",
+        "help_text": null
+      },
+      {
+        "name": "certification_level",
+        "label": "Level *",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Open Water Diver (PADI)",
+            "value": "668f0da5-46c3-4ec9-a499-be0606b831b0"
+          },
+          {
+            "text": "Scuba Diver (PADI)",
+            "value": "9ea295de-66ba-47fe-bb20-bc91f7e567a4"
+          },
+          {
+            "text": "Open Water (PADI)",
+            "value": "9f599550-91de-439d-a9b3-3c5555da8eff"
+          },
+          {
+            "text": "Open Water Diver (PADI)",
+            "value": "70650900-cb3c-4da8-ae38-d8ccf29a26ca"
+          },
+          {
+            "text": "Enriched Air Nitrox (PADI)",
+            "value": "002c9dae-d124-4d23-a4ef-432a7d012df3"
+          },
+          {
+            "text": "Advanced Open Water (PADI)",
+            "value": "89a0a82a-2b47-496d-97b6-e4a1e333110f"
+          },
+          {
+            "text": "Advanced Open Water (PADI)",
+            "value": "3cc882fe-3be7-41b6-b57b-0baf8c7333f2"
+          },
+          {
+            "text": "Rescue Diver (PADI)",
+            "value": "b37a3ad5-3df5-42c3-a01d-05819de3a361"
+          },
+          {
+            "text": "Advanced Open Water Diver (PADI)",
+            "value": "47bede40-69f7-41f2-84c6-167f30d152ae"
+          },
+          {
+            "text": "Rescue Diver (PADI)",
+            "value": "fa72d2d0-eb32-4067-a6a4-cf2d9f621afd"
+          },
+          {
+            "text": "Rescue Diver (PADI)",
+            "value": "9184fa2b-8d2e-4e45-9b33-781b341ddfda"
+          },
+          {
+            "text": "Divemaster (PADI)",
+            "value": "d962457c-8448-40aa-b21d-d8fe076c503c"
+          },
+          {
+            "text": "Park Guide Credential (Parque Nacional Arrecife de Puerto Morelos)",
+            "value": "8050866e-d5e1-40fa-bc65-300713f89e34"
+          },
+          {
+            "text": "Divemaster (PADI)",
+            "value": "548b8140-2fd2-4ec5-a0bb-29c3357b4c95"
+          },
+          {
+            "text": "Underwater Photographer (PADI)",
+            "value": "09529cdf-9391-4022-8352-4b57bc2f8ab4"
+          },
+          {
+            "text": "Peak Performance Buoyancy (PADI)",
+            "value": "2afddefd-d4f3-4a95-a200-9bf77f0131f6"
+          },
+          {
+            "text": "Enriched Air (Nitrox) Diver (PADI)",
+            "value": "953c897a-c997-4639-80a8-1d483e33c82a"
+          },
+          {
+            "text": "Night Diver (PADI)",
+            "value": "c95bdd8e-f29c-49a5-8ee8-f9f530df063b"
+          },
+          {
+            "text": "Deep Diver (PADI)",
+            "value": "85fc0774-27cb-470b-be89-0c5eb27654ff"
+          },
+          {
+            "text": "Wreck Diver (PADI)",
+            "value": "7d2a9b87-cd66-484e-a3b1-d14aab184cf1"
+          },
+          {
+            "text": "Cavern Diver (PADI)",
+            "value": "0e819216-08b2-44ae-93f3-32fb4cd67b08"
+          }
+        ]
+      },
+      {
+        "name": "certification_agency",
+        "label": "Agency *",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "PADI",
+            "value": "09cf6da3-3584-4bac-9a1c-6dc19b7db875"
+          },
+          {
+            "text": "Parque Nacional Arrecife de Puerto Morelos",
+            "value": "ddf8d1aa-642e-4043-8392-288c48522f29"
+          }
+        ]
+      },
+      {
+        "name": "diver_type",
+        "label": "Diver Type",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Does Diving (Activity)",
+            "value": "activity"
+          },
+          {
+            "text": "Diver (Identity)",
+            "value": "identity"
+          }
+        ]
+      },
+      {
+        "name": "equipment_ownership",
+        "label": "Equipment Ownership",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "None - Rents All",
+            "value": "none"
+          },
+          {
+            "text": "Partial - Owns Some Gear",
+            "value": "partial"
+          },
+          {
+            "text": "Full - Owns All Essential Gear",
+            "value": "full"
+          }
+        ]
+      },
+      {
+        "name": "gear_notes",
+        "label": "Gear Notes",
+        "field_type": "textarea",
+        "required": false,
+        "placeholder": "Additional gear preferences or requirements..."
+      }
+    ],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Create Diver",
+        "type": "submit",
+        "style": "primary"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      }
+    ],
+    "tables": [],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Personal Information"
+      }
+    ],
+    "sections": [
+      {
+        "text": "Personal Information",
+        "level": "H3"
+      },
+      {
+        "text": "Certification",
+        "level": "H3"
+      },
+      {
+        "text": "Experience",
+        "level": "H3"
+      },
+      {
+        "text": "Medical Clearance",
+        "level": "H3"
+      },
+      {
+        "text": "Diver Profile",
+        "level": "H3"
+      },
+      {
+        "text": "Body Measurements",
+        "level": "H3"
+      },
+      {
+        "text": "Gear Sizes",
+        "level": "H3"
+      }
+    ]
+  },
+  "excursion_list": {
+    "url": "/staff/diveops/excursions/",
+    "title": "Excursions",
+    "breadcrumbs": [],
+    "form_fields": [],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Add Excursion",
+        "type": "link",
+        "href": "/staff/diveops/excursions/add/"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      }
+    ],
+    "tables": [],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Afternoon 2-Tank Boat Dive"
+      },
+      {
+        "title": "Dawn Boat Dive"
+      },
+      {
+        "title": "Deep Dive Adventure"
+      },
+      {
+        "title": "Deep Wreck and Shallow Reef"
+      },
+      {
+        "title": "Discover Scuba Diving (DSD)"
+      }
+    ],
+    "sections": [
+      {
+        "text": "Book New Excursion",
+        "level": "H2"
+      },
+      {
+        "text": "Afternoon 2-Tank Boat Dive",
+        "level": "H3"
+      },
+      {
+        "text": "Dawn Boat Dive",
+        "level": "H3"
+      },
+      {
+        "text": "Deep Dive Adventure",
+        "level": "H3"
+      },
+      {
+        "text": "Deep Wreck and Shallow Reef",
+        "level": "H3"
+      },
+      {
+        "text": "Discover Scuba Diving (DSD)",
+        "level": "H3"
+      },
+      {
+        "text": "Guided Shore Dive",
+        "level": "H3"
+      },
+      {
+        "text": "Morning 2-Tank Boat Dive",
+        "level": "H3"
+      },
+      {
+        "text": "Night Boat Dive",
+        "level": "H3"
+      },
+      {
+        "text": "Scheduled Excursions",
+        "level": "H2"
+      },
+      {
+        "text": "Coral Gardens",
+        "level": "H3"
+      },
+      {
+        "text": "Juan Escutia",
+        "level": "H3"
+      }
+    ]
+  },
+  "excursion_add": {
+    "url": "/staff/diveops/excursions/add/",
+    "title": "Create Excursion",
+    "breadcrumbs": [],
+    "form_fields": [
+      {
+        "name": "departure_time",
+        "label": "Departure Time *",
+        "field_type": "datetime-local",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "return_time",
+        "label": "Return Time *",
+        "field_type": "datetime-local",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "max_divers",
+        "label": "Maximum Divers *",
+        "field_type": "number",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "price_per_diver",
+        "label": "Price Per Diver",
+        "field_type": "number",
+        "required": false,
+        "placeholder": "0.00",
+        "help_text": null
+      },
+      {
+        "name": "excursion_type",
+        "label": "Excursion Type",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Afternoon 2-Tank Boat Dive (USD 120.00)",
+            "value": "f1280644-418c-4c29-a2cc-db4a05d19fc2"
+          },
+          {
+            "text": "Dawn Boat Dive (USD 85.00)",
+            "value": "e1f88ad2-5932-4e39-b134-a4865ad2f283"
+          },
+          {
+            "text": "Deep Dive Adventure (USD 150.00)",
+            "value": "021e9fd8-71ac-43fe-83fb-ce1b73ebc267"
+          },
+          {
+            "text": "Deep Wreck and Shallow Reef (USD 175.00)",
+            "value": "8450f2d7-4537-4dd8-a5b4-4baa05e3b34f"
+          },
+          {
+            "text": "Discover Scuba Diving (DSD) (USD 150.00)",
+            "value": "12e9ab64-0e0d-47f6-85aa-2273aa8dd7cb"
+          },
+          {
+            "text": "Guided Shore Dive (USD 45.00)",
+            "value": "6d77f271-0627-4adb-a4f8-f606be579821"
+          },
+          {
+            "text": "Morning 2-Tank Boat Dive (USD 120.00)",
+            "value": "933dc851-9e0b-4040-ba5d-0af2718aabc0"
+          },
+          {
+            "text": "Night Boat Dive (USD 95.00)",
+            "value": "47e7c9af-0fc1-437b-b310-eee694f358b9"
+          }
+        ]
+      },
+      {
+        "name": "dive_site",
+        "label": "Dive Site *",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Coral Gardens",
+            "value": "c2e63584-afc9-43e2-b19e-fc8baa464895"
+          },
+          {
+            "text": "Juan Escutia",
+            "value": "3ae82c98-24b0-4a01-a146-997cf444f8b9"
+          },
+          {
+            "text": "Ojo De Aqua",
+            "value": "f8a368b7-370f-4d61-86ea-3e935f944825"
+          },
+          {
+            "text": "The Wall",
+            "value": "f9c28792-a082-4879-9041-b6bcd4849424"
+          },
+          {
+            "text": "Turtle Reef",
+            "value": "3e503e8e-ebbd-4658-96bc-78bd6b044d8c"
+          }
+        ]
+      },
+      {
+        "name": "dive_shop",
+        "label": "Dive Shop *",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Blue Water Divers",
+            "value": "adde7b0c-e849-43f3-a5a2-fa32a0f48223"
+          }
+        ]
+      },
+      {
+        "name": "currency",
+        "label": "Currency",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "USD",
+            "value": "USD"
+          },
+          {
+            "text": "EUR",
+            "value": "EUR"
+          },
+          {
+            "text": "GBP",
+            "value": "GBP"
+          },
+          {
+            "text": "AUD",
+            "value": "AUD"
+          }
+        ]
+      }
+    ],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Create Excursion",
+        "type": "submit",
+        "style": "primary"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      },
+      {
+        "text": "Calendar",
+        "href": "/staff/diveops/calendar/"
+      }
+    ],
+    "tables": [],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Product Type"
+      }
+    ],
+    "sections": [
+      {
+        "text": "Product Type",
+        "level": "H3"
+      },
+      {
+        "text": "Location",
+        "level": "H3"
+      },
+      {
+        "text": "Schedule",
+        "level": "H3"
+      },
+      {
+        "text": "Capacity",
+        "level": "H3"
+      },
+      {
+        "text": "Pricing",
+        "level": "H3"
+      }
+    ]
+  },
+  "agreement_list": {
+    "url": "/staff/diveops/signable-agreements/",
+    "title": "Signable Agreements",
+    "breadcrumbs": [],
+    "form_fields": [
+      {
+        "name": "status",
+        "label": "Status",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Draft",
+            "value": "draft"
+          },
+          {
+            "text": "Sent",
+            "value": "sent"
+          },
+          {
+            "text": "Signed",
+            "value": "signed"
+          },
+          {
+            "text": "Void",
+            "value": "void"
+          },
+          {
+            "text": "Expired",
+            "value": "expired"
+          }
+        ]
+      },
+      {
+        "name": "template",
+        "label": "Template",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Dive Briefing: Parque Nacional Arrecife de Puerto Morelos",
+            "value": "551530a8-d8e6-417c-a4b8-58fc6be08f3e"
+          },
+          {
+            "text": "Liability Waiver",
+            "value": "72bc37b2-621a-4450-911f-1c6961a27b74"
+          }
+        ]
+      }
+    ],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Filter",
+        "type": "submit",
+        "style": "default"
+      },
+      {
+        "text": "New Agreement",
+        "type": "link",
+        "href": "/staff/diveops/signable-agreements/create/"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      }
+    ],
+    "tables": [
+      {
+        "headers": [
+          "TEMPLATE",
+          "PARTY",
+          "STATUS",
+          "SENT",
+          "SIGNED",
+          "ACTIONS"
+        ],
+        "row_count": 14
+      },
+      {
+        "headers": [
+          "DIVER",
+          "DOCUMENT",
+          "COMPLETED",
+          "EXPIRES",
+          "STATUS",
+          "ACTIONS"
+        ],
+        "row_count": 3
+      }
+    ],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      }
+    ],
+    "sections": [
+      {
+        "text": "Signed Medical Questionnaires",
+        "level": "H2"
+      }
+    ]
+  },
+  "agreement_create": {
+    "url": "/staff/diveops/signable-agreements/create/",
+    "title": "New Agreement",
+    "breadcrumbs": [],
+    "form_fields": [
+      {
+        "name": "template",
+        "label": "",
+        "field_type": "radio",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "template",
+        "label": "",
+        "field_type": "radio",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "diver",
+        "label": "",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "John Diver (john@example.com)",
+            "value": "4968cded-96bf-4698-8dfd-fcfd2177430e"
+          },
+          {
+            "text": "Bob Ocean (bob@example.com)",
+            "value": "17590ada-a622-4cb8-9e5b-ced3278cc61c"
+          },
+          {
+            "text": "Jane Smith (jane@example.com)",
+            "value": "8dc8ba64-b6b6-49d7-9c4c-999b80a2105c"
+          }
+        ]
+      },
+      {
+        "name": "delivery_method",
+        "label": "Delivery Method",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Link (copy signing URL)",
+            "value": "link"
+          },
+          {
+            "text": "Email (send to diver)",
+            "value": "email"
+          },
+          {
+            "text": "In Person (sign on device)",
+            "value": "in_person"
+          }
+        ]
+      },
+      {
+        "name": "expires_in_days",
+        "label": "Expires In",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "7 days",
+            "value": "7"
+          },
+          {
+            "text": "14 days",
+            "value": "14"
+          },
+          {
+            "text": "30 days",
+            "value": "30"
+          },
+          {
+            "text": "60 days",
+            "value": "60"
+          },
+          {
+            "text": "90 days",
+            "value": "90"
+          }
+        ]
+      }
+    ],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Save as Draft",
+        "type": "submit",
+        "style": "default"
+      },
+      {
+        "text": "Create & Send",
+        "type": "submit",
+        "style": "primary"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      }
+    ],
+    "tables": [],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "1. Select Agreement Type"
+      },
+      {
+        "title": "2. Select Diver"
+      }
+    ],
+    "sections": [
+      {
+        "text": "1. Select Agreement Type",
+        "level": "H2"
+      },
+      {
+        "text": "2. Select Diver",
+        "level": "H2"
+      },
+      {
+        "text": "3. Delivery Options",
+        "level": "H2"
+      }
+    ]
+  },
+  "protected_area_list": {
+    "url": "/staff/diveops/protected-areas/",
+    "title": "Protected Areas",
+    "breadcrumbs": [],
+    "form_fields": [],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Add Protected Area",
+        "type": "link",
+        "href": "/staff/diveops/protected-areas/add/"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      }
+    ],
+    "tables": [
+      {
+        "headers": [
+          "AREA",
+          "TYPE",
+          "PARENT",
+          "ZONES",
+          "STATUS",
+          "ACTIONS"
+        ],
+        "row_count": 2
+      }
+    ],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      }
+    ],
+    "sections": []
+  },
+  "dive_site_list": {
+    "url": "/staff/diveops/sites/",
+    "title": "Dive Sites",
+    "breadcrumbs": [],
+    "form_fields": [],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Add Dive Site",
+        "type": "link",
+        "href": "/staff/diveops/sites/add/"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      }
+    ],
+    "tables": [
+      {
+        "headers": [
+          "SITE",
+          "DIFFICULTY",
+          "MAX DEPTH",
+          "MIN CERTIFICATION",
+          "RATING",
+          "ACTIONS"
+        ],
+        "row_count": 5
+      }
+    ],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      }
+    ],
+    "sections": []
+  },
+  "medical_list": {
+    "url": "/staff/diveops/medical/",
+    "title": "Medical Questionnaires",
+    "breadcrumbs": [],
+    "form_fields": [
+      {
+        "name": "clearance_document",
+        "label": "",
+        "field_type": "file",
+        "required": false,
+        "placeholder": null,
+        "help_text": null
+      },
+      {
+        "name": "notes",
+        "label": "",
+        "field_type": "text",
+        "required": false,
+        "placeholder": "Physician name, restrictions...",
+        "help_text": null
+      },
+      {
+        "name": "status",
+        "label": "Status",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Pending",
+            "value": "pending"
+          },
+          {
+            "text": "Completed",
+            "value": "completed"
+          },
+          {
+            "text": "Flagged",
+            "value": "flagged"
+          },
+          {
+            "text": "Cleared",
+            "value": "cleared"
+          },
+          {
+            "text": "Expired",
+            "value": "expired"
+          },
+          {
+            "text": "Voided",
+            "value": "voided"
+          }
+        ]
+      },
+      {
+        "name": "expiration",
+        "label": "Expiration",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Valid (Not Expired)",
+            "value": "valid"
+          },
+          {
+            "text": "Expiring in 30 days",
+            "value": "expiring_soon"
+          },
+          {
+            "text": "Expiring in 90 days",
+            "value": "expiring_90"
+          },
+          {
+            "text": "Expired",
+            "value": "expired"
+          }
+        ]
+      },
+      {
+        "name": "sort",
+        "label": "Sort By",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Newest First",
+            "value": "-created_at"
+          },
+          {
+            "text": "Oldest First",
+            "value": "created_at"
+          },
+          {
+            "text": "Expiring Soonest",
+            "value": "expires_at"
+          },
+          {
+            "text": "Expiring Latest",
+            "value": "-expires_at"
+          }
+        ]
+      },
+      {
+        "name": "reason",
+        "label": "",
+        "field_type": "textarea",
+        "required": false,
+        "placeholder": "e.g., Sent in error, duplicate entry..."
+      }
+    ],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Filter",
+        "type": "submit",
+        "style": "default"
+      },
+      {
+        "text": "Void",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Void",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Void",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Void",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Void",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Void",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Copy Link",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Void",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Copy Link",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Void",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Copy Link",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Void",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Void",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Cancel",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Clear Diver",
+        "type": "submit",
+        "style": "success"
+      },
+      {
+        "text": "Cancel",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Void Questionnaire",
+        "type": "submit",
+        "style": "danger"
+      },
+      {
+        "text": "Send Questionnaire",
+        "type": "link",
+        "href": "/staff/diveops/medical/send/"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      }
+    ],
+    "tables": [
+      {
+        "headers": [
+          "DIVER",
+          "STATUS",
+          "CREATED",
+          "EXPIRES",
+          "TIME LEFT",
+          "ACTIONS"
+        ],
+        "row_count": 13
+      }
+    ],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      }
+    ],
+    "sections": [
+      {
+        "text": "Clear Diver:",
+        "level": "H3"
+      },
+      {
+        "text": "Void Questionnaire:",
+        "level": "H3"
+      }
+    ]
+  },
+  "excursion_type_list": {
+    "url": "/staff/diveops/excursion-types/",
+    "title": "Excursion Types",
+    "breadcrumbs": [],
+    "form_fields": [],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Add Excursion Type",
+        "type": "link",
+        "href": "/staff/diveops/excursion-types/add/"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      }
+    ],
+    "tables": [
+      {
+        "headers": [
+          "NAME",
+          "MODE",
+          "TIME",
+          "DIVES",
+          "PRICE",
+          "STATUS",
+          "Actions"
+        ],
+        "row_count": 8
+      }
+    ],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      }
+    ],
+    "sections": []
+  },
+  "agreement_template_list": {
+    "url": "/staff/diveops/agreements/templates/",
+    "title": "Agreement Templates",
+    "breadcrumbs": [],
+    "form_fields": [
+      {
+        "name": "type",
+        "label": "Type",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Liability Waiver",
+            "value": "waiver"
+          },
+          {
+            "text": "Medical Questionnaire",
+            "value": "medical"
+          },
+          {
+            "text": "Briefing Acknowledgment",
+            "value": "briefing"
+          },
+          {
+            "text": "Diver Code of Conduct",
+            "value": "code_of_conduct"
+          },
+          {
+            "text": "Equipment Rental Agreement",
+            "value": "rental"
+          },
+          {
+            "text": "Training Agreement",
+            "value": "training"
+          },
+          {
+            "text": "Other",
+            "value": "other"
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "label": "Status",
+        "field_type": "select",
+        "required": false,
+        "options": [
+          {
+            "text": "Draft",
+            "value": "draft"
+          },
+          {
+            "text": "Published",
+            "value": "published"
+          },
+          {
+            "text": "Archived",
+            "value": "archived"
+          }
+        ]
+      }
+    ],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "Apply Filters",
+        "type": "submit",
+        "style": "default"
+      },
+      {
+        "text": "Add Template",
+        "type": "link",
+        "href": "/staff/diveops/agreements/templates/add/"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      }
+    ],
+    "tables": [
+      {
+        "headers": [
+          "NAME",
+          "TYPE",
+          "VERSION",
+          "STATUS",
+          "REQUIRED",
+          "ACTIONS"
+        ],
+        "row_count": 2
+      }
+    ],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      }
+    ],
+    "sections": []
+  },
+  "audit_log": {
+    "url": "/staff/diveops/audit-log/",
+    "title": "Audit Log",
+    "breadcrumbs": [],
+    "form_fields": [],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "View details",
+        "type": "button",
+        "style": "default"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      },
+      {
+        "text": "Next",
+        "href": "?page=2"
+      }
+    ],
+    "tables": [
+      {
+        "headers": [
+          "TIME",
+          "ACTOR",
+          "ACTION",
+          "TARGET",
+          "DETAILS"
+        ],
+        "row_count": 25
+      }
+    ],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      }
+    ],
+    "sections": []
+  },
+  "document_browser": {
+    "url": "/staff/diveops/documents/",
+    "title": "Documents",
+    "breadcrumbs": [],
+    "form_fields": [],
+    "buttons": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "A",
+        "type": "button",
+        "style": "default"
+      },
+      {
+        "text": "New Folder",
+        "type": "link",
+        "href": "/staff/diveops/documents/folders/add/"
+      }
+    ],
+    "navigation_links": [
+      {
+        "text": "Staff Portal",
+        "href": "/staff/"
+      },
+      {
+        "text": "Excursions",
+        "href": "/staff/diveops/excursions/"
+      },
+      {
+        "text": "Divers",
+        "href": "/staff/diveops/divers/"
+      },
+      {
+        "text": "Dive Sites",
+        "href": "/staff/diveops/sites/"
+      },
+      {
+        "text": "Protected Areas",
+        "href": "/staff/diveops/protected-areas/"
+      },
+      {
+        "text": "Agreements",
+        "href": "/staff/diveops/signable-agreements/"
+      },
+      {
+        "text": "Medical Questionnaires",
+        "href": "/staff/diveops/medical/"
+      },
+      {
+        "text": "Dive Plans",
+        "href": "/staff/diveops/dive-plans/"
+      },
+      {
+        "text": "Dive Logs",
+        "href": "/staff/diveops/dive-logs/"
+      },
+      {
+        "text": "Documents",
+        "href": "/staff/diveops/documents/"
+      },
+      {
+        "text": "Media",
+        "href": "/staff/diveops/media/"
+      },
+      {
+        "text": "Audit Log",
+        "href": "/staff/diveops/audit-log/"
+      },
+      {
+        "text": "Excursion Types",
+        "href": "/staff/diveops/excursion-types/"
+      },
+      {
+        "text": "Agreement Types",
+        "href": "/staff/diveops/agreements/templates/"
+      },
+      {
+        "text": "Catalog Items",
+        "href": "/staff/diveops/catalog/"
+      },
+      {
+        "text": "AI Settings",
+        "href": "/staff/diveops/settings/ai/"
+      },
+      {
+        "text": "Chart of Accounts",
+        "href": "/staff/diveops/accounts/"
+      },
+      {
+        "text": "Payables",
+        "href": "/staff/diveops/payables/"
+      },
+      {
+        "text": "Help Center",
+        "href": "/staff/diveops/help/"
+      },
+      {
+        "text": "Profile",
+        "href": "/profile/"
+      },
+      {
+        "text": "Log out",
+        "href": "/accounts/logout/"
+      },
+      {
+        "text": "Dive Operations",
+        "href": "/staff/diveops/excursions/"
+      }
+    ],
+    "tables": [
+      {
+        "headers": [
+          "DOCUMENT",
+          "TYPE",
+          "UPLOADED",
+          "ACTIONS"
+        ],
+        "row_count": 6
+      }
+    ],
+    "tabs": [],
+    "cards": [
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Weather Forecast"
+      },
+      {
+        "title": "Folders"
+      }
+    ],
+    "sections": [
+      {
+        "text": "Folders",
+        "level": "H2"
+      },
+      {
+        "text": "Documents Without Folder",
+        "level": "H2"
+      },
+      {
+        "text": "Quick Actions",
+        "level": "H3"
+      }
+    ]
+  }
+}

@@ -1,0 +1,901 @@
+{
+  "dashboard": {
+    "title": "Dive Operations Dashboard",
+    "description": "",
+    "form_fields": [],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "New Excursion",
+        "type": "link"
+      }
+    ],
+    "tables": []
+  },
+  "diver_list": {
+    "title": "Divers",
+    "description": "",
+    "form_fields": [],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "Add Diver",
+        "type": "link"
+      }
+    ],
+    "tables": [
+      {
+        "columns": [
+          "NAME",
+          "EMAIL",
+          "MEDICAL",
+          "CERTIFICATION",
+          "TOTAL DIVES",
+          "ACTIONS"
+        ],
+        "rows": 3
+      }
+    ]
+  },
+  "diver_add": {
+    "title": "Add Diver",
+    "description": "",
+    "form_fields": [
+      {
+        "label": "First Name *",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Last Name *",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Email *",
+        "type": "email",
+        "required": false
+      },
+      {
+        "label": "Certification Number",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Certification Date *",
+        "type": "date",
+        "required": false
+      },
+      {
+        "label": "Total Dives",
+        "type": "number",
+        "required": false
+      },
+      {
+        "label": "Clearance Date",
+        "type": "date",
+        "required": false
+      },
+      {
+        "label": "Valid Until",
+        "type": "date",
+        "required": false
+      },
+      {
+        "label": "Weight (kg)",
+        "type": "number",
+        "required": false
+      },
+      {
+        "label": "Height (cm)",
+        "type": "number",
+        "required": false
+      },
+      {
+        "label": "Weight Required (kg)",
+        "type": "number",
+        "required": false
+      },
+      {
+        "label": "Wetsuit Size",
+        "type": "text",
+        "required": false,
+        "placeholder": "e.g., M, L, XL"
+      },
+      {
+        "label": "BCD Size",
+        "type": "text",
+        "required": false,
+        "placeholder": "e.g., M, L, XL"
+      },
+      {
+        "label": "Fin Size",
+        "type": "text",
+        "required": false,
+        "placeholder": "e.g., M/L, 9-10"
+      },
+      {
+        "label": "Mask Fit",
+        "type": "text",
+        "required": false,
+        "placeholder": "e.g., Low volume, Standard"
+      },
+      {
+        "label": "Glove Size",
+        "type": "text",
+        "required": false,
+        "placeholder": "e.g., M, L, XL"
+      },
+      {
+        "label": "Level *",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Open Water Diver (PADI)",
+          "Scuba Diver (PADI)",
+          "Open Water (PADI)",
+          "Open Water Diver (PADI)",
+          "Enriched Air Nitrox (PADI)",
+          "Advanced Open Water (PADI)",
+          "Advanced Open Water (PADI)",
+          "Rescue Diver (PADI)",
+          "Advanced Open Water Diver (PADI)",
+          "Rescue Diver (PADI)",
+          "Rescue Diver (PADI)",
+          "Divemaster (PADI)",
+          "Park Guide Credential (Parque Nacional Arrecife de Puerto Morelos)",
+          "Divemaster (PADI)",
+          "Underwater Photographer (PADI)",
+          "Peak Performance Buoyancy (PADI)",
+          "Enriched Air (Nitrox) Diver (PADI)",
+          "Night Diver (PADI)",
+          "Deep Diver (PADI)",
+          "Wreck Diver (PADI)",
+          "Cavern Diver (PADI)"
+        ]
+      },
+      {
+        "label": "Agency *",
+        "type": "select",
+        "required": false,
+        "options": [
+          "PADI",
+          "Parque Nacional Arrecife de Puerto Morelos"
+        ]
+      },
+      {
+        "label": "Diver Type",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Does Diving (Activity)",
+          "Diver (Identity)"
+        ]
+      },
+      {
+        "label": "Equipment Ownership",
+        "type": "select",
+        "required": false,
+        "options": [
+          "None - Rents All",
+          "Partial - Owns Some Gear",
+          "Full - Owns All Essential Gear"
+        ]
+      },
+      {
+        "label": "Gear Notes",
+        "type": "textarea",
+        "required": false,
+        "placeholder": "Additional gear preferences or requirements..."
+      }
+    ],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "Create Diver",
+        "type": "submit"
+      }
+    ],
+    "tables": []
+  },
+  "excursion_list": {
+    "title": "Excursions",
+    "description": "",
+    "form_fields": [],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "Add Excursion",
+        "type": "link"
+      }
+    ],
+    "tables": []
+  },
+  "excursion_add": {
+    "title": "Create Excursion",
+    "description": "",
+    "form_fields": [
+      {
+        "label": "Departure Time *",
+        "type": "datetime-local",
+        "required": false
+      },
+      {
+        "label": "Return Time *",
+        "type": "datetime-local",
+        "required": false
+      },
+      {
+        "label": "Maximum Divers *",
+        "type": "number",
+        "required": false
+      },
+      {
+        "label": "Price Per Diver",
+        "type": "number",
+        "required": false,
+        "placeholder": "0.00"
+      },
+      {
+        "label": "Excursion Type",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Afternoon 2-Tank Boat Dive (USD 120.00)",
+          "Dawn Boat Dive (USD 85.00)",
+          "Deep Dive Adventure (USD 150.00)",
+          "Deep Wreck and Shallow Reef (USD 175.00)",
+          "Discover Scuba Diving (DSD) (USD 150.00)",
+          "Guided Shore Dive (USD 45.00)",
+          "Morning 2-Tank Boat Dive (USD 120.00)",
+          "Night Boat Dive (USD 95.00)"
+        ]
+      },
+      {
+        "label": "Dive Site *",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Coral Gardens",
+          "Juan Escutia",
+          "Ojo De Aqua",
+          "The Wall",
+          "Turtle Reef"
+        ]
+      },
+      {
+        "label": "Dive Shop *",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Blue Water Divers"
+        ]
+      },
+      {
+        "label": "Currency",
+        "type": "select",
+        "required": false,
+        "options": [
+          "USD",
+          "EUR",
+          "GBP",
+          "AUD"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "Create Excursion",
+        "type": "submit"
+      }
+    ],
+    "tables": []
+  },
+  "agreement_list": {
+    "title": "Signable Agreements",
+    "description": "",
+    "form_fields": [
+      {
+        "label": "Status",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Draft",
+          "Sent",
+          "Signed",
+          "Void",
+          "Expired"
+        ]
+      },
+      {
+        "label": "Template",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Dive Briefing: Parque Nacional Arrecife de Puerto Morelos",
+          "Liability Waiver"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "Filter",
+        "type": "submit"
+      },
+      {
+        "text": "New Agreement",
+        "type": "link"
+      }
+    ],
+    "tables": [
+      {
+        "columns": [
+          "TEMPLATE",
+          "PARTY",
+          "STATUS",
+          "SENT",
+          "SIGNED",
+          "ACTIONS"
+        ],
+        "rows": 14
+      },
+      {
+        "columns": [
+          "DIVER",
+          "DOCUMENT",
+          "COMPLETED",
+          "EXPIRES",
+          "STATUS",
+          "ACTIONS"
+        ],
+        "rows": 3
+      }
+    ]
+  },
+  "agreement_create": {
+    "title": "New Agreement",
+    "description": "",
+    "form_fields": [
+      {
+        "label": "Delivery Method",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Link (copy signing URL)",
+          "Email (send to diver)",
+          "In Person (sign on device)"
+        ]
+      },
+      {
+        "label": "Expires In",
+        "type": "select",
+        "required": false,
+        "options": [
+          "7 days",
+          "14 days",
+          "30 days",
+          "60 days",
+          "90 days"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "Save as Draft",
+        "type": "submit"
+      },
+      {
+        "text": "Create & Send",
+        "type": "submit"
+      }
+    ],
+    "tables": []
+  },
+  "protected_area_list": {
+    "title": "Protected Areas",
+    "description": "",
+    "form_fields": [],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "Add Protected Area",
+        "type": "link"
+      }
+    ],
+    "tables": [
+      {
+        "columns": [
+          "AREA",
+          "TYPE",
+          "PARENT",
+          "ZONES",
+          "STATUS",
+          "ACTIONS"
+        ],
+        "rows": 2
+      }
+    ]
+  },
+  "dive_site_list": {
+    "title": "Dive Sites",
+    "description": "",
+    "form_fields": [],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "Add Dive Site",
+        "type": "link"
+      }
+    ],
+    "tables": [
+      {
+        "columns": [
+          "SITE",
+          "DIFFICULTY",
+          "MAX DEPTH",
+          "MIN CERTIFICATION",
+          "RATING",
+          "ACTIONS"
+        ],
+        "rows": 5
+      }
+    ]
+  },
+  "medical_list": {
+    "title": "Medical Questionnaires",
+    "description": "",
+    "form_fields": [
+      {
+        "label": "Status",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Pending",
+          "Completed",
+          "Flagged",
+          "Cleared",
+          "Expired",
+          "Voided"
+        ]
+      },
+      {
+        "label": "Expiration",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Valid (Not Expired)",
+          "Expiring in 30 days",
+          "Expiring in 90 days",
+          "Expired"
+        ]
+      },
+      {
+        "label": "Sort By",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Newest First",
+          "Oldest First",
+          "Expiring Soonest",
+          "Expiring Latest"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "Filter",
+        "type": "submit"
+      },
+      {
+        "text": "Void",
+        "type": "button"
+      },
+      {
+        "text": "Void",
+        "type": "button"
+      },
+      {
+        "text": "Void",
+        "type": "button"
+      },
+      {
+        "text": "Void",
+        "type": "button"
+      },
+      {
+        "text": "Void",
+        "type": "button"
+      },
+      {
+        "text": "Void",
+        "type": "button"
+      },
+      {
+        "text": "Copy Link",
+        "type": "button"
+      },
+      {
+        "text": "Void",
+        "type": "button"
+      },
+      {
+        "text": "Copy Link",
+        "type": "button"
+      },
+      {
+        "text": "Void",
+        "type": "button"
+      },
+      {
+        "text": "Copy Link",
+        "type": "button"
+      },
+      {
+        "text": "Void",
+        "type": "button"
+      },
+      {
+        "text": "Void",
+        "type": "button"
+      },
+      {
+        "text": "Cancel",
+        "type": "button"
+      },
+      {
+        "text": "Clear Diver",
+        "type": "submit"
+      },
+      {
+        "text": "Cancel",
+        "type": "button"
+      },
+      {
+        "text": "Void Questionnaire",
+        "type": "submit"
+      },
+      {
+        "text": "Send Questionnaire",
+        "type": "link"
+      }
+    ],
+    "tables": [
+      {
+        "columns": [
+          "DIVER",
+          "STATUS",
+          "CREATED",
+          "EXPIRES",
+          "TIME LEFT",
+          "ACTIONS"
+        ],
+        "rows": 13
+      }
+    ]
+  },
+  "excursion_type_list": {
+    "title": "Excursion Types",
+    "description": "",
+    "form_fields": [],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "Add Excursion Type",
+        "type": "link"
+      }
+    ],
+    "tables": [
+      {
+        "columns": [
+          "NAME",
+          "MODE",
+          "TIME",
+          "DIVES",
+          "PRICE",
+          "STATUS",
+          "Actions"
+        ],
+        "rows": 8
+      }
+    ]
+  },
+  "agreement_template_list": {
+    "title": "Agreement Templates",
+    "description": "",
+    "form_fields": [
+      {
+        "label": "Type",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Liability Waiver",
+          "Medical Questionnaire",
+          "Briefing Acknowledgment",
+          "Diver Code of Conduct",
+          "Equipment Rental Agreement",
+          "Training Agreement",
+          "Other"
+        ]
+      },
+      {
+        "label": "Status",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Draft",
+          "Published",
+          "Archived"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "Apply Filters",
+        "type": "submit"
+      },
+      {
+        "text": "Add Template",
+        "type": "link"
+      }
+    ],
+    "tables": [
+      {
+        "columns": [
+          "NAME",
+          "TYPE",
+          "VERSION",
+          "STATUS",
+          "REQUIRED",
+          "ACTIONS"
+        ],
+        "rows": 2
+      }
+    ]
+  },
+  "audit_log": {
+    "title": "Audit Log",
+    "description": "",
+    "form_fields": [],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      },
+      {
+        "text": "View details",
+        "type": "button"
+      }
+    ],
+    "tables": [
+      {
+        "columns": [
+          "TIME",
+          "ACTOR",
+          "ACTION",
+          "TARGET",
+          "DETAILS"
+        ],
+        "rows": 25
+      }
+    ]
+  },
+  "document_browser": {
+    "title": "Documents",
+    "description": "",
+    "form_fields": [],
+    "actions": [
+      {
+        "text": "27\nkts\nG36",
+        "type": "button"
+      },
+      {
+        "text": "A",
+        "type": "button"
+      },
+      {
+        "text": "New Folder",
+        "type": "link"
+      }
+    ],
+    "tables": [
+      {
+        "columns": [
+          "DOCUMENT",
+          "TYPE",
+          "UPLOADED",
+          "ACTIONS"
+        ],
+        "rows": 6
+      }
+    ]
+  }
+}

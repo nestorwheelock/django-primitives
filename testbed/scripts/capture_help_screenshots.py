@@ -4,6 +4,8 @@
 For each help article, this script navigates to the corresponding
 application page and captures a screenshot to illustrate the documentation.
 
+Also captures cropped component screenshots for specific UI elements.
+
 Usage:
     python scripts/capture_help_screenshots.py [--headed] [--base-url URL]
 
@@ -24,7 +26,70 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "primitives_testbed.settings")
 import django
 django.setup()
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, Page
+
+
+# Component selectors for cropped screenshots
+COMPONENT_CROPS = {
+    # Dashboard components
+    "dashboard": {
+        "stats_cards": "main > div:first-of-type",
+        "excursions_table": "[class*='excursion'], table",
+        "sidebar": "aside, nav[class*='fixed']",
+    },
+    # Diver pages
+    "diver_list": {
+        "table": "table",
+        "add_button": "a[href*='add'], button:has-text('Add')",
+    },
+    "diver_add": {
+        "form": "form",
+        "personal_info": "form > div:first-of-type",
+        "certification_section": "[class*='certification'], h3:has-text('Certification') + div",
+        "body_measurements": "h3:has-text('Body') + div, h3:has-text('Measurements') + div",
+    },
+    "diver_detail": {
+        "header": "main > div:first-of-type",
+        "certifications": "[class*='certification'], h2:has-text('Certification') ~ *",
+        "tabs": "[role='tablist'], [class*='tab']",
+    },
+    # Excursion pages
+    "excursion_list": {
+        "table": "table",
+        "filters": "[class*='filter'], form:has(select)",
+    },
+    "excursion_add": {
+        "form": "form",
+        "type_selector": "[class*='type'], h3:has-text('Type') + div",
+    },
+    # Agreement pages
+    "signable_agreement_list": {
+        "table": "table",
+        "status_filter": "[class*='filter'], select",
+    },
+    "signable_agreement_add": {
+        "form": "form",
+        "template_selection": "h2:has-text('Agreement Type') + div, [class*='template']",
+        "diver_selection": "h2:has-text('Diver') + div, [class*='diver']",
+        "delivery_options": "h2:has-text('Delivery') + div",
+    },
+    "signable_agreement_detail": {
+        "header": "main > div:first-of-type",
+        "status_badge": "[class*='badge'], [class*='status']",
+        "actions": "[class*='action'], button",
+    },
+    # Protected area pages
+    "protected_area_detail": {
+        "header": "main > div:first-of-type",
+        "zones": "h2:has-text('Zone') ~ *, [class*='zone']",
+        "fees": "h2:has-text('Fee') ~ *, [class*='fee']",
+    },
+    # Medical pages
+    "medical_list": {
+        "table": "table",
+        "status_legend": "[class*='legend'], [class*='status']",
+    },
+}
 
 
 def get_dynamic_urls():
@@ -168,6 +233,30 @@ def get_staff_session_cookie():
     }
 
 
+def capture_component_screenshot(page: Page, selector: str, output_path: Path) -> bool:
+    """Capture a cropped screenshot of a specific UI component.
+
+    Args:
+        page: Playwright page object
+        selector: CSS selector for the component (can be comma-separated for multiple options)
+        output_path: Path to save the screenshot
+
+    Returns:
+        True if screenshot was captured, False otherwise
+    """
+    # Try each selector option (comma-separated)
+    for sel in selector.split(", "):
+        sel = sel.strip()
+        try:
+            element = page.query_selector(sel)
+            if element and element.is_visible():
+                element.screenshot(path=str(output_path))
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def capture_screenshots(base_url: str, output_dir: Path, headed: bool = False):
     """Capture screenshots of application pages for help documentation."""
 
@@ -180,11 +269,13 @@ def capture_screenshots(base_url: str, output_dir: Path, headed: bool = False):
     details_dir = output_dir / "details"
     forms_dir = output_dir / "forms"
     system_dir = output_dir / "system"
+    components_dir = output_dir / "components"
 
     lists_dir.mkdir(exist_ok=True)
     details_dir.mkdir(exist_ok=True)
     forms_dir.mkdir(exist_ok=True)
     system_dir.mkdir(exist_ok=True)
+    components_dir.mkdir(exist_ok=True)
 
     # Get dynamic URLs
     print("Looking up database records for detail pages...")
@@ -207,6 +298,7 @@ def capture_screenshots(base_url: str, output_dir: Path, headed: bool = False):
 
         page = context.new_page()
         screenshots_taken = 0
+        components_captured = 0
 
         print(f"\nCapturing application screenshots...\n")
 
@@ -244,20 +336,31 @@ def capture_screenshots(base_url: str, output_dir: Path, headed: bool = False):
                     print(f"    SKIPPED: 404 Not Found")
                     continue
 
+                # Capture full page screenshot
                 page.screenshot(path=str(filepath), full_page=True)
                 print(f"    Saved: {subdir.name}/{filename}")
                 screenshots_taken += 1
+
+                # Capture component crops if defined for this page
+                if name in COMPONENT_CROPS:
+                    for comp_name, selector in COMPONENT_CROPS[name].items():
+                        comp_filename = f"{name}_{comp_name}.png"
+                        comp_path = components_dir / comp_filename
+                        if capture_component_screenshot(page, selector, comp_path):
+                            print(f"    Component: {comp_name}")
+                            components_captured += 1
 
             except Exception as e:
                 print(f"    ERROR: {e}")
 
         browser.close()
 
-    print(f"\nDone! {screenshots_taken} screenshots saved to: {output_dir}")
+    print(f"\nDone! {screenshots_taken} full-page screenshots saved to: {output_dir}")
     print(f"  - Lists: {lists_dir}")
     print(f"  - Details: {details_dir}")
     print(f"  - Forms: {forms_dir}")
     print(f"  - System: {system_dir}")
+    print(f"  - Components: {components_dir} ({components_captured} cropped screenshots)")
 
 
 def main():
