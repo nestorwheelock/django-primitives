@@ -27,122 +27,112 @@ django.setup()
 from playwright.sync_api import sync_playwright
 
 
-# Map help articles to their corresponding application URLs
-# Format: (section_slug, article_slug) -> (url_path, description)
-ARTICLE_TO_APP_URL = {
-    # Getting Started
-    ("getting-started", "dashboard-overview"): {
-        "url": "/staff/diveops/",
-        "description": "Staff dashboard overview",
-    },
-    ("getting-started", "navigation-guide"): {
-        "url": "/staff/diveops/",
-        "description": "Navigation sidebar",
-    },
+def get_dynamic_urls():
+    """Get URLs that require database lookups for UUIDs."""
+    from primitives_testbed.diveops.models import (
+        Excursion, SignableAgreement, ProtectedArea, DiveSite, ExcursionSeries,
+        AgreementTemplate, ExcursionType, DiverProfile
+    )
 
-    # Divers
-    ("divers", "creating-profiles"): {
-        "url": "/staff/diveops/divers/",
-        "description": "Diver list page",
-    },
-    ("divers", "managing-certifications"): {
-        "url": "/staff/diveops/divers/",
-        "description": "Diver certifications",
-    },
-    ("divers", "emergency-contacts"): {
-        "url": "/staff/diveops/divers/",
-        "description": "Diver emergency contacts",
-    },
-    ("divers", "diver-categories"): {
-        "url": "/staff/diveops/divers/",
-        "description": "Diver categories",
-    },
+    urls = {}
 
-    # Bookings & Excursions
-    ("bookings", "scheduling-excursions"): {
-        "url": "/staff/diveops/excursions/",
-        "description": "Excursion list",
-    },
-    ("bookings", "managing-bookings"): {
-        "url": "/staff/diveops/excursions/",
-        "description": "Managing bookings",
-    },
-    ("bookings", "check-in-process"): {
-        "url": "/staff/diveops/excursions/",
-        "description": "Check-in process",
-    },
-    ("bookings", "recurring-series"): {
-        "url": "/staff/diveops/excursion-series/",
-        "description": "Recurring excursion series",
-    },
-    ("bookings", "cancellations-refunds"): {
-        "url": "/staff/diveops/excursions/",
-        "description": "Cancellations and refunds",
-    },
+    # Diver detail (uses DiverProfile, not Person)
+    diver = DiverProfile.objects.filter(deleted_at__isnull=True).first()
+    if diver:
+        urls["diver_detail"] = f"/staff/diveops/divers/{diver.pk}/"
+        urls["diver_edit"] = f"/staff/diveops/divers/{diver.pk}/edit/"
 
-    # Agreements & Waivers
-    ("agreements", "creating-agreements"): {
-        "url": "/staff/diveops/agreements/",
-        "description": "Agreements list",
-    },
-    ("agreements", "sending-for-signature"): {
-        "url": "/staff/diveops/agreements/",
-        "description": "Sending agreements",
-    },
-    ("agreements", "tracking-status"): {
-        "url": "/staff/diveops/agreements/",
-        "description": "Agreement status tracking",
-    },
-    ("agreements", "voiding-agreements"): {
-        "url": "/staff/diveops/agreements/",
-        "description": "Voiding agreements",
-    },
+    # Excursion pages
+    exc = Excursion.objects.filter(deleted_at__isnull=True).first()
+    if exc:
+        urls["excursion_detail"] = f"/staff/diveops/excursions/{exc.pk}/"
+        urls["excursion_edit"] = f"/staff/diveops/excursions/{exc.pk}/edit/"
 
-    # Medical Records
-    ("medical", "medical-questionnaires"): {
-        "url": "/staff/diveops/medical/",
-        "description": "Medical questionnaires list",
-    },
-    ("medical", "reviewing-responses"): {
-        "url": "/staff/diveops/medical/",
-        "description": "Reviewing medical responses",
-    },
-    ("medical", "clearance-process"): {
-        "url": "/staff/diveops/medical/",
-        "description": "Medical clearance process",
-    },
-    ("medical", "retention-policies"): {
-        "url": "/staff/diveops/medical/",
-        "description": "Medical retention policies",
-    },
+    # Signable Agreement pages (note: URL is /signable-agreements/, not /agreements/)
+    agr = SignableAgreement.objects.filter(deleted_at__isnull=True).first()
+    if agr:
+        urls["signable_agreement_detail"] = f"/staff/diveops/signable-agreements/{agr.pk}/"
 
-    # Protected Areas
-    ("protected-areas", "managing-permits"): {
-        "url": "/staff/diveops/protected-areas/",
-        "description": "Protected areas list",
-    },
-    ("protected-areas", "fee-schedules"): {
-        "url": "/staff/diveops/protected-areas/",
-        "description": "Fee schedules",
-    },
-    ("protected-areas", "zone-rules"): {
-        "url": "/staff/diveops/protected-areas/",
-        "description": "Zone rules",
-    },
+    # Agreement template (note: URL is /agreements/templates/<pk>/, not /agreement-templates/)
+    template = AgreementTemplate.objects.filter(deleted_at__isnull=True).first()
+    if template:
+        urls["agreement_template_detail"] = f"/staff/diveops/agreements/templates/{template.pk}/"
 
-    # System
-    ("system", "document-management"): {
-        "url": "/staff/diveops/documents/",
-        "description": "Document browser",
-    },
-    ("system", "audit-log"): {
-        "url": "/staff/diveops/audit-log/",
-        "description": "Audit log",
-    },
-    ("system", "ai-settings"): {
-        "url": "/staff/diveops/ai-settings/",
-        "description": "AI settings",
-    },
+    # Protected Area detail
+    pa = ProtectedArea.objects.filter(deleted_at__isnull=True).first()
+    if pa:
+        urls["protected_area_detail"] = f"/staff/diveops/protected-areas/{pa.pk}/"
+
+    # Dive Site detail
+    site = DiveSite.objects.filter(deleted_at__isnull=True).first()
+    if site:
+        urls["dive_site_detail"] = f"/staff/diveops/sites/{site.pk}/"
+
+    # Series detail
+    series = ExcursionSeries.objects.filter(deleted_at__isnull=True).first()
+    if series:
+        urls["series_detail"] = f"/staff/diveops/excursion-series/{series.pk}/"
+
+    # Excursion Type detail
+    exc_type = ExcursionType.objects.filter(deleted_at__isnull=True).first()
+    if exc_type:
+        urls["excursion_type_detail"] = f"/staff/diveops/excursion-types/{exc_type.pk}/"
+
+    return urls
+
+
+# Static URL mappings (pages that don't need database lookups)
+STATIC_URLS = {
+    # Dashboard
+    "dashboard": "/staff/diveops/",
+
+    # Diver pages
+    "diver_list": "/staff/diveops/divers/",
+    "diver_add": "/staff/diveops/divers/add/",
+
+    # Excursion pages
+    "excursion_list": "/staff/diveops/excursions/",
+    "excursion_add": "/staff/diveops/excursions/add/",
+
+    # Agreement pages (signable agreements)
+    "signable_agreement_list": "/staff/diveops/signable-agreements/",
+    "signable_agreement_add": "/staff/diveops/signable-agreements/create/",
+
+    # Medical pages
+    "medical_list": "/staff/diveops/medical/",
+
+    # Protected Area pages
+    "protected_area_list": "/staff/diveops/protected-areas/",
+
+    # Dive Site pages
+    "dive_site_list": "/staff/diveops/sites/",
+
+    # Configuration pages
+    "excursion_type_list": "/staff/diveops/excursion-types/",
+    "excursion_type_add": "/staff/diveops/excursion-types/add/",
+    "agreement_template_list": "/staff/diveops/agreements/templates/",
+    "agreement_template_add": "/staff/diveops/agreements/templates/add/",
+    "catalog_item_list": "/staff/diveops/catalog/",
+
+    # System pages
+    "document_browser": "/staff/diveops/documents/",
+    "media_library": "/staff/diveops/media/",
+    "audit_log": "/staff/diveops/audit-log/",
+
+    # Planning pages
+    "dive_plan_list": "/staff/diveops/dive-plans/",
+    "dive_plan_add": "/staff/diveops/dive-plans/add/",
+    "dive_log_list": "/staff/diveops/dive-logs/",
+
+    # Finance pages
+    "account_list": "/staff/diveops/accounts/",
+    "payables_summary": "/staff/diveops/payables/",
+
+    # Settings pages
+    "ai_settings": "/staff/diveops/settings/ai/",
+
+    # Help center
+    "help_center": "/staff/diveops/help/",
 }
 
 
@@ -184,8 +174,24 @@ def capture_screenshots(base_url: str, output_dir: Path, headed: bool = False):
     # Create session cookie for authentication
     session_cookie = get_staff_session_cookie()
 
-    # Create output directory
+    # Create output directories
     output_dir.mkdir(parents=True, exist_ok=True)
+    lists_dir = output_dir / "lists"
+    details_dir = output_dir / "details"
+    forms_dir = output_dir / "forms"
+    system_dir = output_dir / "system"
+
+    lists_dir.mkdir(exist_ok=True)
+    details_dir.mkdir(exist_ok=True)
+    forms_dir.mkdir(exist_ok=True)
+    system_dir.mkdir(exist_ok=True)
+
+    # Get dynamic URLs
+    print("Looking up database records for detail pages...")
+    dynamic_urls = get_dynamic_urls()
+
+    # Combine all URLs
+    all_urls = {**STATIC_URLS, **dynamic_urls}
 
     with sync_playwright() as p:
         # Launch browser
@@ -200,40 +206,46 @@ def capture_screenshots(base_url: str, output_dir: Path, headed: bool = False):
         print(f"Session cookie added: {session_cookie['name']}={session_cookie['value'][:8]}...")
 
         page = context.new_page()
-
-        # Track unique URLs to avoid duplicate screenshots
-        captured_urls = {}
         screenshots_taken = 0
 
-        print(f"\nCapturing application screenshots for help documentation...\n")
+        print(f"\nCapturing application screenshots...\n")
 
-        for (section_slug, article_slug), config in ARTICLE_TO_APP_URL.items():
-            url_path = config["url"]
-            description = config["description"]
+        for name, url_path in sorted(all_urls.items()):
             full_url = f"{base_url}{url_path}"
 
-            # Generate filename
-            filename = f"{section_slug}-{article_slug}.png"
-            filepath = output_dir / filename
+            # Determine output subdirectory
+            if "_list" in name or name == "dashboard":
+                subdir = lists_dir
+            elif "_detail" in name or "_manifest" in name:
+                subdir = details_dir
+            elif "_create" in name or "_edit" in name:
+                subdir = forms_dir
+            else:
+                subdir = system_dir
 
-            # Check if we already captured this URL
-            if url_path in captured_urls:
-                # Create a symlink or copy reference
-                print(f"  [{section_slug}/{article_slug}] -> (same as {captured_urls[url_path]})")
-                continue
+            filename = f"{name}.png"
+            filepath = subdir / filename
 
-            print(f"  [{section_slug}/{article_slug}] {description}")
+            print(f"  [{name}]")
             print(f"    URL: {url_path}")
 
             try:
-                page.goto(full_url)
+                response = page.goto(full_url)
                 page.wait_for_load_state("networkidle")
                 page.wait_for_timeout(500)  # Wait for animations
 
-                page.screenshot(path=str(filepath), full_page=True)
-                print(f"    Saved: {filename}")
+                # Check if we got redirected to login (auth failed)
+                if "/login" in page.url:
+                    print(f"    SKIPPED: Redirected to login")
+                    continue
 
-                captured_urls[url_path] = f"{section_slug}/{article_slug}"
+                # Check for 404
+                if response and response.status == 404:
+                    print(f"    SKIPPED: 404 Not Found")
+                    continue
+
+                page.screenshot(path=str(filepath), full_page=True)
+                print(f"    Saved: {subdir.name}/{filename}")
                 screenshots_taken += 1
 
             except Exception as e:
@@ -242,6 +254,10 @@ def capture_screenshots(base_url: str, output_dir: Path, headed: bool = False):
         browser.close()
 
     print(f"\nDone! {screenshots_taken} screenshots saved to: {output_dir}")
+    print(f"  - Lists: {lists_dir}")
+    print(f"  - Details: {details_dir}")
+    print(f"  - Forms: {forms_dir}")
+    print(f"  - System: {system_dir}")
 
 
 def main():
