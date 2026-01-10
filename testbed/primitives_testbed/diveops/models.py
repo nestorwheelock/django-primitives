@@ -738,6 +738,75 @@ class DiverRelationship(BaseModel):
         return rel1, rel2, created1 or created2
 
 
+class DiverRelationshipMeta(BaseModel):
+    """DiveOps extension metadata for PartyRelationship.
+
+    Adds dive-specific fields to the canonical django-parties PartyRelationship.
+    This follows the primitives architecture: use PartyRelationship for identity
+    relationships, extend with domain-specific metadata.
+
+    See: docs/ADR-001-RELATIONSHIP-CONSOLIDATION.md
+
+    Fields extended:
+    - priority: For emergency contact ordering (1=primary, 2=secondary, etc.)
+    - is_preferred_buddy: For pairing divers together on excursions
+    - notes: Dive-specific notes (e.g., "prefers morning dives")
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at.
+    """
+
+    party_relationship = models.OneToOneField(
+        "django_parties.PartyRelationship",
+        on_delete=models.CASCADE,
+        related_name="diver_meta",
+        help_text="The canonical PartyRelationship being extended",
+    )
+
+    # Emergency contact ordering
+    priority = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Contact priority (1=primary, 2=secondary). Only for emergency_contact type.",
+    )
+
+    # Dive buddy pairing
+    is_preferred_buddy = models.BooleanField(
+        default=False,
+        help_text="Prefer to pair these divers together on excursions",
+    )
+
+    # Dive-specific notes (separate from PartyRelationship.title)
+    notes = models.TextField(
+        blank=True,
+        help_text="Dive-specific notes about this relationship",
+    )
+
+    class Meta:
+        verbose_name = "Diver Relationship Metadata"
+        verbose_name_plural = "Diver Relationship Metadata"
+        constraints = [
+            # Priority only makes sense for emergency contacts
+            # (can't enforce at DB level which relationship_type, but we validate in clean())
+        ]
+        indexes = [
+            models.Index(fields=["priority"]),
+            models.Index(fields=["is_preferred_buddy"]),
+        ]
+
+    def __str__(self):
+        return f"DiverMeta for {self.party_relationship}"
+
+    def clean(self):
+        """Validate business rules."""
+        super().clean()
+        # Priority is only meaningful for emergency_contact relationships
+        if self.priority is not None:
+            if self.party_relationship.relationship_type != "emergency_contact":
+                raise ValidationError(
+                    {"priority": "Priority is only valid for emergency contact relationships."}
+                )
+
+
 class DiveSite(BaseModel):
     """A dive site location composing primitives.
 

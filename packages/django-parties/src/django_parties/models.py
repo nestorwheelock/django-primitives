@@ -286,6 +286,12 @@ class PartyRelationship(BaseModel):
         ('sibling', _('Sibling')),
         ('manager', _('Manager')),
         ('reports_to', _('Reports To')),
+        ('friend', _('Friend')),
+        ('relative', _('Relative/Family')),
+        ('buddy', _('Activity Partner/Buddy')),
+        ('travel_companion', _('Travel Companion')),
+        ('instructor', _('Instructor/Trainer')),
+        ('student', _('Student/Trainee')),
     ]
 
     # From party (can be Person or Org)
