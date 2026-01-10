@@ -6,7 +6,7 @@ This plan aligns the DiveOps staff diver detail view with the django-primitives 
 
 ## Phases
 
-### Phase 0: Infrastructure (P0) - Selectors & Models
+### Phase 0: Infrastructure (P0) - Selectors & Models ✅ COMPLETE
 
 **Goal:** Add selectors and extension model without breaking existing code.
 
@@ -51,7 +51,7 @@ This plan aligns the DiveOps staff diver detail view with the django-primitives 
 
 3. **Migration:** `0062_add_diver_relationship_meta.py`
 
-### Phase 1: Staff View Context (P1)
+### Phase 1: Staff View Context (P1) ✅ COMPLETE
 
 **Goal:** Add missing data to DiverDetailView context.
 
@@ -139,7 +139,7 @@ def get_context_data(self, **kwargs):
     return context
 ```
 
-### Phase 2: Template Updates (P2)
+### Phase 2: Template Updates (P2) ✅ COMPLETE
 
 **Goal:** Add new sections to diver_detail.html
 
@@ -172,7 +172,7 @@ Add these sections:
    - Valid until date
    - Days remaining badge
 
-### Phase 3: Relationship Migration (P3)
+### Phase 3: Relationship Migration (P3) ✅ COMPLETE
 
 **Goal:** Migrate EmergencyContact and DiverRelationship to PartyRelationship.
 
@@ -233,7 +233,7 @@ Add these sections:
    - Count after: `PartyRelationship.objects.filter(relationship_type='emergency_contact').count()`
    - Assert counts match
 
-### Phase 4: Update Forms (P4)
+### Phase 4: Update Forms (P4) 🔄 PENDING
 
 **Goal:** Switch add/edit forms to use PartyRelationship.
 
@@ -241,9 +241,11 @@ Add these sections:
 2. Update `DiverRelationshipForm` → creates PartyRelationship + DiverRelationshipMeta
 3. Add staff URLs for new relationship management
 
-### Phase 5: Tests (P5)
+### Phase 5: Tests (P5) ✅ COMPLETE
 
 **Goal:** Add comprehensive test coverage.
+
+**Implemented:** `tests/test_diver_selectors.py` with 22 test cases.
 
 #### Test Cases:
 
@@ -289,10 +291,10 @@ Add these sections:
 
 1. ✅ Create ADR document (done)
 2. ✅ Create this plan document (done)
-3. Add selectors module
-4. Add DiverRelationshipMeta model + migration
-5. Update DiverDetailView context
-6. Update template with new sections
-7. Create data migration for relationships
-8. Add tests
-9. Update forms (Phase 4)
+3. ✅ Add selectors module (`diveops/selectors/divers.py`)
+4. ✅ Add DiverRelationshipMeta model + migration (`0066_add_diver_relationship_meta.py`)
+5. ✅ Update DiverDetailView context (person_details, medical_details, booking_history, dive_history)
+6. ✅ Update template with new sections (DOB/age, phone metadata, address, medical dates)
+7. ✅ Create data migration for relationships (`0067_migrate_relationships_to_party_relationship.py`)
+8. ✅ Add tests (`tests/test_diver_selectors.py` - 22 tests)
+9. 🔄 Update forms (Phase 4) - PENDING

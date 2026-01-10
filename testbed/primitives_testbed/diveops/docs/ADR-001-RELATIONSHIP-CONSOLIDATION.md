@@ -1,7 +1,8 @@
 # ADR-001: Relationship Model Consolidation
 
-**Status:** Accepted
+**Status:** Implemented (Phase 1-2 Complete)
 **Date:** 2026-01-09
+**Implemented:** 2026-01-09
 **Decision Makers:** Architecture Review
 
 ## Context
@@ -87,27 +88,31 @@ django-parties PartyRelationship needs these new types for dive domain:
 
 ### Migration Strategy
 
-**Phase 1: Add Infrastructure (No Breaking Changes)**
-1. Add new relationship types to PartyRelationship.RELATIONSHIP_TYPES
-2. Create DiverRelationshipMeta model
-3. Create selectors for new relationship queries
+**Phase 1: Add Infrastructure (No Breaking Changes)** ✅ COMPLETE
+1. ✅ Add new relationship types to PartyRelationship.RELATIONSHIP_TYPES
+   - Added: `friend`, `relative`, `buddy`, `travel_companion`, `instructor`, `student`
+2. ✅ Create DiverRelationshipMeta model
+   - Fields: `party_relationship` (OneToOne), `priority`, `is_preferred_buddy`, `notes`
+3. ✅ Create selectors for new relationship queries
+   - Migration: `0066_add_diver_relationship_meta.py`
 
-**Phase 2: Data Migration**
-1. Copy EmergencyContact → PartyRelationship + DiverRelationshipMeta
-2. Copy DiverRelationship → PartyRelationship + DiverRelationshipMeta
-3. Validate counts match
+**Phase 2: Data Migration** ✅ COMPLETE
+1. ✅ Copy EmergencyContact → PartyRelationship + DiverRelationshipMeta
+2. ✅ Copy DiverRelationship → PartyRelationship + DiverRelationshipMeta
+3. ✅ Validate counts match
+   - Migration: `0067_migrate_relationships_to_party_relationship.py`
 
-**Phase 3: Switch Reads**
+**Phase 3: Switch Reads** 🔄 PENDING
 1. Update DiverDetailView to query PartyRelationship
 2. Update all list/detail templates
 3. Update API endpoints (if any)
 
-**Phase 4: Switch Writes**
+**Phase 4: Switch Writes** 🔄 PENDING
 1. Update forms to create PartyRelationship + extension
 2. Update staff views for add/edit
 3. Deprecate old model forms
 
-**Phase 5: Cleanup (Future PR)**
+**Phase 5: Cleanup (Future PR)** 🔄 PENDING
 1. Mark EmergencyContact as deprecated
 2. Mark DiverRelationship as deprecated
 3. Eventually remove in future migration

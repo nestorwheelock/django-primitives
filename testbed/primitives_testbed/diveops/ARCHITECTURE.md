@@ -133,6 +133,90 @@ DiveOps depends on these primitives:
 | django_ledger | Invoice/billing integration |
 | django_geo | Dive site location data |
 
+## Relationship Consolidation (ADR-001)
+
+### Overview
+
+DiveOps consolidates relationship models to use `django-parties.PartyRelationship` as the canonical source, with a domain extension for dive-specific metadata.
+
+See: `docs/ADR-001-RELATIONSHIP-CONSOLIDATION.md`
+
+### Architecture
+
+```
+django-parties (owns identity relationships)
+┌─────────────────────────────────────────┐
+│ PartyRelationship                       │
+│ - from_person / from_organization       │
+│ - to_person / to_organization / to_group│
+│ - relationship_type                     │
+│ - is_primary, is_active                 │
+└─────────────────────────────────────────┘
+              │
+              │ OneToOne (optional)
+              ▼
+┌─────────────────────────────────────────┐
+│ DiverRelationshipMeta (DiveOps)         │
+│ - party_relationship (FK)               │
+│ - priority (emergency contact ordering) │
+│ - is_preferred_buddy                    │
+│ - notes (dive-specific)                 │
+└─────────────────────────────────────────┘
+```
+
+### Relationship Types
+
+New types added to `PartyRelationship.RELATIONSHIP_TYPES`:
+
+| Type | Description |
+|------|-------------|
+| `friend` | Personal friend |
+| `relative` | Family member (generic) |
+| `buddy` | Activity partner / dive buddy |
+| `travel_companion` | Travel together |
+| `instructor` | Instructor/trainer |
+| `student` | Student/trainee |
+
+### DiverRelationshipMeta Extension
+
+| Field | Purpose |
+|-------|---------|
+| `priority` | Emergency contact ordering (1=primary, 2=secondary) |
+| `is_preferred_buddy` | Prefer to pair these divers on excursions |
+| `notes` | Dive-specific notes about the relationship |
+
+### Legacy Models (Deprecated)
+
+The following models are deprecated but preserved for backward compatibility:
+
+| Model | Replacement |
+|-------|-------------|
+| `EmergencyContact` | `PartyRelationship(type=emergency_contact)` + `DiverRelationshipMeta` |
+| `DiverRelationship` | `PartyRelationship(type=buddy/spouse/friend)` + `DiverRelationshipMeta` |
+
+Data has been migrated to the new structure. Legacy models will be removed in a future release.
+
+### Querying Relationships
+
+```python
+from django_parties.models import PartyRelationship
+
+# Get emergency contacts for a diver
+emergency_contacts = PartyRelationship.objects.filter(
+    from_person=diver.person,
+    relationship_type='emergency_contact',
+    is_active=True,
+    deleted_at__isnull=True,
+).select_related('to_person', 'diver_meta').order_by('diver_meta__priority')
+
+# Get dive buddies
+buddies = PartyRelationship.objects.filter(
+    from_person=diver.person,
+    relationship_type='buddy',
+    deleted_at__isnull=True,
+).select_related('to_person', 'diver_meta')
+```
+
 ## Account Management
 
 ### Architecture
