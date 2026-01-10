@@ -252,9 +252,11 @@ class TestGetDiverEmergencyContacts:
         )
         contacts = get_diver_emergency_contacts(diver)
         assert len(contacts) == 1
-        assert contacts[0].contact_person == contact_person
-        assert contacts[0].relationship == "spouse"
-        assert contacts[0].priority == 1
+        # Returns dicts with 'source' field indicating origin
+        assert contacts[0]["contact_person"] == contact_person
+        assert contacts[0]["relationship"] == "spouse"
+        assert contacts[0]["priority"] == 1
+        assert contacts[0]["source"] == "legacy"  # Using legacy model
 
     def test_contacts_ordered_by_priority(self, diver):
         """Test that contacts are ordered by priority."""
@@ -282,8 +284,9 @@ class TestGetDiverEmergencyContacts:
         )
         contacts = get_diver_emergency_contacts(diver)
         assert len(contacts) == 2
-        assert contacts[0].priority == 1
-        assert contacts[1].priority == 2
+        # Returns dicts ordered by priority
+        assert contacts[0]["priority"] == 1
+        assert contacts[1]["priority"] == 2
 
     def test_excludes_soft_deleted_contacts(self, diver):
         """Test that soft-deleted contacts are excluded."""

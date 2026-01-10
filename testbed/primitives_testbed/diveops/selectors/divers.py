@@ -143,126 +143,219 @@ def get_diver_normalized_contacts(person: Person) -> NormalizedContacts:
     )
 
 
-def get_diver_emergency_contacts(diver: DiverProfile, use_party_relationship: bool = False) -> list:
+def get_diver_emergency_contacts(diver: DiverProfile) -> list:
     """Get emergency contacts for a diver.
 
-    This selector supports both the legacy EmergencyContact model and
-    the new PartyRelationship model during the migration period.
+    Implements "dual-read, single-write" transition pattern:
+    - First tries PartyRelationship (new canonical model)
+    - Falls back to EmergencyContact (legacy) if none found
+    - Writes always go to PartyRelationship (see services.py)
 
     Args:
         diver: DiverProfile instance
-        use_party_relationship: If True, query PartyRelationship instead of EmergencyContact
 
     Returns:
-        List of emergency contact records
+        List of emergency contact dicts with 'source' field indicating origin
     """
-    if use_party_relationship:
-        # New architecture: PartyRelationship with optional DiverRelationshipMeta
-        contacts = (
-            PartyRelationship.objects.filter(
-                from_person=diver.person,
-                relationship_type="emergency_contact",
-                is_active=True,
-                deleted_at__isnull=True,
-            )
-            .select_related("to_person")
-            .order_by("-is_primary", "created_at")
+    # Try PartyRelationship first
+    pr_contacts = _get_emergency_contacts_from_party_relationship(diver)
+    if pr_contacts:
+        return pr_contacts
+
+    # Fallback to legacy EmergencyContact
+    return _get_emergency_contacts_from_legacy(diver)
+
+
+def _get_emergency_contacts_from_party_relationship(diver: DiverProfile) -> list:
+    """Query PartyRelationship for emergency contacts.
+
+    Args:
+        diver: DiverProfile instance
+
+    Returns:
+        List of emergency contact dicts from PartyRelationship, or empty list
+    """
+    from ..models import DiverRelationshipMeta
+
+    contacts = (
+        PartyRelationship.objects.filter(
+            from_person=diver.person,
+            relationship_type="emergency_contact",
+            is_active=True,
+            deleted_at__isnull=True,
         )
+        .select_related("to_person")
+        .prefetch_related("diver_meta")
+        .order_by("created_at")
+    )
 
-        # Enhance with diver_meta if available
-        result = []
-        for contact in contacts:
-            meta = getattr(contact, "diver_meta", None)
-            result.append({
-                "contact_person": contact.to_person,
-                "relationship": meta.secondary_relationship if meta else "",
-                "priority": meta.priority if meta else (1 if contact.is_primary else 99),
-                "notes": contact.title or "",
-                "is_also_diver": hasattr(contact.to_person, "diver_profile")
-                and contact.to_person.diver_profile is not None
-                and contact.to_person.diver_profile.deleted_at is None,
-                "party_relationship": contact,
-            })
-        return sorted(result, key=lambda x: x["priority"])
+    if not contacts.exists():
+        return []
 
-    else:
-        # Legacy: EmergencyContact model
-        return list(
-            EmergencyContact.objects.filter(
-                diver=diver,
-                deleted_at__isnull=True,
-            )
-            .select_related("contact_person", "contact_person__diver_profile")
-            .order_by("priority")
-        )
+    result = []
+    for contact in contacts:
+        meta = getattr(contact, "diver_meta", None)
+        result.append({
+            "contact_person": contact.to_person,
+            "relationship": contact.title or "",
+            "priority": meta.priority if meta else (1 if contact.is_primary else 99),
+            "notes": meta.notes if meta else "",
+            "is_also_diver": _is_person_a_diver(contact.to_person),
+            "party_relationship": contact,
+            "source": "party_relationship",
+        })
+    return sorted(result, key=lambda x: x["priority"])
 
 
-def get_diver_relationships(diver: DiverProfile, use_party_relationship: bool = False) -> list:
+def _get_emergency_contacts_from_legacy(diver: DiverProfile) -> list:
+    """Query legacy EmergencyContact model.
+
+    Args:
+        diver: DiverProfile instance
+
+    Returns:
+        List of emergency contact dicts from EmergencyContact
+    """
+    legacy_contacts = EmergencyContact.objects.filter(
+        diver=diver,
+        deleted_at__isnull=True,
+    ).select_related("contact_person").order_by("priority")
+
+    return [
+        {
+            "contact_person": ec.contact_person,
+            "relationship": ec.relationship,
+            "priority": ec.priority,
+            "notes": ec.notes,
+            "is_also_diver": ec.is_also_diver,
+            "legacy_model": ec,
+            "source": "legacy",
+        }
+        for ec in legacy_contacts
+    ]
+
+
+def _is_person_a_diver(person: Person) -> bool:
+    """Check if person has an active DiverProfile.
+
+    Args:
+        person: Person instance
+
+    Returns:
+        True if person has an active diver profile
+    """
+    return (
+        hasattr(person, "diver_profile")
+        and person.diver_profile is not None
+        and person.diver_profile.deleted_at is None
+    )
+
+
+def get_diver_relationships(diver: DiverProfile) -> list:
     """Get buddy/family relationships for a diver.
 
+    Implements "dual-read, single-write" transition pattern:
+    - First tries PartyRelationship (new canonical model)
+    - Falls back to DiverRelationship (legacy) if none found
+    - Writes always go to PartyRelationship (see services.py)
+
     Args:
         diver: DiverProfile instance
-        use_party_relationship: If True, query PartyRelationship
 
     Returns:
-        List of relationship records
+        List of relationship dicts with 'source' field indicating origin
     """
-    if use_party_relationship:
-        # New architecture: PartyRelationship for dive-related types
-        DIVE_RELATIONSHIP_TYPES = [
-            "spouse",
-            "dive_buddy",
-            "friend",
-            "family",
-            "travel_companion",
-            "instructor_student",
-        ]
-        relationships = (
-            PartyRelationship.objects.filter(
-                Q(from_person=diver.person) | Q(to_person=diver.person),
-                relationship_type__in=DIVE_RELATIONSHIP_TYPES,
-                is_active=True,
-                deleted_at__isnull=True,
-            )
-            .select_related("from_person", "to_person")
-            .exclude(relationship_type="emergency_contact")
-        )
+    # Try PartyRelationship first
+    pr_relationships = _get_relationships_from_party_relationship(diver)
+    if pr_relationships:
+        return pr_relationships
 
-        result = []
-        for rel in relationships:
-            # Get the "other" person in the relationship
-            other_person = rel.to_person if rel.from_person == diver.person else rel.from_person
-            meta = getattr(rel, "diver_meta", None)
-            result.append({
-                "other_person": other_person,
-                "relationship_type": rel.relationship_type,
-                "is_preferred_buddy": meta.is_preferred_buddy if meta else False,
-                "notes": rel.title or "",
-                "party_relationship": rel,
-            })
-        return result
+    # Fallback to legacy DiverRelationship
+    return _get_relationships_from_legacy(diver)
 
-    else:
-        # Legacy: DiverRelationship model
-        relationships = DiverRelationship.objects.filter(
-            Q(from_diver=diver) | Q(to_diver=diver),
+
+def _get_relationships_from_party_relationship(diver: DiverProfile) -> list:
+    """Query PartyRelationship for diver relationships.
+
+    Args:
+        diver: DiverProfile instance
+
+    Returns:
+        List of relationship dicts from PartyRelationship, or empty list
+    """
+    # Relationship types relevant to divers (exclude emergency_contact)
+    DIVE_RELATIONSHIP_TYPES = [
+        "spouse",
+        "buddy",
+        "friend",
+        "relative",
+        "travel_companion",
+        "instructor",
+        "student",
+    ]
+
+    relationships = (
+        PartyRelationship.objects.filter(
+            Q(from_person=diver.person) | Q(to_person=diver.person),
+            relationship_type__in=DIVE_RELATIONSHIP_TYPES,
+            is_active=True,
             deleted_at__isnull=True,
-        ).select_related(
-            "from_diver__person",
-            "to_diver__person",
         )
+        .select_related("from_person", "to_person")
+        .prefetch_related("diver_meta")
+    )
 
-        result = []
-        for rel in relationships:
-            other_diver = rel.to_diver if rel.from_diver == diver else rel.from_diver
-            result.append({
-                "other_person": other_diver.person,
-                "other_diver": other_diver,
-                "relationship_type": rel.relationship_type,
-                "is_preferred_buddy": rel.is_preferred_buddy,
-                "notes": rel.notes,
-            })
-        return result
+    if not relationships.exists():
+        return []
+
+    result = []
+    for rel in relationships:
+        # Get the "other" person in the relationship
+        other_person = rel.to_person if rel.from_person == diver.person else rel.from_person
+        meta = getattr(rel, "diver_meta", None)
+        result.append({
+            "other_person": other_person,
+            "relationship_type": rel.relationship_type,
+            "is_preferred_buddy": meta.is_preferred_buddy if meta else False,
+            "notes": meta.notes if meta else "",
+            "is_also_diver": _is_person_a_diver(other_person),
+            "party_relationship": rel,
+            "source": "party_relationship",
+        })
+    return result
+
+
+def _get_relationships_from_legacy(diver: DiverProfile) -> list:
+    """Query legacy DiverRelationship model.
+
+    Args:
+        diver: DiverProfile instance
+
+    Returns:
+        List of relationship dicts from DiverRelationship
+    """
+    relationships = DiverRelationship.objects.filter(
+        Q(from_diver=diver) | Q(to_diver=diver),
+        deleted_at__isnull=True,
+    ).select_related(
+        "from_diver__person",
+        "to_diver__person",
+    )
+
+    result = []
+    for rel in relationships:
+        other_diver = rel.to_diver if rel.from_diver == diver else rel.from_diver
+        result.append({
+            "other_person": other_diver.person,
+            "other_diver": other_diver,
+            "relationship_type": rel.relationship_type,
+            "is_preferred_buddy": rel.is_preferred_buddy,
+            "notes": rel.notes,
+            "is_also_diver": True,  # Legacy model always links divers
+            "legacy_model": rel,
+            "source": "legacy",
+        })
+    return result
 
 
 def get_diver_booking_history(

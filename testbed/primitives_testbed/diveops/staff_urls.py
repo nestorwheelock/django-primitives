@@ -243,6 +243,8 @@ urlpatterns = [
     path("divers/<uuid:diver_pk>/photo-id/upload/", staff_views.DiverUploadPhotoIdView.as_view(), name="diver-upload-photo-id"),
     # Emergency Contacts
     path("divers/<uuid:diver_pk>/emergency-contacts/add/", staff_views.EmergencyContactAddView.as_view(), name="emergency-contact-add"),
+    # Diver Relationships
+    path("divers/<uuid:diver_pk>/relationships/add/", staff_views.DiverRelationshipAddView.as_view(), name="diver-relationship-add"),
     # Diver Inline Gear Update
     path("divers/<uuid:pk>/update-gear/", staff_views.DiverUpdateGearView.as_view(), name="diver-update-gear"),
     # Media Library

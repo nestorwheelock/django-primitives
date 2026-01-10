@@ -279,37 +279,44 @@ class UpdateGearSizingView(CustomerPortalMixin, View):
 
 
 class AddEmergencyContactView(CustomerPortalMixin, View):
-    """Add an emergency contact from dashboard modal."""
+    """Add an emergency contact from dashboard modal.
+
+    Uses the new PartyRelationship + DiverRelationshipMeta (canonical model)
+    instead of the legacy EmergencyContact model.
+    """
 
     def post(self, request, *args, **kwargs):
-        from django_parties.models import Person
+        from django_parties.models import PartyRelationship
 
-        from .models import EmergencyContact
+        from .services import add_emergency_contact_via_party_relationship
 
         diver = get_current_diver(request.user)
         if not diver:
             return redirect("portal:dashboard")
 
-        # Create the contact person
-        contact_person = Person.objects.create(
+        # Get next priority based on existing PartyRelationship contacts
+        existing_count = PartyRelationship.objects.filter(
+            from_person=diver.person,
+            relationship_type="emergency_contact",
+            deleted_at__isnull=True,
+        ).count()
+
+        # Create emergency contact via PartyRelationship
+        add_emergency_contact_via_party_relationship(
+            diver=diver,
+            existing_person=None,  # Always creating new Person from customer portal
             first_name=request.POST.get("first_name", "").strip(),
             last_name=request.POST.get("last_name", "").strip(),
             phone=request.POST.get("phone", "").strip(),
-            email=request.POST.get("email", "").strip() or None,
-        )
-
-        # Get next priority
-        existing_count = EmergencyContact.objects.filter(
-            diver=diver, deleted_at__isnull=True
-        ).count()
-
-        # Create the emergency contact
-        EmergencyContact.objects.create(
-            diver=diver,
-            contact_person=contact_person,
+            email=request.POST.get("email", "").strip() or "",
+            date_of_birth=None,  # Not collected in customer portal
+            phone_is_mobile=True,  # Default
+            phone_has_whatsapp=False,  # Default
+            phone_can_receive_sms=True,  # Default
             relationship=request.POST.get("relationship", "other"),
             priority=existing_count + 1,
             notes=request.POST.get("notes", "").strip(),
+            actor=request.user,
         )
 
         return redirect("portal:dashboard")
@@ -484,3 +491,213 @@ class CustomerPreferencesView(CustomerPortalMixin, TemplateView):
             "preferences_by_category": preferences_by_category,
         })
         return context
+
+
+class PreferencesSurveyView(CustomerPortalMixin, TemplateView):
+    """Survey form for collecting diver preferences."""
+
+    template_name = "diveops/portal/preferences_survey.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        diver = get_current_diver(user)
+
+        # Get all preference definitions grouped by category
+        from .preferences.models import PreferenceDefinition, PartyPreference
+
+        definitions = PreferenceDefinition.objects.filter(
+            deleted_at__isnull=True
+        ).order_by("category", "key")
+
+        # Group by category
+        definitions_by_category = {}
+        for defn in definitions:
+            if defn.category not in definitions_by_category:
+                definitions_by_category[defn.category] = []
+            definitions_by_category[defn.category].append(defn)
+
+        # Get existing preferences for this diver
+        existing_prefs = {}
+        if diver:
+            prefs = PartyPreference.objects.filter(
+                person=diver.person,
+                deleted_at__isnull=True,
+            ).select_related("definition")
+            for pref in prefs:
+                existing_prefs[pref.definition.key] = pref.value_json
+
+        context.update({
+            "diver": diver,
+            "definitions_by_category": definitions_by_category,
+            "existing_prefs": existing_prefs,
+        })
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from django.http import HttpResponseRedirect
+        from django.urls import reverse
+        from django.contrib import messages
+        from .preferences.models import PreferenceDefinition, PartyPreference
+
+        diver = get_current_diver(request.user)
+        if not diver:
+            messages.error(request, "Diver profile not found.")
+            return HttpResponseRedirect(reverse("portal:dashboard"))
+
+        # Get all definitions to know what fields to expect
+        definitions = PreferenceDefinition.objects.filter(deleted_at__isnull=True)
+
+        saved_count = 0
+        for defn in definitions:
+            field_name = f"pref_{defn.key.replace('.', '_')}"
+
+            if defn.value_type == "multi_choice":
+                # Checkboxes - get list of values
+                values = request.POST.getlist(field_name)
+                if values:
+                    PartyPreference.objects.update_or_create(
+                        person=diver.person,
+                        definition=defn,
+                        defaults={"value_json": values},
+                    )
+                    saved_count += 1
+            elif defn.value_type == "bool":
+                # Checkbox - presence means True
+                value = field_name in request.POST
+                PartyPreference.objects.update_or_create(
+                    person=diver.person,
+                    definition=defn,
+                    defaults={"value_json": value},
+                )
+                saved_count += 1
+            elif defn.value_type == "choice":
+                # Select - single value
+                value = request.POST.get(field_name)
+                if value:
+                    PartyPreference.objects.update_or_create(
+                        person=diver.person,
+                        definition=defn,
+                        defaults={"value_json": value},
+                    )
+                    saved_count += 1
+            else:
+                # Text, number, date - string value
+                value = request.POST.get(field_name)
+                if value:
+                    PartyPreference.objects.update_or_create(
+                        person=diver.person,
+                        definition=defn,
+                        defaults={"value_json": value},
+                    )
+                    saved_count += 1
+
+        messages.success(request, f"Saved {saved_count} preferences.")
+        return HttpResponseRedirect(reverse("portal:preferences"))
+
+
+class AddBuddyView(CustomerPortalMixin, TemplateView):
+    """Form to add a new buddy."""
+
+    template_name = "diveops/portal/add_buddy.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        diver = get_current_diver(self.request.user)
+        context["diver"] = diver
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from django.http import HttpResponseRedirect
+        from django.urls import reverse
+        from django.contrib import messages
+        from django_parties.models import Person
+        from .services import add_buddy_pair
+
+        diver = get_current_diver(request.user)
+        if not diver:
+            messages.error(request, "Diver profile not found.")
+            return HttpResponseRedirect(reverse("portal:dashboard"))
+
+        # Get form data
+        buddy_type = request.POST.get("buddy_type", "new")
+
+        try:
+            if buddy_type == "existing":
+                # Adding an existing person by email
+                email = request.POST.get("email", "").strip()
+                if not email:
+                    messages.error(request, "Please enter an email address.")
+                    return HttpResponseRedirect(reverse("portal:add_buddy"))
+
+                # Find person by email (through their user account)
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                try:
+                    user = User.objects.get(email=email)
+                    friend_person = Person.objects.filter(
+                        partycontactinfo__contact_type="email",
+                        partycontactinfo__contact_value=email,
+                    ).first()
+                    if not friend_person:
+                        # Try to get person linked to user
+                        friend_person = Person.objects.filter(user=user).first()
+                    if not friend_person:
+                        messages.error(request, f"No diver profile found for {email}.")
+                        return HttpResponseRedirect(reverse("portal:add_buddy"))
+
+                    team = add_buddy_pair(me_person=diver.person, friend_person=friend_person)
+                    messages.success(request, f"Added {friend_person.first_name} {friend_person.last_name} as your buddy!")
+                except User.DoesNotExist:
+                    messages.error(request, f"No user found with email {email}.")
+                    return HttpResponseRedirect(reverse("portal:add_buddy"))
+            else:
+                # Adding a new contact (not on platform yet)
+                display_name = request.POST.get("display_name", "").strip()
+                email = request.POST.get("contact_email", "").strip()
+                phone = request.POST.get("phone", "").strip()
+
+                if not display_name:
+                    messages.error(request, "Please enter your buddy's name.")
+                    return HttpResponseRedirect(reverse("portal:add_buddy"))
+
+                if not email and not phone:
+                    messages.error(request, "Please enter either an email or phone number.")
+                    return HttpResponseRedirect(reverse("portal:add_buddy"))
+
+                friend_data = {
+                    "display_name": display_name,
+                    "email": email or None,
+                    "phone": phone or None,
+                }
+                team = add_buddy_pair(me_person=diver.person, friend_data=friend_data)
+                messages.success(request, f"Added {display_name} as your buddy!")
+
+        except ValueError as e:
+            messages.error(request, str(e))
+            return HttpResponseRedirect(reverse("portal:add_buddy"))
+
+        return HttpResponseRedirect(reverse("portal:dashboard"))
+
+
+class RemoveBuddyView(CustomerPortalMixin, View):
+    """Remove a buddy relationship."""
+
+    def post(self, request, team_id, *args, **kwargs):
+        from django.http import HttpResponseRedirect
+        from django.urls import reverse
+        from django.contrib import messages
+        from .services import remove_buddy
+
+        diver = get_current_diver(request.user)
+        if not diver:
+            messages.error(request, "Diver profile not found.")
+            return HttpResponseRedirect(reverse("portal:dashboard"))
+
+        try:
+            remove_buddy(me_person=diver.person, team_id=team_id)
+            messages.success(request, "Buddy removed.")
+        except Exception as e:
+            messages.error(request, f"Error removing buddy: {e}")
+
+        return HttpResponseRedirect(reverse("portal:dashboard"))

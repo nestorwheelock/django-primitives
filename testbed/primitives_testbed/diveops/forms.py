@@ -64,6 +64,69 @@ class DiverForm(forms.Form):
     email = forms.EmailField(
         label="Email",
     )
+    date_of_birth = forms.DateField(
+        required=False,
+        label="Date of Birth",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    preferred_name = forms.CharField(
+        required=False,
+        max_length=150,
+        label="Preferred Name",
+        help_text="What this person prefers to be called",
+    )
+    phone = forms.CharField(
+        required=False,
+        max_length=20,
+        label="Phone Number",
+    )
+    phone_is_mobile = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Mobile Phone",
+    )
+    phone_has_whatsapp = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Has WhatsApp",
+    )
+    phone_can_receive_sms = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Can Receive SMS",
+    )
+
+    # Address fields
+    address_line1 = forms.CharField(
+        required=False,
+        max_length=255,
+        label="Address",
+    )
+    address_line2 = forms.CharField(
+        required=False,
+        max_length=255,
+        label="Address Line 2",
+    )
+    city = forms.CharField(
+        required=False,
+        max_length=100,
+        label="City",
+    )
+    state = forms.CharField(
+        required=False,
+        max_length=100,
+        label="State/Province",
+    )
+    postal_code = forms.CharField(
+        required=False,
+        max_length=20,
+        label="Postal Code",
+    )
+    country = forms.CharField(
+        required=False,
+        max_length=100,
+        label="Country",
+    )
 
     # Certification fields (using new CertificationLevel model)
     certification_agency = forms.ModelChoiceField(
@@ -217,9 +280,22 @@ class DiverForm(forms.Form):
 
         # Pre-populate fields if editing existing diver
         if instance:
-            self.fields["first_name"].initial = instance.person.first_name
-            self.fields["last_name"].initial = instance.person.last_name
-            self.fields["email"].initial = instance.person.email
+            person = instance.person
+            self.fields["first_name"].initial = person.first_name
+            self.fields["last_name"].initial = person.last_name
+            self.fields["email"].initial = person.email
+            self.fields["date_of_birth"].initial = person.date_of_birth
+            self.fields["preferred_name"].initial = person.preferred_name
+            self.fields["phone"].initial = person.phone
+            self.fields["phone_is_mobile"].initial = person.phone_is_mobile
+            self.fields["phone_has_whatsapp"].initial = person.phone_has_whatsapp
+            self.fields["phone_can_receive_sms"].initial = person.phone_can_receive_sms
+            self.fields["address_line1"].initial = person.address_line1
+            self.fields["address_line2"].initial = person.address_line2
+            self.fields["city"].initial = person.city
+            self.fields["state"].initial = person.state
+            self.fields["postal_code"].initial = person.postal_code
+            self.fields["country"].initial = person.country
             self.fields["total_dives"].initial = instance.total_dives
             self.fields["medical_clearance_date"].initial = instance.medical_clearance_date
             self.fields["medical_clearance_valid_until"].initial = instance.medical_clearance_valid_until
@@ -299,9 +375,23 @@ class DiverForm(forms.Form):
             diver = update_diver(
                 diver=self.instance,
                 updated_by=actor,
+                # Person fields
                 first_name=data["first_name"],
                 last_name=data["last_name"],
                 email=data["email"],
+                date_of_birth=data.get("date_of_birth"),
+                preferred_name=data.get("preferred_name", ""),
+                phone=data.get("phone", ""),
+                phone_is_mobile=data.get("phone_is_mobile", True),
+                phone_has_whatsapp=data.get("phone_has_whatsapp", False),
+                phone_can_receive_sms=data.get("phone_can_receive_sms", True),
+                address_line1=data.get("address_line1", ""),
+                address_line2=data.get("address_line2", ""),
+                city=data.get("city", ""),
+                state=data.get("state", ""),
+                postal_code=data.get("postal_code", ""),
+                country=data.get("country", ""),
+                # DiverProfile fields
                 total_dives=data["total_dives"],
                 medical_clearance_date=data.get("medical_clearance_date"),
                 medical_clearance_valid_until=data.get("medical_clearance_valid_until"),
@@ -321,9 +411,23 @@ class DiverForm(forms.Form):
         else:
             # Create new diver via service
             diver = create_diver(
+                # Person fields
                 first_name=data["first_name"],
                 last_name=data["last_name"],
                 email=data["email"],
+                date_of_birth=data.get("date_of_birth"),
+                preferred_name=data.get("preferred_name", ""),
+                phone=data.get("phone", ""),
+                phone_is_mobile=data.get("phone_is_mobile", True),
+                phone_has_whatsapp=data.get("phone_has_whatsapp", False),
+                phone_can_receive_sms=data.get("phone_can_receive_sms", True),
+                address_line1=data.get("address_line1", ""),
+                address_line2=data.get("address_line2", ""),
+                city=data.get("city", ""),
+                state=data.get("state", ""),
+                postal_code=data.get("postal_code", ""),
+                country=data.get("country", ""),
+                # DiverProfile fields
                 total_dives=data["total_dives"],
                 created_by=actor,
                 medical_clearance_date=data.get("medical_clearance_date"),
@@ -401,6 +505,255 @@ class DiverForm(forms.Form):
                     proof_document.save()
 
         return diver
+
+
+class EmergencyContactForm(forms.Form):
+    """Form to add/edit emergency contact using PartyRelationship.
+
+    Creates a PartyRelationship with relationship_type='emergency_contact'
+    and a DiverRelationshipMeta for priority ordering.
+    """
+
+    # Contact selection - mutually exclusive with name fields
+    existing_person = forms.ModelChoiceField(
+        queryset=Person.objects.none(),
+        required=False,
+        label="Select Existing Contact",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    # New contact fields (used if existing_person is not selected)
+    first_name = forms.CharField(
+        required=False,
+        max_length=150,
+        label="First Name",
+    )
+    last_name = forms.CharField(
+        required=False,
+        max_length=150,
+        label="Last Name",
+    )
+    phone = forms.CharField(
+        required=False,
+        max_length=20,
+        label="Phone Number",
+    )
+    email = forms.EmailField(
+        required=False,
+        label="Email",
+    )
+    date_of_birth = forms.DateField(
+        required=False,
+        label="Date of Birth",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    phone_is_mobile = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Mobile Phone",
+    )
+    phone_has_whatsapp = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Has WhatsApp",
+    )
+    phone_can_receive_sms = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Can Receive SMS",
+    )
+
+    # Relationship details
+    RELATIONSHIP_CHOICES = [
+        ("spouse", "Spouse/Partner"),
+        ("parent", "Parent"),
+        ("child", "Child (Adult)"),
+        ("sibling", "Sibling"),
+        ("friend", "Friend"),
+        ("other", "Other"),
+    ]
+    relationship = forms.ChoiceField(
+        choices=RELATIONSHIP_CHOICES,
+        label="Relationship",
+    )
+    priority = forms.IntegerField(
+        min_value=1,
+        initial=1,
+        label="Priority",
+        help_text="1 = primary, 2 = secondary, etc.",
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+        label="Notes",
+    )
+
+    def __init__(self, *args, diver=None, **kwargs):
+        """Initialize form with diver context.
+
+        Args:
+            diver: DiverProfile to add emergency contact for
+        """
+        super().__init__(*args, **kwargs)
+        self.diver = diver
+
+        # Populate existing_person queryset (exclude self)
+        if diver:
+            self.fields["existing_person"].queryset = Person.objects.filter(
+                deleted_at__isnull=True
+            ).exclude(pk=diver.person.pk).order_by("first_name", "last_name")
+
+            # Get next priority number
+            from .models import EmergencyContact
+            current_count = EmergencyContact.objects.filter(
+                diver=diver,
+                deleted_at__isnull=True,
+            ).count()
+            self.fields["priority"].initial = current_count + 1
+
+    def clean(self):
+        """Validate that either existing_person OR name fields are provided, not both."""
+        cleaned_data = super().clean()
+        existing = cleaned_data.get("existing_person")
+        first_name = cleaned_data.get("first_name", "").strip()
+        last_name = cleaned_data.get("last_name", "").strip()
+
+        # VALIDATION: Either existing_person OR (first_name AND last_name)
+        if existing and (first_name or last_name):
+            raise ValidationError(
+                "Select an existing contact OR enter a new name, not both."
+            )
+        if not existing and not (first_name and last_name):
+            raise ValidationError(
+                "Select an existing contact or enter first and last name."
+            )
+
+        return cleaned_data
+
+    @transaction.atomic
+    def save(self, actor=None):
+        """Create PartyRelationship + DiverRelationshipMeta.
+
+        Returns:
+            PartyRelationship instance
+        """
+        from .services import add_emergency_contact_via_party_relationship
+
+        return add_emergency_contact_via_party_relationship(
+            diver=self.diver,
+            existing_person=self.cleaned_data.get("existing_person"),
+            first_name=self.cleaned_data.get("first_name", ""),
+            last_name=self.cleaned_data.get("last_name", ""),
+            phone=self.cleaned_data.get("phone", ""),
+            email=self.cleaned_data.get("email", ""),
+            date_of_birth=self.cleaned_data.get("date_of_birth"),
+            phone_is_mobile=self.cleaned_data.get("phone_is_mobile", True),
+            phone_has_whatsapp=self.cleaned_data.get("phone_has_whatsapp", False),
+            phone_can_receive_sms=self.cleaned_data.get("phone_can_receive_sms", True),
+            relationship=self.cleaned_data["relationship"],
+            priority=self.cleaned_data["priority"],
+            notes=self.cleaned_data.get("notes", ""),
+            actor=actor,
+        )
+
+
+class DiverRelationshipForm(forms.Form):
+    """Form to add/edit diver relationship using PartyRelationship.
+
+    Creates a PartyRelationship with appropriate relationship_type
+    and a DiverRelationshipMeta for buddy-specific fields.
+    """
+
+    # Related person - can be any Person (not just divers)
+    related_person = forms.ModelChoiceField(
+        queryset=Person.objects.none(),
+        label="Related Person",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    RELATIONSHIP_TYPE_CHOICES = [
+        ("spouse", "Spouse/Partner"),
+        ("buddy", "Dive Buddy"),
+        ("friend", "Friend"),
+        ("relative", "Family Member"),
+        ("travel_companion", "Travel Companion"),
+        ("instructor", "Instructor/Trainer"),
+        ("student", "Student/Trainee"),
+    ]
+    relationship_type = forms.ChoiceField(
+        choices=RELATIONSHIP_TYPE_CHOICES,
+        label="Relationship Type",
+    )
+    is_preferred_buddy = forms.BooleanField(
+        required=False,
+        label="Preferred Buddy",
+        help_text="Prefer pairing these divers together (for buddy relationships)",
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+        label="Notes",
+    )
+
+    def __init__(self, *args, from_diver=None, **kwargs):
+        """Initialize form with diver context.
+
+        Args:
+            from_diver: DiverProfile to add relationship for
+        """
+        super().__init__(*args, **kwargs)
+        self.from_diver = from_diver
+
+        # Populate queryset - exclude self
+        if from_diver:
+            self.fields["related_person"].queryset = Person.objects.filter(
+                deleted_at__isnull=True
+            ).exclude(pk=from_diver.person.pk).order_by("first_name", "last_name")
+
+    def clean(self):
+        """Validate relationship constraints."""
+        cleaned_data = super().clean()
+        related_person = cleaned_data.get("related_person")
+        relationship_type = cleaned_data.get("relationship_type")
+
+        # Prevent self-linking (extra safety)
+        if self.from_diver and related_person and related_person == self.from_diver.person:
+            raise ValidationError("Cannot create a relationship with yourself.")
+
+        # Check for duplicate relationship
+        if self.from_diver and related_person and relationship_type:
+            from django_parties.models import PartyRelationship
+            existing = PartyRelationship.objects.filter(
+                from_person=self.from_diver.person,
+                to_person=related_person,
+                relationship_type=relationship_type,
+                deleted_at__isnull=True,
+            ).exists()
+            if existing:
+                raise ValidationError(
+                    f"A {dict(self.RELATIONSHIP_TYPE_CHOICES).get(relationship_type, relationship_type)} "
+                    f"relationship with this person already exists."
+                )
+
+        return cleaned_data
+
+    @transaction.atomic
+    def save(self, actor=None):
+        """Create PartyRelationship + DiverRelationshipMeta.
+
+        Returns:
+            PartyRelationship instance
+        """
+        from .services import add_diver_relationship_via_party_relationship
+
+        return add_diver_relationship_via_party_relationship(
+            from_diver=self.from_diver,
+            to_person=self.cleaned_data["related_person"],
+            relationship_type=self.cleaned_data["relationship_type"],
+            is_preferred_buddy=self.cleaned_data.get("is_preferred_buddy", False),
+            notes=self.cleaned_data.get("notes", ""),
+            actor=actor,
+        )
 
 
 class BookDiverForm(forms.Form):

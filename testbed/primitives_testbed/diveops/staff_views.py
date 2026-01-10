@@ -7290,91 +7290,105 @@ class DiverUploadPhotoIdView(StaffPortalMixin, View):
 
 
 class EmergencyContactAddView(StaffPortalMixin, View):
-    """Add an emergency contact for a diver."""
+    """Add an emergency contact for a diver.
+
+    Uses EmergencyContactForm which creates PartyRelationship + DiverRelationshipMeta
+    (the new canonical model) instead of the legacy EmergencyContact model.
+    """
+
+    def _get_context(self, diver, form):
+        """Build context for template rendering."""
+        from django_parties.models import PartyRelationship, Person
+
+        from .models import EmergencyContact
+
+        # Get existing persons (exclude the diver themselves)
+        existing_persons = (
+            Person.objects.filter(deleted_at__isnull=True)
+            .exclude(pk=diver.person.pk)
+            .order_by("first_name", "last_name")
+        )
+
+        # Get next priority based on existing contacts
+        existing_count = PartyRelationship.objects.filter(
+            from_person=diver.person,
+            relationship_type="emergency_contact",
+            deleted_at__isnull=True,
+        ).count()
+
+        return {
+            "diver": diver,
+            "form": form,
+            "existing_persons": existing_persons,
+            "relationship_choices": EmergencyContact.RELATIONSHIP_CHOICES,
+            "next_priority": existing_count + 1,
+        }
 
     def get(self, request, diver_pk):
-        from django_parties.models import Person
+        from .forms import EmergencyContactForm
 
         diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+        form = EmergencyContactForm(diver=diver)
 
-        # Get existing persons for dropdown (excluding the diver themselves)
-        existing_persons = Person.objects.exclude(
-            pk=diver.person.pk
-        ).order_by("first_name", "last_name")[:50]
+        return render(
+            request,
+            "diveops/staff/emergency_contact_form.html",
+            self._get_context(diver, form),
+        )
 
-        # Get next priority number
-        from .models import EmergencyContact
-        next_priority = diver.emergency_contact_entries.filter(
-            deleted_at__isnull=True
-        ).count() + 1
+    def post(self, request, diver_pk):
+        from .forms import EmergencyContactForm
 
-        return render(request, "diveops/staff/emergency_contact_form.html", {
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+        form = EmergencyContactForm(request.POST, diver=diver)
+
+        if form.is_valid():
+            form.save(actor=request.user)
+            messages.success(request, "Emergency contact added.")
+            return redirect("diveops:diver-detail", pk=diver_pk)
+
+        # Form invalid - re-render with errors
+        return render(
+            request,
+            "diveops/staff/emergency_contact_form.html",
+            self._get_context(diver, form),
+        )
+
+
+class DiverRelationshipAddView(StaffPortalMixin, View):
+    """Add a relationship (buddy, spouse, etc.) for a diver.
+
+    Uses DiverRelationshipForm which creates PartyRelationship + DiverRelationshipMeta
+    (the new canonical model) instead of the legacy DiverRelationship model.
+    """
+
+    def get(self, request, diver_pk):
+        from .forms import DiverRelationshipForm
+
+        diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+        form = DiverRelationshipForm(from_diver=diver)
+
+        return render(request, "diveops/staff/diver_relationship_form.html", {
             "diver": diver,
-            "existing_persons": existing_persons,
-            "next_priority": next_priority,
-            "relationship_choices": EmergencyContact.RELATIONSHIP_CHOICES,
+            "form": form,
         })
 
     def post(self, request, diver_pk):
-        from django_parties.models import Person
-        from .models import EmergencyContact
-        from .audit import log_event
+        from .forms import DiverRelationshipForm
 
         diver = get_object_or_404(DiverProfile, pk=diver_pk, deleted_at__isnull=True)
+        form = DiverRelationshipForm(request.POST, from_diver=diver)
 
-        # Check if using existing person or creating new
-        existing_person_pk = request.POST.get("existing_person")
-        relationship = request.POST.get("relationship")
-        priority = int(request.POST.get("priority", 1))
-        notes = request.POST.get("notes", "")
+        if form.is_valid():
+            form.save(actor=request.user)
+            messages.success(request, "Relationship added.")
+            return redirect("diveops:diver-detail", pk=diver_pk)
 
-        if existing_person_pk:
-            # Use existing person
-            contact_person = get_object_or_404(Person, pk=existing_person_pk)
-        else:
-            # Create new person
-            first_name = request.POST.get("first_name", "").strip()
-            last_name = request.POST.get("last_name", "").strip()
-            phone = request.POST.get("phone", "").strip()
-            email = request.POST.get("email", "").strip()
-
-            if not first_name:
-                messages.error(request, "First name is required.")
-                return redirect("diveops:emergency-contact-add", diver_pk=diver_pk)
-
-            contact_person = Person.objects.create(
-                first_name=first_name,
-                last_name=last_name,
-                phone=phone,
-                email=email if email else None,
-            )
-
-        # Create the emergency contact
-        emergency_contact = EmergencyContact.objects.create(
-            diver=diver,
-            contact_person=contact_person,
-            relationship=relationship,
-            priority=priority,
-            notes=notes,
-        )
-
-        # Log the event
-        log_event(
-            action="emergency_contact_added",
-            target=diver,
-            actor=request.user,
-            request=request,
-            data={
-                "diver_name": str(diver.person),
-                "contact_name": str(contact_person),
-                "relationship": relationship,
-                "priority": priority,
-                "is_also_diver": emergency_contact.is_also_diver,
-            },
-        )
-
-        messages.success(request, f"Emergency contact {contact_person} added.")
-        return redirect("diveops:diver-detail", pk=diver_pk)
+        # Form invalid - re-render with errors
+        return render(request, "diveops/staff/diver_relationship_form.html", {
+            "diver": diver,
+            "form": form,
+        })
 
 
 # =============================================================================

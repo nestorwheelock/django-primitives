@@ -645,8 +645,9 @@ class EmergencyContact(BaseModel):
         if not self.is_also_diver:
             return False
         # Check if the contact's diver profile is on this excursion
-        from .models import ExcursionGuest
-        return ExcursionGuest.objects.filter(
+        # Note: ExcursionGuest doesn't exist - should be ExcursionRoster or Booking
+        # TODO: Fix this broken reference
+        return ExcursionRoster.objects.filter(
             excursion=excursion,
             diver=self.contact_person.diver_profile,
             deleted_at__isnull=True,
@@ -1295,7 +1296,7 @@ class Excursion(BaseModel):
     @property
     def dive_sites(self):
         """Return queryset of all dive sites for this excursion's dives."""
-        from .models import DiveSite
+        # DiveSite is defined in this same file - no import needed
         return DiveSite.objects.filter(dives__excursion=self).distinct()
 
     def clean(self):
@@ -1692,7 +1693,7 @@ class Booking(BaseModel):
 
         INV-5: Bookings with settlements cannot be deleted.
         """
-        from .exceptions import BookingError
+        from ..exceptions import BookingError
 
         if self.is_settled:
             raise BookingError(
@@ -4602,8 +4603,9 @@ class GuidePermitDetails(BaseModel):
 # Pricing Models (from diveops.pricing submodule)
 # =============================================================================
 
-# Import pricing models to ensure Django discovers them
-from .pricing.models import DiverEquipmentRental
+# Note: Pricing models are discovered automatically via primitives_testbed.pricing
+# in INSTALLED_APPS. Importing here would cause circular imports.
+# DiverEquipmentRental is in primitives_testbed.pricing.models
 
 
 # =============================================================================
@@ -5830,7 +5832,7 @@ __all__ = [
 ]
 
 # Import EntitlementGrant from submodule for migration discovery
-from .entitlements.models import EntitlementGrant
+from ..entitlements.models import EntitlementGrant
 
 # Import Preference models from submodule for migration discovery
-from .preferences.models import PreferenceDefinition, PartyPreference
+from ..preferences.models import PreferenceDefinition, PartyPreference

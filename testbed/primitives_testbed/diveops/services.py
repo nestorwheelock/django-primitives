@@ -964,6 +964,20 @@ def create_diver(
     total_dives: int,
     created_by,
     *,
+    # Person fields
+    date_of_birth=None,
+    preferred_name: str = "",
+    phone: str = "",
+    phone_is_mobile: bool = True,
+    phone_has_whatsapp: bool = False,
+    phone_can_receive_sms: bool = True,
+    address_line1: str = "",
+    address_line2: str = "",
+    city: str = "",
+    state: str = "",
+    postal_code: str = "",
+    country: str = "",
+    # DiverProfile fields
     medical_clearance_date=None,
     medical_clearance_valid_until=None,
     weight_kg=None,
@@ -986,6 +1000,18 @@ def create_diver(
         email: Diver's email address
         total_dives: Number of logged dives
         created_by: User creating the diver
+        date_of_birth: Optional date of birth
+        preferred_name: What this person prefers to be called
+        phone: Phone number
+        phone_is_mobile: Whether phone is mobile
+        phone_has_whatsapp: Whether phone has WhatsApp
+        phone_can_receive_sms: Whether phone can receive SMS
+        address_line1: Address line 1
+        address_line2: Address line 2
+        city: City
+        state: State/province
+        postal_code: Postal code
+        country: Country
         medical_clearance_date: Optional medical clearance date
         medical_clearance_valid_until: Optional medical clearance expiry
         weight_kg: Weight in kilograms
@@ -1008,11 +1034,23 @@ def create_diver(
     """
     from django_parties.models import Person
 
-    # Create Person record
+    # Create Person record with all fields
     person = Person.objects.create(
         first_name=first_name,
         last_name=last_name,
         email=email,
+        date_of_birth=date_of_birth,
+        preferred_name=preferred_name,
+        phone=phone,
+        phone_is_mobile=phone_is_mobile,
+        phone_has_whatsapp=phone_has_whatsapp,
+        phone_can_receive_sms=phone_can_receive_sms,
+        address_line1=address_line1,
+        address_line2=address_line2,
+        city=city,
+        state=state,
+        postal_code=postal_code,
+        country=country,
     )
 
     # Create DiverProfile
@@ -1049,9 +1087,23 @@ def update_diver(
     diver: DiverProfile,
     updated_by,
     *,
+    # Person fields
     first_name: str | None = None,
     last_name: str | None = None,
     email: str | None = None,
+    date_of_birth=None,
+    preferred_name: str | None = None,
+    phone: str | None = None,
+    phone_is_mobile: bool | None = None,
+    phone_has_whatsapp: bool | None = None,
+    phone_can_receive_sms: bool | None = None,
+    address_line1: str | None = None,
+    address_line2: str | None = None,
+    city: str | None = None,
+    state: str | None = None,
+    postal_code: str | None = None,
+    country: str | None = None,
+    # DiverProfile fields
     total_dives: int | None = None,
     medical_clearance_date=None,
     medical_clearance_valid_until=None,
@@ -1075,6 +1127,18 @@ def update_diver(
         first_name: New first name (None = no change)
         last_name: New last name (None = no change)
         email: New email (None = no change)
+        date_of_birth: Date of birth (None = no change)
+        preferred_name: What this person prefers to be called (None = no change)
+        phone: Phone number (None = no change)
+        phone_is_mobile: Whether phone is mobile (None = no change)
+        phone_has_whatsapp: Whether phone has WhatsApp (None = no change)
+        phone_can_receive_sms: Whether phone can receive SMS (None = no change)
+        address_line1: Address line 1 (None = no change)
+        address_line2: Address line 2 (None = no change)
+        city: City (None = no change)
+        state: State/province (None = no change)
+        postal_code: Postal code (None = no change)
+        country: Country (None = no change)
         total_dives: New dive count (None = no change)
         medical_clearance_date: New clearance date (None = no change)
         medical_clearance_valid_until: New clearance expiry (None = no change)
@@ -1106,6 +1170,18 @@ def update_diver(
     _apply_tracked_update(person, "first_name", first_name, changes)
     _apply_tracked_update(person, "last_name", last_name, changes)
     _apply_tracked_update(person, "email", email, changes)
+    _apply_tracked_update(person, "date_of_birth", date_of_birth, changes)
+    _apply_tracked_update(person, "preferred_name", preferred_name, changes)
+    _apply_tracked_update(person, "phone", phone, changes)
+    _apply_tracked_update(person, "phone_is_mobile", phone_is_mobile, changes)
+    _apply_tracked_update(person, "phone_has_whatsapp", phone_has_whatsapp, changes)
+    _apply_tracked_update(person, "phone_can_receive_sms", phone_can_receive_sms, changes)
+    _apply_tracked_update(person, "address_line1", address_line1, changes)
+    _apply_tracked_update(person, "address_line2", address_line2, changes)
+    _apply_tracked_update(person, "city", city, changes)
+    _apply_tracked_update(person, "state", state, changes)
+    _apply_tracked_update(person, "postal_code", postal_code, changes)
+    _apply_tracked_update(person, "country", country, changes)
 
     # Update DiverProfile fields
     _apply_tracked_update(diver, "total_dives", total_dives, changes)
@@ -1137,6 +1213,187 @@ def update_diver(
         )
 
     return diver
+
+
+# =============================================================================
+# Relationship Services (PartyRelationship-based)
+# =============================================================================
+
+
+@transaction.atomic
+def add_emergency_contact_via_party_relationship(
+    diver: DiverProfile,
+    existing_person,
+    first_name: str,
+    last_name: str,
+    phone: str,
+    email: str,
+    date_of_birth,
+    phone_is_mobile: bool,
+    phone_has_whatsapp: bool,
+    phone_can_receive_sms: bool,
+    relationship: str,
+    priority: int,
+    notes: str,
+    actor=None,
+):
+    """Create emergency contact using PartyRelationship + DiverRelationshipMeta.
+
+    Args:
+        diver: DiverProfile to add emergency contact for
+        existing_person: Optional existing Person to use as contact
+        first_name: First name for new contact (if not existing_person)
+        last_name: Last name for new contact (if not existing_person)
+        phone: Phone number for new contact
+        email: Email for new contact
+        date_of_birth: Date of birth for new contact
+        phone_is_mobile: Whether phone is mobile
+        phone_has_whatsapp: Whether phone has WhatsApp
+        phone_can_receive_sms: Whether phone can receive SMS
+        relationship: Relationship type (spouse, parent, child, etc.)
+        priority: Contact priority (1 = primary)
+        notes: Additional notes
+        actor: User performing the action
+
+    Returns:
+        PartyRelationship instance
+    """
+    from django_parties.models import PartyRelationship, Person
+    from .models import DiverRelationshipMeta
+    from .audit import log_event
+
+    # Get or create contact person
+    if existing_person:
+        contact_person = existing_person
+    else:
+        contact_person = Person.objects.create(
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone or "",
+            email=email or "",
+            date_of_birth=date_of_birth,
+            phone_is_mobile=phone_is_mobile,
+            phone_has_whatsapp=phone_has_whatsapp,
+            phone_can_receive_sms=phone_can_receive_sms,
+        )
+
+    # Normalize priorities - shift existing ones if needed
+    _normalize_emergency_contact_priorities(diver, priority)
+
+    # Create PartyRelationship
+    pr = PartyRelationship.objects.create(
+        from_person=diver.person,
+        to_person=contact_person,
+        relationship_type="emergency_contact",
+        title=relationship,  # Store display relationship (spouse, parent, etc.)
+        is_active=True,
+        is_primary=(priority == 1),
+    )
+
+    # Create DiverRelationshipMeta
+    DiverRelationshipMeta.objects.create(
+        party_relationship=pr,
+        priority=priority,
+        notes=notes,
+    )
+
+    # Audit log
+    log_event(
+        action="emergency_contact_added_pr",
+        target=diver,
+        actor=actor,
+        request=None,
+        data={
+            "contact_person_id": str(contact_person.pk),
+            "contact_name": str(contact_person),
+            "relationship": relationship,
+            "priority": priority,
+        },
+    )
+
+    return pr
+
+
+def _normalize_emergency_contact_priorities(diver: DiverProfile, new_priority: int):
+    """Shift existing priorities to make room for new one.
+
+    Args:
+        diver: DiverProfile to normalize priorities for
+        new_priority: Priority for the new emergency contact
+    """
+    from django_parties.models import PartyRelationship
+    from .models import DiverRelationshipMeta
+
+    existing = PartyRelationship.objects.filter(
+        from_person=diver.person,
+        relationship_type="emergency_contact",
+        deleted_at__isnull=True,
+    ).select_related("diver_meta")
+
+    for pr in existing:
+        meta = getattr(pr, "diver_meta", None)
+        if meta and meta.priority and meta.priority >= new_priority:
+            meta.priority += 1
+            meta.save(update_fields=["priority", "updated_at"])
+
+
+@transaction.atomic
+def add_diver_relationship_via_party_relationship(
+    from_diver: DiverProfile,
+    to_person,
+    relationship_type: str,
+    is_preferred_buddy: bool,
+    notes: str,
+    actor=None,
+):
+    """Create diver relationship using PartyRelationship + DiverRelationshipMeta.
+
+    Args:
+        from_diver: DiverProfile to add relationship for
+        to_person: Person to relate to
+        relationship_type: Type of relationship (buddy, spouse, friend, etc.)
+        is_preferred_buddy: Whether to prefer pairing these divers together
+        notes: Additional notes
+        actor: User performing the action
+
+    Returns:
+        PartyRelationship instance
+    """
+    from django_parties.models import PartyRelationship
+    from .models import DiverRelationshipMeta
+    from .audit import log_event
+
+    # Create PartyRelationship
+    pr = PartyRelationship.objects.create(
+        from_person=from_diver.person,
+        to_person=to_person,
+        relationship_type=relationship_type,
+        is_active=True,
+        is_primary=is_preferred_buddy,
+    )
+
+    # Create DiverRelationshipMeta
+    DiverRelationshipMeta.objects.create(
+        party_relationship=pr,
+        is_preferred_buddy=is_preferred_buddy,
+        notes=notes,
+    )
+
+    # Audit log
+    log_event(
+        action="diver_relationship_added_pr",
+        target=from_diver,
+        actor=actor,
+        request=None,
+        data={
+            "to_person_id": str(to_person.pk),
+            "to_person_name": str(to_person),
+            "relationship_type": relationship_type,
+            "is_preferred_buddy": is_preferred_buddy,
+        },
+    )
+
+    return pr
 
 
 # =============================================================================
