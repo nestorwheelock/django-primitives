@@ -104,7 +104,7 @@ from .media import (
     PhotoTagQuerySet,
 )
 
-# Misc (AI, Medical, Teams, Settlement)
+# Misc (AI, Email, Medical, Teams, Settlement)
 from .misc import (
     AISettings,
     BuddyIdentity,
@@ -113,6 +113,8 @@ from .misc import (
     DiveBuddy,
     DiveTeam,
     DiveTeamMember,
+    EmailSettings,
+    EmailTemplate,
     MedicalProviderLocation,
     MedicalProviderProfile,
     MedicalProviderRelationship,
@@ -181,6 +183,8 @@ __all__ = [
     "MediaLink",
     # Settings
     "AISettings",
+    "EmailSettings",
+    "EmailTemplate",
     # Medical
     "MedicalProviderProfile",
     "MedicalProviderLocation",

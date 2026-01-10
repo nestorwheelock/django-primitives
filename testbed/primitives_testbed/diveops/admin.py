@@ -11,6 +11,8 @@ from .models import (
     DiverProfile,
     DiveSegmentType,
     DiveSite,
+    EmailSettings,
+    EmailTemplate,
     Excursion,
     ExcursionRoster,
     ProtectedArea,
@@ -374,3 +376,149 @@ class DiverEligibilityProofAdmin(admin.ModelAdmin):
     raw_id_fields = ["diver", "document", "verified_by"]
     readonly_fields = ["id", "created_at", "updated_at"]
     date_hierarchy = "verified_at"
+
+
+# =============================================================================
+# Email Settings Admin
+# =============================================================================
+
+
+@admin.register(EmailSettings)
+class EmailSettingsAdmin(admin.ModelAdmin):
+    """Admin for EmailSettings singleton model.
+
+    Provides DB-first configuration for email sending via Amazon SES.
+    Only superusers can edit sensitive credential fields.
+    """
+
+    fieldsets = (
+        ("General", {
+            "fields": ("enabled", "provider", "sandbox_mode"),
+            "description": "Master controls for email sending."
+        }),
+        ("Sender Identity", {
+            "fields": ("default_from_email", "default_from_name", "reply_to_email"),
+            "description": "Sender address must be verified in SES."
+        }),
+        ("AWS SES Configuration", {
+            "fields": ("aws_region", "configuration_set"),
+        }),
+        ("AWS Credentials", {
+            "fields": ("aws_access_key_id", "aws_secret_access_key"),
+            "description": "Only superusers can edit these fields.",
+            "classes": ("collapse",),
+        }),
+        ("SMTP Configuration (Future)", {
+            "fields": ("smtp_host", "smtp_port", "smtp_username", "smtp_password"),
+            "description": "For future SMTP provider support.",
+            "classes": ("collapse",),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        """Prevent adding additional instances (singleton)."""
+        return not EmailSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deleting the singleton instance."""
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        """Make credential fields readonly for non-superusers."""
+        readonly = []
+        if not request.user.is_superuser:
+            readonly.extend([
+                "aws_access_key_id",
+                "aws_secret_access_key",
+                "smtp_password",
+            ])
+        return readonly
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """Add configuration status to the change form."""
+        extra_context = extra_context or {}
+        if object_id:
+            obj = self.get_object(request, object_id)
+            if obj:
+                extra_context["is_configured"] = obj.is_configured()
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+
+@admin.register(EmailTemplate)
+class EmailTemplateAdmin(admin.ModelAdmin):
+    """Admin for EmailTemplate model.
+
+    Provides editing of email templates with preview capability.
+    """
+
+    list_display = [
+        "key",
+        "name",
+        "is_active",
+        "updated_at",
+        "updated_by",
+    ]
+    list_filter = ["is_active"]
+    search_fields = ["key", "name", "subject_template"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+    raw_id_fields = ["updated_by"]
+    prepopulated_fields = {"key": ("name",)}
+    ordering = ["key"]
+
+    fieldsets = (
+        (None, {
+            "fields": ("key", "name", "is_active"),
+        }),
+        ("Subject", {
+            "fields": ("subject_template",),
+            "description": "Email subject line. Supports Django template syntax: {{ variable }}",
+        }),
+        ("Plain Text Body", {
+            "fields": ("body_text_template",),
+            "description": "Required. Plain text version of the email.",
+        }),
+        ("HTML Body", {
+            "fields": ("body_html_template",),
+            "description": "Optional. HTML version of the email.",
+            "classes": ("collapse",),
+        }),
+        ("Metadata", {
+            "fields": ("updated_by", "created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )
+
+    actions = ["preview_template"]
+
+    @admin.action(description="Preview template with sample context")
+    def preview_template(self, request, queryset):
+        """Preview selected templates with sample context."""
+        from django.contrib import messages
+        from django.template import Context, Template
+
+        # Sample context for preview
+        sample_context = {
+            "user_name": "John Doe",
+            "verify_url": "https://example.com/verify?token=abc123",
+            "dashboard_url": "https://example.com/dashboard",
+            "reset_url": "https://example.com/reset?token=xyz789",
+            "site_name": "DiveOps",
+        }
+
+        for template in queryset:
+            try:
+                django_context = Context(sample_context)
+                subject = Template(template.subject_template).render(django_context).strip()
+                text = Template(template.body_text_template).render(django_context)[:200]
+
+                messages.info(
+                    request,
+                    f"Template '{template.key}': Subject='{subject}' | Text preview: {text}..."
+                )
+            except Exception as e:
+                messages.error(request, f"Template '{template.key}' error: {e}")
+
+    def save_model(self, request, obj, form, change):
+        """Automatically set updated_by to current user."""
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)

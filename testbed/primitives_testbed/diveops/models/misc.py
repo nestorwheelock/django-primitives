@@ -396,6 +396,195 @@ class AISettings(EnvFallbackMixin, SingletonModel):
 
 
 # =============================================================================
+# Email Settings (Singleton Configuration)
+# =============================================================================
+
+
+class EmailSettings(SingletonModel):
+    """Email service configuration for the dive shop.
+
+    DB-first configuration for email sending via Amazon SES or Django console.
+    Credentials are stored in the database and editable via Django admin.
+
+    Supported providers:
+    - console: Uses Django's console email backend (development)
+    - ses_api: Uses boto3 SES API with credentials from this model
+
+    Setup steps:
+    1. Go to Django Admin > Diveops > Email Settings
+    2. Set provider to 'ses_api' for production
+    3. Enter AWS region, access key, and secret key
+    4. Set default_from_email (must be verified in SES)
+    5. Run: python manage.py send_test_email --to your@email.com
+    6. For production, ensure SES is out of sandbox mode
+
+    Usage:
+        settings = EmailSettings.get_instance()
+        if settings.is_configured():
+            from primitives_testbed.diveops.email_service import send_email
+            send_email(to="user@example.com", subject="Hello", body_text="Hi!")
+    """
+
+    PROVIDER_CHOICES = [
+        ("console", "Console (Development)"),
+        ("ses_api", "Amazon SES API"),
+        ("ses_smtp", "Amazon SES SMTP"),
+    ]
+
+    # General settings
+    enabled = models.BooleanField(
+        default=True,
+        help_text="Master switch to enable/disable email sending",
+    )
+    provider = models.CharField(
+        max_length=20,
+        choices=PROVIDER_CHOICES,
+        default="console",
+        help_text="Email provider to use",
+    )
+    sandbox_mode = models.BooleanField(
+        default=False,
+        help_text="Safety toggle - when enabled, emails are logged but not sent",
+    )
+
+    # Sender identity
+    default_from_email = models.EmailField(
+        help_text="Default sender email address (must be verified in SES)",
+    )
+    default_from_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Display name for sender (e.g., 'Dive Shop Name')",
+    )
+    reply_to_email = models.EmailField(
+        blank=True,
+        help_text="Default reply-to address (optional)",
+    )
+
+    # AWS SES configuration
+    aws_region = models.CharField(
+        max_length=50,
+        default="us-east-1",
+        help_text="AWS region for SES (e.g., us-east-1, eu-west-1)",
+    )
+    configuration_set = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="SES Configuration Set name for tracking (optional)",
+    )
+    aws_access_key_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="AWS Access Key ID for SES",
+    )
+    aws_secret_access_key = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="AWS Secret Access Key for SES",
+    )
+
+    # Optional SMTP fields (for future ses_smtp provider)
+    smtp_host = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="SMTP host (for SMTP provider)",
+    )
+    smtp_port = models.PositiveIntegerField(
+        default=587,
+        help_text="SMTP port (typically 587 for TLS)",
+    )
+    smtp_username = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="SMTP username",
+    )
+    smtp_password = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="SMTP password",
+    )
+
+    class Meta:
+        verbose_name = "Email Settings"
+        verbose_name_plural = "Email Settings"
+
+    def __str__(self):
+        return "Email Settings"
+
+    def is_configured(self):
+        """Check if email is properly configured for the selected provider."""
+        if not self.default_from_email:
+            return False
+
+        if self.provider == "console":
+            return True
+        elif self.provider == "ses_api":
+            return bool(self.aws_access_key_id and self.aws_secret_access_key)
+        elif self.provider == "ses_smtp":
+            return bool(self.smtp_host and self.smtp_username and self.smtp_password)
+
+        return False
+
+    def get_from_address(self):
+        """Get formatted From address with name if provided."""
+        if self.default_from_name:
+            return f"{self.default_from_name} <{self.default_from_email}>"
+        return self.default_from_email
+
+
+class EmailTemplate(BaseModel):
+    """DB-stored email template with subject, text, and HTML body.
+
+    Templates are identified by a unique key (e.g., "verify_email", "welcome").
+    Template content uses Django template syntax for variable substitution.
+
+    Usage:
+        template = EmailTemplate.objects.get(key="verify_email", is_active=True)
+        # Use with render_email_template() from email_service.py
+    """
+
+    key = models.SlugField(
+        max_length=100,
+        unique=True,
+        help_text="Unique identifier for the template (e.g., 'verify_email', 'welcome')",
+    )
+    name = models.CharField(
+        max_length=200,
+        help_text="Human-readable name for the template",
+    )
+    subject_template = models.TextField(
+        help_text="Email subject line (supports Django template syntax)",
+    )
+    body_text_template = models.TextField(
+        help_text="Plain text email body (supports Django template syntax)",
+    )
+    body_html_template = models.TextField(
+        blank=True,
+        help_text="HTML email body (optional, supports Django template syntax)",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this template can be used for sending emails",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_email_templates",
+        help_text="User who last updated this template",
+    )
+
+    class Meta:
+        verbose_name = "Email Template"
+        verbose_name_plural = "Email Templates"
+        ordering = ["key"]
+
+    def __str__(self):
+        return f"{self.key}: {self.name}"
+
+
+# =============================================================================
 # Medical Provider Models
 # =============================================================================
 
