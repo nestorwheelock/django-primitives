@@ -4,97 +4,121 @@ Re-exports all models for backward compatibility.
 Import from diveops.models as before:
     from diveops.models import DiverProfile, Booking
 
-This package structure allows the monolithic models.py to be split
-into logical modules while maintaining import compatibility.
+This package structure splits the models into logical modules:
+- base.py: Constants and base utilities
+- certifications.py: CertificationLevel
+- diver.py: DiverProfile, DiverCertification, DiverEligibilityProof
+- relationships.py: EmergencyContact, DiverRelationship, DiverRelationshipMeta
+- sites.py: DiveSite, DiveSitePhoto, SitePriceAdjustment
+- excursions.py: Excursion, Trip, Dive, ExcursionType, etc.
+- bookings.py: Booking, EligibilityOverride
+- roster.py: ExcursionRoster, DiveAssignment, DiveLog
+- permits.py: ProtectedArea*, GuidePermitDetails
+- agreements.py: AgreementTemplate, SignableAgreement*, DocumentRetention*
+- media.py: PhotoTag, DiveSitePhotoTag, MediaLink*
+- misc.py: Settlement*, AISettings, Medical*, Contact, Buddy*, DiveTeam*
 """
 
-# Import all models from the original models.py file
-# During migration, models will be moved to individual files
-# and imports will be updated to use those files instead
+# Base constants
+from .base import DIVEOPS_WAIVER_VALIDITY_DAYS
 
-# For now, import from the _models_all module which contains the original code
-from ._models_all import (
-    # Constants
-    DIVEOPS_WAIVER_VALIDITY_DAYS,
-    # Certifications
-    CertificationLevel,
+# Certifications
+from .certifications import CertificationLevel
+
+# Diver models
+from .diver import (
     DiverCertification,
-    # Diver
-    DiverProfile,
     DiverEligibilityProof,
-    # Relationships
-    EmergencyContact,
+    DiverProfile,
+)
+
+# Relationships
+from .relationships import (
     DiverRelationship,
     DiverRelationshipMeta,
-    # Sites
+    EmergencyContact,
+)
+
+# Sites
+from .sites import (
     DiveSite,
     DiveSitePhoto,
     SitePriceAdjustment,
-    # Excursions
-    Trip,
-    Excursion,
-    ExcursionRequirement,
-    ExcursionType,
-    ExcursionTypeDive,
-    RecurrenceRule,
-    RecurrenceException,
-    ExcursionSeries,
+)
+
+# Excursions
+from .excursions import (
     Dive,
     DiveSegmentType,
-    DiveAssignment,
-    # Bookings
+    Excursion,
+    ExcursionRequirement,
+    ExcursionSeries,
+    ExcursionType,
+    ExcursionTypeDive,
+    RecurrenceException,
+    RecurrenceRule,
+    Trip,
+)
+
+# Bookings
+from .bookings import (
     Booking,
     EligibilityOverride,
-    # Roster
+)
+
+# Roster
+from .roster import (
+    DiveAssignment,
+    DiveLog,
     ExcursionRoster,
-    # Agreements
-    AgreementTemplate,
-    SignableAgreement,
-    SignableAgreementRevision,
-    # Protected Areas
+)
+
+# Permits
+from .permits import (
+    GuidePermitDetails,
     ProtectedArea,
-    ProtectedAreaZone,
-    ProtectedAreaRule,
     ProtectedAreaFeeSchedule,
     ProtectedAreaFeeTier,
     ProtectedAreaPermit,
-    GuidePermitDetails,
-    # Documents
-    DocumentRetentionPolicy,
-    DocumentLegalHold,
-    # Photos
-    PhotoTagQuerySet,
-    PhotoTag,
-    DiveSitePhotoTagQuerySet,
-    DiveSitePhotoTag,
-    # Media
-    MediaLinkSource,
-    MediaLinkQuerySet,
-    MediaLink,
-    # Settings
-    AISettings,
-    # Medical
-    MedicalProviderProfile,
-    MedicalProviderLocation,
-    MedicalProviderRelationship,
-    # Contacts
-    Contact,
-    # Buddies/Teams
-    BuddyIdentity,
-    DiveTeam,
-    DiveTeamMember,
-    DiveBuddy,
-    # Settlements
-    SettlementRecord,
-    CommissionRule,
-    SettlementRun,
-    # Logs
-    DiveLog,
+    ProtectedAreaRule,
+    ProtectedAreaZone,
 )
 
-# Backwards compatibility aliases
-DiveTrip = Excursion
-TripRequirement = ExcursionRequirement
+# Agreements
+from .agreements import (
+    AgreementTemplate,
+    DocumentLegalHold,
+    DocumentRetentionPolicy,
+    SignableAgreement,
+    SignableAgreementRevision,
+)
+
+# Media
+from .media import (
+    DiveSitePhotoTag,
+    DiveSitePhotoTagQuerySet,
+    MediaLink,
+    MediaLinkQuerySet,
+    MediaLinkSource,
+    PhotoTag,
+    PhotoTagQuerySet,
+)
+
+# Misc (AI, Medical, Teams, Settlement)
+from .misc import (
+    AISettings,
+    BuddyIdentity,
+    CommissionRule,
+    Contact,
+    DiveBuddy,
+    DiveTeam,
+    DiveTeamMember,
+    MedicalProviderLocation,
+    MedicalProviderProfile,
+    MedicalProviderRelationship,
+    SettlementRecord,
+    SettlementRun,
+)
 
 __all__ = [
     # Constants
@@ -124,16 +148,20 @@ __all__ = [
     "ExcursionSeries",
     "Dive",
     "DiveSegmentType",
-    "DiveAssignment",
     # Bookings
     "Booking",
     "EligibilityOverride",
     # Roster
     "ExcursionRoster",
+    "DiveAssignment",
+    "DiveLog",
     # Agreements
     "AgreementTemplate",
     "SignableAgreement",
     "SignableAgreementRevision",
+    # Documents
+    "DocumentRetentionPolicy",
+    "DocumentLegalHold",
     # Protected Areas
     "ProtectedArea",
     "ProtectedAreaZone",
@@ -142,9 +170,6 @@ __all__ = [
     "ProtectedAreaFeeTier",
     "ProtectedAreaPermit",
     "GuidePermitDetails",
-    # Documents
-    "DocumentRetentionPolicy",
-    "DocumentLegalHold",
     # Photos
     "PhotoTagQuerySet",
     "PhotoTag",
@@ -171,9 +196,4 @@ __all__ = [
     "SettlementRecord",
     "CommissionRule",
     "SettlementRun",
-    # Logs
-    "DiveLog",
-    # Backwards compatibility
-    "DiveTrip",
-    "TripRequirement",
 ]

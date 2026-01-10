@@ -21,16 +21,7 @@ from .models import (
     Trip,
 )
 
-# Backwards compatibility aliases for admin class names
-MarinePark = ProtectedArea
-ParkZone = ProtectedAreaZone
-ParkRule = ProtectedAreaRule
-ParkFeeSchedule = ProtectedAreaFeeSchedule
-ParkFeeTier = ProtectedAreaFeeTier
 
-# Backwards compatibility aliases
-DiveTrip = Excursion
-TripRoster = ExcursionRoster
 
 
 @admin.register(CertificationLevel)
@@ -198,8 +189,6 @@ class ExcursionAdmin(admin.ModelAdmin):
     date_hierarchy = "departure_time"
 
 
-# Backwards compatibility alias
-DiveTripAdmin = ExcursionAdmin
 
 
 @admin.register(Dive)
@@ -254,8 +243,6 @@ class ExcursionRosterAdmin(admin.ModelAdmin):
     readonly_fields = ["id"]
 
 
-# Backwards compatibility alias
-TripRosterAdmin = ExcursionRosterAdmin
 
 
 # =============================================================================
@@ -263,9 +250,9 @@ TripRosterAdmin = ExcursionRosterAdmin
 # =============================================================================
 
 
-@admin.register(MarinePark)
-class MarineParkAdmin(admin.ModelAdmin):
-    """Admin for MarinePark model."""
+@admin.register(ProtectedArea)
+class ProtectedAreaAdmin(admin.ModelAdmin):
+    """Admin for ProtectedArea model."""
 
     list_display = [
         "name",
@@ -286,9 +273,9 @@ class MarineParkAdmin(admin.ModelAdmin):
         return obj.zones.count()
 
 
-@admin.register(ParkZone)
-class ParkZoneAdmin(admin.ModelAdmin):
-    """Admin for ParkZone model."""
+@admin.register(ProtectedAreaZone)
+class ProtectedAreaZoneAdmin(admin.ModelAdmin):
+    """Admin for ProtectedAreaZone model."""
 
     list_display = [
         "name",
@@ -307,9 +294,9 @@ class ParkZoneAdmin(admin.ModelAdmin):
     readonly_fields = ["id", "created_at", "updated_at"]
 
 
-@admin.register(ParkRule)
-class ParkRuleAdmin(admin.ModelAdmin):
-    """Admin for ParkRule model."""
+@admin.register(ProtectedAreaRule)
+class ProtectedAreaRuleAdmin(admin.ModelAdmin):
+    """Admin for ProtectedAreaRule model."""
 
     list_display = [
         "subject",
@@ -329,9 +316,9 @@ class ParkRuleAdmin(admin.ModelAdmin):
     date_hierarchy = "effective_start"
 
 
-@admin.register(ParkFeeSchedule)
-class ParkFeeScheduleAdmin(admin.ModelAdmin):
-    """Admin for ParkFeeSchedule model."""
+@admin.register(ProtectedAreaFeeSchedule)
+class ProtectedAreaFeeScheduleAdmin(admin.ModelAdmin):
+    """Admin for ProtectedAreaFeeSchedule model."""
 
     list_display = [
         "name",
@@ -350,9 +337,9 @@ class ParkFeeScheduleAdmin(admin.ModelAdmin):
     date_hierarchy = "effective_start"
 
 
-@admin.register(ParkFeeTier)
-class ParkFeeTierAdmin(admin.ModelAdmin):
-    """Admin for ParkFeeTier model."""
+@admin.register(ProtectedAreaFeeTier)
+class ProtectedAreaFeeTierAdmin(admin.ModelAdmin):
+    """Admin for ProtectedAreaFeeTier model."""
 
     list_display = [
         "label",

@@ -38,8 +38,6 @@ from .models import (
 )
 
 # Backwards compatibility aliases
-DiveTrip = Excursion
-TripRequirement = ExcursionRequirement
 
 
 class DiverForm(forms.Form):
@@ -983,7 +981,6 @@ class ExcursionRequirementForm(forms.ModelForm):
 
 
 # Backwards compatibility alias
-TripRequirementForm = ExcursionRequirementForm
 
 
 class DiveSiteForm(forms.Form):

@@ -11,15 +11,15 @@ from primitives_testbed.diveops.models import (
     Booking,
     DiverProfile,
     DiveSite,
-    DiveTrip,
+    Excursion,
 )
 from primitives_testbed.diveops.selectors import (
     get_booking,
     get_diver_profile,
     list_diver_bookings,
     list_dive_sites,
-    list_shop_trips,
-    list_upcoming_trips,
+    list_shop_excursions,
+    list_upcoming_excursions,
 )
 
 User = get_user_model()
@@ -117,7 +117,7 @@ def diver(db, person):
 @pytest.fixture
 def dive_trip(db, dive_shop, dive_site, staff_user):
     """Create an upcoming dive trip."""
-    return DiveTrip.objects.create(
+    return Excursion.objects.create(
         dive_shop=dive_shop,
         dive_site=dive_site,
         departure_time=timezone.now() + timedelta(days=7),
@@ -142,17 +142,17 @@ def another_dive_shop(db):
 
 @pytest.mark.django_db
 class TestListUpcomingTrips:
-    """Tests for list_upcoming_trips selector."""
+    """Tests for list_upcoming_excursions selector."""
 
     def test_returns_upcoming_trips(self, dive_trip):
         """Selector returns upcoming trips."""
-        trips = list_upcoming_trips()
+        trips = list_upcoming_excursions()
         assert len(trips) == 1
         assert trips[0].pk == dive_trip.pk
 
     def test_excludes_past_trips(self, dive_shop, dive_site, staff_user):
         """Past trips are excluded."""
-        DiveTrip.objects.create(
+        Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=timezone.now() - timedelta(days=1),
@@ -162,12 +162,12 @@ class TestListUpcomingTrips:
             status="completed",
             created_by=staff_user,
         )
-        trips = list_upcoming_trips()
+        trips = list_upcoming_excursions()
         assert len(trips) == 0
 
     def test_excludes_cancelled_trips(self, dive_shop, dive_site, staff_user):
         """Cancelled trips are excluded."""
-        DiveTrip.objects.create(
+        Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=timezone.now() + timedelta(days=7),
@@ -177,13 +177,13 @@ class TestListUpcomingTrips:
             status="cancelled",
             created_by=staff_user,
         )
-        trips = list_upcoming_trips()
+        trips = list_upcoming_excursions()
         assert len(trips) == 0
 
     def test_filters_by_dive_shop(self, dive_trip, dive_shop, dive_site, another_dive_shop, staff_user):
         """Can filter by dive shop."""
         # Create trip at another shop
-        DiveTrip.objects.create(
+        Excursion.objects.create(
             dive_shop=another_dive_shop,
             dive_site=dive_site,
             departure_time=timezone.now() + timedelta(days=7),
@@ -193,14 +193,14 @@ class TestListUpcomingTrips:
             status="scheduled",
             created_by=staff_user,
         )
-        trips = list_upcoming_trips(dive_shop=dive_shop)
+        trips = list_upcoming_excursions(dive_shop=dive_shop)
         assert len(trips) == 1
         assert trips[0].dive_shop == dive_shop
 
     def test_filters_by_dive_site(self, dive_trip, dive_shop, dive_site, another_dive_site, staff_user):
         """Can filter by dive site."""
         # Create trip at another site
-        DiveTrip.objects.create(
+        Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=another_dive_site,
             departure_time=timezone.now() + timedelta(days=8),
@@ -210,7 +210,7 @@ class TestListUpcomingTrips:
             status="scheduled",
             created_by=staff_user,
         )
-        trips = list_upcoming_trips(dive_site=dive_site)
+        trips = list_upcoming_excursions(dive_site=dive_site)
         assert len(trips) == 1
         assert trips[0].dive_site == dive_site
 
@@ -223,16 +223,16 @@ class TestListUpcomingTrips:
             status="confirmed",
         )
         # Trip has 9 spots available (10 max - 1 booked)
-        trips = list_upcoming_trips(min_spots=10)
+        trips = list_upcoming_excursions(min_spots=10)
         assert len(trips) == 0
 
-        trips = list_upcoming_trips(min_spots=9)
+        trips = list_upcoming_excursions(min_spots=9)
         assert len(trips) == 1
 
     def test_respects_limit(self, dive_shop, dive_site, staff_user):
         """Respects the limit parameter."""
         for i in range(5):
-            DiveTrip.objects.create(
+            Excursion.objects.create(
                 dive_shop=dive_shop,
                 dive_site=dive_site,
                 departure_time=timezone.now() + timedelta(days=i + 1),
@@ -242,7 +242,7 @@ class TestListUpcomingTrips:
                 status="scheduled",
                 created_by=staff_user,
             )
-        trips = list_upcoming_trips(limit=3)
+        trips = list_upcoming_excursions(limit=3)
         assert len(trips) == 3
 
 
@@ -278,7 +278,7 @@ class TestListDiverBookings:
 
     def test_excludes_past_by_default(self, dive_shop, dive_site, diver, staff_user):
         """Excludes past trips by default."""
-        past_trip = DiveTrip.objects.create(
+        past_trip = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=timezone.now() - timedelta(days=7),
@@ -299,7 +299,7 @@ class TestListDiverBookings:
 
     def test_includes_past_when_requested(self, dive_shop, dive_site, diver, staff_user):
         """Includes past trips when include_past=True."""
-        past_trip = DiveTrip.objects.create(
+        past_trip = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=timezone.now() - timedelta(days=7),
@@ -423,17 +423,17 @@ class TestListDiveSites:
 
 @pytest.mark.django_db
 class TestListShopTrips:
-    """Tests for list_shop_trips selector."""
+    """Tests for list_shop_excursions selector."""
 
     def test_returns_shop_trips(self, dive_trip, dive_shop):
         """Returns trips for a dive shop."""
-        trips = list_shop_trips(dive_shop)
+        trips = list_shop_excursions(dive_shop)
         assert len(trips) == 1
         assert trips[0].pk == dive_trip.pk
 
     def test_filters_by_status(self, dive_shop, dive_site, staff_user):
         """Can filter by status."""
-        DiveTrip.objects.create(
+        Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=timezone.now() + timedelta(days=7),
@@ -443,13 +443,13 @@ class TestListShopTrips:
             status="cancelled",
             created_by=staff_user,
         )
-        trips = list_shop_trips(dive_shop, status="cancelled")
+        trips = list_shop_excursions(dive_shop, status="cancelled")
         assert len(trips) == 1
         assert trips[0].status == "cancelled"
 
     def test_filters_by_from_date(self, dive_shop, dive_site, staff_user):
         """Can filter by from_date."""
-        early_trip = DiveTrip.objects.create(
+        early_trip = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=timezone.now() + timedelta(days=1),
@@ -459,7 +459,7 @@ class TestListShopTrips:
             status="scheduled",
             created_by=staff_user,
         )
-        late_trip = DiveTrip.objects.create(
+        late_trip = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=timezone.now() + timedelta(days=10),
@@ -469,13 +469,13 @@ class TestListShopTrips:
             status="scheduled",
             created_by=staff_user,
         )
-        trips = list_shop_trips(dive_shop, from_date=timezone.now() + timedelta(days=5))
+        trips = list_shop_excursions(dive_shop, from_date=timezone.now() + timedelta(days=5))
         assert len(trips) == 1
         assert trips[0].pk == late_trip.pk
 
     def test_filters_by_to_date(self, dive_shop, dive_site, staff_user):
         """Can filter by to_date."""
-        early_trip = DiveTrip.objects.create(
+        early_trip = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=timezone.now() + timedelta(days=1),
@@ -485,7 +485,7 @@ class TestListShopTrips:
             status="scheduled",
             created_by=staff_user,
         )
-        late_trip = DiveTrip.objects.create(
+        late_trip = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=timezone.now() + timedelta(days=10),
@@ -495,7 +495,7 @@ class TestListShopTrips:
             status="scheduled",
             created_by=staff_user,
         )
-        trips = list_shop_trips(dive_shop, to_date=timezone.now() + timedelta(days=5))
+        trips = list_shop_excursions(dive_shop, to_date=timezone.now() + timedelta(days=5))
         assert len(trips) == 1
         assert trips[0].pk == early_trip.pk
 

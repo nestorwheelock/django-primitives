@@ -5,7 +5,7 @@ DEPRECATED: This module is deprecated. Use eligibility_service.check_layered_eli
 This module provides rule-based eligibility checks for diving operations.
 Uses temporal evaluation to determine eligibility at a specific point in time.
 
-Uses TripRequirement and DiverCertification models for certification checks.
+Uses ExcursionRequirement and DiverCertification models for certification checks.
 """
 
 import warnings
@@ -15,7 +15,7 @@ from datetime import date, datetime
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import DiverProfile, DiveTrip
+from .models import DiverProfile, Excursion
 
 
 @dataclass
@@ -35,19 +35,19 @@ class EligibilityResult:
 
 def can_diver_join_trip(
     diver: DiverProfile,
-    trip: DiveTrip,
+    trip: Excursion,
     as_of: datetime | None = None,
 ) -> EligibilityResult:
     """Check if a diver is eligible to join a trip.
 
     DEPRECATED: Use eligibility_service.check_layered_eligibility() instead.
 
-    Uses TripRequirement and DiverCertification models for certification checks.
+    Uses ExcursionRequirement and DiverCertification models for certification checks.
 
     Evaluates:
     - Trip status (not cancelled, not past)
     - Trip capacity (spots available)
-    - TripRequirements (certification, experience, medical, gear)
+    - ExcursionRequirements (certification, experience, medical, gear)
     - DiverCertification records (current, not expired)
 
     Args:
@@ -93,7 +93,7 @@ def can_diver_join_trip(
             reasons.append("Medical clearance has expired")
         required_actions.append("Provide current medical clearance certificate")
 
-    # Check 5: Trip requirements (from TripRequirement model)
+    # Check 5: Trip requirements (from ExcursionRequirement model)
     _check_trip_requirements(diver, trip, as_of_date, reasons, required_actions)
 
     allowed = len(reasons) == 0
@@ -107,7 +107,7 @@ def can_diver_join_trip(
 
 def _check_trip_requirements(
     diver: DiverProfile,
-    trip: DiveTrip,
+    trip: Excursion,
     as_of_date: date,
     reasons: list[str],
     required_actions: list[str],
@@ -130,7 +130,7 @@ def _check_trip_requirements(
 
 def _check_certification_requirement(
     diver: DiverProfile,
-    req,  # TripRequirement
+    req,  # ExcursionRequirement
     as_of_date: date,
     reasons: list[str],
     required_actions: list[str],
@@ -173,7 +173,7 @@ def _check_certification_requirement(
 
 def _check_experience_requirement(
     diver: DiverProfile,
-    req,  # TripRequirement
+    req,  # ExcursionRequirement
     reasons: list[str],
     required_actions: list[str],
 ) -> None:

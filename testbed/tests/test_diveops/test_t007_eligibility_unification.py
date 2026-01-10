@@ -420,11 +420,11 @@ class TestDeprecationWarning:
     ):
         """can_diver_join_trip() emits DeprecationWarning pointing to new function."""
         from primitives_testbed.diveops.decisioning import can_diver_join_trip
-        from primitives_testbed.diveops.models import DiveTrip  # Alias for Excursion
+        from primitives_testbed.diveops.models import Excursion  # Alias for Excursion
 
-        # DiveTrip is an alias for Excursion which has departure_time
+        # Excursion is an alias for Excursion which has departure_time
         tomorrow = timezone.now() + timedelta(days=1)
-        excursion = DiveTrip.objects.create(
+        excursion = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=tomorrow,

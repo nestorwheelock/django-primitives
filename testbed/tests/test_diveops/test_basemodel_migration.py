@@ -65,11 +65,11 @@ class TestBaseModelInheritance:
         )
 
     def test_dive_trip_inherits_basemodel(self):
-        """DiveTrip must inherit from BaseModel."""
-        from primitives_testbed.diveops.models import DiveTrip
+        """Excursion must inherit from BaseModel."""
+        from primitives_testbed.diveops.models import Excursion
 
-        assert issubclass(DiveTrip, BaseModel), (
-            "DiveTrip must inherit from django_basemodels.BaseModel"
+        assert issubclass(Excursion, BaseModel), (
+            "Excursion must inherit from django_basemodels.BaseModel"
         )
 
     def test_booking_inherits_basemodel(self):
@@ -250,7 +250,7 @@ class TestUUIDAndTimestamps:
         assert diver_profile.updated_at is not None
 
     def test_dive_trip_has_uuid_pk(self, dive_trip):
-        """DiveTrip.id is a UUID."""
+        """Excursion.id is a UUID."""
         assert isinstance(dive_trip.pk, uuid.UUID)
 
     def test_booking_has_uuid_pk(self, dive_trip, diver_profile, user):

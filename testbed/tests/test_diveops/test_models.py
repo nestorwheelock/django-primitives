@@ -140,16 +140,16 @@ class TestDiveSite:
 
 
 @pytest.mark.django_db
-class TestDiveTrip:
-    """Tests for DiveTrip model."""
+class TestExcursion:
+    """Tests for Excursion model."""
 
     def test_create_dive_trip(self, dive_shop, dive_site, user):
-        """DiveTrip can be created with valid data."""
-        from primitives_testbed.diveops.models import DiveTrip
+        """Excursion can be created with valid data."""
+        from primitives_testbed.diveops.models import Excursion
 
         departure = timezone.now() + timedelta(days=1)
 
-        trip = DiveTrip.objects.create(
+        trip = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=departure,
@@ -165,12 +165,12 @@ class TestDiveTrip:
 
     def test_return_after_departure_constraint(self, dive_shop, dive_site, user):
         """return_time must be after departure_time (DB constraint)."""
-        from primitives_testbed.diveops.models import DiveTrip
+        from primitives_testbed.diveops.models import Excursion
 
         departure = timezone.now() + timedelta(days=1)
 
         with pytest.raises(IntegrityError):
-            DiveTrip.objects.create(
+            Excursion.objects.create(
                 dive_shop=dive_shop,
                 dive_site=dive_site,
                 departure_time=departure,
@@ -183,12 +183,12 @@ class TestDiveTrip:
 
     def test_max_divers_positive_constraint(self, dive_shop, dive_site, user):
         """max_divers must be positive (DB constraint)."""
-        from primitives_testbed.diveops.models import DiveTrip
+        from primitives_testbed.diveops.models import Excursion
 
         departure = timezone.now() + timedelta(days=1)
 
         with pytest.raises(IntegrityError):
-            DiveTrip.objects.create(
+            Excursion.objects.create(
                 dive_shop=dive_shop,
                 dive_site=dive_site,
                 departure_time=departure,
@@ -201,12 +201,12 @@ class TestDiveTrip:
 
     def test_price_non_negative_constraint(self, dive_shop, dive_site, user):
         """price_per_diver cannot be negative (DB constraint)."""
-        from primitives_testbed.diveops.models import DiveTrip
+        from primitives_testbed.diveops.models import Excursion
 
         departure = timezone.now() + timedelta(days=1)
 
         with pytest.raises(IntegrityError):
-            DiveTrip.objects.create(
+            Excursion.objects.create(
                 dive_shop=dive_shop,
                 dive_site=dive_site,
                 departure_time=departure,

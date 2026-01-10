@@ -29,9 +29,6 @@ from ..models import (
 )
 
 # Backwards compatibility aliases
-DiveTrip = Excursion
-TripRequirement = ExcursionRequirement
-TripRoster = ExcursionRoster
 
 
 def list_upcoming_excursions(
@@ -89,7 +86,6 @@ def list_upcoming_excursions(
 
 
 # Backwards compatibility alias
-list_upcoming_trips = list_upcoming_excursions
 
 
 def get_excursion_with_roster(excursion_id) -> Optional[Excursion]:
@@ -296,7 +292,6 @@ def list_shop_excursions(
 
 
 # Backwards compatibility alias
-list_shop_trips = list_shop_excursions
 
 
 def get_booking(booking_id) -> Optional[Booking]:

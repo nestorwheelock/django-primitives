@@ -591,7 +591,7 @@ def log_roster_event(
 
     Args:
         action: One of Actions.DIVER_CHECKED_IN, DIVER_NO_SHOW, etc.
-        roster: TripRoster instance
+        roster: ExcursionRoster instance
         actor: Django User who performed the action
         data: Optional additional context
         request: Optional HTTP request

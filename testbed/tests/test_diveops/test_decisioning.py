@@ -33,7 +33,7 @@ class TestCanDiverJoinTrip:
             CertificationLevel,
             DiverCertification,
             DiverProfile,
-            DiveTrip,
+            Excursion,
             ExcursionRequirement,
         )
 
@@ -47,7 +47,7 @@ class TestCanDiverJoinTrip:
 
         # Create trip with AOW requirement
         tomorrow = timezone.now() + timedelta(days=1)
-        trip = DiveTrip.objects.create(
+        trip = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=tomorrow,
@@ -166,10 +166,10 @@ class TestCanDiverJoinTrip:
     def test_past_trip_returns_reasons(self, dive_shop, dive_site, diver_profile, user):
         """Past trip returns allowed=False."""
         from primitives_testbed.diveops.decisioning import can_diver_join_trip
-        from primitives_testbed.diveops.models import DiveTrip
+        from primitives_testbed.diveops.models import Excursion
 
         yesterday = timezone.now() - timedelta(days=1)
-        trip = DiveTrip.objects.create(
+        trip = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=yesterday,
@@ -196,7 +196,7 @@ class TestCanDiverJoinTrip:
             CertificationLevel,
             DiverCertification,
             DiverProfile,
-            DiveTrip,
+            Excursion,
             ExcursionRequirement,
         )
 
@@ -222,7 +222,7 @@ class TestCanDiverJoinTrip:
 
         # Create trip with AOW requirement
         tomorrow = timezone.now() + timedelta(days=1)
-        trip = DiveTrip.objects.create(
+        trip = Excursion.objects.create(
             dive_shop=dive_shop,
             dive_site=dive_site,
             departure_time=tomorrow,

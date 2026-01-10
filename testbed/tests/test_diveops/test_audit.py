@@ -14,7 +14,7 @@ from primitives_testbed.diveops.models import (
     Booking,
     DiverCertification,
     DiverProfile,
-    DiveTrip,
+    Excursion,
     ExcursionRoster,
 )
 

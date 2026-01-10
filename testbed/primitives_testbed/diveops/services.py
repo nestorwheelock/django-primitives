@@ -87,8 +87,6 @@ from .models import (
 )
 
 # Backwards compatibility aliases
-DiveTrip = Excursion
-TripRoster = ExcursionRoster
 
 
 def _get_constraint_name(exc: IntegrityError) -> str | None:

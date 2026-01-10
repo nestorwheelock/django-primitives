@@ -255,7 +255,7 @@ def deep_site(db, deep_site_place):
         name="The Abyss",
         place=deep_site_place,
         max_depth_meters=40,
-        min_certification_level=None,  # Cert requirements now via TripRequirement
+        min_certification_level=None,  # Cert requirements now via ExcursionRequirement
         difficulty="advanced",
         description="Deep wall dive",
     )

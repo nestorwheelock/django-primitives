@@ -1,12 +1,12 @@
 """Tests for Marine Park models.
 
 TDD tests for:
-- MarinePark: Marine protected area with regulatory authority
-- ParkZone: Zones within a park with specific rules
-- ParkRule: Effective-dated enforceable rules
-- ParkFeeSchedule / ParkFeeTier: Stratified fee tiers
+- ProtectedArea: Marine protected area with regulatory authority
+- ProtectedAreaZone: Zones within a park with specific rules
+- ProtectedAreaRule: Effective-dated enforceable rules
+- ProtectedAreaFeeSchedule / ProtectedAreaFeeTier: Stratified fee tiers
 - DiverEligibilityProof: Verified proof for fee tier eligibility
-- ParkGuideCredential: Permission to guide in park areas
+- GuidePermitDetails: Permission to guide in park areas
 - VesselPermit: Per-park vessel permits
 - DiveSite updates: marine_park and park_zone FKs
 """
@@ -96,18 +96,18 @@ def cert_level_ow(db, padi_agency):
     )
 
 
-# === MarinePark Model Tests ===
+# === ProtectedArea Model Tests ===
 
 
 @pytest.mark.django_db
-class TestMarineParkModel:
-    """Tests for MarinePark model creation and validation."""
+class TestProtectedAreaModel:
+    """Tests for ProtectedArea model creation and validation."""
 
     def test_marine_park_creation_minimal(self, db):
-        """MarinePark can be created with minimal required fields."""
-        from primitives_testbed.diveops.models import MarinePark
+        """ProtectedArea can be created with minimal required fields."""
+        from primitives_testbed.diveops.models import ProtectedArea
 
-        park = MarinePark.objects.create(
+        park = ProtectedArea.objects.create(
             name="Parque Nacional Arrecife de Puerto Morelos",
             code="pnapm",
         )
@@ -117,10 +117,10 @@ class TestMarineParkModel:
         assert park.is_active is True
 
     def test_marine_park_creation_full(self, place):
-        """MarinePark can be created with all fields."""
-        from primitives_testbed.diveops.models import MarinePark
+        """ProtectedArea can be created with all fields."""
+        from primitives_testbed.diveops.models import ProtectedArea
 
-        park = MarinePark.objects.create(
+        park = ProtectedArea.objects.create(
             name="Parque Nacional Arrecife de Puerto Morelos",
             code="pnapm",
             description="Marine park in Puerto Morelos, Mexico",
@@ -138,18 +138,18 @@ class TestMarineParkModel:
         assert park.max_divers_per_site == 10
 
     def test_marine_park_code_unique(self, db):
-        """MarinePark.code must be unique."""
-        from primitives_testbed.diveops.models import MarinePark
+        """ProtectedArea.code must be unique."""
+        from primitives_testbed.diveops.models import ProtectedArea
 
-        MarinePark.objects.create(name="Park 1", code="park1")
+        ProtectedArea.objects.create(name="Park 1", code="park1")
         with pytest.raises(IntegrityError):
-            MarinePark.objects.create(name="Park 2", code="park1")
+            ProtectedArea.objects.create(name="Park 2", code="park1")
 
     def test_marine_park_boundary_file_optional(self, db):
-        """MarinePark.boundary_file is optional."""
-        from primitives_testbed.diveops.models import MarinePark
+        """ProtectedArea.boundary_file is optional."""
+        from primitives_testbed.diveops.models import ProtectedArea
 
-        park = MarinePark.objects.create(
+        park = ProtectedArea.objects.create(
             name="Test Park",
             code="test",
         )
@@ -157,28 +157,28 @@ class TestMarineParkModel:
         assert not park.boundary_file
 
 
-# === ParkZone Model Tests ===
+# === ProtectedAreaZone Model Tests ===
 
 
 @pytest.mark.django_db
-class TestParkZoneModel:
-    """Tests for ParkZone model creation and constraints."""
+class TestProtectedAreaZoneModel:
+    """Tests for ProtectedAreaZone model creation and constraints."""
 
     @pytest.fixture
     def marine_park(self, db):
         """Create a marine park for zone tests."""
-        from primitives_testbed.diveops.models import MarinePark
+        from primitives_testbed.diveops.models import ProtectedArea
 
-        return MarinePark.objects.create(
+        return ProtectedArea.objects.create(
             name="Test Park",
             code="testpark",
         )
 
     def test_park_zone_creation(self, marine_park):
-        """ParkZone can be created with required fields."""
-        from primitives_testbed.diveops.models import ParkZone
+        """ProtectedAreaZone can be created with required fields."""
+        from primitives_testbed.diveops.models import ProtectedAreaZone
 
-        zone = ParkZone.objects.create(
+        zone = ProtectedAreaZone.objects.create(
             marine_park=marine_park,
             name="Zona Núcleo",
             code="nucleo",
@@ -189,10 +189,10 @@ class TestParkZoneModel:
         assert zone.zone_type == "core"
 
     def test_park_zone_defaults(self, marine_park):
-        """ParkZone has correct default values."""
-        from primitives_testbed.diveops.models import ParkZone
+        """ProtectedAreaZone has correct default values."""
+        from primitives_testbed.diveops.models import ProtectedAreaZone
 
-        zone = ParkZone.objects.create(
+        zone = ProtectedAreaZone.objects.create(
             marine_park=marine_park,
             name="Use Zone",
             code="use",
@@ -207,15 +207,15 @@ class TestParkZoneModel:
 
     def test_park_zone_unique_code_per_park(self, marine_park):
         """Zone code must be unique within a park."""
-        from primitives_testbed.diveops.models import ParkZone
+        from primitives_testbed.diveops.models import ProtectedAreaZone
 
-        ParkZone.objects.create(
+        ProtectedAreaZone.objects.create(
             marine_park=marine_park,
             name="Zone 1",
             code="zone1",
         )
         with pytest.raises(IntegrityError):
-            ParkZone.objects.create(
+            ProtectedAreaZone.objects.create(
                 marine_park=marine_park,
                 name="Zone 1 Duplicate",
                 code="zone1",
@@ -223,18 +223,18 @@ class TestParkZoneModel:
 
     def test_park_zone_same_code_different_parks(self, marine_park):
         """Same zone code can exist in different parks."""
-        from primitives_testbed.diveops.models import MarinePark, ParkZone
+        from primitives_testbed.diveops.models import ProtectedArea, ProtectedAreaZone
 
-        other_park = MarinePark.objects.create(
+        other_park = ProtectedArea.objects.create(
             name="Other Park",
             code="other",
         )
-        ParkZone.objects.create(
+        ProtectedAreaZone.objects.create(
             marine_park=marine_park,
             name="Zone 1",
             code="zone1",
         )
-        zone2 = ParkZone.objects.create(
+        zone2 = ProtectedAreaZone.objects.create(
             marine_park=other_park,
             name="Zone 1",
             code="zone1",
@@ -242,19 +242,19 @@ class TestParkZoneModel:
         assert zone2.pk is not None
 
 
-# === ParkRule Model Tests ===
+# === ProtectedAreaRule Model Tests ===
 
 
 @pytest.mark.django_db
-class TestParkRuleModel:
-    """Tests for ParkRule model with effective dating."""
+class TestProtectedAreaRuleModel:
+    """Tests for ProtectedAreaRule model with effective dating."""
 
     @pytest.fixture
     def marine_park(self, db):
         """Create a marine park for rule tests."""
-        from primitives_testbed.diveops.models import MarinePark
+        from primitives_testbed.diveops.models import ProtectedArea
 
-        return MarinePark.objects.create(
+        return ProtectedArea.objects.create(
             name="Test Park",
             code="testpark",
         )
@@ -262,19 +262,19 @@ class TestParkRuleModel:
     @pytest.fixture
     def zone(self, marine_park):
         """Create a zone for rule tests."""
-        from primitives_testbed.diveops.models import ParkZone
+        from primitives_testbed.diveops.models import ProtectedAreaZone
 
-        return ParkZone.objects.create(
+        return ProtectedAreaZone.objects.create(
             marine_park=marine_park,
             name="Test Zone",
             code="testzone",
         )
 
     def test_park_rule_creation_park_wide(self, marine_park):
-        """ParkRule can be created at park level (no zone)."""
-        from primitives_testbed.diveops.models import ParkRule
+        """ProtectedAreaRule can be created at park level (no zone)."""
+        from primitives_testbed.diveops.models import ProtectedAreaRule
 
-        rule = ParkRule.objects.create(
+        rule = ProtectedAreaRule.objects.create(
             marine_park=marine_park,
             rule_type="max_depth",
             applies_to="diver",
@@ -290,10 +290,10 @@ class TestParkRuleModel:
         assert rule.enforcement_level == "block"
 
     def test_park_rule_creation_zone_specific(self, marine_park, zone):
-        """ParkRule can be created at zone level."""
-        from primitives_testbed.diveops.models import ParkRule
+        """ProtectedAreaRule can be created at zone level."""
+        from primitives_testbed.diveops.models import ProtectedAreaRule
 
-        rule = ParkRule.objects.create(
+        rule = ProtectedAreaRule.objects.create(
             marine_park=marine_park,
             zone=zone,
             rule_type="max_divers",
@@ -308,11 +308,11 @@ class TestParkRuleModel:
         assert rule.zone == zone
 
     def test_park_rule_effective_date_required(self, marine_park):
-        """ParkRule requires effective_start date."""
-        from primitives_testbed.diveops.models import ParkRule
+        """ProtectedAreaRule requires effective_start date."""
+        from primitives_testbed.diveops.models import ProtectedAreaRule
 
         with pytest.raises(IntegrityError):
-            ParkRule.objects.create(
+            ProtectedAreaRule.objects.create(
                 marine_park=marine_park,
                 rule_type="max_depth",
                 applies_to="diver",
@@ -321,11 +321,11 @@ class TestParkRuleModel:
             )
 
     def test_park_rule_operator_enum(self, marine_park):
-        """ParkRule.operator uses normalized enum values."""
-        from primitives_testbed.diveops.models import ParkRule
+        """ProtectedAreaRule.operator uses normalized enum values."""
+        from primitives_testbed.diveops.models import ProtectedAreaRule
 
         # Valid operators: lte, gte, eq, in, contains, required_true
-        rule = ParkRule.objects.create(
+        rule = ProtectedAreaRule.objects.create(
             marine_park=marine_park,
             rule_type="certification",
             applies_to="diver",
@@ -337,19 +337,19 @@ class TestParkRuleModel:
         assert rule.operator == "required_true"
 
 
-# === ParkFeeSchedule and ParkFeeTier Tests ===
+# === ProtectedAreaFeeSchedule and ProtectedAreaFeeTier Tests ===
 
 
 @pytest.mark.django_db
 class TestParkFeeModels:
-    """Tests for ParkFeeSchedule and ParkFeeTier models."""
+    """Tests for ProtectedAreaFeeSchedule and ProtectedAreaFeeTier models."""
 
     @pytest.fixture
     def marine_park(self, db):
         """Create a marine park for fee tests."""
-        from primitives_testbed.diveops.models import MarinePark
+        from primitives_testbed.diveops.models import ProtectedArea
 
-        return MarinePark.objects.create(
+        return ProtectedArea.objects.create(
             name="Test Park",
             code="testpark",
         )
@@ -357,9 +357,9 @@ class TestParkFeeModels:
     @pytest.fixture
     def fee_schedule(self, marine_park):
         """Create a fee schedule."""
-        from primitives_testbed.diveops.models import ParkFeeSchedule
+        from primitives_testbed.diveops.models import ProtectedAreaFeeSchedule
 
-        return ParkFeeSchedule.objects.create(
+        return ProtectedAreaFeeSchedule.objects.create(
             marine_park=marine_park,
             name="Diver Admission 2024",
             fee_type="per_person",
@@ -371,23 +371,23 @@ class TestParkFeeModels:
         )
 
     def test_fee_schedule_creation(self, fee_schedule):
-        """ParkFeeSchedule can be created."""
+        """ProtectedAreaFeeSchedule can be created."""
         assert fee_schedule.pk is not None
         assert fee_schedule.fee_type == "per_person"
         assert fee_schedule.currency == "MXN"
 
     def test_fee_tier_creation(self, fee_schedule):
-        """ParkFeeTier can be created with stratified pricing."""
-        from primitives_testbed.diveops.models import ParkFeeTier
+        """ProtectedAreaFeeTier can be created with stratified pricing."""
+        from primitives_testbed.diveops.models import ProtectedAreaFeeTier
 
-        tourist_tier = ParkFeeTier.objects.create(
+        tourist_tier = ProtectedAreaFeeTier.objects.create(
             schedule=fee_schedule,
             tier_code="tourist",
             label="Tourist (Foreign)",
             amount=Decimal("280.00"),
             priority=100,
         )
-        national_tier = ParkFeeTier.objects.create(
+        national_tier = ProtectedAreaFeeTier.objects.create(
             schedule=fee_schedule,
             tier_code="national",
             label="Mexican National",
@@ -396,7 +396,7 @@ class TestParkFeeModels:
             proof_notes="INE/IFE required",
             priority=50,
         )
-        child_tier = ParkFeeTier.objects.create(
+        child_tier = ProtectedAreaFeeTier.objects.create(
             schedule=fee_schedule,
             tier_code="child",
             label="Child (0-12)",
@@ -412,16 +412,16 @@ class TestParkFeeModels:
 
     def test_fee_tier_unique_per_schedule(self, fee_schedule):
         """Each tier_code can only appear once per schedule."""
-        from primitives_testbed.diveops.models import ParkFeeTier
+        from primitives_testbed.diveops.models import ProtectedAreaFeeTier
 
-        ParkFeeTier.objects.create(
+        ProtectedAreaFeeTier.objects.create(
             schedule=fee_schedule,
             tier_code="tourist",
             label="Tourist",
             amount=Decimal("280.00"),
         )
         with pytest.raises(IntegrityError):
-            ParkFeeTier.objects.create(
+            ProtectedAreaFeeTier.objects.create(
                 schedule=fee_schedule,
                 tier_code="tourist",
                 label="Tourist Duplicate",
@@ -430,23 +430,23 @@ class TestParkFeeModels:
 
     def test_fee_tier_ordering_by_priority(self, fee_schedule):
         """Fee tiers are ordered by priority ascending."""
-        from primitives_testbed.diveops.models import ParkFeeTier
+        from primitives_testbed.diveops.models import ProtectedAreaFeeTier
 
-        ParkFeeTier.objects.create(
+        ProtectedAreaFeeTier.objects.create(
             schedule=fee_schedule,
             tier_code="tourist",
             label="Tourist",
             amount=Decimal("280.00"),
             priority=100,
         )
-        ParkFeeTier.objects.create(
+        ProtectedAreaFeeTier.objects.create(
             schedule=fee_schedule,
             tier_code="child",
             label="Child",
             amount=Decimal("0.00"),
             priority=10,
         )
-        ParkFeeTier.objects.create(
+        ProtectedAreaFeeTier.objects.create(
             schedule=fee_schedule,
             tier_code="national",
             label="National",
@@ -536,19 +536,19 @@ class TestDiverEligibilityProofModel:
         assert proof.is_valid_as_of(date.today()) is False
 
 
-# === ParkGuideCredential Tests ===
+# === GuidePermitDetails Tests ===
 
 
 @pytest.mark.django_db
-class TestParkGuideCredentialModel:
-    """Tests for ParkGuideCredential model."""
+class TestGuidePermitDetailsModel:
+    """Tests for GuidePermitDetails model."""
 
     @pytest.fixture
     def marine_park(self, db):
         """Create a marine park."""
-        from primitives_testbed.diveops.models import MarinePark
+        from primitives_testbed.diveops.models import ProtectedArea
 
-        return MarinePark.objects.create(
+        return ProtectedArea.objects.create(
             name="Test Park",
             code="testpark",
         )
@@ -594,10 +594,10 @@ class TestParkGuideCredentialModel:
         return diver
 
     def test_guide_credential_creation_dm_diver(self, marine_park, dm_diver):
-        """ParkGuideCredential can be created for DM or higher."""
-        from primitives_testbed.diveops.models import ParkGuideCredential
+        """GuidePermitDetails can be created for DM or higher."""
+        from primitives_testbed.diveops.models import GuidePermitDetails
 
-        credential = ParkGuideCredential.objects.create(
+        credential = GuidePermitDetails.objects.create(
             marine_park=marine_park,
             diver=dm_diver,
             issued_at=date.today(),
@@ -606,10 +606,10 @@ class TestParkGuideCredentialModel:
         assert credential.is_active is True
 
     def test_guide_credential_clean_rejects_ow_diver(self, marine_park, ow_diver):
-        """ParkGuideCredential.clean() rejects divers without DM+."""
-        from primitives_testbed.diveops.models import ParkGuideCredential
+        """GuidePermitDetails.clean() rejects divers without DM+."""
+        from primitives_testbed.diveops.models import GuidePermitDetails
 
-        credential = ParkGuideCredential(
+        credential = GuidePermitDetails(
             marine_park=marine_park,
             diver=ow_diver,
             issued_at=date.today(),
@@ -620,15 +620,15 @@ class TestParkGuideCredentialModel:
 
     def test_guide_credential_unique_per_park(self, marine_park, dm_diver):
         """Only one credential per diver per park."""
-        from primitives_testbed.diveops.models import ParkGuideCredential
+        from primitives_testbed.diveops.models import GuidePermitDetails
 
-        ParkGuideCredential.objects.create(
+        GuidePermitDetails.objects.create(
             marine_park=marine_park,
             diver=dm_diver,
             issued_at=date.today(),
         )
         with pytest.raises(IntegrityError):
-            ParkGuideCredential.objects.create(
+            GuidePermitDetails.objects.create(
                 marine_park=marine_park,
                 diver=dm_diver,
                 issued_at=date.today(),
@@ -636,9 +636,9 @@ class TestParkGuideCredentialModel:
 
     def test_guide_credential_is_refresher_due(self, marine_park, dm_diver):
         """is_refresher_due property checks next_refresher_due_at."""
-        from primitives_testbed.diveops.models import ParkGuideCredential
+        from primitives_testbed.diveops.models import GuidePermitDetails
 
-        credential = ParkGuideCredential.objects.create(
+        credential = GuidePermitDetails.objects.create(
             marine_park=marine_park,
             diver=dm_diver,
             issued_at=date.today(),
@@ -648,14 +648,14 @@ class TestParkGuideCredentialModel:
 
     def test_guide_credential_can_guide_in_zone_all_zones(self, marine_park, dm_diver):
         """Credential with no zone restriction can guide anywhere."""
-        from primitives_testbed.diveops.models import ParkGuideCredential, ParkZone
+        from primitives_testbed.diveops.models import GuidePermitDetails, ProtectedAreaZone
 
-        zone = ParkZone.objects.create(
+        zone = ProtectedAreaZone.objects.create(
             marine_park=marine_park,
             name="Test Zone",
             code="test",
         )
-        credential = ParkGuideCredential.objects.create(
+        credential = GuidePermitDetails.objects.create(
             marine_park=marine_park,
             diver=dm_diver,
             issued_at=date.today(),
@@ -674,9 +674,9 @@ class TestVesselPermitModel:
     @pytest.fixture
     def marine_park(self, db):
         """Create a marine park."""
-        from primitives_testbed.diveops.models import MarinePark
+        from primitives_testbed.diveops.models import ProtectedArea
 
-        return MarinePark.objects.create(
+        return ProtectedArea.objects.create(
             name="Test Park",
             code="testpark",
         )
@@ -722,9 +722,9 @@ class TestVesselPermitModel:
 
     def test_vessel_permit_same_number_different_parks(self, marine_park, dive_shop):
         """Same permit number can exist in different parks."""
-        from primitives_testbed.diveops.models import MarinePark, VesselPermit
+        from primitives_testbed.diveops.models import ProtectedArea, VesselPermit
 
-        other_park = MarinePark.objects.create(
+        other_park = ProtectedArea.objects.create(
             name="Other Park",
             code="other",
         )
@@ -751,15 +751,15 @@ class TestVesselPermitModel:
 
 
 @pytest.mark.django_db
-class TestDiveSiteMarineParkIntegration:
+class TestDiveSiteProtectedAreaIntegration:
     """Tests for DiveSite marine_park and park_zone fields."""
 
     @pytest.fixture
     def marine_park(self, db):
         """Create a marine park."""
-        from primitives_testbed.diveops.models import MarinePark
+        from primitives_testbed.diveops.models import ProtectedArea
 
-        return MarinePark.objects.create(
+        return ProtectedArea.objects.create(
             name="Test Park",
             code="testpark",
         )
@@ -767,9 +767,9 @@ class TestDiveSiteMarineParkIntegration:
     @pytest.fixture
     def zone(self, marine_park):
         """Create a zone in the park."""
-        from primitives_testbed.diveops.models import ParkZone
+        from primitives_testbed.diveops.models import ProtectedAreaZone
 
-        return ParkZone.objects.create(
+        return ProtectedAreaZone.objects.create(
             marine_park=marine_park,
             name="Use Zone",
             code="use",
@@ -816,13 +816,13 @@ class TestDiveSiteMarineParkIntegration:
 
     def test_dive_site_zone_must_belong_to_park_clean(self, marine_park, dive_site_place):
         """DiveSite.clean() validates zone belongs to park."""
-        from primitives_testbed.diveops.models import DiveSite, MarinePark, ParkZone
+        from primitives_testbed.diveops.models import DiveSite, ProtectedArea, ProtectedAreaZone
 
-        other_park = MarinePark.objects.create(
+        other_park = ProtectedArea.objects.create(
             name="Other Park",
             code="other",
         )
-        wrong_zone = ParkZone.objects.create(
+        wrong_zone = ProtectedAreaZone.objects.create(
             marine_park=other_park,
             name="Wrong Zone",
             code="wrong",
