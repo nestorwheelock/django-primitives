@@ -828,3 +828,200 @@ The `agreement_signed` audit event captures:
 6. Signed agreement creates immutable ledger record
 7. Content edits create revision records with required change_note
 8. Only one pending agreement per template+party+related_object
+
+## Email Subsystem
+
+### Overview
+
+DiveOps includes a configurable email subsystem for transactional emails. The system supports multiple providers (Django console for development, Amazon SES for production) with database-configured settings and reusable templates.
+
+### Architecture
+
+```
+Services → email_service.py → EmailSettings (DB) → Provider (SES/Console)
+                   ↓
+           EmailTemplate (DB)
+```
+
+### Design Intent
+
+- **DB-first configuration**: Email settings stored in database, not environment variables
+- **Singleton pattern**: One EmailSettings instance per tenant via django-singleton
+- **Template-driven**: Reusable email templates stored in database with Django template syntax
+- **Provider abstraction**: Swap between console (dev) and SES (prod) without code changes
+- **Sandbox mode**: Test configuration without sending real emails
+
+### Hard Rules
+
+1. **Never log AWS credentials** - Secret access key never appears in logs
+2. **Context validation is strict** - Missing required fields raise ValueError
+3. **Templates are database-managed** - No file-based templates for transactional emails
+4. **Sandbox mode logs but doesn't send** - Returns success with reason="sandbox"
+
+### Models
+
+```python
+# Singleton configuration (via django-singleton)
+class EmailSettings(SingletonModel):
+    enabled = BooleanField(default=False)
+    provider = CharField(choices=["console", "ses_api"])
+    sandbox_mode = BooleanField(default=True)
+
+    # Sender identity
+    default_from_email = EmailField()
+    default_from_name = CharField()
+    reply_to_email = EmailField(blank=True)
+
+    # AWS SES configuration
+    aws_region = CharField(default="us-east-1")
+    aws_access_key_id = CharField(blank=True)
+    aws_secret_access_key = CharField(blank=True)  # Never logged
+    configuration_set = CharField(blank=True)
+
+    def is_configured(self) -> bool
+    def get_from_address(self) -> str
+
+# Reusable email templates
+class EmailTemplate(BaseModel):
+    key = SlugField(unique=True)  # e.g., "verify_email", "welcome"
+    name = CharField()
+    subject_template = TextField()  # Django template syntax
+    body_text_template = TextField()  # Plain text (required)
+    body_html_template = TextField(blank=True)  # HTML (optional)
+    is_active = BooleanField(default=True)
+    updated_by = FK(User, null=True)
+```
+
+### Template Context Requirements
+
+Templates require specific context fields for rendering:
+
+| Template Key | Required Context Fields |
+|-------------|------------------------|
+| `verify_email` | `user_name`, `verify_url` |
+| `welcome` | `user_name`, `dashboard_url` |
+| `password_reset` | `user_name`, `reset_url` |
+
+Missing fields raise `ValueError` with specific message listing missing fields.
+
+### Service Layer API
+
+```python
+from primitives_testbed.diveops.email_service import (
+    send_email,
+    send_templated_email,
+    render_email_template,
+    EmailResult,
+    TEMPLATE_CONTEXT_REQUIREMENTS,
+)
+
+# Simple email (no template)
+result = send_email(
+    to="recipient@example.com",
+    subject="Welcome!",
+    body_text="Hello, welcome to our dive shop.",
+    body_html="<html><body><h1>Hello!</h1></body></html>",
+    reply_to="support@diveshop.com",  # optional
+)
+
+# Templated email (uses EmailTemplate from DB)
+result = send_templated_email(
+    to="recipient@example.com",
+    template_key="verify_email",
+    context={"user_name": "Alice", "verify_url": "https://..."},
+    reply_to="support@diveshop.com",  # optional
+)
+
+# Render template without sending (for preview)
+subject, text_body, html_body = render_email_template(
+    key="welcome",
+    context={"user_name": "Bob", "dashboard_url": "https://..."},
+)
+
+if result.sent:
+    print(f"Sent via {result.provider}, ID: {result.message_id}")
+else:
+    print(f"Not sent: {result.reason}")
+```
+
+### EmailResult Dataclass
+
+```python
+@dataclass
+class EmailResult:
+    sent: bool
+    provider: str | None  # "console", "ses_api"
+    message_id: str | None  # SES message ID
+    reason: str | None  # "disabled", "sandbox", "not_configured", error message
+```
+
+### Providers
+
+| Provider | When Used | Behavior |
+|----------|-----------|----------|
+| `console` | Development | Uses Django's console email backend, prints to stdout |
+| `ses_api` | Production | Uses boto3 SES API directly with credentials from settings |
+
+### Provider Selection
+
+The `EmailSettings.provider` field determines which provider is used:
+
+1. **console**: Uses Django's `EmailMultiAlternatives` which outputs to console
+2. **ses_api**: Uses boto3 `ses.send_email()` with credentials from settings
+
+### Sandbox Mode
+
+When `EmailSettings.sandbox_mode = True`:
+- Email is logged but not actually sent
+- Returns `EmailResult(sent=True, reason="sandbox")`
+- Useful for testing email configuration without sending
+
+### Management Command
+
+```bash
+# Simple test email (no template)
+python manage.py send_test_email --to recipient@example.com
+python manage.py send_test_email --to recipient@example.com --subject "Custom Subject"
+
+# Templated test email
+python manage.py send_test_email --to recipient@example.com --template verify_email
+python manage.py send_test_email --to recipient@example.com --template welcome
+
+# List available templates
+python manage.py send_test_email --to admin@example.com --list-templates
+```
+
+### Admin Configuration
+
+| Model | Admin Features |
+|-------|----------------|
+| `EmailSettings` | Singleton (no add if exists, no delete), credential fields readonly for non-superusers, collapsed AWS/SMTP sections |
+| `EmailTemplate` | List with key/name/active/updated_at, prepopulated slug, preview action with sample context, auto-set updated_by on save |
+
+### Invariants
+
+1. EmailSettings.get_instance() always returns a valid instance (creates if needed)
+2. send_email() never raises - always returns EmailResult
+3. send_templated_email() raises ValueError for missing template or context
+4. AWS credentials are never logged (info/debug/error levels)
+5. Template rendering uses Django's Template class for consistent syntax
+6. Inactive templates cannot be used for sending (raises ValueError)
+
+### URL Patterns
+
+Email settings are managed via Django Admin:
+
+```
+/admin/diveops/emailsettings/    # Edit singleton
+/admin/diveops/emailtemplate/    # List/CRUD templates
+```
+
+### SES Setup Requirements
+
+For production use with Amazon SES:
+
+1. **Verify sender identity** in SES console (email or domain)
+2. **Create IAM user** with `ses:SendEmail` permission
+3. **Store credentials** in EmailSettings (superuser only)
+4. **Request production access** to send to any address (sandbox mode limits recipients)
+5. **Optional**: Create Configuration Set for tracking bounces/complaints

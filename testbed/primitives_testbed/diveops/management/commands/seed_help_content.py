@@ -991,6 +991,199 @@ HELP_CONTENT = {
 </ul>
 """,
         },
+        "email-settings": {
+            "title": "Email Settings (SES)",
+            "content": """
+<p>DiveOps uses Amazon Simple Email Service (SES) for transactional emails. Email configuration is managed through Django Admin.</p>
+
+<h3>Accessing Email Settings</h3>
+<p>Navigate to Django Admin (<code>/admin/</code>) and find:</p>
+<ul>
+    <li><strong>Email Settings</strong> - Global email configuration (singleton)</li>
+    <li><strong>Email Templates</strong> - Reusable email templates</li>
+</ul>
+
+<h3>Email Settings Configuration</h3>
+<p>The EmailSettings model is a singleton - only one instance exists. Configure these fields:</p>
+
+<h4>General</h4>
+<ul>
+    <li><strong>Enabled</strong> - Master on/off switch for all email sending</li>
+    <li><strong>Provider</strong> - Choose between:
+        <ul>
+            <li><em>console</em> - Development mode, prints emails to console</li>
+            <li><em>ses_api</em> - Production mode, sends via Amazon SES</li>
+        </ul>
+    </li>
+    <li><strong>Sandbox Mode</strong> - When enabled, logs emails but doesn't actually send them (useful for testing)</li>
+</ul>
+
+<h4>Sender Identity</h4>
+<ul>
+    <li><strong>Default From Email</strong> - The email address emails are sent from (must be verified in SES)</li>
+    <li><strong>Default From Name</strong> - Display name shown to recipients</li>
+    <li><strong>Reply-To Email</strong> - Optional address for replies</li>
+</ul>
+
+<h4>AWS SES Configuration</h4>
+<ul>
+    <li><strong>AWS Region</strong> - SES region (e.g., us-east-1, eu-west-1)</li>
+    <li><strong>Configuration Set</strong> - Optional SES configuration set for tracking</li>
+</ul>
+
+<h4>AWS Credentials (Superuser Only)</h4>
+<ul>
+    <li><strong>AWS Access Key ID</strong> - IAM user access key</li>
+    <li><strong>AWS Secret Access Key</strong> - IAM user secret key (stored securely)</li>
+</ul>
+
+<h3>Setting Up Amazon SES</h3>
+<p>Follow these steps to configure SES for production use:</p>
+
+<h4>Step 1: Verify Sender Identity</h4>
+<ol>
+    <li>Open the <a href="https://console.aws.amazon.com/ses/">AWS SES Console</a></li>
+    <li>Navigate to <strong>Verified identities</strong></li>
+    <li>Click <strong>Create identity</strong></li>
+    <li>Choose <strong>Email address</strong> or <strong>Domain</strong>:
+        <ul>
+            <li><em>Email address</em> - Quick setup, verify single address</li>
+            <li><em>Domain</em> - Recommended for production, allows any address @yourdomain.com</li>
+        </ul>
+    </li>
+    <li>For domain verification, add the provided DNS records to your domain</li>
+    <li>Wait for verification status to show <strong>Verified</strong></li>
+</ol>
+
+<h4>Step 2: Create IAM User for SES</h4>
+<ol>
+    <li>Open the <a href="https://console.aws.amazon.com/iam/">AWS IAM Console</a></li>
+    <li>Navigate to <strong>Users</strong> → <strong>Create user</strong></li>
+    <li>Enter a username (e.g., <code>diveops-ses-sender</code>)</li>
+    <li>Select <strong>Attach policies directly</strong></li>
+    <li>Search for and attach <strong>AmazonSESFullAccess</strong> (or create a more restrictive policy)</li>
+    <li>Complete user creation</li>
+    <li>Create access keys:
+        <ul>
+            <li>Go to the user's <strong>Security credentials</strong> tab</li>
+            <li>Click <strong>Create access key</strong></li>
+            <li>Select <strong>Application running outside AWS</strong></li>
+            <li>Download or copy both the Access Key ID and Secret Access Key</li>
+        </ul>
+    </li>
+</ol>
+
+<h4>Step 3: Request Production Access</h4>
+<p><strong>Important:</strong> New SES accounts are in sandbox mode by default, which only allows sending to verified addresses.</p>
+<ol>
+    <li>In SES Console, navigate to <strong>Account dashboard</strong></li>
+    <li>Find the <strong>Sending limits</strong> section</li>
+    <li>Click <strong>Request production access</strong></li>
+    <li>Complete the request form:
+        <ul>
+            <li>Mail type: Transactional</li>
+            <li>Describe your use case (customer notifications, booking confirmations, etc.)</li>
+            <li>Explain how you handle bounces and complaints</li>
+        </ul>
+    </li>
+    <li>Wait for AWS approval (typically 24-48 hours)</li>
+</ol>
+
+<h4>Step 4: Configure DiveOps</h4>
+<ol>
+    <li>Open Django Admin → <strong>Email Settings</strong></li>
+    <li>Set <strong>Provider</strong> to <code>ses_api</code></li>
+    <li>Enter your verified <strong>From Email</strong></li>
+    <li>Select the appropriate <strong>AWS Region</strong></li>
+    <li>Enter your IAM <strong>Access Key ID</strong> and <strong>Secret Access Key</strong></li>
+    <li>Set <strong>Enabled</strong> to True</li>
+    <li>Initially keep <strong>Sandbox Mode</strong> enabled for testing</li>
+    <li>Save changes</li>
+</ol>
+
+<h4>Step 5: Test Configuration</h4>
+<p>Use the management command to test your setup:</p>
+<pre>
+python manage.py send_test_email --to your-verified-email@example.com
+</pre>
+<p>If sandbox mode is on, the email will be logged but not sent. Disable sandbox mode after confirming the configuration works.</p>
+
+<h3>Email Templates</h3>
+<p>Create reusable templates for common emails:</p>
+
+<h4>Creating a Template</h4>
+<ol>
+    <li>Navigate to Django Admin → <strong>Email Templates</strong></li>
+    <li>Click <strong>Add Email Template</strong></li>
+    <li>Fill in:
+        <ul>
+            <li><strong>Key</strong> - Unique identifier (e.g., <code>verify_email</code>)</li>
+            <li><strong>Name</strong> - Human-readable name</li>
+            <li><strong>Subject Template</strong> - Subject line with template variables</li>
+            <li><strong>Body Text Template</strong> - Plain text version (required)</li>
+            <li><strong>Body HTML Template</strong> - HTML version (optional)</li>
+        </ul>
+    </li>
+    <li>Save the template</li>
+</ol>
+
+<h4>Template Syntax</h4>
+<p>Templates use Django template syntax. Variables are enclosed in double braces:</p>
+<pre>
+Subject: Welcome to DiveOps, {{ user_name }}!
+
+Body:
+Hello {{ user_name }},
+
+Thanks for joining. Access your dashboard at:
+{{ dashboard_url }}
+</pre>
+
+<h4>Required Context by Template</h4>
+<table>
+    <tr><th>Template Key</th><th>Required Variables</th></tr>
+    <tr><td><code>verify_email</code></td><td>user_name, verify_url</td></tr>
+    <tr><td><code>welcome</code></td><td>user_name, dashboard_url</td></tr>
+    <tr><td><code>password_reset</code></td><td>user_name, reset_url</td></tr>
+</table>
+
+<h4>Testing Templates</h4>
+<p>Test a specific template with sample data:</p>
+<pre>
+python manage.py send_test_email --to you@example.com --template verify_email
+</pre>
+
+<h3>Troubleshooting</h3>
+
+<h4>Email Not Sending</h4>
+<ul>
+    <li>Check <strong>Enabled</strong> is True in Email Settings</li>
+    <li>Check <strong>Sandbox Mode</strong> is False for production</li>
+    <li>Verify <code>is_configured()</code> returns True in admin</li>
+    <li>Check application logs for error messages</li>
+</ul>
+
+<h4>SES Errors</h4>
+<ul>
+    <li><strong>Email address not verified</strong> - Verify sender in SES Console</li>
+    <li><strong>Access denied</strong> - Check IAM permissions for ses:SendEmail</li>
+    <li><strong>Sending rate exceeded</strong> - Request higher limits or implement throttling</li>
+    <li><strong>Message rejected</strong> - Check recipient is valid (in sandbox, must be verified)</li>
+</ul>
+
+<h4>Testing in Development</h4>
+<p>For local development, set <strong>Provider</strong> to <code>console</code>. Emails will print to the Django console output instead of sending.</p>
+
+<h3>Security Best Practices</h3>
+<ul>
+    <li>Only superusers can edit AWS credentials</li>
+    <li>Credentials are never logged</li>
+    <li>Use IAM users with minimal permissions (ses:SendEmail only)</li>
+    <li>Rotate access keys periodically</li>
+    <li>Monitor SES reputation dashboard for bounce/complaint rates</li>
+</ul>
+""",
+        },
         "automated-documentation": {
             "title": "Automated Documentation",
             "content": """
