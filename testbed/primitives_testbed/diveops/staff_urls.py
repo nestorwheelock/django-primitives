@@ -22,6 +22,7 @@ urlpatterns = [
     path("crm/inbox/<uuid:conversation_id>/assign/", staff_views.AssignConversationView.as_view(), name="crm-assign"),
     path("crm/inbox/<uuid:conversation_id>/close/", staff_views.CloseConversationView.as_view(), name="crm-close"),
     path("crm/inbox/<uuid:conversation_id>/reopen/", staff_views.ReopenConversationView.as_view(), name="crm-reopen"),
+    path("crm/inbox/new/", staff_views.StaffNewConversationView.as_view(), name="crm-new-conversation"),
     # CMS - Content Management
     path("cms/pages/", staff_views.CMSPageListView.as_view(), name="cms-page-list"),
     path("cms/pages/add/", staff_views.CMSPageCreateView.as_view(), name="cms-page-create"),

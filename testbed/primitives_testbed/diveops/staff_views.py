@@ -10065,3 +10065,88 @@ class ReopenConversationView(StaffPortalMixin, View):
         conversation.reopen()
         messages.success(request, "Conversation reopened.")
         return redirect("diveops:crm-conversation", conversation_id=conversation.pk)
+
+
+class StaffNewConversationView(StaffPortalMixin, TemplateView):
+    """Start a new conversation with a customer."""
+
+    template_name = "diveops/staff/crm/new_conversation.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from django_parties.models import Person
+
+        # Get search query if provided
+        search = self.request.GET.get("search", "").strip()
+        context["search"] = search
+
+        # If customer_id is provided, pre-select that customer
+        customer_id = self.request.GET.get("customer_id")
+        if customer_id:
+            context["selected_customer"] = Person.objects.filter(
+                pk=customer_id, deleted_at__isnull=True
+            ).first()
+
+        # Search for customers if query provided
+        if search:
+            context["customers"] = Person.objects.filter(
+                deleted_at__isnull=True
+            ).filter(
+                models.Q(first_name__icontains=search)
+                | models.Q(last_name__icontains=search)
+                | models.Q(email__icontains=search)
+                | models.Q(phone__icontains=search)
+            ).order_by("last_name", "first_name")[:20]
+        else:
+            context["customers"] = []
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from django_communication.models import MessageDirection, ParticipantRole
+        from django_communication.services import create_conversation, send_in_conversation
+        from django_parties.models import Person
+
+        from .selectors import get_staff_person
+
+        customer_id = request.POST.get("customer_id")
+        subject = request.POST.get("subject", "").strip()
+        message_text = request.POST.get("message", "").strip()
+
+        if not customer_id:
+            messages.error(request, "Please select a customer.")
+            return redirect("diveops:crm-new-conversation")
+
+        if not message_text:
+            messages.error(request, "Please enter a message.")
+            return redirect(f"{request.path}?customer_id={customer_id}")
+
+        customer = get_object_or_404(Person, pk=customer_id, deleted_at__isnull=True)
+        staff_person = get_staff_person(request.user)
+
+        if not staff_person:
+            messages.error(request, "Your user account is not linked to a Person record.")
+            return redirect("diveops:crm-inbox")
+
+        # Create conversation with both participants
+        participants = [
+            (customer, ParticipantRole.CUSTOMER),
+            (staff_person, ParticipantRole.STAFF),
+        ]
+        conversation = create_conversation(
+            subject=subject or f"Conversation with {customer.first_name}",
+            participants=participants,
+            assigned_to_user=request.user,
+            created_by_user=request.user,
+        )
+
+        # Send the initial message
+        send_in_conversation(
+            conversation=conversation,
+            sender_person=staff_person,
+            body_text=message_text,
+            direction=MessageDirection.OUTBOUND,
+        )
+
+        messages.success(request, f"Conversation started with {customer.first_name} {customer.last_name}.")
+        return redirect("diveops:crm-conversation", conversation_id=conversation.pk)
