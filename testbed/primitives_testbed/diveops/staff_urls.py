@@ -24,6 +24,16 @@ urlpatterns = [
     path("crm/inbox/<uuid:conversation_id>/reopen/", staff_views.ReopenConversationView.as_view(), name="crm-reopen"),
     path("crm/inbox/new/", staff_views.StaffNewConversationView.as_view(), name="crm-new-conversation"),
     path("api/customers/search/", staff_views.CustomerSearchAPIView.as_view(), name="api-customer-search"),
+    path("api/canned-responses/", staff_views.CannedResponseListAPIView.as_view(), name="api-canned-responses"),
+    path("api/canned-responses/<uuid:pk>/render/", staff_views.CannedResponseRenderAPIView.as_view(), name="api-canned-response-render"),
+    # Canned Response Management
+    path("canned-responses/", staff_views.CannedResponseListView.as_view(), name="canned-response-list"),
+    path("canned-responses/add/", staff_views.CannedResponseCreateView.as_view(), name="canned-response-create"),
+    path("canned-responses/<uuid:pk>/edit/", staff_views.CannedResponseUpdateView.as_view(), name="canned-response-edit"),
+    path("canned-responses/<uuid:pk>/delete/", staff_views.CannedResponseDeleteView.as_view(), name="canned-response-delete"),
+    path("canned-responses/tags/", staff_views.CannedResponseTagListView.as_view(), name="canned-response-tag-list"),
+    path("canned-responses/tags/add/", staff_views.CannedResponseTagCreateView.as_view(), name="canned-response-tag-create"),
+    path("canned-responses/tags/<uuid:pk>/delete/", staff_views.CannedResponseTagDeleteView.as_view(), name="canned-response-tag-delete"),
     # CMS - Content Management
     path("cms/pages/", staff_views.CMSPageListView.as_view(), name="cms-page-list"),
     path("cms/pages/add/", staff_views.CMSPageCreateView.as_view(), name="cms-page-create"),

@@ -10204,3 +10204,320 @@ class CustomerSearchAPIView(StaffPortalMixin, View):
                 for c in customers
             ]
         })
+
+
+class CannedResponseListAPIView(StaffPortalMixin, View):
+    """JSON API for listing canned responses available to staff."""
+
+    def get(self, request):
+        from django_communication.services.canned_responses import list_canned_responses
+        from .selectors import get_staff_person
+
+        # Get staff person for filtering
+        staff_person = get_staff_person(request.user)
+        if not staff_person:
+            return JsonResponse({"responses": []})
+
+        # Optional filters from query params
+        channel = request.GET.get("channel")
+        search = request.GET.get("q", "").strip()
+        tags = request.GET.getlist("tags")
+
+        responses = list_canned_responses(
+            actor=staff_person,
+            channel=channel if channel else None,
+            q=search if search else None,
+            tags=tags if tags else None,
+        )
+
+        return JsonResponse({
+            "responses": [
+                {
+                    "id": str(r.pk),
+                    "title": r.title,
+                    "body": r.body,
+                    "channel": r.channel,
+                    "tags": [t.name for t in r.tags.all()],
+                }
+                for r in responses[:50]  # Limit to 50 responses
+            ]
+        })
+
+
+class CannedResponseRenderAPIView(StaffPortalMixin, View):
+    """JSON API for rendering a canned response with context."""
+
+    def post(self, request, pk):
+        import json
+        from django_communication.models import CannedResponse, Conversation
+        from django_communication.services.canned_responses import (
+            render_canned_response,
+            get_context_for_conversation,
+            can_use_canned_response,
+        )
+        from .selectors import get_staff_person
+
+        staff_person = get_staff_person(request.user)
+        if not staff_person:
+            return JsonResponse({"error": "Staff person not found"}, status=403)
+
+        try:
+            canned = CannedResponse.objects.get(pk=pk, is_active=True)
+        except CannedResponse.DoesNotExist:
+            return JsonResponse({"error": "Canned response not found"}, status=404)
+
+        # Check permission
+        if not can_use_canned_response(staff_person, canned):
+            return JsonResponse({"error": "Not authorized to use this response"}, status=403)
+
+        # Parse request body for context
+        try:
+            body = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            body = {}
+
+        # Get conversation if provided
+        conversation = None
+        recipient = None
+        conversation_id = body.get("conversation_id")
+        if conversation_id:
+            try:
+                conversation = Conversation.objects.get(pk=conversation_id)
+                # Get customer participant as recipient
+                customer = conversation.participants.filter(role="customer").first()
+                if customer:
+                    recipient = customer.person
+            except Conversation.DoesNotExist:
+                pass
+
+        # Build context
+        context = get_context_for_conversation(
+            conversation=conversation,
+            actor=staff_person,
+            recipient=recipient,
+            extra=body.get("extra", {}),
+        )
+
+        # Render the canned response
+        rendered = render_canned_response(canned, context)
+
+        return JsonResponse({
+            "id": str(canned.pk),
+            "title": canned.title,
+            "rendered": rendered,
+        })
+
+
+# === Canned Response Management Views ===
+
+
+class CannedResponseListView(StaffPortalMixin, ListView):
+    """List all canned responses available to staff."""
+
+    template_name = "diveops/staff/canned_response_list.html"
+    context_object_name = "responses"
+    paginate_by = 25
+
+    def get_queryset(self):
+        from django_communication.models import CannedResponse, ResponseChannel, Visibility
+        from .selectors import get_staff_person
+
+        staff_person = get_staff_person(self.request.user)
+        queryset = CannedResponse.objects.filter(
+            deleted_at__isnull=True,
+            is_active=True,
+        )
+
+        # Staff can see:
+        # - Public responses
+        # - Org responses for their org
+        # - Private responses they created
+        if staff_person:
+            queryset = queryset.filter(
+                Q(visibility=Visibility.PUBLIC)
+                | Q(visibility=Visibility.ORG)  # TODO: Filter by org
+                | Q(visibility=Visibility.PRIVATE, created_by=staff_person)
+            )
+
+        # Filter by channel
+        channel = self.request.GET.get("channel")
+        if channel:
+            queryset = queryset.filter(Q(channel=channel) | Q(channel=ResponseChannel.ANY))
+
+        # Filter by tag
+        tag = self.request.GET.get("tag")
+        if tag:
+            queryset = queryset.filter(tags__name=tag)
+
+        # Search
+        search = self.request.GET.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) | Q(body__icontains=search)
+            )
+
+        return queryset.order_by("title").distinct()
+
+    def get_context_data(self, **kwargs):
+        from django_communication.models import CannedResponseTag, ResponseChannel
+
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Canned Responses"
+        context["current_channel"] = self.request.GET.get("channel", "")
+        context["current_tag"] = self.request.GET.get("tag", "")
+        context["current_search"] = self.request.GET.get("search", "")
+        context["channels"] = ResponseChannel.choices
+        context["tags"] = CannedResponseTag.objects.all().order_by("name")
+        return context
+
+
+class CannedResponseCreateView(StaffPortalMixin, View):
+    """Create a new canned response."""
+
+    template_name = "diveops/staff/canned_response_form.html"
+
+    def get(self, request):
+        from django_communication.models import CannedResponseTag, ResponseChannel, Visibility
+
+        return render(request, self.template_name, {
+            "page_title": "Create Canned Response",
+            "response": None,
+            "channels": ResponseChannel.choices,
+            "visibilities": Visibility.choices,
+            "tags": CannedResponseTag.objects.all().order_by("name"),
+        })
+
+    def post(self, request):
+        from django_communication.models import CannedResponse, CannedResponseTag
+        from .selectors import get_staff_person
+
+        staff_person = get_staff_person(request.user)
+
+        canned = CannedResponse(
+            title=request.POST.get("title", "").strip(),
+            body=request.POST.get("body", "").strip(),
+            channel=request.POST.get("channel", "any"),
+            language=request.POST.get("language", "").strip(),
+            visibility=request.POST.get("visibility", "org"),
+            created_by=staff_person,
+            is_active=request.POST.get("is_active") == "on",
+        )
+
+        try:
+            canned.full_clean()
+            canned.save()
+
+            # Handle tags
+            tag_ids = request.POST.getlist("tags")
+            if tag_ids:
+                canned.tags.set(CannedResponseTag.objects.filter(pk__in=tag_ids))
+
+            messages.success(request, f"Canned response '{canned.title}' created.")
+            return redirect("diveops:canned-response-list")
+        except Exception as e:
+            messages.error(request, f"Error creating canned response: {e}")
+            return self.get(request)
+
+
+class CannedResponseUpdateView(StaffPortalMixin, View):
+    """Edit an existing canned response."""
+
+    template_name = "diveops/staff/canned_response_form.html"
+
+    def get(self, request, pk):
+        from django_communication.models import CannedResponse, CannedResponseTag, ResponseChannel, Visibility
+
+        canned = get_object_or_404(CannedResponse, pk=pk, deleted_at__isnull=True)
+
+        return render(request, self.template_name, {
+            "page_title": "Edit Canned Response",
+            "response": canned,
+            "channels": ResponseChannel.choices,
+            "visibilities": Visibility.choices,
+            "tags": CannedResponseTag.objects.all().order_by("name"),
+        })
+
+    def post(self, request, pk):
+        from django_communication.models import CannedResponse, CannedResponseTag
+
+        canned = get_object_or_404(CannedResponse, pk=pk, deleted_at__isnull=True)
+
+        canned.title = request.POST.get("title", "").strip()
+        canned.body = request.POST.get("body", "").strip()
+        canned.channel = request.POST.get("channel", "any")
+        canned.language = request.POST.get("language", "").strip()
+        canned.visibility = request.POST.get("visibility", "org")
+        canned.is_active = request.POST.get("is_active") == "on"
+
+        try:
+            canned.full_clean()
+            canned.save()
+
+            # Handle tags
+            tag_ids = request.POST.getlist("tags")
+            canned.tags.set(CannedResponseTag.objects.filter(pk__in=tag_ids))
+
+            messages.success(request, f"Canned response '{canned.title}' updated.")
+            return redirect("diveops:canned-response-list")
+        except Exception as e:
+            messages.error(request, f"Error updating canned response: {e}")
+            return self.get(request, pk)
+
+
+class CannedResponseDeleteView(StaffPortalMixin, View):
+    """Delete a canned response (soft delete)."""
+
+    def post(self, request, pk):
+        from django_communication.models import CannedResponse
+
+        canned = get_object_or_404(CannedResponse, pk=pk, deleted_at__isnull=True)
+        canned.delete()  # Soft delete via BaseModel
+        messages.success(request, f"Canned response '{canned.title}' deleted.")
+        return redirect("diveops:canned-response-list")
+
+
+class CannedResponseTagListView(StaffPortalMixin, ListView):
+    """List and manage canned response tags."""
+
+    template_name = "diveops/staff/canned_response_tag_list.html"
+    context_object_name = "tags"
+
+    def get_queryset(self):
+        from django_communication.models import CannedResponseTag
+
+        return CannedResponseTag.objects.filter(deleted_at__isnull=True).annotate(
+            response_count=Count("canned_responses")
+        ).order_by("name")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Canned Response Tags"
+        return context
+
+
+class CannedResponseTagCreateView(StaffPortalMixin, View):
+    """Create a new canned response tag."""
+
+    def post(self, request):
+        from django_communication.models import CannedResponseTag
+
+        name = request.POST.get("name", "").strip()
+        if name:
+            try:
+                CannedResponseTag.objects.create(name=name)
+                messages.success(request, f"Tag '{name}' created.")
+            except Exception as e:
+                messages.error(request, f"Error creating tag: {e}")
+        return redirect("diveops:canned-response-tag-list")
+
+
+class CannedResponseTagDeleteView(StaffPortalMixin, View):
+    """Delete a canned response tag."""
+
+    def post(self, request, pk):
+        from django_communication.models import CannedResponseTag
+
+        tag = get_object_or_404(CannedResponseTag, pk=pk, deleted_at__isnull=True)
+        tag.delete()
+        messages.success(request, f"Tag '{tag.name}' deleted.")
+        return redirect("diveops:canned-response-tag-list")

@@ -1,0 +1,157 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Canned Responses</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <div class="flex items-center space-x-2">
+            <a href="{% url 'diveops:canned-response-tag-list' %}"
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "tag" "w-4 h-4 mr-2" %}
+                Manage Tags
+            </a>
+            <a href="{% url 'diveops:canned-response-create' %}"
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "plus" "w-4 h-4 mr-2" %}
+                New Response
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <form method="get" class="flex flex-wrap items-center gap-4">
+            <div class="flex-1 min-w-[200px]">
+                <input type="text" name="search" value="{{ current_search }}"
+                       placeholder="Search responses..."
+                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+            </div>
+            <div>
+                <select name="channel" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                    <option value="">All Channels</option>
+                    {% for value, label in channels %}
+                    <option value="{{ value }}" {% if current_channel == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <select name="tag" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                    <option value="">All Tags</option>
+                    {% for tag in tags %}
+                    <option value="{{ tag.name }}" {% if current_tag == tag.name %}selected{% endif %}>{{ tag.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "search" "w-4 h-4 mr-1" %}
+                Filter
+            </button>
+            {% if current_search or current_channel or current_tag %}
+            <a href="{% url 'diveops:canned-response-list' %}" class="text-sm text-gray-500 hover:text-gray-700">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Responses List -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {% if responses %}
+        <div class="divide-y divide-gray-200">
+            {% for response in responses %}
+            <div class="p-4 hover:bg-gray-50">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-sm font-medium text-gray-900">{{ response.title }}</h3>
+                        <p class="mt-1 text-sm text-gray-500 line-clamp-2">{{ response.body|truncatewords:30 }}</p>
+                        <div class="mt-2 flex flex-wrap items-center gap-2">
+                            <!-- Channel badge -->
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                {% if response.channel == 'email' %}bg-blue-100 text-blue-800
+                                {% elif response.channel == 'sms' %}bg-green-100 text-green-800
+                                {% elif response.channel == 'chat' %}bg-purple-100 text-purple-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ response.get_channel_display }}
+                            </span>
+                            <!-- Visibility badge -->
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                {% if response.visibility == 'private' %}bg-yellow-100 text-yellow-800
+                                {% elif response.visibility == 'public' %}bg-green-100 text-green-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ response.get_visibility_display }}
+                            </span>
+                            <!-- Tags -->
+                            {% for tag in response.tags.all %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700">
+                                {% icon "tag" "w-3 h-3 mr-1" %}{{ tag.name }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="ml-4 flex-shrink-0 flex items-center space-x-2">
+                        <a href="{% url 'diveops:canned-response-edit' pk=response.pk %}"
+                           class="text-gray-400 hover:text-gray-600" title="Edit">
+                            {% icon "pencil" "w-4 h-4" %}
+                        </a>
+                        <form method="post" action="{% url 'diveops:canned-response-delete' pk=response.pk %}" class="inline"
+                              onsubmit="return confirm('Delete this canned response?');">
+                            {% csrf_token %}
+                            <button type="submit" class="text-gray-400 hover:text-red-600" title="Delete">
+                                {% icon "trash" "w-4 h-4" %}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if is_paginated %}
+        <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div class="flex-1 flex justify-between sm:hidden">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Previous</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Next</a>
+                {% endif %}
+            </div>
+            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm text-gray-700">
+                        Showing <span class="font-medium">{{ page_obj.start_index }}</span> to <span class="font-medium">{{ page_obj.end_index }}</span> of <span class="font-medium">{{ page_obj.paginator.count }}</span> results
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="px-6 py-12 text-center">
+            <div class="mx-auto h-12 w-12 text-gray-400">
+                {% icon "document-text" "w-12 h-12" %}
+            </div>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No canned responses</h3>
+            <p class="mt-1 text-sm text-gray-500">Get started by creating a new canned response.</p>
+            <div class="mt-6">
+                <a href="{% url 'diveops:canned-response-create' %}"
+                   class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    {% icon "plus" "w-4 h-4 mr-2" %}
+                    New Response
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

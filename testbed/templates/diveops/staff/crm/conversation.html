@@ -189,14 +189,103 @@
 
         <!-- Reply Input -->
         {% if conversation.status == 'active' %}
-        <div class="px-4 py-4 border-t border-gray-200 bg-white">
-            <form method="post" class="flex items-end space-x-3">
+        <div class="px-4 py-4 border-t border-gray-200 bg-white" x-data="cannedResponsePicker()">
+            <!-- Canned Response Picker -->
+            <div class="mb-3 relative">
+                <div class="flex items-center space-x-2">
+                    <button
+                        type="button"
+                        @click="showPicker = !showPicker"
+                        class="inline-flex items-center px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        :class="{ 'bg-blue-50 border-blue-300 text-blue-700': showPicker }"
+                    >
+                        {% icon "document-text" "w-4 h-4 mr-1.5" %}
+                        <span>Canned Responses</span>
+                        <svg class="w-4 h-4 ml-1" :class="{ 'rotate-180': showPicker }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <template x-if="selectedResponse">
+                        <span class="text-sm text-gray-500">
+                            Using: <span class="font-medium text-gray-700" x-text="selectedResponse.title"></span>
+                            <button type="button" @click="clearSelection()" class="text-gray-400 hover:text-red-500 ml-1">
+                                {% icon "x-mark" "w-4 h-4 inline" %}
+                            </button>
+                        </span>
+                    </template>
+                </div>
+
+                <!-- Dropdown Panel -->
+                <div
+                    x-show="showPicker"
+                    x-transition:enter="transition ease-out duration-100"
+                    x-transition:enter-start="opacity-0 transform -translate-y-1"
+                    x-transition:enter-end="opacity-100 transform translate-y-0"
+                    x-transition:leave="transition ease-in duration-75"
+                    x-transition:leave-start="opacity-100 transform translate-y-0"
+                    x-transition:leave-end="opacity-0 transform -translate-y-1"
+                    @click.away="showPicker = false"
+                    class="absolute left-0 bottom-full mb-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
+                >
+                    <!-- Search -->
+                    <div class="p-3 border-b border-gray-200">
+                        <input
+                            type="text"
+                            x-model="searchQuery"
+                            @input.debounce.300ms="searchResponses()"
+                            placeholder="Search canned responses..."
+                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500"
+                        >
+                    </div>
+
+                    <!-- Results List -->
+                    <div class="max-h-64 overflow-y-auto">
+                        <template x-if="loading">
+                            <div class="p-4 text-center text-gray-500 text-sm">Loading...</div>
+                        </template>
+                        <template x-if="!loading && responses.length === 0">
+                            <div class="p-4 text-center text-gray-500 text-sm">
+                                <template x-if="searchQuery">
+                                    <span>No responses found</span>
+                                </template>
+                                <template x-if="!searchQuery">
+                                    <span>No canned responses available</span>
+                                </template>
+                            </div>
+                        </template>
+                        <template x-for="response in responses" :key="response.id">
+                            <button
+                                type="button"
+                                @click="selectResponse(response)"
+                                class="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                            >
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium text-gray-900 truncate" x-text="response.title"></p>
+                                        <p class="text-xs text-gray-500 mt-0.5 line-clamp-2" x-text="response.body.substring(0, 100) + (response.body.length > 100 ? '...' : '')"></p>
+                                    </div>
+                                    <template x-if="response.tags && response.tags.length > 0">
+                                        <div class="flex flex-wrap gap-1 ml-2">
+                                            <template x-for="tag in response.tags.slice(0, 2)" :key="tag">
+                                                <span class="inline-flex items-center px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded" x-text="tag"></span>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <form method="post" class="flex items-end space-x-3" @submit="onSubmit($event)">
                 {% csrf_token %}
                 <div class="flex-1">
                     <label for="message" class="sr-only">Your reply</label>
                     <textarea
                         name="message"
                         id="message"
+                        x-ref="messageInput"
                         rows="3"
                         class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 resize-none text-sm"
                         placeholder="Type your reply..."
@@ -206,8 +295,17 @@
                 <button
                     type="submit"
                     class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                    :disabled="inserting"
                 >
-                    {% icon "paper-airplane" "w-5 h-5 mr-1" %}
+                    <template x-if="inserting">
+                        <svg class="animate-spin w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </template>
+                    <template x-if="!inserting">
+                        {% icon "paper-airplane" "w-5 h-5 mr-1" %}
+                    </template>
                     Send
                 </button>
             </form>
@@ -468,5 +566,96 @@ document.addEventListener('DOMContentLoaded', function() {
         container.scrollTop = container.scrollHeight;
     }
 });
+
+// Canned Response Picker Alpine.js component
+function cannedResponsePicker() {
+    return {
+        showPicker: false,
+        searchQuery: '',
+        responses: [],
+        loading: false,
+        selectedResponse: null,
+        inserting: false,
+        conversationId: '{{ conversation.pk }}',
+        csrfToken: '{{ csrf_token }}',
+
+        init() {
+            // Load initial responses on mount
+            this.searchResponses();
+        },
+
+        async searchResponses() {
+            this.loading = true;
+            try {
+                let url = '{% url "diveops:api-canned-responses" %}';
+                if (this.searchQuery) {
+                    url += '?q=' + encodeURIComponent(this.searchQuery);
+                }
+                const response = await fetch(url);
+                const data = await response.json();
+                this.responses = data.responses || [];
+            } catch (error) {
+                console.error('Error loading canned responses:', error);
+                this.responses = [];
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async selectResponse(response) {
+            this.selectedResponse = response;
+            this.showPicker = false;
+            this.inserting = true;
+
+            try {
+                // Render the canned response with context
+                const renderUrl = '{% url "diveops:api-canned-response-render" pk="00000000-0000-0000-0000-000000000000" %}'.replace(
+                    '00000000-0000-0000-0000-000000000000',
+                    response.id
+                );
+                const renderResponse = await fetch(renderUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.csrfToken,
+                    },
+                    body: JSON.stringify({
+                        conversation_id: this.conversationId,
+                    }),
+                });
+                const data = await renderResponse.json();
+
+                if (data.rendered) {
+                    // Insert rendered text into textarea
+                    this.$refs.messageInput.value = data.rendered;
+                    this.$refs.messageInput.focus();
+                } else if (data.error) {
+                    console.error('Error rendering canned response:', data.error);
+                    // Fall back to raw body
+                    this.$refs.messageInput.value = response.body;
+                    this.$refs.messageInput.focus();
+                }
+            } catch (error) {
+                console.error('Error rendering canned response:', error);
+                // Fall back to raw body
+                this.$refs.messageInput.value = response.body;
+                this.$refs.messageInput.focus();
+            } finally {
+                this.inserting = false;
+            }
+        },
+
+        clearSelection() {
+            this.selectedResponse = null;
+            this.$refs.messageInput.value = '';
+            this.$refs.messageInput.focus();
+        },
+
+        onSubmit(event) {
+            // Form submission continues normally
+            // The canned response info is just for display, actual message is in the textarea
+        }
+    };
+}
 </script>
 {% endblock %}

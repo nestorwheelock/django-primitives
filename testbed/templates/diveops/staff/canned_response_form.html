@@ -1,0 +1,157 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:canned-response-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Canned Responses</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{% if response %}Edit{% else %}Create{% endif %}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-3xl">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="mt-1 text-sm text-gray-500">Create reusable message snippets with variable substitution.</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-sm font-semibold text-gray-900">Response Details</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <!-- Title -->
+                <div>
+                    <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
+                    <input type="text" name="title" id="title"
+                           value="{{ response.title|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                           placeholder="e.g., Welcome Greeting, Booking Confirmation"
+                           required>
+                    <p class="mt-1 text-xs text-gray-500">A short label for quick identification</p>
+                </div>
+
+                <!-- Body -->
+                <div>
+                    <label for="body" class="block text-sm font-medium text-gray-700">Message Body</label>
+                    <textarea name="body" id="body" rows="8"
+                              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm font-mono"
+                              placeholder="Hi {{ first_name }},
+
+Thank you for your interest in {{ class_name }}!
+
+We look forward to seeing you on {{ class_date }}.
+
+Best regards,
+The Team"
+                              required>{{ response.body|default:'' }}</textarea>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Use <code class="bg-gray-100 px-1 rounded">{% verbatim %}{{ variable_name }}{% endverbatim %}</code> for dynamic content.
+                        Available: <code class="bg-gray-100 px-1 rounded">first_name</code>,
+                        <code class="bg-gray-100 px-1 rounded">last_name</code>,
+                        <code class="bg-gray-100 px-1 rounded">email</code>
+                    </p>
+                </div>
+
+                <!-- Channel -->
+                <div>
+                    <label for="channel" class="block text-sm font-medium text-gray-700">Channel</label>
+                    <select name="channel" id="channel"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                        {% for value, label in channels %}
+                        <option value="{{ value }}" {% if response.channel == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Which channels this response can be used for</p>
+                </div>
+
+                <!-- Language -->
+                <div>
+                    <label for="language" class="block text-sm font-medium text-gray-700">Language (optional)</label>
+                    <input type="text" name="language" id="language"
+                           value="{{ response.language|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                           placeholder="e.g., en, es, fr (leave blank for all)">
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-sm font-semibold text-gray-900">Access & Organization</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <!-- Visibility -->
+                <div>
+                    <label for="visibility" class="block text-sm font-medium text-gray-700">Visibility</label>
+                    <select name="visibility" id="visibility"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                        {% for value, label in visibilities %}
+                        <option value="{{ value }}" {% if response.visibility == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Private: Only you can use. Organization: All staff in your org. Public: Everyone.
+                    </p>
+                </div>
+
+                <!-- Tags -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                    <div class="space-y-2">
+                        {% for tag in tags %}
+                        <label class="inline-flex items-center mr-4">
+                            <input type="checkbox" name="tags" value="{{ tag.pk }}"
+                                   {% if response and tag in response.tags.all %}checked{% endif %}
+                                   class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                            <span class="ml-2 text-sm text-gray-700">{{ tag.name }}</span>
+                        </label>
+                        {% empty %}
+                        <p class="text-sm text-gray-500">No tags available. <a href="{% url 'diveops:canned-response-tag-list' %}" class="text-blue-600 hover:underline">Create tags</a></p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Active -->
+                <div class="flex items-center">
+                    <input type="checkbox" name="is_active" id="is_active"
+                           {% if response.is_active or not response %}checked{% endif %}
+                           class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                    <label for="is_active" class="ml-2 text-sm text-gray-700">Active (can be used in conversations)</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end space-x-3">
+            <a href="{% url 'diveops:canned-response-list' %}"
+               class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% if response %}
+                Save Changes
+                {% else %}
+                Create Response
+                {% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

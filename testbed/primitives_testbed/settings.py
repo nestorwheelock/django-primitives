@@ -408,6 +408,12 @@ PORTAL_UI = {
             "icon": "file-text",
         },
         {
+            "section": "Configuration",
+            "label": "Canned Responses",
+            "url": "diveops:canned-response-list",
+            "icon": "document-text",
+        },
+        {
             "section": "Finance",
             "label": "Chart of Accounts",
             "url": "diveops:account-list",
