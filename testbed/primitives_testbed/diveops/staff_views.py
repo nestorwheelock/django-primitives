@@ -480,17 +480,20 @@ class DiverDetailView(StaffPortalMixin, DetailView):
             deleted_at__isnull=True
         ).select_related("protected_area").prefetch_related("guide_details").order_by("protected_area__name")
 
-        # === MEDICAL STATUS & DETAILS ===
+        # === MEDICAL STATUS & DETAILS (single query for all medical data) ===
         try:
-            from .medical.services import get_diver_medical_status, get_diver_medical_instance
-            context["medical_status"] = get_diver_medical_status(diver).value
-            context["medical_instance"] = get_diver_medical_instance(diver)
+            from .medical.services import get_diver_medical_context
+            medical_ctx = get_diver_medical_context(diver)
+            context["medical_status"] = medical_ctx["status"].value
+            context["medical_instance"] = medical_ctx["instance"]
+            # Pass instance to avoid duplicate query
+            context["medical_details"] = get_diver_medical_details(
+                diver, questionnaire_instance=medical_ctx["instance"]
+            )
         except ImportError:
             context["medical_status"] = None
             context["medical_instance"] = None
-
-        # Full medical details with dates
-        context["medical_details"] = get_diver_medical_details(diver)
+            context["medical_details"] = get_diver_medical_details(diver)
 
         # === STAFF NOTES (django-notes primitive) ===
         from django_notes.models import Note
@@ -503,7 +506,8 @@ class DiverDetailView(StaffPortalMixin, DetailView):
         # === AGREEMENTS (linked via Person, not DiverProfile) ===
         from django.contrib.contenttypes.models import ContentType
         from .models import SignableAgreement
-        person_ct = ContentType.objects.get_for_model(person)
+        # get_for_model uses an in-memory cache, so this is fast
+        person_ct = ContentType.objects.get_for_model(person.__class__)
         context["agreements"] = SignableAgreement.objects.filter(
             party_a_content_type=person_ct,
             party_a_object_id=str(person.pk),

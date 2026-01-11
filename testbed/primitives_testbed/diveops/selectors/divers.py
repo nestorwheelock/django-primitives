@@ -131,15 +131,16 @@ def get_diver_normalized_contacts(person: Person) -> NormalizedContacts:
     Returns:
         NormalizedContacts dataclass with querysets
     """
-    addresses = person.addresses.filter(deleted_at__isnull=True).order_by("-is_primary", "address_type")
-    phones = person.phone_numbers.filter(deleted_at__isnull=True).order_by("-is_primary", "phone_type")
-    emails = person.email_addresses.filter(deleted_at__isnull=True).order_by("-is_primary", "email_type")
+    # Evaluate querysets once to avoid duplicate queries
+    addresses = list(person.addresses.filter(deleted_at__isnull=True).order_by("-is_primary", "address_type"))
+    phones = list(person.phone_numbers.filter(deleted_at__isnull=True).order_by("-is_primary", "phone_type"))
+    emails = list(person.email_addresses.filter(deleted_at__isnull=True).order_by("-is_primary", "email_type"))
 
     return NormalizedContacts(
         addresses=addresses,
         phones=phones,
         emails=emails,
-        has_any=addresses.exists() or phones.exists() or emails.exists(),
+        has_any=bool(addresses or phones or emails),
     )
 
 
@@ -177,7 +178,8 @@ def _get_emergency_contacts_from_party_relationship(diver: DiverProfile) -> list
     """
     from ..models import DiverRelationshipMeta
 
-    contacts = (
+    # Evaluate once - don't use .exists() then iterate (causes 2 queries)
+    contacts = list(
         PartyRelationship.objects.filter(
             from_person=diver.person,
             relationship_type="emergency_contact",
@@ -189,7 +191,7 @@ def _get_emergency_contacts_from_party_relationship(diver: DiverProfile) -> list
         .order_by("created_at")
     )
 
-    if not contacts.exists():
+    if not contacts:
         return []
 
     result = []
@@ -294,7 +296,8 @@ def _get_relationships_from_party_relationship(diver: DiverProfile) -> list:
         "student",
     ]
 
-    relationships = (
+    # Evaluate once - don't use .exists() then iterate (causes 2 queries)
+    relationships = list(
         PartyRelationship.objects.filter(
             Q(from_person=diver.person) | Q(to_person=diver.person),
             relationship_type__in=DIVE_RELATIONSHIP_TYPES,
@@ -305,7 +308,7 @@ def _get_relationships_from_party_relationship(diver: DiverProfile) -> list:
         .prefetch_related("diver_meta")
     )
 
-    if not relationships.exists():
+    if not relationships:
         return []
 
     result = []
@@ -420,29 +423,32 @@ def get_diver_dive_history(
     return qs.order_by("-checked_in_at")[:limit]
 
 
-def get_diver_medical_details(diver: DiverProfile) -> MedicalDetails:
+def get_diver_medical_details(
+    diver: DiverProfile,
+    questionnaire_instance: Optional[object] = None,
+) -> MedicalDetails:
     """Get full medical clearance details for a diver.
 
     Args:
         diver: DiverProfile instance
+        questionnaire_instance: Optional pre-fetched instance to avoid extra query
 
     Returns:
         MedicalDetails dataclass with clearance information
     """
     today = date.today()
-
-    # Try to get medical instance from questionnaire system
-    questionnaire_instance = None
     clearance_notes = ""
 
-    try:
-        from ..medical.services import get_diver_medical_instance
+    # Use provided instance or fetch if not provided
+    if questionnaire_instance is None:
+        try:
+            from ..medical.services import get_diver_medical_instance
+            questionnaire_instance = get_diver_medical_instance(diver)
+        except ImportError:
+            pass
 
-        questionnaire_instance = get_diver_medical_instance(diver)
-        if questionnaire_instance:
-            clearance_notes = getattr(questionnaire_instance, "clearance_notes", "") or ""
-    except ImportError:
-        pass
+    if questionnaire_instance:
+        clearance_notes = getattr(questionnaire_instance, "clearance_notes", "") or ""
 
     # Calculate validity
     clearance_date = diver.medical_clearance_date
@@ -511,6 +517,16 @@ def get_diver_with_full_context(diver_id: UUID) -> Optional[dict]:
 
     person = diver.person
 
+    # Get medical context in a single query (status + instance)
+    try:
+        from ..medical.services import get_diver_medical_context
+        medical_ctx = get_diver_medical_context(diver)
+        medical_status = medical_ctx["status"].value
+        medical_instance = medical_ctx["instance"]
+    except ImportError:
+        medical_status = None
+        medical_instance = None
+
     return {
         "diver": diver,
         "person": person,
@@ -520,7 +536,9 @@ def get_diver_with_full_context(diver_id: UUID) -> Optional[dict]:
         "relationships": get_diver_relationships(diver),
         "booking_history": get_diver_booking_history(diver),
         "dive_history": get_diver_dive_history(diver),
-        "medical_details": get_diver_medical_details(diver),
+        "medical_details": get_diver_medical_details(diver, questionnaire_instance=medical_instance),
+        "medical_status": medical_status,
+        "medical_instance": medical_instance,
         "demographics": getattr(person, "demographics", None),
     }
 
