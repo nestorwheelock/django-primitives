@@ -1,0 +1,310 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:lead-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Leads</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ lead.get_full_name }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+            <div class="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
+                <span class="text-2xl font-bold text-blue-600">{{ lead.first_name|slice:":1"|upper }}</span>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">{{ lead.get_full_name }}</h1>
+                <div class="flex items-center space-x-2 mt-1">
+                    {% if lead.lead_status == 'new' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">New</span>
+                    {% elif lead.lead_status == 'contacted' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Contacted</span>
+                    {% elif lead.lead_status == 'qualified' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Qualified</span>
+                    {% elif lead.lead_status == 'converted' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Converted</span>
+                    {% elif lead.lead_status == 'lost' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Lost</span>
+                    {% endif %}
+                    {% if lead.lead_source %}
+                    <span class="text-sm text-gray-500">via {{ lead.get_lead_source_display }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center space-x-3">
+            {% if not is_diver and lead.lead_status != 'converted' and lead.lead_status != 'lost' %}
+            <a href="{% url 'diveops:lead-convert' pk=lead.pk %}"
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700">
+                {% icon "user-check" "w-4 h-4 mr-2" %}
+                Convert to Diver
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Content -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Contact Information -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Contact Information</h2>
+                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Email</dt>
+                        <dd class="mt-1 text-sm text-gray-900">
+                            <a href="mailto:{{ lead.email }}" class="text-blue-600 hover:underline">{{ lead.email }}</a>
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Phone</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ lead.phone|default:"-" }}</dd>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <dt class="text-sm font-medium text-gray-500">Notes</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ lead.notes|default:"-"|linebreaks }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <!-- Add Note Form -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Add Note</h2>
+                <form method="post" action="{% url 'diveops:lead-add-note' pk=lead.pk %}">
+                    {% csrf_token %}
+                    <div class="mb-4">
+                        <textarea name="body" rows="3"
+                                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                  placeholder="Add a note about this lead..."></textarea>
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="submit"
+                                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
+                            Add Note
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Activity Timeline -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Activity Timeline</h2>
+                {% if timeline %}
+                <div class="flow-root">
+                    <ul class="-mb-8">
+                        {% for item in timeline %}
+                        <li>
+                            <div class="relative pb-8">
+                                {% if not forloop.last %}
+                                <span class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200"></span>
+                                {% endif %}
+                                <div class="relative flex space-x-3">
+                                    <div>
+                                        {% if item.type == 'note' %}
+                                        <!-- Note icon -->
+                                        <span class="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center ring-8 ring-white">
+                                            <svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+                                            </svg>
+                                        </span>
+                                        {% elif item.to_status == 'new' %}
+                                        <span class="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center ring-8 ring-white">
+                                            <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                            </svg>
+                                        </span>
+                                        {% elif item.to_status == 'contacted' %}
+                                        <span class="h-8 w-8 rounded-full bg-yellow-500 flex items-center justify-center ring-8 ring-white">
+                                            <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                            </svg>
+                                        </span>
+                                        {% elif item.to_status == 'qualified' %}
+                                        <span class="h-8 w-8 rounded-full bg-purple-500 flex items-center justify-center ring-8 ring-white">
+                                            <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            </svg>
+                                        </span>
+                                        {% elif item.to_status == 'converted' %}
+                                        <span class="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center ring-8 ring-white">
+                                            <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                            </svg>
+                                        </span>
+                                        {% elif item.to_status == 'lost' %}
+                                        <span class="h-8 w-8 rounded-full bg-gray-500 flex items-center justify-center ring-8 ring-white">
+                                            <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                            </svg>
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
+                                        <div>
+                                            {% if item.type == 'note' %}
+                                            <p class="text-sm text-gray-500 font-medium">Note added</p>
+                                            <p class="mt-1 text-sm text-gray-900">{{ item.body }}</p>
+                                            {% else %}
+                                            <p class="text-sm text-gray-900">
+                                                {% if item.from_status %}
+                                                Changed from <span class="font-medium">{{ item.from_status }}</span> to
+                                                {% else %}
+                                                Status set to
+                                                {% endif %}
+                                                <span class="font-medium">{{ item.to_status }}</span>
+                                            </p>
+                                            {% if item.note %}
+                                            <p class="mt-1 text-sm text-gray-500">{{ item.note }}</p>
+                                            {% endif %}
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-right text-sm whitespace-nowrap text-gray-500">
+                                            <time>{{ item.created_at|date:"M d, Y H:i" }}</time>
+                                            {% if item.actor %}
+                                            <br><span class="text-xs">by {{ item.actor.get_full_name|default:item.actor.username }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% else %}
+                <p class="text-gray-500 text-sm">No activity recorded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Quick Actions -->
+            {% if lead.lead_status != 'converted' and lead.lead_status != 'lost' %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+                <div class="space-y-3">
+                    {% if lead.lead_status == 'new' %}
+                    <form method="post" action="{% url 'diveops:lead-status-update' pk=lead.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="contacted">
+                        <button type="submit" class="w-full px-4 py-2 text-left rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center">
+                            <span class="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center mr-3">
+                                <svg class="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                </svg>
+                            </span>
+                            <span class="font-medium text-gray-900">Mark as Contacted</span>
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    {% if lead.lead_status == 'new' or lead.lead_status == 'contacted' %}
+                    <form method="post" action="{% url 'diveops:lead-status-update' pk=lead.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="qualified">
+                        <button type="submit" class="w-full px-4 py-2 text-left rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center">
+                            <span class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3">
+                                <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </span>
+                            <span class="font-medium text-gray-900">Mark as Qualified</span>
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    <!-- Mark as Lost (opens modal) -->
+                    <button type="button" onclick="document.getElementById('lostModal').classList.remove('hidden')"
+                            class="w-full px-4 py-2 text-left rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center">
+                        <span class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-3">
+                            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </span>
+                        <span class="font-medium text-gray-900">Mark as Lost</span>
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Lead Info -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Lead Info</h2>
+                <dl class="space-y-3">
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Created</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ lead.created_at|date:"M d, Y H:i" }}</dd>
+                    </div>
+                    {% if lead.lead_owner %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Assigned To</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ lead.lead_owner.get_full_name|default:lead.lead_owner.username }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if lead.lead_converted_at %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Converted At</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ lead.lead_converted_at|date:"M d, Y H:i" }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if lead.lead_lost_reason %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Lost Reason</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ lead.lead_lost_reason }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lost Modal -->
+<div id="lostModal" class="fixed inset-0 z-50 overflow-y-auto hidden">
+    <div class="flex min-h-screen items-center justify-center p-4">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="document.getElementById('lostModal').classList.add('hidden')"></div>
+        <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Mark Lead as Lost</h3>
+            <form method="post" action="{% url 'diveops:lead-status-update' pk=lead.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="lost">
+                <div class="mb-4">
+                    <label for="note" class="block text-sm font-medium text-gray-700 mb-1">Reason (optional)</label>
+                    <textarea name="note" id="note" rows="3"
+                              class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                              placeholder="Why was this lead lost?"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="document.getElementById('lostModal').classList.add('hidden')"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700">
+                        Mark as Lost
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

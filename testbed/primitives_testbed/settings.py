@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     # Django Primitives - Infrastructure
     "django_decisioning",
     "django_audit_log",
+    "django_communication",
     # Django Primitives - Domain
     "django_catalog",
     "django_encounters",
@@ -269,6 +270,12 @@ PORTAL_UI = {
             "icon": "users",
         },
         {
+            "section": "CRM",
+            "label": "Leads",
+            "url": "diveops:lead-list",
+            "icon": "user-plus",
+        },
+        {
             "section": "Dive Operations",
             "label": "Dive Sites",
             "url": "diveops:staff-site-list",
@@ -345,6 +352,18 @@ PORTAL_UI = {
             "label": "AI Settings",
             "url": "diveops:ai-settings",
             "icon": "cpu",
+        },
+        {
+            "section": "Configuration",
+            "label": "Communication Settings",
+            "url": "diveops:communication-settings",
+            "icon": "mail",
+        },
+        {
+            "section": "Configuration",
+            "label": "Message Templates",
+            "url": "diveops:message-template-list",
+            "icon": "file-text",
         },
         {
             "section": "Finance",

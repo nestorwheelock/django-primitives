@@ -43,6 +43,8 @@ from .models import (
     AgreementTemplate,
     AISettings,
     Booking,
+    EmailSettings,
+    EmailTemplate,
     CertificationLevel,
     DiverCertification,
     DiverProfile,
@@ -5752,6 +5754,393 @@ class AISettingsView(StaffPortalMixin, TemplateView):
         return redirect("diveops:ai-settings")
 
 
+# =============================================================================
+# Email Settings Configuration
+# =============================================================================
+
+
+class EmailSettingsView(StaffPortalMixin, TemplateView):
+    """View and edit email settings configuration."""
+
+    template_name = "diveops/staff/email_settings.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        settings = EmailSettings.get_instance()
+        context["settings"] = settings
+        context["page_title"] = "Email Settings"
+
+        # Check configuration status
+        context["is_configured"] = settings.is_configured()
+        context["is_enabled"] = settings.enabled
+
+        # Get templates for display
+        context["templates"] = EmailTemplate.objects.filter(
+            is_active=True, deleted_at__isnull=True
+        ).order_by("key")
+
+        # Provider choices
+        context["provider_choices"] = [
+            ("console", "Console (Development)"),
+            ("ses_api", "Amazon SES (Production)"),
+        ]
+
+        # AWS region choices
+        context["region_choices"] = [
+            ("us-east-1", "US East (N. Virginia)"),
+            ("us-east-2", "US East (Ohio)"),
+            ("us-west-1", "US West (N. California)"),
+            ("us-west-2", "US West (Oregon)"),
+            ("eu-west-1", "EU (Ireland)"),
+            ("eu-west-2", "EU (London)"),
+            ("eu-central-1", "EU (Frankfurt)"),
+            ("ap-southeast-1", "Asia Pacific (Singapore)"),
+            ("ap-southeast-2", "Asia Pacific (Sydney)"),
+            ("ap-northeast-1", "Asia Pacific (Tokyo)"),
+        ]
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        settings = EmailSettings.get_instance()
+
+        # Handle test email action
+        if request.POST.get("action") == "test_email":
+            return self._send_test_email(request, settings)
+
+        # Update general settings
+        settings.enabled = request.POST.get("enabled") == "on"
+        settings.provider = request.POST.get("provider", settings.provider)
+        settings.sandbox_mode = request.POST.get("sandbox_mode") == "on"
+
+        # Update sender identity
+        settings.default_from_email = request.POST.get("default_from_email", "").strip()
+        settings.default_from_name = request.POST.get("default_from_name", "").strip()
+        settings.reply_to_email = request.POST.get("reply_to_email", "").strip()
+
+        # Update AWS configuration
+        settings.aws_region = request.POST.get("aws_region", settings.aws_region)
+        settings.configuration_set = request.POST.get("configuration_set", "").strip()
+
+        # Update AWS credentials (only if provided, preserves existing if blank)
+        aws_access_key = request.POST.get("aws_access_key_id", "").strip()
+        aws_secret_key = request.POST.get("aws_secret_access_key", "").strip()
+
+        if request.POST.get("clear_aws_credentials"):
+            settings.aws_access_key_id = ""
+            settings.aws_secret_access_key = ""
+        else:
+            if aws_access_key:
+                settings.aws_access_key_id = aws_access_key
+            if aws_secret_key:
+                settings.aws_secret_access_key = aws_secret_key
+
+        settings.save()
+
+        messages.success(request, "Email settings saved successfully.")
+        return redirect("diveops:email-settings")
+
+    def _send_test_email(self, request, settings):
+        """Send a test email to verify configuration."""
+        from .email_service import send_email
+
+        test_recipient = request.POST.get("test_email_recipient", "").strip()
+        if not test_recipient:
+            messages.error(request, "Please enter a recipient email address.")
+            return redirect("diveops:email-settings")
+
+        result = send_email(
+            to=test_recipient,
+            subject="Test Email from DiveOps",
+            body_text=f"""This is a test email from DiveOps.
+
+Configuration:
+- Provider: {settings.provider}
+- Region: {settings.aws_region}
+- From: {settings.get_from_address()}
+- Sandbox Mode: {settings.sandbox_mode}
+
+If you received this email, your email configuration is working correctly.
+""",
+            body_html=f"""
+<html>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h1 style="color: #2563eb;">Test Email from DiveOps</h1>
+    <p>This is a test email to verify your email configuration.</p>
+
+    <h2 style="color: #374151;">Configuration</h2>
+    <table style="border-collapse: collapse; width: 100%;">
+        <tr style="background-color: #f3f4f6;">
+            <td style="padding: 8px; border: 1px solid #e5e7eb;"><strong>Provider</strong></td>
+            <td style="padding: 8px; border: 1px solid #e5e7eb;">{settings.provider}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px; border: 1px solid #e5e7eb;"><strong>Region</strong></td>
+            <td style="padding: 8px; border: 1px solid #e5e7eb;">{settings.aws_region}</td>
+        </tr>
+        <tr style="background-color: #f3f4f6;">
+            <td style="padding: 8px; border: 1px solid #e5e7eb;"><strong>From</strong></td>
+            <td style="padding: 8px; border: 1px solid #e5e7eb;">{settings.get_from_address()}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px; border: 1px solid #e5e7eb;"><strong>Sandbox Mode</strong></td>
+            <td style="padding: 8px; border: 1px solid #e5e7eb;">{settings.sandbox_mode}</td>
+        </tr>
+    </table>
+
+    <p style="margin-top: 24px; color: #059669;">
+        If you received this email, your email configuration is working correctly.
+    </p>
+</body>
+</html>
+""",
+        )
+
+        if result.sent:
+            if result.reason == "sandbox":
+                messages.warning(
+                    request,
+                    f"Test email logged (sandbox mode). Would send to {test_recipient} via {result.provider}."
+                )
+            else:
+                messages.success(
+                    request,
+                    f"Test email sent successfully to {test_recipient} via {result.provider}."
+                    + (f" Message ID: {result.message_id}" if result.message_id else "")
+                )
+        else:
+            messages.error(request, f"Failed to send test email: {result.reason}")
+
+        return redirect("diveops:email-settings")
+
+
+# ============================================================================
+# Email Template Views
+# ============================================================================
+
+
+class EmailTemplateListView(StaffPortalMixin, ListView):
+    """List all email templates."""
+
+    model = EmailTemplate
+    template_name = "diveops/staff/email_template_list.html"
+    context_object_name = "templates"
+    paginate_by = 25
+
+    def get_queryset(self):
+        queryset = EmailTemplate.objects.filter(deleted_at__isnull=True).order_by("key")
+
+        # Filter by active status
+        status = self.request.GET.get("status")
+        if status == "active":
+            queryset = queryset.filter(is_active=True)
+        elif status == "inactive":
+            queryset = queryset.filter(is_active=False)
+
+        # Search by key or name
+        search = self.request.GET.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                models.Q(key__icontains=search) | models.Q(name__icontains=search)
+            )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Email Templates"
+        context["current_status"] = self.request.GET.get("status", "")
+        context["current_search"] = self.request.GET.get("search", "")
+        context["total_count"] = EmailTemplate.objects.filter(deleted_at__isnull=True).count()
+        context["active_count"] = EmailTemplate.objects.filter(
+            deleted_at__isnull=True, is_active=True
+        ).count()
+        return context
+
+
+class EmailTemplateCreateView(StaffPortalMixin, View):
+    """Create a new email template."""
+
+    template_name = "diveops/staff/email_template_form.html"
+
+    def get(self, request):
+        return render(request, self.template_name, {
+            "page_title": "Create Email Template",
+            "template": None,
+        })
+
+    def post(self, request):
+        key = request.POST.get("key", "").strip()
+        name = request.POST.get("name", "").strip()
+        subject_template = request.POST.get("subject_template", "").strip()
+        body_text_template = request.POST.get("body_text_template", "").strip()
+        body_html_template = request.POST.get("body_html_template", "").strip()
+        is_active = request.POST.get("is_active") == "on"
+
+        # Validation
+        errors = []
+        if not key:
+            errors.append("Template key is required.")
+        elif EmailTemplate.objects.filter(key=key, deleted_at__isnull=True).exists():
+            errors.append(f"A template with key '{key}' already exists.")
+        if not name:
+            errors.append("Template name is required.")
+        if not subject_template:
+            errors.append("Subject template is required.")
+        if not body_text_template:
+            errors.append("Plain text body is required.")
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return render(request, self.template_name, {
+                "page_title": "Create Email Template",
+                "template": {
+                    "key": key,
+                    "name": name,
+                    "subject_template": subject_template,
+                    "body_text_template": body_text_template,
+                    "body_html_template": body_html_template,
+                    "is_active": is_active,
+                },
+            })
+
+        template = EmailTemplate.objects.create(
+            key=key,
+            name=name,
+            subject_template=subject_template,
+            body_text_template=body_text_template,
+            body_html_template=body_html_template,
+            is_active=is_active,
+            updated_by=request.user,
+        )
+
+        messages.success(request, f"Email template '{name}' created successfully.")
+        return redirect("diveops:email-template-detail", pk=template.pk)
+
+
+class EmailTemplateDetailView(StaffPortalMixin, View):
+    """View email template details."""
+
+    template_name = "diveops/staff/email_template_detail.html"
+
+    def get(self, request, pk):
+        template = get_object_or_404(EmailTemplate, pk=pk, deleted_at__isnull=True)
+        return render(request, self.template_name, {
+            "page_title": template.name,
+            "template": template,
+        })
+
+
+class EmailTemplateUpdateView(StaffPortalMixin, View):
+    """Edit an email template."""
+
+    template_name = "diveops/staff/email_template_form.html"
+
+    def get(self, request, pk):
+        template = get_object_or_404(EmailTemplate, pk=pk, deleted_at__isnull=True)
+        return render(request, self.template_name, {
+            "page_title": f"Edit: {template.name}",
+            "template": template,
+            "is_edit": True,
+        })
+
+    def post(self, request, pk):
+        template = get_object_or_404(EmailTemplate, pk=pk, deleted_at__isnull=True)
+
+        key = request.POST.get("key", "").strip()
+        name = request.POST.get("name", "").strip()
+        subject_template = request.POST.get("subject_template", "").strip()
+        body_text_template = request.POST.get("body_text_template", "").strip()
+        body_html_template = request.POST.get("body_html_template", "").strip()
+        is_active = request.POST.get("is_active") == "on"
+
+        # Validation
+        errors = []
+        if not key:
+            errors.append("Template key is required.")
+        elif EmailTemplate.objects.filter(key=key, deleted_at__isnull=True).exclude(pk=pk).exists():
+            errors.append(f"A template with key '{key}' already exists.")
+        if not name:
+            errors.append("Template name is required.")
+        if not subject_template:
+            errors.append("Subject template is required.")
+        if not body_text_template:
+            errors.append("Plain text body is required.")
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            # Pass form data back
+            template.key = key
+            template.name = name
+            template.subject_template = subject_template
+            template.body_text_template = body_text_template
+            template.body_html_template = body_html_template
+            template.is_active = is_active
+            return render(request, self.template_name, {
+                "page_title": f"Edit: {template.name}",
+                "template": template,
+                "is_edit": True,
+            })
+
+        template.key = key
+        template.name = name
+        template.subject_template = subject_template
+        template.body_text_template = body_text_template
+        template.body_html_template = body_html_template
+        template.is_active = is_active
+        template.updated_by = request.user
+        template.save()
+
+        messages.success(request, f"Email template '{name}' updated successfully.")
+        return redirect("diveops:email-template-detail", pk=template.pk)
+
+
+class EmailTemplateDeleteView(StaffPortalMixin, View):
+    """Delete (soft) an email template."""
+
+    def post(self, request, pk):
+        template = get_object_or_404(EmailTemplate, pk=pk, deleted_at__isnull=True)
+        template_name = template.name
+        template.delete()  # Soft delete via BaseModel
+        messages.success(request, f"Email template '{template_name}' deleted.")
+        return redirect("diveops:email-template-list")
+
+
+class EmailTemplatePreviewView(StaffPortalMixin, View):
+    """Preview an email template with sample data."""
+
+    def post(self, request, pk):
+        from .email_service import render_email_template
+
+        template = get_object_or_404(EmailTemplate, pk=pk, deleted_at__isnull=True)
+
+        # Sample context for preview
+        sample_context = {
+            "user_name": "John Doe",
+            "first_name": "John",
+            "last_name": "Doe",
+            "email": "john.doe@example.com",
+            "site_name": "DiveOps",
+            "site_url": request.build_absolute_uri("/"),
+        }
+
+        try:
+            result = render_email_template(template.key, sample_context)
+            return JsonResponse({
+                "success": True,
+                "subject": result["subject"],
+                "body_text": result["body_text"],
+                "body_html": result["body_html"],
+            })
+        except Exception as e:
+            return JsonResponse({
+                "success": False,
+                "error": str(e),
+            }, status=400)
+
+
 # ============================================================================
 # Medical Questionnaire Views
 # ============================================================================
@@ -7726,3 +8115,853 @@ class ExcursionMakeRecurringView(StaffPortalMixin, FormView):
 
     def get_success_url(self):
         return reverse("diveops:excursion-list")
+
+
+# ============================================================================
+# Communication Settings Views (using django-communication primitive)
+# ============================================================================
+
+
+class CommunicationSettingsView(StaffPortalMixin, TemplateView):
+    """View and edit communication settings (email, SMS)."""
+
+    template_name = "diveops/staff/communication_settings.html"
+
+    def get_context_data(self, **kwargs):
+        from django_communication.models import (
+            CommunicationSettings,
+            MessageTemplate,
+            Message,
+            Channel,
+            MessageStatus,
+        )
+
+        context = super().get_context_data(**kwargs)
+
+        # Get or create settings singleton
+        settings = CommunicationSettings.objects.first()
+        if not settings:
+            settings = CommunicationSettings.objects.create()
+
+        context["settings"] = settings
+        context["page_title"] = "Communication Settings"
+
+        # Channel options
+        context["channel_choices"] = Channel.choices
+
+        # Provider choices
+        context["email_provider_choices"] = [
+            ("console", "Console (Development)"),
+            ("ses", "Amazon SES (Production)"),
+        ]
+        context["sms_provider_choices"] = [
+            ("console", "Console (Development)"),
+        ]
+
+        # AWS region choices
+        context["region_choices"] = [
+            ("us-east-1", "US East (N. Virginia)"),
+            ("us-east-2", "US East (Ohio)"),
+            ("us-west-1", "US West (N. California)"),
+            ("us-west-2", "US West (Oregon)"),
+            ("eu-west-1", "EU (Ireland)"),
+            ("eu-west-2", "EU (London)"),
+            ("eu-central-1", "EU (Frankfurt)"),
+            ("ap-southeast-1", "Asia Pacific (Singapore)"),
+            ("ap-southeast-2", "Asia Pacific (Sydney)"),
+            ("ap-northeast-1", "Asia Pacific (Tokyo)"),
+        ]
+
+        # Get message statistics
+        context["template_count"] = MessageTemplate.objects.filter(
+            is_active=True, deleted_at__isnull=True
+        ).count()
+        context["message_count"] = Message.objects.count()
+        context["sent_count"] = Message.objects.filter(status=MessageStatus.SENT).count()
+        context["failed_count"] = Message.objects.filter(status=MessageStatus.FAILED).count()
+
+        # Recent messages for preview
+        context["recent_messages"] = Message.objects.order_by("-created_at")[:5]
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from django_communication.models import CommunicationSettings
+
+        settings = CommunicationSettings.objects.first()
+        if not settings:
+            settings = CommunicationSettings.objects.create()
+
+        # Update email settings
+        settings.email_enabled = request.POST.get("email_enabled") == "on"
+        settings.email_provider = request.POST.get("email_provider", settings.email_provider)
+        settings.email_from_address = request.POST.get("email_from_address", "").strip()
+        settings.email_from_name = request.POST.get("email_from_name", "").strip()
+        settings.email_reply_to = request.POST.get("email_reply_to", "").strip()
+
+        # Update SMS settings
+        settings.sms_enabled = request.POST.get("sms_enabled") == "on"
+        settings.sms_provider = request.POST.get("sms_provider", settings.sms_provider)
+        settings.sms_from_number = request.POST.get("sms_from_number", "").strip()
+
+        # Update AWS SES configuration
+        settings.ses_region = request.POST.get("ses_region", settings.ses_region)
+        settings.ses_configuration_set = request.POST.get("ses_configuration_set", "").strip()
+
+        # Update AWS credentials (only if provided)
+        aws_access_key = request.POST.get("ses_access_key_id", "").strip()
+        aws_secret_key = request.POST.get("ses_secret_access_key", "").strip()
+
+        if request.POST.get("clear_aws_credentials"):
+            settings.ses_access_key_id = ""
+            settings.ses_secret_access_key = ""
+        else:
+            if aws_access_key:
+                settings.ses_access_key_id = aws_access_key
+            if aws_secret_key:
+                settings.ses_secret_access_key = aws_secret_key
+
+        # Update default channel
+        settings.default_channel = request.POST.get("default_channel", settings.default_channel)
+        settings.sandbox_mode = request.POST.get("sandbox_mode") == "on"
+
+        settings.save()
+
+        messages.success(request, "Communication settings saved successfully.")
+        return redirect("diveops:communication-settings")
+
+
+class MessageTemplateListView(StaffPortalMixin, ListView):
+    """List all message templates."""
+
+    template_name = "diveops/staff/message_template_list.html"
+    context_object_name = "templates"
+    paginate_by = 25
+
+    def get_queryset(self):
+        from django_communication.models import MessageTemplate
+
+        queryset = MessageTemplate.objects.filter(deleted_at__isnull=True).order_by("key")
+
+        # Filter by active status
+        status = self.request.GET.get("status")
+        if status == "active":
+            queryset = queryset.filter(is_active=True)
+        elif status == "inactive":
+            queryset = queryset.filter(is_active=False)
+
+        # Filter by message type
+        message_type = self.request.GET.get("type")
+        if message_type:
+            queryset = queryset.filter(message_type=message_type)
+
+        # Search by key or name
+        search = self.request.GET.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                models.Q(key__icontains=search) | models.Q(name__icontains=search)
+            )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        from django_communication.models import MessageTemplate, MessageType
+
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Message Templates"
+        context["current_status"] = self.request.GET.get("status", "")
+        context["current_type"] = self.request.GET.get("type", "")
+        context["current_search"] = self.request.GET.get("search", "")
+        context["message_types"] = MessageType.choices
+        context["total_count"] = MessageTemplate.objects.filter(deleted_at__isnull=True).count()
+        context["active_count"] = MessageTemplate.objects.filter(
+            deleted_at__isnull=True, is_active=True
+        ).count()
+        return context
+
+
+class MessageTemplateCreateView(StaffPortalMixin, View):
+    """Create a new message template."""
+
+    template_name = "diveops/staff/message_template_form.html"
+
+    def get(self, request):
+        from django_communication.models import MessageType
+
+        return render(request, self.template_name, {
+            "page_title": "Create Message Template",
+            "template": None,
+            "message_types": MessageType.choices,
+        })
+
+    def post(self, request):
+        from django_communication.models import MessageTemplate
+
+        template = MessageTemplate(
+            key=request.POST.get("key", "").strip(),
+            name=request.POST.get("name", "").strip(),
+            message_type=request.POST.get("message_type", "transactional"),
+            email_subject=request.POST.get("email_subject", "").strip(),
+            email_body_text=request.POST.get("email_body_text", "").strip(),
+            email_body_html=request.POST.get("email_body_html", "").strip(),
+            sms_body=request.POST.get("sms_body", "").strip(),
+            is_active=request.POST.get("is_active") == "on",
+            updated_by=request.user,
+        )
+
+        try:
+            template.full_clean()
+            template.save()
+            messages.success(request, f"Template '{template.name}' created successfully.")
+            return redirect("diveops:message-template-detail", pk=template.pk)
+        except ValidationError as e:
+            messages.error(request, f"Validation error: {e}")
+            from django_communication.models import MessageType
+            return render(request, self.template_name, {
+                "page_title": "Create Message Template",
+                "template": template,
+                "message_types": MessageType.choices,
+            })
+
+
+class MessageTemplateDetailView(StaffPortalMixin, DetailView):
+    """View message template details."""
+
+    template_name = "diveops/staff/message_template_detail.html"
+    context_object_name = "template"
+
+    def get_queryset(self):
+        from django_communication.models import MessageTemplate
+        return MessageTemplate.objects.filter(deleted_at__isnull=True)
+
+    def get_context_data(self, **kwargs):
+        from django_communication.models import Message
+        from django.template import Template, Context
+
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Template: {self.object.name}"
+
+        # Get recent messages using this template
+        context["recent_messages"] = Message.objects.filter(
+            template=self.object
+        ).order_by("-created_at")[:10]
+        context["message_count"] = Message.objects.filter(template=self.object).count()
+
+        # Render preview with sample data
+        sample_context = {
+            "recipient": {
+                "first_name": "Maria",
+                "last_name": "Garcia",
+                "email": "maria@example.com",
+                "phone": "+52 998 123 4567",
+            },
+            "booking": {
+                "reference": "HD-2024-0042",
+                "date": "January 15, 2024",
+                "guest_count": 2,
+            },
+            "excursion": {
+                "name": "Cenote Adventure Dive",
+                "departure_time": "8:00 AM",
+                "meeting_point": "Happy Diving Shop, Tulum",
+            },
+            "payment": {
+                "reference": "PAY-2024-0042",
+                "amount": "$150.00 USD",
+                "date": "January 10, 2024",
+                "method": "Credit Card",
+            },
+            "questionnaire_url": "https://happydiving.mx/medical/abc123",
+        }
+
+        try:
+            if self.object.email_body_html:
+                html_template = Template(self.object.email_body_html)
+                context["preview_html"] = html_template.render(Context(sample_context))
+            if self.object.email_subject:
+                subject_template = Template(self.object.email_subject)
+                context["preview_subject"] = subject_template.render(Context(sample_context))
+        except Exception as e:
+            context["preview_html"] = f"<p style='color: red;'>Error rendering template: {e}</p>"
+            context["preview_subject"] = "Error rendering subject"
+
+        return context
+
+
+class MessageTemplatePreviewView(StaffPortalMixin, View):
+    """Render message template preview in a standalone page."""
+
+    def get(self, request, pk):
+        from django_communication.models import MessageTemplate
+        from django.template import Template, Context
+        from django.http import HttpResponse
+
+        template = get_object_or_404(MessageTemplate, pk=pk, deleted_at__isnull=True)
+
+        # Sample context data
+        sample_context = {
+            "recipient": {
+                "first_name": "Maria",
+                "last_name": "Garcia",
+                "email": "maria@example.com",
+                "phone": "+52 998 123 4567",
+            },
+            "booking": {
+                "reference": "HD-2024-0042",
+                "date": "January 15, 2024",
+                "guest_count": 2,
+            },
+            "excursion": {
+                "name": "Cenote Adventure Dive",
+                "departure_time": "8:00 AM",
+                "meeting_point": "Happy Diving Shop, Tulum",
+            },
+            "payment": {
+                "reference": "PAY-2024-0042",
+                "amount": "$150.00 USD",
+                "date": "January 10, 2024",
+                "method": "Credit Card",
+            },
+            "questionnaire_url": "https://happydiving.mx/medical/abc123",
+        }
+
+        try:
+            if template.email_body_html:
+                html_template = Template(template.email_body_html)
+                rendered_html = html_template.render(Context(sample_context))
+                return HttpResponse(rendered_html, content_type="text/html")
+            else:
+                return HttpResponse(
+                    "<html><body><p>No HTML template configured.</p></body></html>",
+                    content_type="text/html"
+                )
+        except Exception as e:
+            return HttpResponse(
+                f"<html><body><p style='color: red;'>Error rendering template: {e}</p></body></html>",
+                content_type="text/html"
+            )
+
+
+class MessageTemplateUpdateView(StaffPortalMixin, View):
+    """Edit an existing message template."""
+
+    template_name = "diveops/staff/message_template_form.html"
+
+    def get(self, request, pk):
+        from django_communication.models import MessageTemplate, MessageType
+
+        template = get_object_or_404(MessageTemplate, pk=pk, deleted_at__isnull=True)
+        return render(request, self.template_name, {
+            "page_title": f"Edit Template: {template.name}",
+            "template": template,
+            "message_types": MessageType.choices,
+        })
+
+    def post(self, request, pk):
+        from django_communication.models import MessageTemplate, MessageType
+
+        template = get_object_or_404(MessageTemplate, pk=pk, deleted_at__isnull=True)
+
+        template.key = request.POST.get("key", "").strip()
+        template.name = request.POST.get("name", "").strip()
+        template.message_type = request.POST.get("message_type", template.message_type)
+        template.email_subject = request.POST.get("email_subject", "").strip()
+        template.email_body_text = request.POST.get("email_body_text", "").strip()
+        template.email_body_html = request.POST.get("email_body_html", "").strip()
+        template.sms_body = request.POST.get("sms_body", "").strip()
+        template.is_active = request.POST.get("is_active") == "on"
+        template.updated_by = request.user
+
+        try:
+            template.full_clean()
+            template.save()
+            messages.success(request, f"Template '{template.name}' updated successfully.")
+            return redirect("diveops:message-template-detail", pk=template.pk)
+        except ValidationError as e:
+            messages.error(request, f"Validation error: {e}")
+            return render(request, self.template_name, {
+                "page_title": f"Edit Template: {template.name}",
+                "template": template,
+                "message_types": MessageType.choices,
+            })
+
+
+class MessageTemplateDeleteView(StaffPortalMixin, View):
+    """Delete (soft delete) a message template."""
+
+    def post(self, request, pk):
+        from django_communication.models import MessageTemplate
+        from django.utils import timezone
+
+        template = get_object_or_404(MessageTemplate, pk=pk, deleted_at__isnull=True)
+        template.deleted_at = timezone.now()
+        template.save(update_fields=["deleted_at", "updated_at"])
+
+        messages.success(request, f"Template '{template.name}' deleted.")
+        return redirect("diveops:message-template-list")
+
+
+class MessageLogView(StaffPortalMixin, ListView):
+    """View message send history."""
+
+    template_name = "diveops/staff/message_log.html"
+    context_object_name = "messages_list"
+    paginate_by = 50
+
+    def get_queryset(self):
+        from django_communication.models import Message
+
+        queryset = Message.objects.order_by("-created_at")
+
+        # Filter by status
+        status = self.request.GET.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # Filter by channel
+        channel = self.request.GET.get("channel")
+        if channel:
+            queryset = queryset.filter(channel=channel)
+
+        # Search by to_address
+        search = self.request.GET.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                models.Q(to_address__icontains=search) |
+                models.Q(subject__icontains=search)
+            )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        from django_communication.models import Message, MessageStatus, Channel
+
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Message Log"
+        context["current_status"] = self.request.GET.get("status", "")
+        context["current_channel"] = self.request.GET.get("channel", "")
+        context["current_search"] = self.request.GET.get("search", "")
+        context["status_choices"] = MessageStatus.choices
+        context["channel_choices"] = Channel.choices
+        context["total_count"] = Message.objects.count()
+        context["sent_count"] = Message.objects.filter(status=MessageStatus.SENT).count()
+        context["failed_count"] = Message.objects.filter(status=MessageStatus.FAILED).count()
+        return context
+
+
+class MessageDetailView(StaffPortalMixin, DetailView):
+    """View individual message details."""
+
+    template_name = "diveops/staff/message_detail.html"
+    context_object_name = "message"
+
+    def get_queryset(self):
+        from django_communication.models import Message
+        return Message.objects.all()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Message: {self.object.subject or self.object.to_address}"
+        return context
+
+
+# ============================================================================
+# Message Profile Views (django-communication primitive)
+# ============================================================================
+
+
+class MessageProfileListView(StaffPortalMixin, ListView):
+    """List all message profiles."""
+
+    template_name = "diveops/staff/message_profile_list.html"
+    context_object_name = "profiles"
+    paginate_by = 25
+
+    def get_queryset(self):
+        from django_communication.models import MessageProfile
+
+        queryset = MessageProfile.objects.filter(deleted_at__isnull=True).order_by("slug")
+
+        # Filter by active status
+        status = self.request.GET.get("status")
+        if status == "active":
+            queryset = queryset.filter(is_active=True)
+        elif status == "inactive":
+            queryset = queryset.filter(is_active=False)
+
+        # Search by slug or name
+        search = self.request.GET.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                models.Q(slug__icontains=search) | models.Q(name__icontains=search)
+            )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        from django_communication.models import MessageProfile, CommunicationSettings
+
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Message Profiles"
+        context["current_status"] = self.request.GET.get("status", "")
+        context["current_search"] = self.request.GET.get("search", "")
+        context["total_count"] = MessageProfile.objects.filter(deleted_at__isnull=True).count()
+        context["active_count"] = MessageProfile.objects.filter(
+            is_active=True, deleted_at__isnull=True
+        ).count()
+
+        # Get default profile
+        settings = CommunicationSettings.objects.first()
+        context["default_profile"] = settings.default_profile if settings else None
+
+        return context
+
+
+class MessageProfileCreateView(StaffPortalMixin, View):
+    """Create a new message profile."""
+
+    template_name = "diveops/staff/message_profile_form.html"
+
+    def get(self, request):
+        return render(request, self.template_name, {
+            "page_title": "New Message Profile",
+            "profile": None,
+        })
+
+    def post(self, request):
+        from django_communication.models import MessageProfile
+
+        profile = MessageProfile(
+            slug=request.POST.get("slug", "").strip(),
+            name=request.POST.get("name", "").strip(),
+            description=request.POST.get("description", "").strip(),
+            from_name=request.POST.get("from_name", "").strip(),
+            from_address_en=request.POST.get("from_address_en", "").strip(),
+            reply_to_en=request.POST.get("reply_to_en", "").strip(),
+            ses_configuration_set_en=request.POST.get("ses_configuration_set_en", "").strip(),
+            from_address_es=request.POST.get("from_address_es", "").strip(),
+            reply_to_es=request.POST.get("reply_to_es", "").strip(),
+            ses_configuration_set_es=request.POST.get("ses_configuration_set_es", "").strip(),
+            is_active=request.POST.get("is_active") == "on",
+        )
+
+        try:
+            profile.full_clean()
+            profile.save()
+            messages.success(request, f"Profile '{profile.name}' created successfully.")
+            return redirect("diveops:message-profile-detail", pk=profile.pk)
+        except ValidationError as e:
+            messages.error(request, f"Validation error: {e}")
+            return render(request, self.template_name, {
+                "page_title": "New Message Profile",
+                "profile": profile,
+            })
+
+
+class MessageProfileDetailView(StaffPortalMixin, DetailView):
+    """View message profile details."""
+
+    template_name = "diveops/staff/message_profile_detail.html"
+    context_object_name = "profile"
+
+    def get_queryset(self):
+        from django_communication.models import MessageProfile
+        return MessageProfile.objects.filter(deleted_at__isnull=True)
+
+    def get_context_data(self, **kwargs):
+        from django_communication.models import Message, CommunicationSettings
+
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Profile: {self.object.name}"
+
+        # Get recent messages using this profile
+        context["recent_messages"] = Message.objects.filter(
+            profile=self.object
+        ).order_by("-created_at")[:10]
+        context["message_count"] = Message.objects.filter(profile=self.object).count()
+
+        # Check if this is the default profile
+        settings = CommunicationSettings.objects.first()
+        context["is_default"] = settings and settings.default_profile == self.object
+
+        return context
+
+
+class MessageProfileUpdateView(StaffPortalMixin, View):
+    """Edit an existing message profile."""
+
+    template_name = "diveops/staff/message_profile_form.html"
+
+    def get(self, request, pk):
+        from django_communication.models import MessageProfile
+
+        profile = get_object_or_404(MessageProfile, pk=pk, deleted_at__isnull=True)
+        return render(request, self.template_name, {
+            "page_title": f"Edit Profile: {profile.name}",
+            "profile": profile,
+        })
+
+    def post(self, request, pk):
+        from django_communication.models import MessageProfile
+
+        profile = get_object_or_404(MessageProfile, pk=pk, deleted_at__isnull=True)
+
+        profile.slug = request.POST.get("slug", "").strip()
+        profile.name = request.POST.get("name", "").strip()
+        profile.description = request.POST.get("description", "").strip()
+        profile.from_name = request.POST.get("from_name", "").strip()
+        profile.from_address_en = request.POST.get("from_address_en", "").strip()
+        profile.reply_to_en = request.POST.get("reply_to_en", "").strip()
+        profile.ses_configuration_set_en = request.POST.get("ses_configuration_set_en", "").strip()
+        profile.from_address_es = request.POST.get("from_address_es", "").strip()
+        profile.reply_to_es = request.POST.get("reply_to_es", "").strip()
+        profile.ses_configuration_set_es = request.POST.get("ses_configuration_set_es", "").strip()
+        profile.is_active = request.POST.get("is_active") == "on"
+
+        try:
+            profile.full_clean()
+            profile.save()
+            messages.success(request, f"Profile '{profile.name}' updated successfully.")
+            return redirect("diveops:message-profile-detail", pk=profile.pk)
+        except ValidationError as e:
+            messages.error(request, f"Validation error: {e}")
+            return render(request, self.template_name, {
+                "page_title": f"Edit Profile: {profile.name}",
+                "profile": profile,
+            })
+
+
+class MessageProfileDeleteView(StaffPortalMixin, View):
+    """Delete (soft delete) a message profile."""
+
+    def post(self, request, pk):
+        from django_communication.models import MessageProfile, CommunicationSettings
+        from django.utils import timezone
+
+        profile = get_object_or_404(MessageProfile, pk=pk, deleted_at__isnull=True)
+
+        # Check if this is the default profile
+        settings = CommunicationSettings.objects.first()
+        if settings and settings.default_profile == profile:
+            settings.default_profile = None
+            settings.save(update_fields=["default_profile", "updated_at"])
+
+        profile.deleted_at = timezone.now()
+        profile.save(update_fields=["deleted_at", "updated_at"])
+
+        messages.success(request, f"Profile '{profile.name}' deleted.")
+        return redirect("diveops:message-profile-list")
+
+
+class MessageProfileSetDefaultView(StaffPortalMixin, View):
+    """Set a profile as the default for communication settings."""
+
+    def post(self, request, pk):
+        from django_communication.models import MessageProfile, CommunicationSettings
+
+        profile = get_object_or_404(MessageProfile, pk=pk, deleted_at__isnull=True)
+
+        settings = CommunicationSettings.objects.first()
+        if not settings:
+            settings = CommunicationSettings.objects.create()
+
+        settings.default_profile = profile
+        settings.save(update_fields=["default_profile", "updated_at"])
+
+        messages.success(request, f"'{profile.name}' is now the default message profile.")
+        return redirect("diveops:message-profile-detail", pk=profile.pk)
+
+
+# =============================================================================
+# Lead Management Views
+# =============================================================================
+
+
+class LeadListView(StaffPortalMixin, ListView):
+    """List all leads (Persons with lead_status set)."""
+
+    template_name = "diveops/staff/lead_list.html"
+    context_object_name = "leads"
+    paginate_by = 25
+
+    def get_queryset(self):
+        from django_parties.models import Person
+
+        queryset = Person.objects.filter(
+            lead_status__isnull=False,
+            deleted_at__isnull=True,
+        ).select_related("lead_owner").order_by("-created_at")
+
+        # Filter by status
+        status = self.request.GET.get("status")
+        if status:
+            queryset = queryset.filter(lead_status=status)
+
+        # Filter by source
+        source = self.request.GET.get("source")
+        if source:
+            queryset = queryset.filter(lead_source=source)
+
+        # Search
+        search = self.request.GET.get("q")
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(phone__icontains=search)
+            )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        from django_parties.models import Person
+
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Leads"
+        context["status_choices"] = Person.LEAD_STATUS_CHOICES
+        context["source_choices"] = Person.LEAD_SOURCE_CHOICES
+        context["current_status"] = self.request.GET.get("status", "")
+        context["current_source"] = self.request.GET.get("source", "")
+        context["search_query"] = self.request.GET.get("q", "")
+
+        # Summary counts
+        base_qs = Person.objects.filter(lead_status__isnull=False, deleted_at__isnull=True)
+        context["total_leads"] = base_qs.count()
+        context["new_leads"] = base_qs.filter(lead_status="new").count()
+        context["contacted_leads"] = base_qs.filter(lead_status="contacted").count()
+        context["qualified_leads"] = base_qs.filter(lead_status="qualified").count()
+        context["converted_leads"] = base_qs.filter(lead_status="converted").count()
+        context["lost_leads"] = base_qs.filter(lead_status="lost").count()
+
+        return context
+
+
+class LeadDetailView(StaffPortalMixin, DetailView):
+    """View lead details with status history."""
+
+    template_name = "diveops/staff/lead_detail.html"
+    context_object_name = "lead"
+
+    def get_queryset(self):
+        from django_parties.models import Person
+
+        return Person.objects.filter(
+            lead_status__isnull=False,
+            deleted_at__isnull=True,
+        ).select_related("lead_owner")
+
+    def get_context_data(self, **kwargs):
+        from .crm.services import get_lead_timeline, get_lead_notes
+
+        context = super().get_context_data(**kwargs)
+        lead = self.object
+        context["page_title"] = f"Lead: {lead.get_full_name()}"
+
+        # Combined timeline (status events + notes)
+        context["timeline"] = get_lead_timeline(lead)
+
+        # Notes separately for the notes section
+        context["notes"] = get_lead_notes(lead)
+
+        # Check if already a diver
+        context["is_diver"] = DiverProfile.objects.filter(
+            person=lead, deleted_at__isnull=True
+        ).exists()
+
+        # Status choices for action buttons
+        context["status_choices"] = lead.LEAD_STATUS_CHOICES
+
+        return context
+
+
+class LeadStatusUpdateView(StaffPortalMixin, View):
+    """Update lead status (contacted, qualified, lost)."""
+
+    def post(self, request, pk):
+        from django_parties.models import Person
+        from .crm.services import set_lead_status
+
+        lead = get_object_or_404(Person, pk=pk, lead_status__isnull=False, deleted_at__isnull=True)
+        new_status = request.POST.get("status")
+        note = request.POST.get("note", "").strip()
+
+        if new_status == lead.lead_status:
+            messages.info(request, f"Lead is already in '{new_status}' status.")
+            return redirect("diveops:lead-detail", pk=pk)
+
+        try:
+            set_lead_status(
+                lead,
+                new_status,
+                actor=request.user,
+                note=note or None,
+                lost_reason=note if new_status == "lost" else None,
+            )
+            status_display = dict(Person.LEAD_STATUS_CHOICES).get(new_status, new_status)
+            messages.success(request, f"Lead status updated to '{status_display}'.")
+        except ValueError as e:
+            messages.error(request, str(e))
+
+        return redirect("diveops:lead-detail", pk=pk)
+
+
+class ConvertLeadToDiverView(StaffPortalMixin, View):
+    """Convert a lead to a diver (creates DiverProfile)."""
+
+    template_name = "diveops/staff/lead_convert.html"
+
+    def get(self, request, pk):
+        from django_parties.models import Person
+
+        lead = get_object_or_404(Person, pk=pk, lead_status__isnull=False, deleted_at__isnull=True)
+
+        # Check if already a diver
+        existing_diver = DiverProfile.objects.filter(person=lead, deleted_at__isnull=True).first()
+        if existing_diver:
+            messages.info(request, "This lead is already a diver.")
+            return redirect("diveops:diver-detail", pk=existing_diver.pk)
+
+        return render(request, self.template_name, {
+            "page_title": f"Convert Lead: {lead.get_full_name()}",
+            "lead": lead,
+        })
+
+    def post(self, request, pk):
+        from django_parties.models import Person
+        from .crm.services import convert_to_diver
+
+        lead = get_object_or_404(Person, pk=pk, lead_status__isnull=False, deleted_at__isnull=True)
+
+        # Check if already a diver
+        existing_diver = DiverProfile.objects.filter(person=lead, deleted_at__isnull=True).first()
+        if existing_diver:
+            messages.info(request, "This lead is already a diver.")
+            return redirect("diveops:diver-detail", pk=existing_diver.pk)
+
+        try:
+            diver = convert_to_diver(lead, actor=request.user)
+            messages.success(request, f"Lead '{lead.get_full_name()}' converted to diver!")
+            return redirect("diveops:diver-detail", pk=diver.pk)
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect("diveops:lead-detail", pk=pk)
+
+
+class LeadAddNoteView(StaffPortalMixin, View):
+    """Add a note to a lead."""
+
+    def post(self, request, pk):
+        from django_parties.models import Person
+        from .crm.services import add_lead_note
+
+        lead = get_object_or_404(Person, pk=pk, lead_status__isnull=False, deleted_at__isnull=True)
+        body = request.POST.get("body", "").strip()
+
+        if not body:
+            messages.error(request, "Note cannot be empty.")
+            return redirect("diveops:lead-detail", pk=pk)
+
+        add_lead_note(lead, body, author=request.user)
+        messages.success(request, "Note added.")
+        return redirect("diveops:lead-detail", pk=pk)

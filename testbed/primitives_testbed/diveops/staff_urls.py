@@ -9,6 +9,12 @@ app_name = "diveops"
 urlpatterns = [
     # Dashboard
     path("", staff_views.DashboardView.as_view(), name="dashboard"),
+    # CRM - Lead management
+    path("crm/leads/", staff_views.LeadListView.as_view(), name="lead-list"),
+    path("crm/leads/<uuid:pk>/", staff_views.LeadDetailView.as_view(), name="lead-detail"),
+    path("crm/leads/<uuid:pk>/status/", staff_views.LeadStatusUpdateView.as_view(), name="lead-status-update"),
+    path("crm/leads/<uuid:pk>/notes/", staff_views.LeadAddNoteView.as_view(), name="lead-add-note"),
+    path("crm/leads/<uuid:pk>/convert/", staff_views.ConvertLeadToDiverView.as_view(), name="lead-convert"),
     # Diver management
     path("divers/", staff_views.DiverListView.as_view(), name="diver-list"),
     path("divers/add/", staff_views.CreateDiverView.as_view(), name="diver-create"),
@@ -221,6 +227,33 @@ urlpatterns = [
     path("documents/<uuid:pk>/untag-dive-site/<uuid:tag_pk>/", document_views.DiveSitePhotoTagRemoveView.as_view(), name="dive-site-tag-remove"),
     # Configuration
     path("settings/ai/", staff_views.AISettingsView.as_view(), name="ai-settings"),
+    path("settings/email/", staff_views.EmailSettingsView.as_view(), name="email-settings"),
+    # Communication Settings (django-communication primitive)
+    path("settings/communication/", staff_views.CommunicationSettingsView.as_view(), name="communication-settings"),
+    # Message Templates (django-communication primitive)
+    path("message-templates/", staff_views.MessageTemplateListView.as_view(), name="message-template-list"),
+    path("message-templates/add/", staff_views.MessageTemplateCreateView.as_view(), name="message-template-create"),
+    path("message-templates/<uuid:pk>/", staff_views.MessageTemplateDetailView.as_view(), name="message-template-detail"),
+    path("message-templates/<uuid:pk>/edit/", staff_views.MessageTemplateUpdateView.as_view(), name="message-template-edit"),
+    path("message-templates/<uuid:pk>/delete/", staff_views.MessageTemplateDeleteView.as_view(), name="message-template-delete"),
+    path("message-templates/<uuid:pk>/preview/", staff_views.MessageTemplatePreviewView.as_view(), name="message-template-preview"),
+    # Message Log (django-communication primitive)
+    path("messages/", staff_views.MessageLogView.as_view(), name="message-log"),
+    path("messages/<uuid:pk>/", staff_views.MessageDetailView.as_view(), name="message-detail"),
+    # Message Profiles (django-communication primitive)
+    path("message-profiles/", staff_views.MessageProfileListView.as_view(), name="message-profile-list"),
+    path("message-profiles/add/", staff_views.MessageProfileCreateView.as_view(), name="message-profile-create"),
+    path("message-profiles/<uuid:pk>/", staff_views.MessageProfileDetailView.as_view(), name="message-profile-detail"),
+    path("message-profiles/<uuid:pk>/edit/", staff_views.MessageProfileUpdateView.as_view(), name="message-profile-edit"),
+    path("message-profiles/<uuid:pk>/delete/", staff_views.MessageProfileDeleteView.as_view(), name="message-profile-delete"),
+    path("message-profiles/<uuid:pk>/set-default/", staff_views.MessageProfileSetDefaultView.as_view(), name="message-profile-set-default"),
+    # Email Templates (legacy - kept for compatibility)
+    path("email-templates/", staff_views.EmailTemplateListView.as_view(), name="email-template-list"),
+    path("email-templates/add/", staff_views.EmailTemplateCreateView.as_view(), name="email-template-create"),
+    path("email-templates/<uuid:pk>/", staff_views.EmailTemplateDetailView.as_view(), name="email-template-detail"),
+    path("email-templates/<uuid:pk>/edit/", staff_views.EmailTemplateUpdateView.as_view(), name="email-template-edit"),
+    path("email-templates/<uuid:pk>/delete/", staff_views.EmailTemplateDeleteView.as_view(), name="email-template-delete"),
+    path("email-templates/<uuid:pk>/preview/", staff_views.EmailTemplatePreviewView.as_view(), name="email-template-preview"),
     # Medical Questionnaires
     path("medical/", staff_views.MedicalQuestionnaireListView.as_view(), name="medical-list"),
     path("medical/send/", staff_views.SendMedicalQuestionnaireCreateView.as_view(), name="medical-send-create"),

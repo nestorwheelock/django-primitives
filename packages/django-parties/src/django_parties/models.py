@@ -26,6 +26,7 @@ Key Design:
 - A Person can exist without any User account (contacts, leads)
 - A User can exist without a Person (API/service accounts)
 """
+from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -116,6 +117,65 @@ class Person(BaseModel, Party):
     # Metadata
     notes = models.TextField(_('notes'), blank=True)
 
+    # Lead Pipeline Fields
+    # A Person with lead_status set is a lead; NULL = not a lead (just a contact)
+    LEAD_STATUS_CHOICES = [
+        ('new', _('New')),
+        ('contacted', _('Contacted')),
+        ('qualified', _('Qualified')),
+        ('converted', _('Converted')),
+        ('lost', _('Lost')),
+    ]
+    LEAD_SOURCE_CHOICES = [
+        ('website', _('Website')),
+        ('walk_in', _('Walk-in')),
+        ('whatsapp', _('WhatsApp')),
+        ('referral', _('Referral')),
+        ('hotel', _('Hotel Partner')),
+        ('facebook', _('Facebook/Instagram')),
+        ('google', _('Google Ads')),
+        ('tripadvisor', _('TripAdvisor')),
+        ('returning', _('Returning Customer')),
+        ('other', _('Other')),
+    ]
+
+    lead_status = models.CharField(
+        _('lead status'),
+        max_length=20,
+        choices=LEAD_STATUS_CHOICES,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_('Pipeline status for leads. NULL means not a lead.'),
+    )
+    lead_source = models.CharField(
+        _('lead source'),
+        max_length=20,
+        choices=LEAD_SOURCE_CHOICES,
+        blank=True,
+        help_text=_('How the lead found us'),
+    )
+    lead_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='owned_leads',
+        verbose_name=_('lead owner'),
+        help_text=_('Staff member responsible for this lead'),
+    )
+    lead_converted_at = models.DateTimeField(
+        _('converted at'),
+        null=True,
+        blank=True,
+        help_text=_('When lead was converted to customer'),
+    )
+    lead_lost_reason = models.TextField(
+        _('lost reason'),
+        blank=True,
+        help_text=_('Why the lead was lost (if status=lost)'),
+    )
+
     class Meta:
         verbose_name = _('person')
         verbose_name_plural = _('people')
@@ -154,6 +214,103 @@ class Person(BaseModel, Party):
         if (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day):
             age -= 1
         return age
+
+    @property
+    def is_lead(self):
+        """Returns True if this Person is a lead (has lead_status set)."""
+        return self.lead_status is not None
+
+
+class LeadStatusEvent(BaseModel):
+    """Audit trail for lead status changes.
+
+    Records every transition in the lead pipeline with who made
+    the change, when, and optional notes.
+    """
+
+    person = models.ForeignKey(
+        'Person',
+        on_delete=models.CASCADE,
+        related_name='lead_status_events',
+        verbose_name=_('person'),
+    )
+    from_status = models.CharField(
+        _('from status'),
+        max_length=20,
+        choices=Person.LEAD_STATUS_CHOICES,
+        blank=True,
+        help_text=_('Previous status (blank if new lead)'),
+    )
+    to_status = models.CharField(
+        _('to status'),
+        max_length=20,
+        choices=Person.LEAD_STATUS_CHOICES,
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lead_status_changes',
+        verbose_name=_('changed by'),
+        help_text=_('Staff member who made the change'),
+    )
+    note = models.TextField(
+        _('note'),
+        blank=True,
+        help_text=_('Optional note about this status change'),
+    )
+
+    class Meta:
+        verbose_name = _('lead status event')
+        verbose_name_plural = _('lead status events')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['person', 'created_at']),
+        ]
+
+    def __str__(self):
+        from_str = self.from_status or 'new'
+        return f'{self.person}: {from_str} → {self.to_status}'
+
+
+class LeadNote(BaseModel):
+    """Notes attached to leads for tracking conversations and follow-ups.
+
+    Separate from LeadStatusEvent - these are free-form notes staff can add
+    without changing the lead's pipeline status.
+    """
+
+    person = models.ForeignKey(
+        'Person',
+        on_delete=models.CASCADE,
+        related_name='lead_notes',
+        verbose_name=_('person'),
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lead_notes_authored',
+        verbose_name=_('author'),
+    )
+    body = models.TextField(
+        _('note'),
+        help_text=_('Note content'),
+    )
+
+    class Meta:
+        verbose_name = _('lead note')
+        verbose_name_plural = _('lead notes')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['person', 'created_at']),
+        ]
+
+    def __str__(self):
+        preview = self.body[:50] + '...' if len(self.body) > 50 else self.body
+        return f'{self.person}: {preview}'
 
 
 class Organization(BaseModel, Party):
