@@ -764,6 +764,25 @@ class CustomerConversationDetailView(CustomerPortalMixin, TemplateView):
         context["messages_list"] = get_conversation_messages(conversation)
         context["current_person"] = person
 
+        # Get staff participant for read status display and avatar
+        staff_participant = conversation.participants.filter(role="staff").first()
+        if staff_participant:
+            context["staff_participant"] = staff_participant
+            context["staff_person"] = staff_participant.person
+            # Find the last message from customer that staff has read
+            if staff_participant.last_read_at:
+                last_read_outbound = conversation.messages.filter(
+                    sender_person=person,
+                    created_at__lte=staff_participant.last_read_at,
+                ).order_by("-created_at").first()
+                if last_read_outbound:
+                    context["last_read_outbound_message_id"] = str(last_read_outbound.pk)
+
+        # Get current diver for their profile photo
+        diver = get_current_diver(self.request.user)
+        if diver:
+            context["current_diver"] = diver
+
         # Mark as read for this customer
         conversation.mark_read_for(person)
 

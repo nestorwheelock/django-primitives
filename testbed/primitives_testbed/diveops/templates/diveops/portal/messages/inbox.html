@@ -25,29 +25,34 @@
         <ul class="divide-y divide-gray-200">
             {% for conv in conversations %}
             <li>
-                <a href="{% url 'portal:conversation' conversation_id=conv.pk %}" class="block hover:bg-gray-50 transition-colors">
+                <a href="{% url 'portal:conversation' conversation_id=conv.pk %}"
+                   class="block hover:bg-gray-50 transition-colors {% if conv.unread_count > 0 %}bg-blue-50 hover:bg-blue-100{% endif %}">
                     <div class="px-6 py-4">
                         <div class="flex items-center justify-between">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center space-x-3">
-                                    <h3 class="text-sm font-medium text-gray-900 truncate">
-                                        {{ conv.subject|default:"New Conversation" }}
-                                    </h3>
-                                    {% if conv.unread_count > 0 %}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
-                                        {{ conv.unread_count }} new
+                            <div class="flex items-center flex-1 min-w-0">
+                                {% if conv.unread_count > 0 %}
+                                <div class="flex-shrink-0 mr-3">
+                                    <span class="flex items-center justify-center w-6 h-6 bg-red-500 text-white text-xs font-bold rounded-full">
+                                        {{ conv.unread_count }}
                                     </span>
+                                </div>
+                                {% endif %}
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center space-x-3">
+                                        <h3 class="text-sm {% if conv.unread_count > 0 %}font-semibold text-gray-900{% else %}font-medium text-gray-700{% endif %} truncate">
+                                            {{ conv.subject|default:"New Conversation" }}
+                                        </h3>
+                                    </div>
+                                    {% if conv.last_message_preview %}
+                                    <p class="mt-1 text-sm {% if conv.unread_count > 0 %}text-gray-700 font-medium{% else %}text-gray-500{% endif %} truncate">
+                                        {{ conv.last_message_preview|truncatechars:100 }}
+                                    </p>
                                     {% endif %}
                                 </div>
-                                {% if conv.last_message_preview %}
-                                <p class="mt-1 text-sm text-gray-500 truncate">
-                                    {{ conv.last_message_preview|truncatechars:100 }}
-                                </p>
-                                {% endif %}
                             </div>
                             <div class="ml-4 flex-shrink-0 flex flex-col items-end">
                                 {% if conv.last_message_at %}
-                                <p class="text-xs text-gray-500">
+                                <p class="text-xs {% if conv.unread_count > 0 %}text-blue-600 font-semibold{% else %}text-gray-500{% endif %}">
                                     {{ conv.last_message_at|timesince }} ago
                                 </p>
                                 {% endif %}

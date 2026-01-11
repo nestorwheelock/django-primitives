@@ -12,6 +12,13 @@
                 <a href="{% url 'portal:messages' %}" class="text-gray-500 hover:text-gray-700">
                     {% icon "arrow-left" "w-5 h-5" %}
                 </a>
+                {% if staff_person %}
+                <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                    <span class="text-sm font-bold text-gray-600">
+                        {{ staff_person.first_name|slice:":1"|upper }}{{ staff_person.last_name|slice:":1"|upper }}
+                    </span>
+                </div>
+                {% endif %}
                 <div>
                     <h2 class="text-lg font-semibold text-gray-800">{{ conversation.subject|default:"Conversation" }}</h2>
                     <p class="text-sm text-gray-500">
@@ -42,7 +49,23 @@
         {% if messages_list %}
             {% for msg in messages_list %}
             <div class="flex {% if msg.sender_person == current_person %}justify-end{% else %}justify-start{% endif %}">
-                <div class="max-w-[75%] {% if msg.sender_person == current_person %}order-2{% endif %}">
+                {% if msg.sender_person != current_person %}
+                <!-- Staff avatar for inbound messages -->
+                <div class="flex-shrink-0 mr-2 self-end mb-6">
+                    {% if staff_person %}
+                    <div class="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center">
+                        <span class="text-xs font-bold text-gray-600">
+                            {{ staff_person.first_name|slice:":1"|upper }}
+                        </span>
+                    </div>
+                    {% else %}
+                    <div class="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center">
+                        {% icon "user" "w-4 h-4 text-gray-500" %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                <div class="max-w-[75%]">
                     <div class="rounded-lg px-4 py-2 {% if msg.sender_person == current_person %}bg-primary-500 text-white{% else %}bg-white shadow text-gray-800{% endif %}">
                         {% if msg.subject %}
                         <p class="text-xs font-semibold mb-1 {% if msg.sender_person == current_person %}text-primary-100{% else %}text-gray-500{% endif %}">
@@ -74,7 +97,32 @@
                         </span>
                         {% endif %}
                     </div>
+                    {% comment %}Messenger-style read indicator - show when staff has read customer's message{% endcomment %}
+                    {% if msg.sender_person == current_person and last_read_outbound_message_id %}
+                        {% if msg.pk|stringformat:"s" == last_read_outbound_message_id %}
+                        <div class="flex justify-end mt-1">
+                            <span class="inline-flex items-center text-xs text-gray-500" title="Seen by staff">
+                                {% icon "check-circle" "w-3.5 h-3.5 mr-1 text-green-500" %}
+                                Seen
+                            </span>
+                        </div>
+                        {% endif %}
+                    {% endif %}
                 </div>
+                {% if msg.sender_person == current_person %}
+                <!-- Customer avatar for outbound messages -->
+                <div class="flex-shrink-0 ml-2 self-end mb-6">
+                    {% if current_diver and current_diver.profile_photo %}
+                    <img src="{{ current_diver.profile_photo.file.url }}" alt="You" class="w-7 h-7 rounded-full object-cover">
+                    {% else %}
+                    <div class="w-7 h-7 rounded-full bg-primary-100 flex items-center justify-center">
+                        <span class="text-xs font-bold text-primary-600">
+                            {{ current_person.first_name|slice:":1"|upper }}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
         {% else %}
