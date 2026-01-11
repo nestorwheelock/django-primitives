@@ -23,7 +23,45 @@
 {% endblock %}
 
 {% block staff_content %}
-<div class="max-w-4xl mx-auto space-y-6">
+<div class="max-w-4xl mx-auto space-y-6"
+     x-data="{
+         search: '',
+         customers: [],
+         selectedCustomer: {% if selected_customer %}{ id: '{{ selected_customer.pk }}', first_name: '{{ selected_customer.first_name }}', last_name: '{{ selected_customer.last_name }}', email: '{{ selected_customer.email }}', initials: '{{ selected_customer.first_name|slice:":1"|upper }}{{ selected_customer.last_name|slice:":1"|upper }}' }{% else %}null{% endif %},
+         loading: false,
+         debounceTimer: null,
+
+         async searchCustomers() {
+             if (this.search.length < 2) {
+                 this.customers = [];
+                 return;
+             }
+             this.loading = true;
+             try {
+                 const response = await fetch(`{% url 'diveops:api-customer-search' %}?q=${encodeURIComponent(this.search)}`);
+                 const data = await response.json();
+                 this.customers = data.customers;
+             } catch (e) {
+                 console.error('Search failed:', e);
+             }
+             this.loading = false;
+         },
+
+         debouncedSearch() {
+             clearTimeout(this.debounceTimer);
+             this.debounceTimer = setTimeout(() => this.searchCustomers(), 300);
+         },
+
+         selectCustomer(customer) {
+             this.selectedCustomer = customer;
+             this.customers = [];
+             this.search = '';
+         },
+
+         clearCustomer() {
+             this.selectedCustomer = null;
+         }
+     }">
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div class="flex items-center space-x-4">
@@ -44,80 +82,86 @@
                 <h3 class="text-sm font-semibold text-gray-900">Select Customer</h3>
             </div>
             <div class="p-4">
-                <!-- Search Form -->
-                <form method="get" class="mb-4">
-                    <div class="flex space-x-2">
-                        <input
-                            type="text"
-                            name="search"
-                            value="{{ search }}"
-                            placeholder="Search by name, email, or phone..."
-                            class="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
-                        >
-                        <button type="submit" class="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
-                            {% icon "search" "w-4 h-4" %}
-                        </button>
+                <!-- Live Search Input -->
+                <div class="relative mb-4">
+                    <input
+                        type="text"
+                        x-model="search"
+                        @input="debouncedSearch()"
+                        placeholder="Search by name, email, or phone..."
+                        class="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm pl-10"
+                    >
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <template x-if="loading">
+                            <svg class="animate-spin h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </template>
+                        <template x-if="!loading">
+                            <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                        </template>
                     </div>
-                </form>
+                </div>
 
                 <!-- Selected Customer Display -->
-                {% if selected_customer %}
-                <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                <span class="text-sm font-bold text-blue-600">
-                                    {{ selected_customer.first_name|slice:":1"|upper }}{{ selected_customer.last_name|slice:":1"|upper }}
-                                </span>
+                <template x-if="selectedCustomer">
+                    <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                    <span class="text-sm font-bold text-blue-600" x-text="selectedCustomer.initials"></span>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-900" x-text="selectedCustomer.first_name + ' ' + selectedCustomer.last_name"></p>
+                                    <p class="text-sm text-gray-500" x-text="selectedCustomer.email"></p>
+                                </div>
                             </div>
-                            <div>
-                                <p class="font-medium text-gray-900">
-                                    {{ selected_customer.first_name }} {{ selected_customer.last_name }}
-                                </p>
-                                <p class="text-sm text-gray-500">{{ selected_customer.email }}</p>
-                            </div>
+                            <button @click="clearCustomer()" class="text-gray-400 hover:text-gray-600" title="Clear selection">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
                         </div>
-                        <a href="{% url 'diveops:crm-new-conversation' %}" class="text-gray-400 hover:text-gray-600" title="Clear selection">
-                            {% icon "x-mark" "w-5 h-5" %}
-                        </a>
                     </div>
-                </div>
-                {% endif %}
+                </template>
 
-                <!-- Search Results -->
-                {% if customers %}
-                <div class="border border-gray-200 rounded-lg divide-y divide-gray-200 max-h-80 overflow-y-auto">
-                    {% for customer in customers %}
-                    <a href="?customer_id={{ customer.pk }}"
-                       class="block px-4 py-3 hover:bg-gray-50 transition-colors {% if selected_customer.pk == customer.pk %}bg-blue-50{% endif %}">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                                <span class="text-xs font-bold text-gray-600">
-                                    {{ customer.first_name|slice:":1"|upper }}{{ customer.last_name|slice:":1"|upper }}
-                                </span>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-gray-900 truncate">
-                                    {{ customer.first_name }} {{ customer.last_name }}
-                                </p>
-                                <p class="text-xs text-gray-500 truncate">{{ customer.email }}</p>
-                            </div>
-                            {% if customer.phone %}
-                            <span class="text-xs text-gray-400">{{ customer.phone }}</span>
-                            {% endif %}
-                        </div>
-                    </a>
-                    {% endfor %}
-                </div>
-                {% elif search %}
-                <div class="text-center py-8 text-gray-500">
-                    <p>No customers found matching "{{ search }}"</p>
-                </div>
-                {% else %}
-                <div class="text-center py-8 text-gray-500">
-                    <p>Search for a customer to start a conversation</p>
-                </div>
-                {% endif %}
+                <!-- Live Search Results -->
+                <template x-if="customers.length > 0">
+                    <div class="border border-gray-200 rounded-lg divide-y divide-gray-200 max-h-80 overflow-y-auto">
+                        <template x-for="customer in customers" :key="customer.id">
+                            <button @click="selectCustomer(customer)"
+                                    class="w-full text-left block px-4 py-3 hover:bg-gray-50 transition-colors">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                                        <span class="text-xs font-bold text-gray-600" x-text="customer.initials"></span>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium text-gray-900 truncate" x-text="customer.first_name + ' ' + customer.last_name"></p>
+                                        <p class="text-xs text-gray-500 truncate" x-text="customer.email"></p>
+                                    </div>
+                                    <span x-show="customer.phone" class="text-xs text-gray-400" x-text="customer.phone"></span>
+                                </div>
+                            </button>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- No Results Message -->
+                <template x-if="search.length >= 2 && customers.length === 0 && !loading">
+                    <div class="text-center py-8 text-gray-500">
+                        <p>No customers found matching "<span x-text="search"></span>"</p>
+                    </div>
+                </template>
+
+                <!-- Initial State -->
+                <template x-if="!selectedCustomer && search.length < 2 && customers.length === 0">
+                    <div class="text-center py-8 text-gray-500">
+                        <p>Type at least 2 characters to search</p>
+                    </div>
+                </template>
             </div>
         </div>
 
@@ -129,9 +173,7 @@
             <div class="p-4">
                 <form method="post" class="space-y-4">
                     {% csrf_token %}
-                    {% if selected_customer %}
-                    <input type="hidden" name="customer_id" value="{{ selected_customer.pk }}">
-                    {% endif %}
+                    <input type="hidden" name="customer_id" :value="selectedCustomer ? selectedCustomer.id : ''">
 
                     <div>
                         <label for="subject" class="block text-sm font-medium text-gray-700 mb-1">Subject (Optional)</label>
@@ -162,7 +204,7 @@
                         </a>
                         <button
                             type="submit"
-                            {% if not selected_customer %}disabled{% endif %}
+                            :disabled="!selectedCustomer"
                             class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {% icon "paper-airplane" "w-4 h-4 mr-2" %}
@@ -171,14 +213,16 @@
                     </div>
                 </form>
 
-                {% if not selected_customer %}
-                <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p class="text-sm text-yellow-800">
-                        {% icon "exclamation-triangle" "w-4 h-4 inline mr-1" %}
-                        Please select a customer first to start a conversation.
-                    </p>
-                </div>
-                {% endif %}
+                <template x-if="!selectedCustomer">
+                    <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p class="text-sm text-yellow-800">
+                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            Please select a customer first to start a conversation.
+                        </p>
+                    </div>
+                </template>
             </div>
         </div>
     </div>

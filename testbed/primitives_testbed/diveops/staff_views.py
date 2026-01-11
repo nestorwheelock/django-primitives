@@ -10089,13 +10089,15 @@ class StaffNewConversationView(StaffPortalMixin, TemplateView):
 
         # Search for customers if query provided
         if search:
+            from django.db.models import Q
+
             context["customers"] = Person.objects.filter(
                 deleted_at__isnull=True
             ).filter(
-                models.Q(first_name__icontains=search)
-                | models.Q(last_name__icontains=search)
-                | models.Q(email__icontains=search)
-                | models.Q(phone__icontains=search)
+                Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(email__icontains=search)
+                | Q(phone__icontains=search)
             ).order_by("last_name", "first_name")[:20]
         else:
             context["customers"] = []
@@ -10150,3 +10152,40 @@ class StaffNewConversationView(StaffPortalMixin, TemplateView):
 
         messages.success(request, f"Conversation started with {customer.first_name} {customer.last_name}.")
         return redirect("diveops:crm-conversation", conversation_id=conversation.pk)
+
+
+class CustomerSearchAPIView(StaffPortalMixin, View):
+    """JSON API for live customer search."""
+
+    def get(self, request):
+        from django.db.models import Q
+        from django.http import JsonResponse
+
+        from django_parties.models import Person
+
+        search = request.GET.get("q", "").strip()
+        if len(search) < 2:
+            return JsonResponse({"customers": []})
+
+        customers = Person.objects.filter(
+            deleted_at__isnull=True
+        ).filter(
+            Q(first_name__icontains=search)
+            | Q(last_name__icontains=search)
+            | Q(email__icontains=search)
+            | Q(phone__icontains=search)
+        ).order_by("last_name", "first_name")[:10]
+
+        return JsonResponse({
+            "customers": [
+                {
+                    "id": str(c.pk),
+                    "first_name": c.first_name or "",
+                    "last_name": c.last_name or "",
+                    "email": c.email or "",
+                    "phone": c.phone or "",
+                    "initials": f"{(c.first_name or '?')[0]}{(c.last_name or '?')[0]}".upper(),
+                }
+                for c in customers
+            ]
+        })
