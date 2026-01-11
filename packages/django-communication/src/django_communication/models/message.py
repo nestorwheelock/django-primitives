@@ -135,6 +135,20 @@ class Message(BaseModel):
         help_text="Template used to generate this message",
     )
 
+    # === Canned Response Reference (for audit) ===
+    canned_response = models.ForeignKey(
+        "django_communication.CannedResponse",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="messages",
+        help_text="Canned response used to create this message",
+    )
+    canned_rendered_body = models.TextField(
+        blank=True,
+        help_text="Snapshot of rendered canned response at send time",
+    )
+
     # === Status Tracking ===
     status = models.CharField(
         max_length=20,

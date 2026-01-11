@@ -4,6 +4,12 @@ Re-exports all models for convenient importing:
     from django_communication.models import Message, MessageTemplate, Conversation
 """
 
+from .canned_response import (
+    CannedResponse,
+    CannedResponseTag,
+    ResponseChannel,
+    Visibility,
+)
 from .conversation import Conversation, ConversationStatus
 from .message import Channel, Message, MessageDirection, MessageStatus
 from .participant import ConversationParticipant, ParticipantRole
@@ -13,6 +19,8 @@ from .settings import CommunicationSettings
 from .template import MessageTemplate, MessageType
 
 __all__ = [
+    "CannedResponse",
+    "CannedResponseTag",
     "Channel",
     "CommunicationSettings",
     "Conversation",
@@ -27,5 +35,7 @@ __all__ = [
     "MessageType",
     "ParticipantRole",
     "PushSubscription",
+    "ResponseChannel",
+    "Visibility",
     "get_recipient_locale",
 ]
