@@ -9955,6 +9955,16 @@ class StaffConversationView(StaffPortalMixin, TemplateView):
             from django_communication.services import get_notification_status
             context["notification_status"] = get_notification_status(customer.person)
 
+            # Calculate last read outbound message for Messenger-style read indicator
+            if customer.last_read_at:
+                # Find the last outbound message that was read by the customer
+                last_read_outbound = conversation.messages.filter(
+                    direction="outbound",
+                    created_at__lte=customer.last_read_at,
+                ).order_by("-created_at").first()
+                if last_read_outbound:
+                    context["last_read_outbound_message_id"] = str(last_read_outbound.pk)
+
         # Mark as read for staff
         from .selectors import get_staff_person
         staff_person = get_staff_person(self.request.user)

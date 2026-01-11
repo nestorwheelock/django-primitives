@@ -132,6 +132,24 @@
                                 {{ msg.direction }}
                             </span>
                         </div>
+                        {% comment %}Messenger-style read indicator - show small avatar under last read outbound message{% endcomment %}
+                        {% if msg.direction == 'outbound' and last_read_outbound_message_id %}
+                            {% if msg.pk|stringformat:"s" == last_read_outbound_message_id %}
+                            <div class="flex justify-end mt-1">
+                                <div class="flex items-center" title="Seen by {{ customer_person.first_name }}">
+                                    {% if diver and diver.profile_photo %}
+                                    <img src="{{ diver.profile_photo.file.url }}" alt="Seen" class="w-4 h-4 rounded-full object-cover border border-white shadow-sm">
+                                    {% else %}
+                                    <div class="w-4 h-4 rounded-full bg-blue-100 flex items-center justify-center border border-white shadow-sm">
+                                        <span class="text-[8px] font-bold text-blue-600">
+                                            {{ customer_person.first_name|slice:":1"|upper }}
+                                        </span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
@@ -194,11 +212,15 @@
             <div class="p-4">
                 {% if customer_person %}
                 <div class="flex items-center space-x-3 mb-4">
+                    {% if diver and diver.profile_photo %}
+                    <img src="{{ diver.profile_photo.file.url }}" alt="{{ customer_person.first_name }}" class="w-12 h-12 rounded-full object-cover">
+                    {% else %}
                     <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
                         <span class="text-lg font-bold text-blue-600">
                             {{ customer_person.first_name|slice:":1"|upper }}{{ customer_person.last_name|slice:":1"|upper }}
                         </span>
                     </div>
+                    {% endif %}
                     <div>
                         <p class="font-medium text-gray-900">
                             {{ customer_person.first_name }} {{ customer_person.last_name }}
