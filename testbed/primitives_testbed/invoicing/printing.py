@@ -12,15 +12,9 @@ from django.conf import settings
 
 from .selectors import InvoicePrintData
 
-# Import WeasyPrint lazily to avoid import errors if not installed
-try:
-    from weasyprint import HTML, CSS
-
-    WEASYPRINT_AVAILABLE = True
-except ImportError:
-    HTML = None
-    CSS = None
-    WEASYPRINT_AVAILABLE = False
+# WeasyPrint is imported lazily inside render_pdf() to avoid
+# 9+ second cold-start penalty on every URL resolver warmup.
+# See: render_pdf() method for actual import.
 
 
 class InvoicePrintService:
@@ -93,7 +87,10 @@ class InvoicePrintService:
         Raises:
             RuntimeError: If WeasyPrint is not installed
         """
-        if not WEASYPRINT_AVAILABLE:
+        # Lazy import WeasyPrint to avoid 9+ second cold-start penalty
+        try:
+            from weasyprint import HTML, CSS
+        except ImportError:
             raise RuntimeError(
                 "WeasyPrint is required for PDF generation. "
                 "Install with: pip install weasyprint"
