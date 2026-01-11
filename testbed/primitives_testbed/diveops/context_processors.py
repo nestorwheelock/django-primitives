@@ -27,39 +27,75 @@ def diveops_context(request):
         "dive_shop_name": shop_name,
         "dive_shop_latitude": latitude,
         "dive_shop_longitude": longitude,
-        "unread_messages_count": 0,  # Default to 0
+        "unread_messages_count": 0,  # Default to 0 (for customers)
+        "staff_unread_count": 0,  # Default to 0 (for staff inbox)
     }
 
     # Add unread message count for authenticated users
     if request.user.is_authenticated:
         context["unread_messages_count"] = _get_unread_messages_count(request.user)
+        context["staff_unread_count"] = _get_staff_unread_count(request.user)
 
     return context
 
 
 def _get_unread_messages_count(user):
-    """Get total unread message count for a user across all conversations."""
-    try:
-        from .selectors import get_current_diver
+    """Get total unread message count for a user across all conversations.
 
-        diver = get_current_diver(user)
-        if not diver or not diver.person:
+    Uses get_customer_inbox with aggregate instead of iteration.
+    """
+    try:
+        from django.db.models import Sum
+        from django.db.models.functions import Coalesce
+        from django_parties.models import Person
+        from django_communication.services import get_customer_inbox
+
+        # Find person by email (single query, get full object for the service)
+        person = Person.objects.filter(
+            email__iexact=user.email,
+            deleted_at__isnull=True
+        ).first()
+
+        if not person:
             return 0
 
-        from django_communication.models import ConversationParticipant
+        # Use get_customer_inbox which annotates unread_count properly
+        # Then aggregate to sum in the database
+        inbox = get_customer_inbox(person)
+        result = inbox.aggregate(
+            total=Coalesce(Sum("unread_count"), 0)
+        )
 
-        # Get all conversation participations for this person
-        participations = ConversationParticipant.objects.filter(
-            person=diver.person,
-            conversation__status="active",
-        ).select_related("conversation")
-
-        total_unread = 0
-        for participation in participations:
-            total_unread += participation.unread_count
-
-        return total_unread
-    except Exception as e:
+        return result["total"]
+    except Exception:
         import logging
         logging.getLogger(__name__).exception("Error getting unread messages count")
+        return 0
+
+
+def _get_staff_unread_count(user):
+    """Get total unread message count for staff inbox.
+
+    Uses aggregate query on get_staff_inbox instead of Python iteration.
+    """
+    try:
+        if not user.is_staff:
+            return 0
+
+        from django.db.models import Sum
+        from django.db.models.functions import Coalesce
+        from django_communication.services import get_staff_inbox
+
+        # Get inbox queryset with unread_count already annotated
+        # Use .aggregate() to sum in the database instead of Python
+        inbox = get_staff_inbox(user, scope="all")
+
+        result = inbox.aggregate(
+            total=Coalesce(Sum("unread_count"), 0)
+        )
+
+        return result["total"]
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Error getting staff unread count")
         return 0

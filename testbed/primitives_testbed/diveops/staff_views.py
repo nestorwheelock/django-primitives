@@ -130,16 +130,51 @@ class DiverListView(StaffPortalMixin, ListView):
     def get_context_data(self, **kwargs):
         """Add medical status for each diver."""
         context = super().get_context_data(**kwargs)
-        divers = context["divers"]
+        divers = list(context["divers"])  # Evaluate queryset once
 
-        # Fetch medical status and instances for all divers
+        # Batch fetch medical instances to avoid N+1 queries
         try:
-            from .medical.services import get_diver_medical_status, get_diver_medical_instance
+            from django.contrib.contenttypes.models import ContentType
+            from django_questionnaires.models import QuestionnaireInstance, InstanceStatus
+            from .medical.services import MedicalStatus, RSTC_MEDICAL_SLUG
 
+            diver_ct = ContentType.objects.get_for_model(DiverProfile)
+            diver_ids = [str(d.pk) for d in divers]
+
+            # Single query to fetch all current medical instances
+            instances = QuestionnaireInstance.objects.filter(
+                definition__slug=RSTC_MEDICAL_SLUG,
+                respondent_content_type=diver_ct,
+                respondent_object_id__in=diver_ids,
+                deleted_at__isnull=True,
+            ).select_related("definition").order_by("-created_at")
+
+            # Build lookup dict: diver_id -> most recent instance
+            instance_by_diver = {}
+            for inst in instances:
+                diver_id = inst.respondent_object_id
+                if diver_id not in instance_by_diver:
+                    instance_by_diver[diver_id] = inst
+
+            # Build medical data using the prefetched instances
             medical_data = {}
             for diver in divers:
-                status = get_diver_medical_status(diver)
-                instance = get_diver_medical_instance(diver)
+                instance = instance_by_diver.get(str(diver.pk))
+
+                # Determine status from instance
+                if not instance:
+                    status = MedicalStatus.NOT_STARTED
+                elif instance.is_expired:
+                    status = MedicalStatus.EXPIRED
+                elif instance.status == InstanceStatus.PENDING:
+                    status = MedicalStatus.PENDING
+                elif instance.status == InstanceStatus.FLAGGED:
+                    status = MedicalStatus.REQUIRES_CLEARANCE
+                elif instance.status in [InstanceStatus.COMPLETED, InstanceStatus.CLEARED]:
+                    status = MedicalStatus.CLEARED
+                else:
+                    status = MedicalStatus.PENDING
+
                 has_restrictions = bool(instance and instance.clearance_notes)
                 medical_data[diver.pk] = {
                     "status": status.value,
@@ -512,6 +547,29 @@ class DiverDetailView(StaffPortalMixin, DetailView):
 
         # === DIVE/CHECK-IN HISTORY ===
         context["dive_history"] = get_diver_dive_history(diver, limit=10, completed_only=False)
+
+        # === CUSTOMER CONVERSATION (for chat widget) ===
+        from .services import _get_customer_active_conversation
+        from .selectors import get_staff_person
+        from django_communication.services.canned_responses import list_canned_responses
+
+        customer_conversation = _get_customer_active_conversation(person)
+        context["customer_conversation"] = customer_conversation
+
+        if customer_conversation:
+            # Get messages for display
+            context["conversation_messages"] = customer_conversation.messages.select_related(
+                "sender_person"
+            ).order_by("-created_at")[:20]  # Last 20 messages, newest first
+
+        # Canned responses for chat
+        staff_person = get_staff_person(self.request.user)
+        if staff_person:
+            context["canned_responses"] = list(list_canned_responses(actor=staff_person))
+        else:
+            context["canned_responses"] = []
+
+        context["staff_person"] = staff_person
 
         return context
 
@@ -3769,6 +3827,9 @@ class AgreementTemplateSendView(StaffPortalMixin, View):
 
     def get(self, request, pk):
         """Show form to select party and delivery method."""
+        from django_communication.services.canned_responses import list_canned_responses
+        from .selectors import get_staff_person
+
         template = get_object_or_404(AgreementTemplate, pk=pk)
 
         # Only published templates can be sent
@@ -3778,6 +3839,12 @@ class AgreementTemplateSendView(StaffPortalMixin, View):
 
         # Get filtered parties based on template's target_party_type
         parties, party_type_label, is_organization = self._get_parties_for_template(template)
+
+        # Get canned responses for agreement sending (all available)
+        staff_person = get_staff_person(request.user)
+        canned_responses = []
+        if staff_person:
+            canned_responses = list(list_canned_responses(actor=staff_person))
 
         return render(
             request,
@@ -3793,12 +3860,14 @@ class AgreementTemplateSendView(StaffPortalMixin, View):
                     ("link", "Generate Link"),
                     ("in_person", "In-Person Signing"),
                 ],
+                "canned_responses": canned_responses,
             },
         )
 
     def post(self, request, pk):
         """Create SignableAgreement and send to party."""
         from django_parties.models import Organization, Person
+        from django_communication.services.canned_responses import get_canned_response
 
         from .services import create_agreement_from_template, send_agreement
 
@@ -3835,6 +3904,18 @@ class AgreementTemplateSendView(StaffPortalMixin, View):
         except ValueError:
             expires_in_days = 30
 
+        # Get canned response or custom message
+        canned_response = None
+        custom_message = None
+        message_type = request.POST.get("message_type", "none")
+
+        if message_type == "canned":
+            canned_response_id = request.POST.get("canned_response_id")
+            if canned_response_id:
+                canned_response = get_canned_response(canned_response_id)
+        elif message_type == "custom":
+            custom_message = request.POST.get("custom_message", "").strip() or None
+
         # Create the SignableAgreement
         agreement = create_agreement_from_template(
             template=template,
@@ -3848,6 +3929,8 @@ class AgreementTemplateSendView(StaffPortalMixin, View):
             delivery_method=delivery_method,
             expires_in_days=expires_in_days,
             actor=request.user,
+            canned_response=canned_response,
+            custom_message=custom_message,
         )
 
         # Build the signing URL
@@ -5123,9 +5206,11 @@ class SignableAgreementListView(StaffPortalMixin, ListView):
 
     def get_context_data(self, **kwargs):
         """Add filter options and medical documents to context."""
-        from .models import AgreementTemplate, SignableAgreement
+        from .models import AgreementTemplate, SignableAgreement, DiverProfile
         from django_documents.models import Document
         from django.contrib.contenttypes.models import ContentType
+        from django_parties.models import Person, Organization
+        from collections import defaultdict
 
         context = super().get_context_data(**kwargs)
         context["page_title"] = "Signable Agreements"
@@ -5136,15 +5221,70 @@ class SignableAgreementListView(StaffPortalMixin, ListView):
             deleted_at__isnull=True
         ).order_by("name")
 
-        # Add signed medical questionnaire documents
+        # Prefetch party_a GenericFK to avoid N+1 queries
+        agreements = list(context["agreements"])
+        if agreements:
+            # Initialize all agreements to prevent fallback to GenericFK
+            for agreement in agreements:
+                agreement._prefetched_party_a = None
+
+            # Group by content type
+            person_ct = ContentType.objects.get_for_model(Person)
+            org_ct = ContentType.objects.get_for_model(Organization)
+            diver_ct = ContentType.objects.get_for_model(DiverProfile)
+
+            person_ids = []
+            org_ids = []
+            diver_ids = []
+
+            for agreement in agreements:
+                ct_id = agreement.party_a_content_type_id
+                obj_id = agreement.party_a_object_id
+                if ct_id == person_ct.id:
+                    person_ids.append(obj_id)
+                elif ct_id == org_ct.id:
+                    org_ids.append(obj_id)
+                elif ct_id == diver_ct.id:
+                    diver_ids.append(obj_id)
+
+            # Batch fetch all related objects
+            persons = {str(p.pk): p for p in Person.objects.filter(pk__in=person_ids)} if person_ids else {}
+            orgs = {str(o.pk): o for o in Organization.objects.filter(pk__in=org_ids)} if org_ids else {}
+            divers = {str(d.pk): d for d in DiverProfile.objects.select_related("person").filter(pk__in=diver_ids)} if diver_ids else {}
+
+            # Attach to agreements
+            for agreement in agreements:
+                ct_id = agreement.party_a_content_type_id
+                obj_id = agreement.party_a_object_id
+                if ct_id == person_ct.id:
+                    agreement._prefetched_party_a = persons.get(obj_id)
+                elif ct_id == org_ct.id:
+                    agreement._prefetched_party_a = orgs.get(obj_id)
+                elif ct_id == diver_ct.id:
+                    agreement._prefetched_party_a = divers.get(obj_id)
+
+            context["agreements"] = agreements
+
+        # Add signed medical questionnaire documents with prefetched targets
         # These are attached to DiverProfile and have document_type="signed_medical_questionnaire"
-        from .models import DiverProfile
         diver_ct = ContentType.objects.get_for_model(DiverProfile)
-        context["medical_documents"] = Document.objects.filter(
+        medical_docs = list(Document.objects.filter(
             target_content_type=diver_ct,
             document_type="signed_medical_questionnaire",
             deleted_at__isnull=True,
-        ).select_related("target_content_type").order_by("-created_at")[:50]
+        ).select_related("target_content_type").order_by("-created_at")[:50])
+
+        # Prefetch target GenericFK (DiverProfile) to avoid N+1
+        if medical_docs:
+            diver_ids = [doc.target_id for doc in medical_docs if doc.target_id]
+            divers_by_id = {
+                str(d.pk): d
+                for d in DiverProfile.objects.select_related("person").filter(pk__in=diver_ids)
+            }
+            for doc in medical_docs:
+                doc.prefetched_target = divers_by_id.get(doc.target_id)
+
+        context["medical_documents"] = medical_docs
 
         return context
 
@@ -6206,6 +6346,9 @@ class MedicalQuestionnaireListView(StaffPortalMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from django_questionnaires.models import InstanceStatus
+        from django.contrib.contenttypes.models import ContentType
+        from .models import DiverProfile
+
         context["status_choices"] = InstanceStatus.choices
         context["current_status"] = self.request.GET.get("status", "")
         context["current_expiration"] = self.request.GET.get("expiration", "")
@@ -6223,6 +6366,33 @@ class MedicalQuestionnaireListView(StaffPortalMixin, ListView):
             ("expires_at", "Expiring Soonest"),
             ("-expires_at", "Expiring Latest"),
         ]
+
+        # Prefetch respondent GenericFK to avoid N+1 queries
+        # Set prefetched_respondent on ALL instances to prevent template fallback
+        instances = list(context["instances"])
+        if instances:
+            # Initialize all instances to prevent template |default fallback
+            for inst in instances:
+                inst.prefetched_respondent = None
+
+            diver_ct = ContentType.objects.get_for_model(DiverProfile)
+            diver_ids = [
+                inst.respondent_object_id
+                for inst in instances
+                if inst.respondent_content_type_id == diver_ct.id
+            ]
+
+            if diver_ids:
+                divers = {
+                    str(d.pk): d
+                    for d in DiverProfile.objects.select_related("person").filter(pk__in=diver_ids)
+                }
+                for inst in instances:
+                    if inst.respondent_content_type_id == diver_ct.id:
+                        inst.prefetched_respondent = divers.get(inst.respondent_object_id)
+
+            context["instances"] = instances
+
         return context
 
 
@@ -6549,7 +6719,9 @@ class SendMedicalQuestionnaireCreateView(StaffPortalMixin, View):
 
     def get(self, request):
         """Show the create form with diver selection."""
+        from django_communication.services.canned_responses import list_canned_responses
         from .models import DiverProfile
+        from .selectors import get_staff_person
 
         divers = DiverProfile.objects.select_related("person").order_by(
             "person__last_name", "person__first_name"
@@ -6558,16 +6730,24 @@ class SendMedicalQuestionnaireCreateView(StaffPortalMixin, View):
         # Check for pre-selected diver from query params
         selected_diver = request.GET.get("diver")
 
+        # Get canned responses for medical questionnaire sending
+        staff_person = get_staff_person(request.user)
+        canned_responses = []
+        if staff_person:
+            canned_responses = list(list_canned_responses(actor=staff_person))
+
         context = {
             "page_title": "Send Medical Questionnaire",
             "divers": divers,
             "selected_diver": selected_diver,
             "default_expires_days": 365,
+            "canned_responses": canned_responses,
         }
         return render(request, self.template_name, context)
 
     def post(self, request):
         """Create and send the questionnaire."""
+        from django_communication.services.canned_responses import get_canned_response
         from .medical.services import send_medical_questionnaire
         from .models import DiverProfile
 
@@ -6583,16 +6763,37 @@ class SendMedicalQuestionnaireCreateView(StaffPortalMixin, View):
         except (ValueError, TypeError):
             expires_in_days = 365
 
+        # Get canned response or custom message
+        canned_response = None
+        custom_message = None
+        message_type = request.POST.get("message_type", "none")
+
+        if message_type == "canned":
+            canned_response_id = request.POST.get("canned_response_id")
+            if canned_response_id:
+                canned_response = get_canned_response(canned_response_id)
+        elif message_type == "custom":
+            custom_message = request.POST.get("custom_message", "").strip() or None
+
         if not diver_id:
+            from django_communication.services.canned_responses import list_canned_responses
+            from .selectors import get_staff_person
+
             divers = DiverProfile.objects.select_related("person").order_by(
                 "person__last_name", "person__first_name"
             )
+            staff_person = get_staff_person(request.user)
+            canned_responses = []
+            if staff_person:
+                canned_responses = list(list_canned_responses(actor=staff_person))
+
             context = {
                 "page_title": "Send Medical Questionnaire",
                 "divers": divers,
                 "errors": ["Please select a diver."],
                 "selected_diver": diver_id,
                 "default_expires_days": expires_in_days,
+                "canned_responses": canned_responses,
             }
             return render(request, self.template_name, context)
 
@@ -6603,6 +6804,8 @@ class SendMedicalQuestionnaireCreateView(StaffPortalMixin, View):
                 diver=diver,
                 expires_in_days=expires_in_days,
                 actor=request.user,
+                canned_response=canned_response,
+                custom_message=custom_message,
             )
 
             # Build the public URL for the questionnaire
@@ -8967,6 +9170,99 @@ class LeadAddNoteView(StaffPortalMixin, View):
         return redirect("diveops:lead-detail", pk=pk)
 
 
+class ContactsListView(StaffPortalMixin, ListView):
+    """List all contacts (Persons who are not divers yet).
+
+    This mirrors the divers list UI but shows persons without a DiverProfile.
+    Useful for managing leads, customers, and other contacts.
+    """
+
+    template_name = "diveops/staff/crm/contacts.html"
+    context_object_name = "contacts"
+    paginate_by = 25
+
+    def get_queryset(self):
+        from django.db.models import Exists, OuterRef, Q
+        from django_parties.models import Person
+
+        from .models import DiverProfile
+
+        # Get persons who don't have a DiverProfile
+        queryset = Person.objects.filter(
+            deleted_at__isnull=True,
+        ).exclude(
+            Exists(DiverProfile.objects.filter(person=OuterRef("pk")))
+        ).order_by("-created_at")
+
+        # Filter by lead status
+        status = self.request.GET.get("status")
+        if status == "lead":
+            queryset = queryset.filter(lead_status__isnull=False)
+        elif status == "no_lead":
+            queryset = queryset.filter(lead_status__isnull=True)
+
+        # Search
+        search = self.request.GET.get("q")
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(email__icontains=search)
+                | Q(phone__icontains=search)
+            )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["search_query"] = self.request.GET.get("q", "")
+        context["current_status"] = self.request.GET.get("status", "all")
+        return context
+
+
+class ContactDetailView(StaffPortalMixin, DetailView):
+    """View details of a contact (Person without DiverProfile)."""
+
+    template_name = "diveops/staff/crm/contact_detail.html"
+    context_object_name = "contact"
+
+    def get_queryset(self):
+        from django_parties.models import Person
+
+        return Person.objects.filter(deleted_at__isnull=True)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        contact = self.object
+
+        # Check if this person has a diver profile (shouldn't, but just in case)
+        from .models import DiverProfile
+
+        context["has_diver_profile"] = DiverProfile.objects.filter(person=contact).exists()
+
+        # Get conversations for this contact
+        from django_communication.models import ConversationParticipant
+
+        context["conversations"] = ConversationParticipant.objects.filter(
+            person=contact
+        ).select_related("conversation").order_by("-conversation__last_message_at")[:5]
+
+        # Get notes if using django-notes
+        try:
+            from django_notes.models import Note
+            from django.contrib.contenttypes.models import ContentType
+
+            ct = ContentType.objects.get_for_model(contact)
+            context["notes"] = Note.objects.filter(
+                target_content_type=ct,
+                target_object_id=str(contact.pk),
+            ).order_by("-created_at")[:10]
+        except ImportError:
+            context["notes"] = []
+
+        return context
+
+
 # =============================================================================
 # CMS - Content Management
 # =============================================================================
@@ -9900,10 +10196,15 @@ class StaffInboxView(StaffPortalMixin, TemplateView):
         status = self.request.GET.get("status", "active")
         scope = self.request.GET.get("scope", "mine")
 
-        context["conversations"] = get_staff_inbox(
+        conversations = get_staff_inbox(
             self.request.user,
             status=status,
             scope=scope,
+        )
+        # Prefetch flow_thread and assigned_to_user to avoid N+1
+        context["conversations"] = conversations.select_related(
+            "flow_thread__flow_type",
+            "assigned_to_user",
         )
         context["current_status"] = status
         context["current_scope"] = scope
@@ -9933,47 +10234,124 @@ class StaffConversationView(StaffPortalMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        from django_communication.models import Conversation
+        from django_communication.models import (
+            Conversation,
+            ConversationType,
+            ParticipantRole,
+            ParticipantState,
+        )
         from django_communication.services import get_conversation_messages
+        from django_communication.services.conversations import get_active_participants
 
         conversation_id = self.kwargs.get("conversation_id")
-        conversation = get_object_or_404(Conversation, pk=conversation_id)
+        conversation = get_object_or_404(
+            Conversation.objects.select_related("flow_thread__flow_type"),
+            pk=conversation_id,
+        )
 
         context["conversation"] = conversation
         context["messages_list"] = get_conversation_messages(conversation)
 
-        # Get customer participant for context panel
-        customer = conversation.participants.filter(role="customer").first()
-        if customer:
-            context["customer_person"] = customer.person
-            context["customer_participant"] = customer
-            # Try to get associated diver profile
+        # Check if this is a group conversation
+        is_group = conversation.conversation_type == ConversationType.GROUP
+        context["is_group"] = is_group
+
+        if is_group:
+            # Get all active participants for groups
+            active_participants = get_active_participants(conversation)
+            pending_invitations = conversation.participants.filter(
+                state=ParticipantState.INVITED
+            ).select_related("person")
+
+            # Build diver lookup for participants (for linking to contact records)
+            # Maps person_pk (as string) to diver_pk (as string) for template use
             from .selectors import get_diver_for_person
-            context["diver"] = get_diver_for_person(customer.person)
 
-            # Get notification status for this customer
-            from django_communication.services import get_notification_status
-            context["notification_status"] = get_notification_status(customer.person)
+            participant_diver_pks = {}
+            all_persons = [p.person for p in active_participants] + [p.person for p in pending_invitations]
+            for person in all_persons:
+                diver = get_diver_for_person(person)
+                if diver:
+                    participant_diver_pks[str(person.pk)] = str(diver.pk)
 
-            # Calculate last read outbound message for Messenger-style read indicator
-            if customer.last_read_at:
-                # Find the last outbound message that was read by the customer
-                last_read_outbound = conversation.messages.filter(
-                    direction="outbound",
-                    created_at__lte=customer.last_read_at,
-                ).order_by("-created_at").first()
-                if last_read_outbound:
-                    context["last_read_outbound_message_id"] = str(last_read_outbound.pk)
+            context["active_participants"] = active_participants
+            context["pending_invitations"] = pending_invitations
+            context["participant_diver_pks"] = participant_diver_pks
 
-        # Mark as read for staff
-        from .selectors import get_staff_person
-        staff_person = get_staff_person(self.request.user)
-        if staff_person:
-            conversation.mark_read_for(staff_person)
+            # Get staff person to check permissions
+            from .selectors import get_staff_person
+            from django_communication.services import ensure_conversation_participant
+
+            staff_person = get_staff_person(self.request.user)
+            staff_participant = conversation.participants.filter(person=staff_person).first()
+
+            # Check if staff can invite (owner or admin)
+            context["can_invite"] = staff_participant and staff_participant.role in [
+                ParticipantRole.OWNER,
+                ParticipantRole.ADMIN,
+            ]
+
+            # Ensure staff is a participant and mark as read
+            if staff_person:
+                if not staff_participant:
+                    ensure_conversation_participant(
+                        conversation=conversation,
+                        person=staff_person,
+                        role=ParticipantRole.STAFF,
+                    )
+                conversation.mark_read_for(staff_person)
+        else:
+            # Get customer participant for context panel (direct conversation)
+            customer = conversation.participants.filter(role="customer").first()
+            if customer:
+                context["customer_person"] = customer.person
+                context["customer_participant"] = customer
+                # Try to get associated diver profile
+                from .selectors import get_diver_for_person
+                context["diver"] = get_diver_for_person(customer.person)
+
+                # Get notification status for this customer
+                from django_communication.services import get_notification_status
+                context["notification_status"] = get_notification_status(customer.person)
+
+                # Calculate last read outbound message for Messenger-style read indicator
+                if customer.last_read_at:
+                    # Find the last outbound message that was read by the customer
+                    last_read_outbound = conversation.messages.filter(
+                        direction="outbound",
+                        created_at__lte=customer.last_read_at,
+                    ).order_by("-created_at").first()
+                    if last_read_outbound:
+                        context["last_read_outbound_message_id"] = str(last_read_outbound.pk)
+
+            # Ensure staff is a participant and mark as read
+            from .selectors import get_staff_person
+            from django_communication.services import ensure_conversation_participant
+
+            staff_person = get_staff_person(self.request.user)
+            if staff_person:
+                # Ensure staff is a participant so we can track their read status
+                ensure_conversation_participant(
+                    conversation=conversation,
+                    person=staff_person,
+                    role=ParticipantRole.STAFF,
+                )
+                conversation.mark_read_for(staff_person)
 
         # Get related object info if any
         if conversation.related_object:
             context["related_object"] = conversation.related_object
+
+        # Get available agreement templates for "Send Document" feature
+        # Only show templates that target divers (most common case)
+        from .models import AgreementTemplate
+        context["agreement_templates"] = AgreementTemplate.objects.filter(
+            status=AgreementTemplate.Status.PUBLISHED,
+            target_party_type__in=[
+                AgreementTemplate.TargetPartyType.DIVER,
+                AgreementTemplate.TargetPartyType.ANY,
+            ],
+        ).order_by("name")[:20]
 
         return context
 
@@ -10025,6 +10403,14 @@ class StaffReplyView(StaffPortalMixin, View):
                     direction=MessageDirection.OUTBOUND,
                 )
 
+        # Support redirect to custom next URL (for diver detail chat widget)
+        # Validate URL to prevent open redirect attacks
+        next_url = request.POST.get("next")
+        if next_url:
+            from django.utils.http import url_has_allowed_host_and_scheme
+            if url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+                return redirect(next_url)
+            # Invalid redirect URL - fall through to default
         return redirect("diveops:crm-conversation", conversation_id=conversation.pk)
 
 
@@ -10082,8 +10468,140 @@ class ReopenConversationView(StaffPortalMixin, View):
         return redirect("diveops:crm-conversation", conversation_id=conversation.pk)
 
 
+class StaffInviteToConversationView(StaffPortalMixin, View):
+    """Invite or add a customer to a group conversation.
+
+    Supports two modes:
+    - invite (default): Sends invitation, customer must accept
+    - add: Force-adds as active participant immediately
+    """
+
+    def post(self, request, conversation_id):
+        from django_communication.models import Conversation, ParticipantRole
+        from django_communication.services.conversations import add_participant, invite_participant
+        from django_parties.models import Person
+
+        from .selectors import get_staff_person
+
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+        person_id = request.POST.get("person_id")
+        mode = request.POST.get("mode", "invite")  # "invite" or "add"
+
+        if not person_id:
+            messages.error(request, "Please select a customer.")
+            return redirect("diveops:crm-conversation", conversation_id=conversation_id)
+
+        staff_person = get_staff_person(request.user)
+        if not staff_person:
+            messages.error(request, "Your user account is not linked to a Person record.")
+            return redirect("diveops:crm-conversation", conversation_id=conversation_id)
+
+        # Check permission
+        staff_participant = conversation.participants.filter(person=staff_person).first()
+        if not staff_participant or staff_participant.role not in [
+            ParticipantRole.OWNER,
+            ParticipantRole.ADMIN,
+        ]:
+            messages.error(request, "You don't have permission to add members.")
+            return redirect("diveops:crm-conversation", conversation_id=conversation_id)
+
+        try:
+            person_to_add = Person.objects.get(pk=person_id, deleted_at__isnull=True)
+
+            if mode == "add":
+                # Force add as active participant
+                add_participant(
+                    conversation=conversation,
+                    person=person_to_add,
+                    added_by=staff_person,
+                )
+                messages.success(request, f"Added {person_to_add.first_name} {person_to_add.last_name} to the conversation.")
+            else:
+                # Send invitation (polite way)
+                invite_participant(
+                    conversation=conversation,
+                    person=person_to_add,
+                    invited_by=staff_person,
+                )
+                messages.success(request, f"Invited {person_to_add.first_name} {person_to_add.last_name} to the conversation.")
+
+        except Person.DoesNotExist:
+            messages.error(request, "Customer not found.")
+        except (PermissionError, ValueError) as e:
+            messages.error(request, str(e))
+
+        return redirect("diveops:crm-conversation", conversation_id=conversation_id)
+
+
+class StaffRemoveFromConversationView(StaffPortalMixin, View):
+    """Remove a participant from a group conversation.
+
+    Supports two modes:
+    - remove (default): Removes but keeps read-only access to history
+    - purge: Removes and deletes all access to conversation history
+    """
+
+    def post(self, request, conversation_id):
+        from django_communication.models import Conversation, ParticipantRole
+        from django_communication.services.conversations import remove_participant
+        from django_parties.models import Person
+
+        from .selectors import get_staff_person
+
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+        person_id = request.POST.get("person_id")
+        mode = request.POST.get("mode", "remove")  # "remove" or "purge"
+
+        if not person_id:
+            messages.error(request, "Please select a participant to remove.")
+            return redirect("diveops:crm-conversation", conversation_id=conversation_id)
+
+        staff_person = get_staff_person(request.user)
+        if not staff_person:
+            messages.error(request, "Your user account is not linked to a Person record.")
+            return redirect("diveops:crm-conversation", conversation_id=conversation_id)
+
+        # Check permission
+        staff_participant = conversation.participants.filter(person=staff_person).first()
+        if not staff_participant or staff_participant.role not in [
+            ParticipantRole.OWNER,
+            ParticipantRole.ADMIN,
+        ]:
+            messages.error(request, "You don't have permission to remove members.")
+            return redirect("diveops:crm-conversation", conversation_id=conversation_id)
+
+        try:
+            person_to_remove = Person.objects.get(pk=person_id, deleted_at__isnull=True)
+            purge_history = mode == "purge"
+
+            remove_participant(
+                conversation=conversation,
+                person=person_to_remove,
+                removed_by=staff_person,
+                purge_history=purge_history,
+            )
+
+            if purge_history:
+                messages.success(
+                    request,
+                    f"Removed {person_to_remove.first_name} {person_to_remove.last_name} and purged their access to conversation history.",
+                )
+            else:
+                messages.success(
+                    request,
+                    f"Removed {person_to_remove.first_name} {person_to_remove.last_name}. They retain read-only access to past messages.",
+                )
+
+        except Person.DoesNotExist:
+            messages.error(request, "Person not found.")
+        except (PermissionError, ValueError) as e:
+            messages.error(request, str(e))
+
+        return redirect("diveops:crm-conversation", conversation_id=conversation_id)
+
+
 class StaffNewConversationView(StaffPortalMixin, TemplateView):
-    """Start a new conversation with a customer."""
+    """Start a new conversation with one or more customers (direct or group)."""
 
     template_name = "diveops/staff/crm/new_conversation.html"
 
@@ -10120,52 +10638,101 @@ class StaffNewConversationView(StaffPortalMixin, TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
+        import json
         from django_communication.models import MessageDirection, ParticipantRole
         from django_communication.services import create_conversation, send_in_conversation
+        from django_communication.services.conversations import create_group_conversation
         from django_parties.models import Person
 
         from .selectors import get_staff_person
 
-        customer_id = request.POST.get("customer_id")
+        # Get conversation type (direct or group)
+        conversation_type = request.POST.get("conversation_type", "direct")
         subject = request.POST.get("subject", "").strip()
         message_text = request.POST.get("message", "").strip()
 
-        if not customer_id:
-            messages.error(request, "Please select a customer.")
+        # Get selected customers - can be single ID or JSON array
+        customer_ids_raw = request.POST.get("customer_ids", "")
+        customer_id = request.POST.get("customer_id", "")  # Backwards compat
+
+        # Parse customer IDs
+        customer_ids = []
+        if customer_ids_raw:
+            try:
+                customer_ids = json.loads(customer_ids_raw)
+            except json.JSONDecodeError:
+                customer_ids = [customer_ids_raw] if customer_ids_raw else []
+        elif customer_id:
+            customer_ids = [customer_id]
+
+        if not customer_ids:
+            messages.error(request, "Please select at least one customer.")
             return redirect("diveops:crm-new-conversation")
 
         if not message_text:
             messages.error(request, "Please enter a message.")
-            return redirect(f"{request.path}?customer_id={customer_id}")
+            return redirect("diveops:crm-new-conversation")
 
-        customer = get_object_or_404(Person, pk=customer_id, deleted_at__isnull=True)
+        # Get customer Person objects
+        customers = list(Person.objects.filter(
+            pk__in=customer_ids, deleted_at__isnull=True
+        ))
+
+        if not customers:
+            messages.error(request, "No valid customers selected.")
+            return redirect("diveops:crm-new-conversation")
+
         staff_person = get_staff_person(request.user)
-
         if not staff_person:
             messages.error(request, "Your user account is not linked to a Person record.")
             return redirect("diveops:crm-inbox")
 
-        # Create conversation with both participants
-        participants = [
-            (customer, ParticipantRole.CUSTOMER),
-            (staff_person, ParticipantRole.STAFF),
-        ]
-        conversation = create_conversation(
-            subject=subject or f"Conversation with {customer.first_name}",
-            participants=participants,
-            assigned_to_user=request.user,
-            created_by_user=request.user,
-        )
+        # Decide: group or direct conversation
+        if len(customers) > 1 or conversation_type == "group":
+            # Create group conversation
+            title = subject or f"Group with {', '.join(c.first_name for c in customers[:3])}"
+            if len(customers) > 3:
+                title += f" +{len(customers) - 3} more"
 
-        # Send the initial message
-        send_in_conversation(
-            conversation=conversation,
-            sender_person=staff_person,
-            body_text=message_text,
-            direction=MessageDirection.OUTBOUND,
-        )
+            conversation = create_group_conversation(
+                title=title,
+                creator_person=staff_person,
+                initial_members=customers,
+            )
 
-        messages.success(request, f"Conversation started with {customer.first_name} {customer.last_name}.")
+            # Send the initial message
+            send_in_conversation(
+                conversation=conversation,
+                sender_person=staff_person,
+                body_text=message_text,
+                direction=MessageDirection.OUTBOUND,
+            )
+
+            messages.success(request, f"Group conversation started with {len(customers)} participants.")
+        else:
+            # Create direct (1:1) conversation
+            customer = customers[0]
+            participants = [
+                (customer, ParticipantRole.CUSTOMER),
+                (staff_person, ParticipantRole.STAFF),
+            ]
+            conversation = create_conversation(
+                subject=subject or f"Conversation with {customer.first_name}",
+                participants=participants,
+                assigned_to_user=request.user,
+                created_by_user=request.user,
+            )
+
+            # Send the initial message
+            send_in_conversation(
+                conversation=conversation,
+                sender_person=staff_person,
+                body_text=message_text,
+                direction=MessageDirection.OUTBOUND,
+            )
+
+            messages.success(request, f"Conversation started with {customer.first_name} {customer.last_name}.")
+
         return redirect("diveops:crm-conversation", conversation_id=conversation.pk)
 
 
@@ -10306,6 +10873,203 @@ class CannedResponseRenderAPIView(StaffPortalMixin, View):
             "title": canned.title,
             "rendered": rendered,
         })
+
+
+class ConversationSendAgreementAPIView(StaffPortalMixin, View):
+    """API to send an agreement to a customer from within a conversation."""
+
+    def post(self, request, conversation_id):
+        import json
+        from django_communication.models import Conversation
+        from django_parties.models import Person
+        from .models import AgreementTemplate
+        from .services import create_agreement_from_template, send_agreement
+        from .selectors import get_staff_person, get_diver_for_person
+
+        staff_person = get_staff_person(request.user)
+        if not staff_person:
+            return JsonResponse({"error": "Staff person not found"}, status=403)
+
+        try:
+            conversation = Conversation.objects.get(pk=conversation_id)
+        except Conversation.DoesNotExist:
+            return JsonResponse({"error": "Conversation not found"}, status=404)
+
+        # Get customer from conversation
+        customer_participant = conversation.participants.filter(role="customer").first()
+        if not customer_participant:
+            return JsonResponse({"error": "No customer in this conversation"}, status=400)
+
+        customer_person = customer_participant.person
+
+        # Parse request body
+        try:
+            body = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            body = {}
+
+        template_id = body.get("template_id")
+        if not template_id:
+            return JsonResponse({"error": "template_id required"}, status=400)
+
+        try:
+            template = AgreementTemplate.objects.get(
+                pk=template_id,
+                status=AgreementTemplate.Status.PUBLISHED,
+            )
+        except AgreementTemplate.DoesNotExist:
+            return JsonResponse({"error": "Template not found or not published"}, status=404)
+
+        # Idempotency check: prevent duplicate agreements for same template+customer
+        from django.contrib.contenttypes.models import ContentType
+        from .models import SignableAgreement
+
+        person_ct = ContentType.objects.get_for_model(customer_person)
+        existing = SignableAgreement.objects.filter(
+            template=template,
+            party_a_content_type=person_ct,
+            party_a_object_id=str(customer_person.pk),
+            status__in=[SignableAgreement.Status.DRAFT, SignableAgreement.Status.SENT],
+            deleted_at__isnull=True,
+        ).first()
+
+        if existing:
+            # Return existing agreement instead of creating duplicate
+            signing_url = request.build_absolute_uri(f"/sign/{existing.access_token}/") if existing.access_token else None
+            return JsonResponse({
+                "success": True,
+                "agreement_id": str(existing.pk),
+                "template_name": template.name,
+                "signing_url": signing_url,
+                "message": f"Agreement '{template.name}' already sent to {customer_person.first_name}",
+                "already_exists": True,
+            })
+
+        # Create and send the agreement
+        from django.db import IntegrityError
+        try:
+            agreement = create_agreement_from_template(
+                template=template,
+                party_a=customer_person,
+                actor=request.user,
+            )
+            agreement, token = send_agreement(
+                agreement=agreement,
+                delivery_method="link",
+                expires_in_days=30,
+                actor=request.user,
+            )
+
+            # Build signing URL
+            signing_url = request.build_absolute_uri(f"/sign/{token}/")
+
+            # Send message to conversation
+            from django_communication.services import send_in_conversation, send_system_message
+
+            # System message about the action
+            send_system_message(
+                conversation=conversation,
+                body_text=f"Agreement sent: {template.name}",
+                event_type="agreement_sent",
+            )
+
+            # Staff message with the link
+            send_in_conversation(
+                conversation=conversation,
+                sender_person=staff_person,
+                body_text=f"I've sent you the {template.name} agreement to sign. You can access it here: {signing_url}",
+                direction="outbound",
+            )
+
+            return JsonResponse({
+                "success": True,
+                "agreement_id": str(agreement.pk),
+                "template_name": template.name,
+                "signing_url": signing_url,
+                "message": f"Agreement '{template.name}' sent to {customer_person.first_name}",
+            })
+        except IntegrityError:
+            return JsonResponse({"error": "Agreement could not be created. Please try again."}, status=400)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Unexpected error sending agreement from conversation")
+            return JsonResponse({"error": "An unexpected error occurred. Please try again."}, status=500)
+
+
+class ConversationSendMedicalAPIView(StaffPortalMixin, View):
+    """API to send a medical questionnaire to a customer from within a conversation."""
+
+    def post(self, request, conversation_id):
+        import json
+        from django_communication.models import Conversation
+        from .medical.services import send_medical_questionnaire
+        from .selectors import get_staff_person, get_diver_for_person
+
+        staff_person = get_staff_person(request.user)
+        if not staff_person:
+            return JsonResponse({"error": "Staff person not found"}, status=403)
+
+        try:
+            conversation = Conversation.objects.get(pk=conversation_id)
+        except Conversation.DoesNotExist:
+            return JsonResponse({"error": "Conversation not found"}, status=404)
+
+        # Get customer from conversation
+        customer_participant = conversation.participants.filter(role="customer").first()
+        if not customer_participant:
+            return JsonResponse({"error": "No customer in this conversation"}, status=400)
+
+        customer_person = customer_participant.person
+
+        # Get diver profile for this person
+        diver = get_diver_for_person(customer_person)
+        if not diver:
+            return JsonResponse({
+                "error": f"{customer_person.first_name} doesn't have a diver profile. Create one first."
+            }, status=400)
+
+        # Send medical questionnaire
+        try:
+            instance = send_medical_questionnaire(
+                diver=diver,
+                expires_in_days=365,
+                actor=request.user,
+            )
+
+            # Build questionnaire URL
+            from django.urls import reverse
+            questionnaire_url = request.build_absolute_uri(
+                reverse("diveops_public:medical-questionnaire", kwargs={"instance_id": instance.pk})
+            )
+
+            # Send message to conversation
+            from django_communication.services import send_in_conversation, send_system_message
+
+            # System message about the action
+            send_system_message(
+                conversation=conversation,
+                body_text="Medical questionnaire sent",
+                event_type="medical_questionnaire_sent",
+            )
+
+            # Staff message with the link
+            send_in_conversation(
+                conversation=conversation,
+                sender_person=staff_person,
+                body_text=f"I've sent you the medical questionnaire to complete. Please fill it out here: {questionnaire_url}",
+                direction="outbound",
+            )
+
+            return JsonResponse({
+                "success": True,
+                "instance_id": str(instance.pk),
+                "questionnaire_url": questionnaire_url,
+                "message": f"Medical questionnaire sent to {customer_person.first_name}",
+            })
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Unexpected error sending medical questionnaire from conversation")
+            return JsonResponse({"error": "An unexpected error occurred. Please try again."}, status=500)
 
 
 # === Canned Response Management Views ===

@@ -100,7 +100,7 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <div class="text-sm text-gray-900">
-                            {% with party=agreement.party_a %}
+                            {% with party=agreement.get_party_a_cached %}
                             {% if party.first_name %}{{ party.first_name }} {{ party.last_name }}{% elif party.name %}{{ party.name }}{% else %}{{ party }}{% endif %}
                             {% endwith %}
                         </div>
@@ -259,15 +259,15 @@
                     <tr class="hover:bg-gray-50">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="text-sm font-medium text-gray-900">
-                                {% if doc.target %}
-                                    {% if doc.target.person %}
-                                        {{ doc.target.person.first_name }} {{ doc.target.person.last_name }}
-                                    {% else %}
-                                        {{ doc.target }}
-                                    {% endif %}
+                                {% with diver=doc.prefetched_target %}
+                                {% if diver and diver.person %}
+                                    {{ diver.person.first_name }} {{ diver.person.last_name }}
+                                {% elif diver %}
+                                    {{ diver }}
                                 {% else %}
                                     Unknown
                                 {% endif %}
+                                {% endwith %}
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">

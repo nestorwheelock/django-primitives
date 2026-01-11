@@ -157,11 +157,12 @@
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 {% for instance in instances %}
+                {% with respondent=instance.prefetched_respondent %}
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
-                        {% if instance.respondent %}
-                        <a href="{% url 'diveops:diver-medical-status' pk=instance.respondent.pk %}" class="text-blue-600 hover:text-blue-900 font-medium">
-                            {{ instance.respondent }}
+                        {% if respondent %}
+                        <a href="{% url 'diveops:diver-medical-status' pk=respondent.pk %}" class="text-blue-600 hover:text-blue-900 font-medium">
+                            {{ respondent }}
                         </a>
                         {% else %}
                         <span class="text-gray-400">Unknown</span>
@@ -211,7 +212,7 @@
                         <a href="{% url 'diveops:medical-detail' pk=instance.pk %}"
                            class="text-blue-600 hover:text-blue-900">View</a>
                         {% if instance.status == 'flagged' %}
-                        <button type="button" onclick="openClearModal('{{ instance.pk }}', '{{ instance.respondent }}')"
+                        <button type="button" onclick="openClearModal('{{ instance.pk }}', '{{ respondent }}')"
                            class="text-orange-600 hover:text-orange-900">Clear</button>
                         {% endif %}
                         {% if instance.status == 'pending' %}
@@ -229,11 +230,12 @@
                            class="text-teal-600 hover:text-teal-900" title="Download Clearance">Clearance</a>
                         {% endif %}
                         {% if instance.status != 'voided' %}
-                        <button type="button" onclick="openVoidModal('{{ instance.pk }}', '{{ instance.respondent }}')"
+                        <button type="button" onclick="openVoidModal('{{ instance.pk }}', '{{ respondent }}')"
                            class="text-gray-400 hover:text-red-600" title="Void this questionnaire">Void</button>
                         {% endif %}
                     </td>
                 </tr>
+                {% endwith %}
                 {% endfor %}
             </tbody>
         </table>

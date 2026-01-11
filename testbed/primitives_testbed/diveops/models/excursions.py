@@ -316,6 +316,9 @@ class Excursion(BaseModel):
             models.Index(fields=["departure_time"]),
             models.Index(fields=["status"]),
             models.Index(fields=["dive_shop", "status"]),
+            # Performance: type-based and series-based queries
+            models.Index(fields=["excursion_type"]),
+            models.Index(fields=["series"]),
         ]
         ordering = ["-departure_time"]
 
@@ -357,7 +360,15 @@ class Excursion(BaseModel):
 
     @property
     def spots_available(self) -> int:
-        """Return number of available spots (excluding cancelled bookings)."""
+        """Return number of available spots (excluding cancelled bookings).
+
+        Uses confirmed_count annotation if available (from list_upcoming_excursions),
+        otherwise falls back to database count.
+        """
+        # Use annotation if available (avoids N+1)
+        if hasattr(self, "confirmed_count"):
+            return max(0, self.max_divers - self.confirmed_count)
+        # Fallback for non-annotated instances
         confirmed_count = self.bookings.filter(
             status__in=["confirmed", "checked_in"]
         ).count()
@@ -553,6 +564,8 @@ class Dive(BaseModel):
             models.Index(fields=["excursion", "sequence"]),
             models.Index(fields=["logged_at"]),
             models.Index(fields=["plan_locked_at"]),
+            # Performance: site-based queries
+            models.Index(fields=["dive_site"]),
         ]
         ordering = ["excursion", "sequence"]
 
