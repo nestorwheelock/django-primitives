@@ -1,0 +1,248 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:message-log' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Message Log</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">Message Details</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-4xl">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Message Details</h1>
+            <p class="mt-1 text-sm text-gray-500">
+                Sent {{ message.created_at|date:"M d, Y" }} at {{ message.created_at|time:"H:i" }}
+            </p>
+        </div>
+        <a href="{% url 'diveops:message-log' %}" class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700">
+            {% icon "arrow-left" "w-4 h-4 mr-1" %}
+            Back to Log
+        </a>
+    </div>
+
+    <!-- Status and Channel -->
+    <div class="flex items-center space-x-3 mb-6">
+        {% if message.status == 'delivered' %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+            {% icon "check-circle" "w-4 h-4 mr-1" %}
+            Delivered
+        </span>
+        {% elif message.status == 'sent' %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+            {% icon "send" "w-4 h-4 mr-1" %}
+            Sent
+        </span>
+        {% elif message.status == 'failed' %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+            {% icon "x-circle" "w-4 h-4 mr-1" %}
+            Failed
+        </span>
+        {% elif message.status == 'pending' %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+            {% icon "clock" "w-4 h-4 mr-1" %}
+            Pending
+        </span>
+        {% else %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+            {{ message.status }}
+        </span>
+        {% endif %}
+
+        {% if message.channel == 'email' %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700">
+            {% icon "mail" "w-4 h-4 mr-1" %}
+            Email
+        </span>
+        {% else %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-50 text-green-700">
+            {% icon "phone" "w-4 h-4 mr-1" %}
+            SMS
+        </span>
+        {% endif %}
+
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
+            {{ message.get_message_type_display }}
+        </span>
+    </div>
+
+    <!-- Recipient Info -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 class="text-lg font-medium text-gray-900 mb-4">Recipient</h2>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Address</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ message.recipient_address }}</dd>
+            </div>
+            {% if message.recipient %}
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Person</dt>
+                <dd class="mt-1 text-sm text-gray-900">
+                    {{ message.recipient.first_name }} {{ message.recipient.last_name }}
+                    {% if message.recipient.email %}
+                    <span class="text-gray-500">({{ message.recipient.email }})</span>
+                    {% endif %}
+                </dd>
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+
+    <!-- Message Content -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-6">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h2 class="text-lg font-medium text-gray-900">Message Content</h2>
+        </div>
+        <div class="p-6">
+            {% if message.subject %}
+            <div class="mb-4">
+                <dt class="text-sm font-medium text-gray-500">Subject</dt>
+                <dd class="mt-1 text-lg text-gray-900">{{ message.subject }}</dd>
+            </div>
+            {% endif %}
+
+            {% if message.body_text %}
+            <div class="mb-4">
+                <dt class="text-sm font-medium text-gray-500">Body</dt>
+                <dd class="mt-2 text-sm text-gray-900 bg-gray-50 p-4 rounded-lg whitespace-pre-wrap font-mono">{{ message.body_text }}</dd>
+            </div>
+            {% endif %}
+
+            {% if message.body_html %}
+            <div class="mb-4">
+                <dt class="text-sm font-medium text-gray-500 mb-2">HTML Preview</dt>
+                <dd class="border border-gray-200 rounded-lg overflow-hidden">
+                    <iframe id="html-preview" class="w-full bg-white" style="min-height: 300px;" srcdoc="{{ message.body_html|escape }}"></iframe>
+                </dd>
+            </div>
+            <div>
+                <details class="text-sm">
+                    <summary class="text-gray-500 cursor-pointer hover:text-gray-700">View HTML Source</summary>
+                    <pre class="mt-2 p-4 bg-gray-50 rounded-lg overflow-x-auto text-xs">{{ message.body_html }}</pre>
+                </details>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Template Info -->
+    {% if message.template %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 class="text-lg font-medium text-gray-900 mb-4">Template</h2>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Template Key</dt>
+                <dd class="mt-1 text-sm text-gray-900">
+                    <a href="{% url 'diveops:message-template-detail' pk=message.template.pk %}" class="text-blue-600 hover:text-blue-800">
+                        <code class="bg-gray-100 px-2 py-0.5 rounded">{{ message.template.key }}</code>
+                    </a>
+                </dd>
+            </div>
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Template Name</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ message.template.name }}</dd>
+            </div>
+        </dl>
+    </div>
+    {% endif %}
+
+    <!-- Related Object -->
+    {% if message.related_object %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 class="text-lg font-medium text-gray-900 mb-4">Related Object</h2>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Type</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ message.related_content_type }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Object</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ message.related_object }}</dd>
+            </div>
+        </dl>
+    </div>
+    {% endif %}
+
+    <!-- Delivery Details -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 class="text-lg font-medium text-gray-900 mb-4">Delivery Details</h2>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Provider</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ message.provider|default:"Not recorded" }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm font-medium text-gray-500">External ID</dt>
+                <dd class="mt-1 text-sm text-gray-900 font-mono">{{ message.external_id|default:"Not available" }}</dd>
+            </div>
+            {% if message.sent_at %}
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Sent At</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ message.sent_at|date:"M d, Y H:i:s" }}</dd>
+            </div>
+            {% endif %}
+            {% if message.delivered_at %}
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Delivered At</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ message.delivered_at|date:"M d, Y H:i:s" }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+
+    <!-- Error Info (if failed) -->
+    {% if message.status == 'failed' and message.error_message %}
+    <div class="bg-red-50 rounded-lg border border-red-200 p-6 mb-6">
+        <h2 class="text-lg font-medium text-red-800 mb-4 flex items-center">
+            {% icon "alert-triangle" "w-5 h-5 mr-2" %}
+            Error Information
+        </h2>
+        <pre class="text-sm text-red-700 bg-red-100 p-4 rounded-lg overflow-x-auto">{{ message.error_message }}</pre>
+    </div>
+    {% endif %}
+
+    <!-- Metadata -->
+    {% if message.metadata %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 class="text-lg font-medium text-gray-900 mb-4">Metadata</h2>
+        <pre class="text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-x-auto">{{ message.metadata|pprint }}</pre>
+    </div>
+    {% endif %}
+
+    <!-- Timestamps -->
+    <div class="text-xs text-gray-500 space-y-1">
+        <p>Message ID: <code class="bg-gray-100 px-1 rounded">{{ message.pk }}</code></p>
+        <p>Created: {{ message.created_at|date:"M d, Y H:i:s" }}</p>
+        <p>Updated: {{ message.updated_at|date:"M d, Y H:i:s" }}</p>
+    </div>
+</div>
+
+<script>
+// Auto-resize iframe to fit content
+const iframe = document.getElementById('html-preview');
+if (iframe) {
+    iframe.onload = function() {
+        try {
+            iframe.style.height = iframe.contentWindow.document.body.scrollHeight + 20 + 'px';
+        } catch (e) {
+            // Cross-origin error, keep default height
+        }
+    };
+}
+</script>
+{% endblock %}

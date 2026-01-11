@@ -1,0 +1,168 @@
+{% extends "diveops/public/blog/_base.html" %}
+
+{% block title %}Diving Blog{% endblock %}
+
+{% block meta %}
+<meta name="description" content="Explore diving tips, destination guides, gear reviews, and underwater adventures from Happy Diving.">
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <!-- Hero Section -->
+    <div class="text-center mb-12">
+        <h1 class="text-4xl font-bold text-gray-900 mb-4">Happy Diving Blog</h1>
+        <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+            Dive into our world of underwater adventures, expert tips, gear reviews, and destination guides.
+        </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <!-- Main Content -->
+        <div class="lg:col-span-3">
+            {% if posts %}
+            <!-- Featured Post (first post) -->
+            {% with featured=posts.0 %}
+            {% if featured %}
+            <article class="bg-white rounded-xl shadow-sm overflow-hidden mb-8">
+                {% if featured.featured_image_url %}
+                <a href="{% url 'blog-post' slug=featured.slug %}">
+                    <img src="{{ featured.featured_image_url }}" alt="{{ featured.title }}" class="w-full h-64 object-cover hover:opacity-90 transition-opacity">
+                </a>
+                {% endif %}
+                <div class="p-6">
+                    {% if featured.category %}
+                    <a href="{% url 'blog-category' slug=featured.category.slug %}"
+                       class="inline-block px-3 py-1 text-sm font-medium rounded-full mb-3"
+                       style="background-color: {{ featured.category.color }}20; color: {{ featured.category.color }};">
+                        {{ featured.category.name }}
+                    </a>
+                    {% endif %}
+                    <h2 class="text-2xl font-bold text-gray-900 mb-3">
+                        <a href="{% url 'blog-post' slug=featured.slug %}" class="hover:text-primary-600">
+                            {{ featured.title }}
+                        </a>
+                    </h2>
+                    <p class="text-gray-600 mb-4">{{ featured.excerpt }}</p>
+                    <div class="flex items-center justify-between text-sm text-gray-500">
+                        <div class="flex items-center space-x-4">
+                            {% if featured.author %}
+                            <span>By {{ featured.author.first_name }} {{ featured.author.last_name }}</span>
+                            {% endif %}
+                            <span>{{ featured.published_at|date:"M d, Y" }}</span>
+                        </div>
+                        {% if featured.reading_time_minutes %}
+                        <span>{{ featured.reading_time_minutes }} min read</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </article>
+            {% endif %}
+            {% endwith %}
+
+            <!-- Post Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {% for post in posts %}
+                {% if not forloop.first %}
+                <article class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    {% if post.featured_image_url %}
+                    <a href="{% url 'blog-post' slug=post.slug %}">
+                        <img src="{{ post.featured_image_url }}" alt="{{ post.title }}" class="w-full h-48 object-cover hover:opacity-90 transition-opacity">
+                    </a>
+                    {% endif %}
+                    <div class="p-5">
+                        {% if post.category %}
+                        <a href="{% url 'blog-category' slug=post.category.slug %}"
+                           class="inline-block px-2 py-0.5 text-xs font-medium rounded-full mb-2"
+                           style="background-color: {{ post.category.color }}20; color: {{ post.category.color }};">
+                            {{ post.category.name }}
+                        </a>
+                        {% endif %}
+                        <h3 class="text-lg font-bold text-gray-900 mb-2">
+                            <a href="{% url 'blog-post' slug=post.slug %}" class="hover:text-primary-600">
+                                {{ post.title }}
+                            </a>
+                        </h3>
+                        <p class="text-gray-600 text-sm mb-3 line-clamp-2">{{ post.excerpt }}</p>
+                        <div class="flex items-center justify-between text-xs text-gray-500">
+                            <span>{{ post.published_at|date:"M d, Y" }}</span>
+                            {% if post.reading_time_minutes %}
+                            <span>{{ post.reading_time_minutes }} min read</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </article>
+                {% endif %}
+                {% endfor %}
+            </div>
+
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <nav class="flex justify-center mt-8">
+                <div class="flex items-center space-x-2">
+                    {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}"
+                       class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                        Previous
+                    </a>
+                    {% endif %}
+
+                    <span class="px-4 py-2 text-gray-600">
+                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                    </span>
+
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}"
+                       class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                        Next
+                    </a>
+                    {% endif %}
+                </div>
+            </nav>
+            {% endif %}
+
+            {% else %}
+            <div class="bg-white rounded-xl shadow-sm p-12 text-center">
+                <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
+                </svg>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No posts yet</h3>
+                <p class="text-gray-500">Check back soon for diving tips and adventures!</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <aside class="lg:col-span-1">
+            <!-- Categories -->
+            <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                <h3 class="text-lg font-bold text-gray-900 mb-4">Categories</h3>
+                <ul class="space-y-2">
+                    {% for category in categories %}
+                    <li>
+                        <a href="{% url 'blog-category' slug=category.slug %}"
+                           class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors">
+                            <div class="flex items-center">
+                                <span class="w-3 h-3 rounded-full mr-3" style="background-color: {{ category.color }};"></span>
+                                <span class="text-gray-700">{{ category.name }}</span>
+                            </div>
+                            <span class="text-sm text-gray-400">{{ category.post_count }}</span>
+                        </a>
+                    </li>
+                    {% empty %}
+                    <li class="text-gray-500 text-sm">No categories yet</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Newsletter CTA -->
+            <div class="bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-sm p-6 text-white">
+                <h3 class="text-lg font-bold mb-2">Stay Updated</h3>
+                <p class="text-primary-100 text-sm mb-4">Get the latest diving tips and adventure stories delivered to your inbox.</p>
+                <a href="/sign/get-started/" class="block w-full bg-white text-primary-600 text-center py-2 rounded-lg font-medium hover:bg-primary-50 transition-colors">
+                    Subscribe
+                </a>
+            </div>
+        </aside>
+    </div>
+</div>
+{% endblock %}

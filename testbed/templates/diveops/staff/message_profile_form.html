@@ -1,0 +1,168 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:message-profile-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Message Profiles</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{% if profile.pk %}Edit{% else %}New{% endif %}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-3xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Basic Info -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Profile Information</h3>
+                <p class="mt-1 text-sm text-gray-500">Basic details for this sender profile.</p>
+            </div>
+            <div class="px-4 py-5 sm:p-6 space-y-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="slug" class="block text-sm font-medium text-gray-700">Slug <span class="text-red-500">*</span></label>
+                        <input type="text" name="slug" id="slug" required
+                               value="{{ profile.slug|default:'' }}"
+                               pattern="[a-z0-9_-]+"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                               placeholder="transactional">
+                        <p class="mt-1 text-xs text-gray-500">Unique identifier (lowercase, hyphens, underscores only)</p>
+                    </div>
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700">Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="name" id="name" required
+                               value="{{ profile.name|default:'' }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                               placeholder="Transactional Emails">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                    <textarea name="description" id="description" rows="2"
+                              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                              placeholder="When this profile should be used...">{{ profile.description|default:'' }}</textarea>
+                </div>
+
+                <div>
+                    <label for="from_name" class="block text-sm font-medium text-gray-700">From Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="from_name" id="from_name" required
+                           value="{{ profile.from_name|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                           placeholder="Happy Diving">
+                    <p class="mt-1 text-xs text-gray-500">Display name that appears in recipients' inboxes</p>
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" name="is_active" id="is_active"
+                           {% if profile.is_active or not profile.pk %}checked{% endif %}
+                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                    <label for="is_active" class="ml-2 block text-sm text-gray-900">Active</label>
+                    <span class="ml-2 text-xs text-gray-500">(Inactive profiles cannot be used for sending)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- English Identity -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200 bg-blue-50">
+                <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                    {% icon "globe" "w-5 h-5 mr-2 text-blue-600" %}
+                    English Identity (EN)
+                </h3>
+                <p class="mt-1 text-sm text-gray-500">Used for recipients with English language preference.</p>
+            </div>
+            <div class="px-4 py-5 sm:p-6 space-y-4">
+                <div>
+                    <label for="from_address_en" class="block text-sm font-medium text-gray-700">From Address <span class="text-red-500">*</span></label>
+                    <input type="email" name="from_address_en" id="from_address_en" required
+                           value="{{ profile.from_address_en|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                           placeholder="info@happydiving.com">
+                </div>
+                <div>
+                    <label for="reply_to_en" class="block text-sm font-medium text-gray-700">Reply-To Address</label>
+                    <input type="email" name="reply_to_en" id="reply_to_en"
+                           value="{{ profile.reply_to_en|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                           placeholder="support@happydiving.com">
+                    <p class="mt-1 text-xs text-gray-500">Optional - where replies should be directed</p>
+                </div>
+                <div>
+                    <label for="ses_configuration_set_en" class="block text-sm font-medium text-gray-700">SES Configuration Set</label>
+                    <input type="text" name="ses_configuration_set_en" id="ses_configuration_set_en"
+                           value="{{ profile.ses_configuration_set_en|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                           placeholder="happy-diving-en">
+                    <p class="mt-1 text-xs text-gray-500">Optional - AWS SES configuration set for tracking</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spanish Identity -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200 bg-orange-50">
+                <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                    {% icon "globe" "w-5 h-5 mr-2 text-orange-600" %}
+                    Spanish Identity (ES)
+                </h3>
+                <p class="mt-1 text-sm text-gray-500">Used for recipients with Spanish language preference.</p>
+            </div>
+            <div class="px-4 py-5 sm:p-6 space-y-4">
+                <div>
+                    <label for="from_address_es" class="block text-sm font-medium text-gray-700">From Address <span class="text-red-500">*</span></label>
+                    <input type="email" name="from_address_es" id="from_address_es" required
+                           value="{{ profile.from_address_es|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                           placeholder="info@buceandofeliz.com">
+                </div>
+                <div>
+                    <label for="reply_to_es" class="block text-sm font-medium text-gray-700">Reply-To Address</label>
+                    <input type="email" name="reply_to_es" id="reply_to_es"
+                           value="{{ profile.reply_to_es|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                           placeholder="soporte@buceandofeliz.com">
+                    <p class="mt-1 text-xs text-gray-500">Optional - where replies should be directed</p>
+                </div>
+                <div>
+                    <label for="ses_configuration_set_es" class="block text-sm font-medium text-gray-700">SES Configuration Set</label>
+                    <input type="text" name="ses_configuration_set_es" id="ses_configuration_set_es"
+                           value="{{ profile.ses_configuration_set_es|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                           placeholder="buceando-feliz-es">
+                    <p class="mt-1 text-xs text-gray-500">Optional - AWS SES configuration set for tracking</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-between pt-4">
+            <a href="{% url 'diveops:message-profile-list' %}"
+               class="text-sm text-gray-600 hover:text-gray-900">Cancel</a>
+            <button type="submit"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                {% icon "save" "w-4 h-4 mr-2" %}
+                {% if profile.pk %}Update Profile{% else %}Create Profile{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

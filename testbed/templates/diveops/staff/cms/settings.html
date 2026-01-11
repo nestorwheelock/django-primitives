@@ -1,0 +1,86 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">CMS Settings</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">CMS Settings</h1>
+        <p class="text-gray-600">Configure global CMS settings</p>
+    </div>
+
+    <!-- Form -->
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Site Settings -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+            <h3 class="text-lg font-medium text-gray-900">Site Settings</h3>
+
+            <div>
+                <label for="site_name" class="block text-sm font-medium text-gray-700">Site Name</label>
+                <input type="text" name="site_name" id="site_name"
+                       value="{{ settings.site_name }}"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                       placeholder="My Awesome Site">
+                <p class="mt-1 text-sm text-gray-500">Display name for your site</p>
+            </div>
+        </div>
+
+        <!-- SEO Settings -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+            <h3 class="text-lg font-medium text-gray-900">Default SEO</h3>
+
+            <div>
+                <label for="default_seo_title_suffix" class="block text-sm font-medium text-gray-700">SEO Title Suffix</label>
+                <input type="text" name="default_seo_title_suffix" id="default_seo_title_suffix"
+                       value="{{ settings.default_seo_title_suffix }}"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                       placeholder=" | My Site">
+                <p class="mt-1 text-sm text-gray-500">Appended to all page titles (e.g., " | My Site")</p>
+            </div>
+
+            <div>
+                <label for="default_og_image_url" class="block text-sm font-medium text-gray-700">Default Open Graph Image URL</label>
+                <input type="url" name="default_og_image_url" id="default_og_image_url"
+                       value="{{ settings.default_og_image_url }}"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                       placeholder="https://example.com/images/og-default.jpg">
+                <p class="mt-1 text-sm text-gray-500">Default image for social media shares</p>
+            </div>
+        </div>
+
+        <!-- API Settings -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+            <h3 class="text-lg font-medium text-gray-900">API Settings</h3>
+
+            <div>
+                <label for="api_cache_ttl_seconds" class="block text-sm font-medium text-gray-700">API Cache TTL (seconds)</label>
+                <input type="number" name="api_cache_ttl_seconds" id="api_cache_ttl_seconds"
+                       value="{{ settings.api_cache_ttl_seconds|default:60 }}"
+                       min="0" max="86400"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                <p class="mt-1 text-sm text-gray-500">How long API responses are cached (0 to disable)</p>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end">
+            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                Save Settings
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

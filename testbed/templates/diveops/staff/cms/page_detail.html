@@ -1,0 +1,244 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:cms-page-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">CMS Pages</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ page.title }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{ page.title }}</h1>
+            <p class="text-gray-600">/{{ page.slug }}/</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="/{{ page.slug }}/" target="_blank" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                Preview
+            </a>
+            {% if page.status == 'draft' %}
+            <form method="post" action="{% url 'diveops:cms-page-publish' pk=page.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                    Publish
+                </button>
+            </form>
+            {% elif page.status == 'published' %}
+            <form method="post" action="{% url 'diveops:cms-page-unpublish' pk=page.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700">
+                    Unpublish
+                </button>
+            </form>
+            {% endif %}
+            {% if page.status != 'archived' %}
+            <form method="post" action="{% url 'diveops:cms-page-archive' pk=page.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                    Archive
+                </button>
+            </form>
+            {% endif %}
+            <form method="post" action="{% url 'diveops:cms-page-delete' pk=page.pk %}" class="inline"
+                  onsubmit="return confirm('Are you sure you want to delete this page?')">
+                {% csrf_token %}
+                <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                    Delete
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Status Badge -->
+    <div class="flex items-center gap-4">
+        {% if page.status == 'draft' %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">Draft</span>
+        {% elif page.status == 'published' %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">Published</span>
+        {% elif page.status == 'archived' %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">Archived</span>
+        {% endif %}
+        <span class="text-sm text-gray-500">Access: {{ page.get_access_level_display }}</span>
+        {% if page.published_at %}
+        <span class="text-sm text-gray-500">Published: {{ page.published_at|date:"M d, Y H:i" }}</span>
+        {% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Page Settings -->
+        <div class="lg:col-span-1">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Page Settings</h3>
+
+                <form method="post" action="{% url 'diveops:cms-page-update' pk=page.pk %}" class="space-y-4">
+                    {% csrf_token %}
+
+                    <div>
+                        <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
+                        <input type="text" name="title" id="title" value="{{ page.title }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="slug" class="block text-sm font-medium text-gray-700">Slug</label>
+                        <input type="text" name="slug" id="slug" value="{{ page.slug }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="access_level" class="block text-sm font-medium text-gray-700">Access Level</label>
+                        <select name="access_level" id="access_level"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            {% for value, label in access_choices %}
+                            <option value="{{ value }}" {% if page.access_level == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="template_key" class="block text-sm font-medium text-gray-700">Template</label>
+                        <input type="text" name="template_key" id="template_key" value="{{ page.template_key }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <div class="pt-4 border-t border-gray-200">
+                        <h4 class="text-sm font-medium text-gray-700 mb-2">SEO</h4>
+
+                        <div class="space-y-3">
+                            <div>
+                                <label for="seo_title" class="block text-xs text-gray-500">SEO Title</label>
+                                <input type="text" name="seo_title" id="seo_title" value="{{ page.seo_title }}" maxlength="70"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                            </div>
+
+                            <div>
+                                <label for="seo_description" class="block text-xs text-gray-500">Meta Description</label>
+                                <textarea name="seo_description" id="seo_description" rows="2" maxlength="160"
+                                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">{{ page.seo_description }}</textarea>
+                            </div>
+
+                            <div class="flex items-center">
+                                <input type="checkbox" name="is_indexable" id="is_indexable" {% if page.is_indexable %}checked{% endif %}
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <label for="is_indexable" class="ml-2 text-sm text-gray-700">Include in sitemap</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        Save Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Content Blocks -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Content Blocks</h3>
+                </div>
+
+                <!-- Existing Blocks -->
+                <div class="space-y-4 mb-6">
+                    {% for block in blocks %}
+                    <div class="border border-gray-200 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-medium text-gray-900">{{ block.block_type }}</span>
+                                <span class="text-xs text-gray-500">#{{ block.sequence }}</span>
+                                {% if not block.is_active %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">Inactive</span>
+                                {% endif %}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <form method="post" action="{% url 'diveops:cms-block-delete' page_pk=page.pk block_pk=block.pk %}" class="inline"
+                                      onsubmit="return confirm('Delete this block?')">
+                                    {% csrf_token %}
+                                    <button type="submit" class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <form method="post" action="{% url 'diveops:cms-block-update' page_pk=page.pk block_pk=block.pk %}">
+                            {% csrf_token %}
+                            <div class="space-y-2">
+                                <textarea name="data" rows="4"
+                                          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 font-mono text-sm">{{ block.data|safe }}</textarea>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" name="is_active" id="block_active_{{ block.pk }}" {% if block.is_active %}checked{% endif %}
+                                               class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        <label for="block_active_{{ block.pk }}" class="ml-2 text-sm text-gray-700">Active</label>
+                                    </div>
+                                    <button type="submit" class="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">
+                                        Update
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-8 text-gray-500">
+                        No content blocks yet. Add one below.
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Add Block Form -->
+                <div class="border-t border-gray-200 pt-4">
+                    <h4 class="text-sm font-medium text-gray-700 mb-3">Add Block</h4>
+                    <form method="post" action="{% url 'diveops:cms-block-add' pk=page.pk %}" class="space-y-3">
+                        {% csrf_token %}
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label for="block_type" class="block text-sm text-gray-600">Block Type</label>
+                                <select name="block_type" id="block_type"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                    <option value="heading">Heading</option>
+                                    <option value="text">Text</option>
+                                    <option value="image">Image</option>
+                                    <option value="rich_text">Rich Text</option>
+                                    <option value="call_to_action">Call to Action</option>
+                                    <option value="video">Video</option>
+                                    <option value="gallery">Gallery</option>
+                                    <option value="html">Raw HTML</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="new_block_data" class="block text-sm text-gray-600">Block Data (JSON)</label>
+                            <textarea name="data" id="new_block_data" rows="3"
+                                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 font-mono text-sm"
+                                      placeholder='{"content": "Your content here"}'>{}</textarea>
+                        </div>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                            Add Block
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

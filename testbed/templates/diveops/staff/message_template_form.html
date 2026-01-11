@@ -1,0 +1,182 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:message-template-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Message Templates</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{% if template %}Edit{% else %}New{% endif %} Template</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-4xl">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">{{ page_title }}</h1>
+        <p class="mt-1 text-sm text-gray-500">{% if template %}Update the message template details.{% else %}Create a new message template for automated communications.{% endif %}</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Basic Info -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-lg font-medium text-gray-900 mb-4">Basic Information</h2>
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="key" class="block text-sm font-medium text-gray-700">Template Key</label>
+                    <input type="text" name="key" id="key" value="{{ template.key|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                           placeholder="booking_confirmation" required {% if template %}readonly{% endif %}>
+                    <p class="mt-1 text-xs text-gray-500">Unique identifier used in code. Cannot be changed after creation.</p>
+                </div>
+                <div>
+                    <label for="name" class="block text-sm font-medium text-gray-700">Display Name</label>
+                    <input type="text" name="name" id="name" value="{{ template.name|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                           placeholder="Booking Confirmation" required>
+                </div>
+                <div>
+                    <label for="message_type" class="block text-sm font-medium text-gray-700">Message Type</label>
+                    <select name="message_type" id="message_type"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        {% for value, label in message_types %}
+                        <option value="{{ value }}" {% if template.message_type == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Determines default channel routing (transactional = email, reminder = SMS).</p>
+                </div>
+                <div>
+                    <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                    <input type="text" name="description" id="description" value="{{ template.description|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                           placeholder="Sent after a booking is confirmed">
+                </div>
+            </div>
+            <div class="mt-4">
+                <label class="flex items-center">
+                    <input type="checkbox" name="is_active" {% if template.is_active or not template %}checked{% endif %}
+                           class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <span class="ml-2 text-sm text-gray-700">Active</span>
+                </label>
+                <p class="mt-1 text-xs text-gray-500 ml-6">Inactive templates will not be used for sending messages.</p>
+            </div>
+        </div>
+
+        <!-- Email Content -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-lg font-medium text-gray-900 mb-4">
+                {% icon "mail" "w-5 h-5 inline mr-2 text-blue-500" %}
+                Email Content
+            </h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="email_subject" class="block text-sm font-medium text-gray-700">Subject Line</label>
+                    <input type="text" name="email_subject" id="email_subject" value="{{ template.email_subject|default:'' }}"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                           placeholder="Your booking is confirmed - {% templatetag openvariable %} booking.reference {% templatetag closevariable %}">
+                    <p class="mt-1 text-xs text-gray-500">Supports Django template syntax for variables.</p>
+                </div>
+                <div>
+                    <label for="email_body_text" class="block text-sm font-medium text-gray-700">Plain Text Body</label>
+                    <textarea name="email_body_text" id="email_body_text" rows="6"
+                              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono text-xs"
+                              placeholder="Hi {% templatetag openvariable %} recipient.first_name {% templatetag closevariable %},&#10;&#10;Your booking has been confirmed...">{{ template.email_body_text|default:'' }}</textarea>
+                </div>
+                <div>
+                    <label for="email_body_html" class="block text-sm font-medium text-gray-700">HTML Body (Optional)</label>
+                    <textarea name="email_body_html" id="email_body_html" rows="10"
+                              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono text-xs"
+                              placeholder="<html>&#10;<body>&#10;  <h1>Booking Confirmed</h1>&#10;  <p>Hi {% templatetag openvariable %} recipient.first_name {% templatetag closevariable %},</p>&#10;</body>&#10;</html>">{{ template.email_body_html|default:'' }}</textarea>
+                    <p class="mt-1 text-xs text-gray-500">If empty, only plain text will be sent.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- SMS Content -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-lg font-medium text-gray-900 mb-4">
+                {% icon "phone" "w-5 h-5 inline mr-2 text-green-500" %}
+                SMS Content
+            </h2>
+            <div>
+                <label for="sms_body" class="block text-sm font-medium text-gray-700">SMS Message</label>
+                <textarea name="sms_body" id="sms_body" rows="3"
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          placeholder="Hi {% templatetag openvariable %} recipient.first_name {% templatetag closevariable %}, your booking {% templatetag openvariable %} booking.reference {% templatetag closevariable %} is confirmed.">{{ template.sms_body|default:'' }}</textarea>
+                <p class="mt-1 text-xs text-gray-500">Keep under 160 characters for single SMS. Current: <span id="sms-count">0</span> chars</p>
+            </div>
+        </div>
+
+        <!-- Available Variables -->
+        <div class="bg-blue-50 rounded-lg border border-blue-200 p-4">
+            <h3 class="text-sm font-medium text-blue-800 mb-2">Available Template Variables</h3>
+            <div class="grid grid-cols-2 gap-4 text-xs text-blue-700">
+                <div>
+                    <p class="font-medium">Recipient (Person):</p>
+                    <ul class="ml-4 list-disc">
+                        <li><code>{% templatetag openvariable %} recipient.first_name {% templatetag closevariable %}</code></li>
+                        <li><code>{% templatetag openvariable %} recipient.last_name {% templatetag closevariable %}</code></li>
+                        <li><code>{% templatetag openvariable %} recipient.email {% templatetag closevariable %}</code></li>
+                        <li><code>{% templatetag openvariable %} recipient.phone {% templatetag closevariable %}</code></li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="font-medium">Custom Context:</p>
+                    <ul class="ml-4 list-disc">
+                        <li>Pass any variables via <code>context</code> dict</li>
+                        <li>e.g., <code>{% templatetag openvariable %} booking.reference {% templatetag closevariable %}</code></li>
+                        <li>e.g., <code>{% templatetag openvariable %} excursion.name {% templatetag closevariable %}</code></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-between pt-4">
+            <a href="{% url 'diveops:message-template-list' %}" class="text-sm text-gray-500 hover:text-gray-700">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                {% if template %}
+                {% icon "check" "w-4 h-4 mr-2" %}
+                Save Changes
+                {% else %}
+                {% icon "plus" "w-4 h-4 mr-2" %}
+                Create Template
+                {% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+// SMS character counter
+const smsBody = document.getElementById('sms_body');
+const smsCount = document.getElementById('sms-count');
+
+function updateCount() {
+    smsCount.textContent = smsBody.value.length;
+    if (smsBody.value.length > 160) {
+        smsCount.classList.add('text-red-600', 'font-bold');
+    } else {
+        smsCount.classList.remove('text-red-600', 'font-bold');
+    }
+}
+
+smsBody.addEventListener('input', updateCount);
+updateCount();
+</script>
+{% endblock %}

@@ -1,0 +1,179 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:blog-post-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Posts</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{% if is_create %}Create{% else %}Edit{% endif %}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">{% if is_create %}Create Post{% else %}Edit Post{% endif %}</h1>
+        <p class="text-gray-600">{% if is_create %}Write a new post{% else %}Update post settings{% endif %}</p>
+    </div>
+
+    <!-- Form -->
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Main Content -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                    <h3 class="text-lg font-medium text-gray-900">Post Content</h3>
+
+                    <div>
+                        <label for="title" class="block text-sm font-medium text-gray-700">Title *</label>
+                        <input type="text" name="title" id="title" required
+                               value="{{ form_data.title|default:'' }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                               placeholder="Post title">
+                    </div>
+
+                    <div>
+                        <label for="slug" class="block text-sm font-medium text-gray-700">Slug *</label>
+                        <div class="mt-1 flex rounded-md shadow-sm">
+                            <span class="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">/blog/</span>
+                            <input type="text" name="slug" id="slug" required
+                                   value="{{ form_data.slug|default:'' }}"
+                                   class="flex-1 block w-full rounded-none rounded-r-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                   placeholder="post-slug">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="excerpt" class="block text-sm font-medium text-gray-700">Excerpt</label>
+                        <textarea name="excerpt" id="excerpt" rows="3"
+                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                  placeholder="Brief summary of the post...">{{ form_data.excerpt|default:'' }}</textarea>
+                        <p class="mt-1 text-sm text-gray-500">Shown in post listings and search results</p>
+                    </div>
+
+                    <div>
+                        <label for="featured_image_url" class="block text-sm font-medium text-gray-700">Featured Image URL</label>
+                        <input type="url" name="featured_image_url" id="featured_image_url"
+                               value="{{ form_data.featured_image_url|default:'' }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                               placeholder="https://example.com/image.jpg">
+                    </div>
+                </div>
+
+                <!-- SEO -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                    <h3 class="text-lg font-medium text-gray-900">SEO Settings</h3>
+
+                    <div>
+                        <label for="seo_title" class="block text-sm font-medium text-gray-700">SEO Title</label>
+                        <input type="text" name="seo_title" id="seo_title" maxlength="70"
+                               value="{{ form_data.seo_title|default:'' }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                               placeholder="Custom title for search engines">
+                        <p class="mt-1 text-sm text-gray-500">Max 70 characters</p>
+                    </div>
+
+                    <div>
+                        <label for="seo_description" class="block text-sm font-medium text-gray-700">Meta Description</label>
+                        <textarea name="seo_description" id="seo_description" rows="2" maxlength="160"
+                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                  placeholder="Description for search results">{{ form_data.seo_description|default:'' }}</textarea>
+                        <p class="mt-1 text-sm text-gray-500">Max 160 characters</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="space-y-6">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                    <h3 class="text-lg font-medium text-gray-900">Settings</h3>
+
+                    <div>
+                        <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
+                        <select name="status" id="status"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if form_data.status == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="author" class="block text-sm font-medium text-gray-700">Author</label>
+                        <select name="author" id="author"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="">Select author...</option>
+                            {% for author in authors %}
+                            <option value="{{ author.pk }}" {% if form_data.author == author.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ author.first_name }} {{ author.last_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="category" class="block text-sm font-medium text-gray-700">Category</label>
+                        <select name="category" id="category"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="">No category</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat.pk }}" {% if form_data.category == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="tags" class="block text-sm font-medium text-gray-700">Tags</label>
+                        <input type="text" name="tags" id="tags"
+                               value="{{ form_data.tags|default:'' }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                               placeholder="tag1, tag2, tag3">
+                        <p class="mt-1 text-sm text-gray-500">Comma-separated</p>
+                    </div>
+
+                    <div>
+                        <label for="reading_time_minutes" class="block text-sm font-medium text-gray-700">Reading Time (minutes)</label>
+                        <input type="number" name="reading_time_minutes" id="reading_time_minutes" min="1"
+                               value="{{ form_data.reading_time_minutes|default:'' }}"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="access_level" class="block text-sm font-medium text-gray-700">Access Level</label>
+                        <select name="access_level" id="access_level"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            {% for value, label in access_choices %}
+                            <option value="{{ value }}" {% if form_data.access_level == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end gap-3">
+            <a href="{% url 'diveops:blog-post-list' %}" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">
+                Cancel
+            </a>
+            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                {% if is_create %}Create Post{% else %}Save Changes{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

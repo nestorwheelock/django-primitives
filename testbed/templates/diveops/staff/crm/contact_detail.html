@@ -1,0 +1,242 @@
+{% extends "diveops/staff/_base.html" %}
+{% load portal_ui_tags %}
+
+{% block breadcrumb %}
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <a href="{% url 'diveops:contacts-list' %}" class="ml-2 text-sm font-medium text-gray-500 hover:text-gray-700">Contacts</a>
+    </div>
+</li>
+<li>
+    <div class="flex items-center">
+        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span class="ml-2 text-sm font-medium text-gray-500">{{ contact.first_name }} {{ contact.last_name }}</span>
+    </div>
+</li>
+{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+            <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
+                <span class="text-2xl font-bold text-gray-600">{{ contact.first_name|slice:":1"|upper }}{{ contact.last_name|slice:":1"|upper }}</span>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">{{ contact.first_name }} {{ contact.last_name }}</h1>
+                <div class="flex items-center space-x-2 mt-1">
+                    {% if contact.lead_status %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                        {% if contact.lead_status == 'new' %}bg-blue-100 text-blue-800
+                        {% elif contact.lead_status == 'contacted' %}bg-yellow-100 text-yellow-800
+                        {% elif contact.lead_status == 'qualified' %}bg-green-100 text-green-800
+                        {% elif contact.lead_status == 'converted' %}bg-purple-100 text-purple-800
+                        {% elif contact.lead_status == 'lost' %}bg-gray-100 text-gray-600
+                        {% else %}bg-gray-100 text-gray-600{% endif %}">
+                        Lead: {{ contact.get_lead_status_display|default:contact.lead_status }}
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                        Contact (not a lead)
+                    </span>
+                    {% endif %}
+                    {% if has_diver_profile %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        {% icon "check-circle" "w-3 h-3 mr-1" %}
+                        Has Diver Profile
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3">
+            {% if contact.lead_status %}
+            <a href="{% url 'diveops:lead-detail' pk=contact.pk %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "arrow-right" "w-4 h-4 mr-2" %}
+                View Lead
+            </a>
+            {% endif %}
+            {% if not has_diver_profile %}
+            <a href="{% url 'diveops:lead-convert' pk=contact.pk %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {% icon "user-plus" "w-4 h-4 mr-2" %}
+                Convert to Diver
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Info -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Contact Information -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-semibold text-gray-900">Contact Information</h2>
+                </div>
+                <div class="p-6">
+                    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Email</dt>
+                            <dd class="mt-1 text-sm text-gray-900">
+                                {% if contact.email %}
+                                <a href="mailto:{{ contact.email }}" class="text-blue-600 hover:text-blue-800">{{ contact.email }}</a>
+                                {% else %}
+                                <span class="text-gray-400">Not provided</span>
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Phone</dt>
+                            <dd class="mt-1 text-sm text-gray-900">
+                                {% if contact.phone %}
+                                <a href="tel:{{ contact.phone }}" class="text-blue-600 hover:text-blue-800">{{ contact.phone }}</a>
+                                {% else %}
+                                <span class="text-gray-400">Not provided</span>
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">First Name</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ contact.first_name }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Last Name</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ contact.last_name }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Created</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ contact.created_at|date:"F j, Y g:i a" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Last Updated</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ contact.updated_at|date:"F j, Y g:i a" }}</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Lead Information (if lead) -->
+            {% if contact.lead_status %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-semibold text-gray-900">Lead Information</h2>
+                </div>
+                <div class="p-6">
+                    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Lead Status</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ contact.get_lead_status_display }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Lead Source</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ contact.get_lead_source_display|default:"Not specified" }}</dd>
+                        </div>
+                        {% if contact.lead_owner %}
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Lead Owner</dt>
+                            <dd class="mt-1 text-sm text-gray-900">{{ contact.lead_owner.first_name }} {{ contact.lead_owner.last_name }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                    <div class="mt-4">
+                        <a href="{% url 'diveops:lead-detail' pk=contact.pk %}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                            View full lead details &rarr;
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Conversations -->
+            {% if conversations %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-900">Recent Conversations</h2>
+                </div>
+                <ul class="divide-y divide-gray-200">
+                    {% for participant in conversations %}
+                    <li>
+                        <a href="{% url 'diveops:crm-conversation' conversation_id=participant.conversation.pk %}" class="block px-6 py-4 hover:bg-gray-50">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-900">{{ participant.conversation.subject|default:"No subject" }}</p>
+                                    <p class="text-sm text-gray-500 mt-1">{{ participant.conversation.last_message_at|timesince }} ago</p>
+                                </div>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                    {% if participant.conversation.status == 'active' %}bg-green-100 text-green-800
+                                    {% elif participant.conversation.status == 'closed' %}bg-gray-100 text-gray-600
+                                    {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                    {{ participant.conversation.status|title }}
+                                </span>
+                            </div>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Quick Actions -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-semibold text-gray-900">Actions</h2>
+                </div>
+                <div class="p-4 space-y-3">
+                    {% if contact.email %}
+                    <a href="mailto:{{ contact.email }}" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        {% icon "envelope" "w-4 h-4 mr-2" %}
+                        Send Email
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'diveops:crm-new-conversation' %}?person={{ contact.pk }}" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        {% icon "chat-bubble-left-right" "w-4 h-4 mr-2" %}
+                        Start Conversation
+                    </a>
+                    {% if not contact.lead_status %}
+                    <form method="post" action="{% url 'diveops:lead-status-update' pk=contact.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="new">
+                        <button type="submit" class="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                            {% icon "flag" "w-4 h-4 mr-2" %}
+                            Convert to Lead
+                        </button>
+                    </form>
+                    {% endif %}
+                    {% if not has_diver_profile %}
+                    <a href="{% url 'diveops:lead-convert' pk=contact.pk %}" class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                        {% icon "user-plus" "w-4 h-4 mr-2" %}
+                        Convert to Diver
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Notes -->
+            {% if notes %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-semibold text-gray-900">Recent Notes</h2>
+                </div>
+                <ul class="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+                    {% for note in notes %}
+                    <li class="px-4 py-3">
+                        <p class="text-sm text-gray-900">{{ note.body|truncatewords:30 }}</p>
+                        <p class="text-xs text-gray-500 mt-1">{{ note.created_at|date:"M j, Y" }}</p>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
