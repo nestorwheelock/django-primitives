@@ -270,6 +270,37 @@
         </div>
         {% endif %}
 
+        <!-- Customer Read Status -->
+        {% if customer_participant %}
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-sm font-semibold text-gray-900">Message Status</h3>
+            </div>
+            <div class="p-4 space-y-3 text-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-600">Customer has read:</span>
+                    {% if customer_participant.has_unread %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                        {% icon "eye-slash" "w-3.5 h-3.5 mr-1" %}
+                        {{ customer_participant.unread_count }} unread
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                        {% icon "check" "w-3.5 h-3.5 mr-1" %}
+                        All read
+                    </span>
+                    {% endif %}
+                </div>
+                {% if customer_participant.last_read_at %}
+                <div class="flex items-center justify-between text-gray-500">
+                    <span>Last seen:</span>
+                    <span>{{ customer_participant.last_read_at|timesince }} ago</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Notification Status -->
         {% if notification_status %}
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">

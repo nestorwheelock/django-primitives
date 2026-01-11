@@ -99,18 +99,30 @@ class ConversationParticipant(BaseModel):
 
     @property
     def unread_count(self) -> int:
-        """Count of unread messages in this conversation for this participant."""
+        """Count of unread messages in this conversation for this participant.
+
+        Only counts messages NOT sent by this participant (messages from others
+        that this participant needs to read).
+        """
+        # Exclude messages sent by this participant
+        others_messages = self.conversation.messages.exclude(
+            sender_person=self.person
+        )
         if self.last_read_at is None:
-            return self.conversation.messages.count()
-        return self.conversation.messages.filter(
+            return others_messages.count()
+        return others_messages.filter(
             created_at__gt=self.last_read_at
         ).count()
 
     @property
     def has_unread(self) -> bool:
-        """Whether there are any unread messages."""
+        """Whether there are any unread messages from others."""
+        # Exclude messages sent by this participant
+        others_messages = self.conversation.messages.exclude(
+            sender_person=self.person
+        )
         if self.last_read_at is None:
-            return self.conversation.messages.exists()
-        return self.conversation.messages.filter(
+            return others_messages.exists()
+        return others_messages.filter(
             created_at__gt=self.last_read_at
         ).exists()

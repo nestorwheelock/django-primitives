@@ -9946,6 +9946,7 @@ class StaffConversationView(StaffPortalMixin, TemplateView):
         customer = conversation.participants.filter(role="customer").first()
         if customer:
             context["customer_person"] = customer.person
+            context["customer_participant"] = customer
             # Try to get associated diver profile
             from .selectors import get_diver_for_person
             context["diver"] = get_diver_for_person(customer.person)
