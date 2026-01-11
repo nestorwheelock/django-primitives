@@ -42,6 +42,14 @@ class MessageTemplate(BaseModel):
         help_text="Determines default channel routing",
     )
 
+    # === Event-Driven Messaging ===
+    event_type = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        help_text="Event type that triggers this template (e.g., 'booking.confirmed', 'class.signup.started')",
+    )
+
     # === Email Content ===
     email_subject = models.CharField(
         max_length=500,
