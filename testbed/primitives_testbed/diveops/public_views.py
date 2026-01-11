@@ -538,3 +538,244 @@ class PublicMedicalQuestionnaireView(View):
                     "errors": [str(e)],
                 },
             )
+
+
+class LeadOnboardingView(View):
+    """Public lead capture form - no authentication required.
+
+    Collects minimal contact information from prospective customers and creates
+    a Person (lead/contact) record, then sends a confirmation email.
+    """
+
+    template_name = "diveops/public/lead_onboarding.html"
+    success_template = "diveops/public/lead_onboarding_success.html"
+
+    def get(self, request):
+        from .forms import LeadOnboardingForm
+
+        form = LeadOnboardingForm()
+        return render(request, self.template_name, {"form": form})
+
+    def post(self, request):
+        from .forms import LeadOnboardingForm
+
+        form = LeadOnboardingForm(request.POST)
+        if form.is_valid():
+            person = form.save()
+            self._send_confirmation_email(person)
+            return render(
+                request,
+                self.success_template,
+                {
+                    "person": person,
+                    "email": person.email,
+                },
+            )
+        return render(request, self.template_name, {"form": form})
+
+    def _send_confirmation_email(self, person):
+        """Send welcome/confirmation email to new lead."""
+        try:
+            from django_communication.services import send
+
+            send(
+                template_key="welcome_diver",
+                recipient=person,
+                context={
+                    "recipient": {
+                        "first_name": person.first_name,
+                        "last_name": person.last_name,
+                    },
+                },
+            )
+        except Exception:
+            # Log but don't fail the request if email fails
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "Failed to send confirmation email for lead: %s", person.email
+            )
+
+
+# =============================================================================
+# Public Blog Views
+# =============================================================================
+
+
+class BlogHomeView(View):
+    """Public blog home page showing latest posts."""
+
+    template_name = "diveops/public/blog/home.html"
+
+    def get(self, request):
+        from django.core.paginator import Paginator
+        from django_cms_core.models import BlogCategory, ContentPage, PageStatus, PageType
+
+        # Get published blog posts
+        posts = (
+            ContentPage.objects.filter(
+                page_type=PageType.POST,
+                status=PageStatus.PUBLISHED,
+                deleted_at__isnull=True,
+            )
+            .select_related("category", "author")
+            .order_by("-published_at")
+        )
+
+        # Pagination
+        paginator = Paginator(posts, 10)
+        page_number = request.GET.get("page")
+        page_obj = paginator.get_page(page_number)
+
+        # Get categories with post counts
+        categories = (
+            BlogCategory.objects.filter(deleted_at__isnull=True)
+            .annotate(
+                post_count=Count(
+                    "posts",
+                    filter=Q(
+                        posts__status=PageStatus.PUBLISHED,
+                        posts__deleted_at__isnull=True,
+                    ),
+                )
+            )
+            .order_by("sort_order", "name")
+        )
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "posts": page_obj,
+                "page_obj": page_obj,
+                "categories": categories,
+            },
+        )
+
+
+class BlogCategoryView(View):
+    """Public blog category page showing posts in a category."""
+
+    template_name = "diveops/public/blog/category.html"
+
+    def get(self, request, slug):
+        from django.core.paginator import Paginator
+        from django_cms_core.models import BlogCategory, ContentPage, PageStatus, PageType
+
+        # Get category
+        try:
+            category = BlogCategory.objects.get(slug=slug, deleted_at__isnull=True)
+        except BlogCategory.DoesNotExist:
+            raise Http404("Category not found")
+
+        # Get published posts in this category
+        posts = (
+            ContentPage.objects.filter(
+                page_type=PageType.POST,
+                status=PageStatus.PUBLISHED,
+                category=category,
+                deleted_at__isnull=True,
+            )
+            .select_related("category", "author")
+            .order_by("-published_at")
+        )
+
+        # Pagination
+        paginator = Paginator(posts, 10)
+        page_number = request.GET.get("page")
+        page_obj = paginator.get_page(page_number)
+
+        # Get all categories with post counts for sidebar
+        categories = (
+            BlogCategory.objects.filter(deleted_at__isnull=True)
+            .annotate(
+                post_count=Count(
+                    "posts",
+                    filter=Q(
+                        posts__status=PageStatus.PUBLISHED,
+                        posts__deleted_at__isnull=True,
+                    ),
+                )
+            )
+            .order_by("sort_order", "name")
+        )
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "category": category,
+                "posts": page_obj,
+                "page_obj": page_obj,
+                "categories": categories,
+            },
+        )
+
+
+class BlogPostView(View):
+    """Public blog post detail view."""
+
+    template_name = "diveops/public/blog/post.html"
+
+    def get(self, request, slug):
+        from django_cms_core.models import BlogCategory, ContentPage, PageStatus, PageType
+        from django_cms_core.registry import BlockRegistry
+
+        # Get published post
+        try:
+            post = ContentPage.objects.select_related("category", "author").get(
+                slug=slug,
+                page_type=PageType.POST,
+                status=PageStatus.PUBLISHED,
+                deleted_at__isnull=True,
+            )
+        except ContentPage.DoesNotExist:
+            raise Http404("Post not found")
+
+        # Get content blocks
+        blocks = post.blocks.filter(is_active=True).order_by("sequence")
+
+        # Get categories for sidebar
+        categories = (
+            BlogCategory.objects.filter(deleted_at__isnull=True)
+            .annotate(
+                post_count=Count(
+                    "posts",
+                    filter=Q(
+                        posts__status=PageStatus.PUBLISHED,
+                        posts__deleted_at__isnull=True,
+                    ),
+                )
+            )
+            .order_by("sort_order", "name")
+        )
+
+        # Get related posts (same category, excluding current)
+        related_posts = []
+        if post.category:
+            related_posts = (
+                ContentPage.objects.filter(
+                    page_type=PageType.POST,
+                    status=PageStatus.PUBLISHED,
+                    category=post.category,
+                    deleted_at__isnull=True,
+                )
+                .exclude(pk=post.pk)
+                .order_by("-published_at")[:3]
+            )
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "post": post,
+                "blocks": blocks,
+                "categories": categories,
+                "related_posts": related_posts,
+                "registry": BlockRegistry,
+            },
+        )
+
+
+# Add imports for blog views at the top of the file
+from django.db.models import Count, Q

@@ -117,6 +117,12 @@
                                                 Awaiting Reply
                                             </span>
                                             {% endif %}
+                                            {% if conv.flow_thread %}
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                                {% icon "arrow-path" "w-3 h-3 mr-1" %}
+                                                {{ conv.flow_thread.flow_type.name|truncatechars:20 }}
+                                            </span>
+                                            {% endif %}
                                         </div>
                                         <p class="text-sm text-gray-600 truncate">
                                             {{ conv.subject|default:"No subject" }}

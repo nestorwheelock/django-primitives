@@ -111,6 +111,7 @@ from .misc import (
     CommissionRule,
     Contact,
     DiveBuddy,
+    DiveBuddyGroup,
     DiveTeam,
     DiveTeamMember,
     EmailSettings,
@@ -120,6 +121,12 @@ from .misc import (
     MedicalProviderRelationship,
     SettlementRecord,
     SettlementRun,
+)
+
+# Flows
+from .flows import (
+    FlowThread,
+    FlowType,
 )
 
 __all__ = [
@@ -193,6 +200,7 @@ __all__ = [
     "Contact",
     # Buddies/Teams
     "BuddyIdentity",
+    "DiveBuddyGroup",
     "DiveTeam",
     "DiveTeamMember",
     "DiveBuddy",
@@ -200,4 +208,7 @@ __all__ = [
     "SettlementRecord",
     "CommissionRule",
     "SettlementRun",
+    # Flows
+    "FlowType",
+    "FlowThread",
 ]

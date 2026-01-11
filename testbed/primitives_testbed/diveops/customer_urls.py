@@ -38,4 +38,11 @@ urlpatterns = [
     path("push/vapid-key/", customer_views.VapidPublicKeyView.as_view(), name="vapid-public-key"),
     path("push/subscribe/", customer_views.PushSubscribeView.as_view(), name="push-subscribe"),
     path("push/unsubscribe/", customer_views.PushUnsubscribeView.as_view(), name="push-unsubscribe"),
+    # Buddy Group Chats
+    path("buddy-chats/", customer_views.BuddyGroupChatListView.as_view(), name="buddy_chats"),
+    path("buddy-chats/<uuid:team_id>/create/", customer_views.CreateBuddyGroupChatView.as_view(), name="create_buddy_chat"),
+    path("buddy-chats/<uuid:conversation_id>/", customer_views.BuddyGroupChatDetailView.as_view(), name="buddy_chat"),
+    path("buddy-chats/<uuid:conversation_id>/invite/", customer_views.InviteBuddyToChatView.as_view(), name="invite_to_buddy_chat"),
+    path("buddy-chats/<uuid:conversation_id>/leave/", customer_views.LeaveBuddyChatView.as_view(), name="leave_buddy_chat"),
+    path("buddy-chats/<uuid:conversation_id>/accept/", customer_views.AcceptBuddyChatInviteView.as_view(), name="accept_buddy_chat_invite"),
 ]

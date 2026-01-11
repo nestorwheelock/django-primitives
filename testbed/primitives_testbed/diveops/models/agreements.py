@@ -447,7 +447,13 @@ class SignableAgreement(BaseModel):
         ]
 
     def __str__(self):
-        return f"{self.template.name} for {self.party_a} ({self.status})"
+        return f"{self.template.name} for {self.get_party_a_cached()} ({self.status})"
+
+    def get_party_a_cached(self):
+        """Get party_a using prefetched data if available (avoids N+1)."""
+        if hasattr(self, "_prefetched_party_a"):
+            return self._prefetched_party_a
+        return self.party_a
 
     @staticmethod
     def generate_token() -> tuple[str, str]:

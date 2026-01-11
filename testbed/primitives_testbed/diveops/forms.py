@@ -3998,3 +3998,106 @@ class ExcursionSeriesForm(forms.Form):
                     created_by=actor,
                 )
                 return series
+
+
+class LeadOnboardingForm(forms.Form):
+    """Minimal form for public lead capture.
+
+    Collects basic contact information from prospective divers and creates
+    a Person + DiverProfile record without requiring authentication.
+    """
+
+    first_name = forms.CharField(
+        max_length=150,
+        required=True,
+        widget=forms.TextInput(
+            attrs={
+                "class": "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500",
+                "placeholder": "First name",
+            }
+        ),
+    )
+    last_name = forms.CharField(
+        max_length=150,
+        required=True,
+        widget=forms.TextInput(
+            attrs={
+                "class": "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500",
+                "placeholder": "Last name",
+            }
+        ),
+    )
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(
+            attrs={
+                "class": "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500",
+                "placeholder": "you@example.com",
+            }
+        ),
+    )
+    phone = forms.CharField(
+        max_length=20,
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "class": "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500",
+                "placeholder": "+1 (555) 123-4567",
+            }
+        ),
+    )
+    experience_level = forms.ChoiceField(
+        choices=[
+            ("never", "Never dived before"),
+            ("beginner", "A few dives (1-10)"),
+            ("intermediate", "10-50 dives"),
+            ("experienced", "50+ dives"),
+        ],
+        required=False,
+        initial="never",
+        widget=forms.Select(
+            attrs={
+                "class": "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            }
+        ),
+    )
+
+    def clean_email(self):
+        """Validate email is not already registered."""
+        email = self.cleaned_data["email"].lower().strip()
+        if Person.objects.filter(email__iexact=email, deleted_at__isnull=True).exists():
+            raise ValidationError(
+                "This email is already registered. Please log in or use a different email."
+            )
+        return email
+
+    def save(self):
+        """Create Person record as a new lead."""
+        from django_parties.models import LeadStatusEvent
+
+        experience = self.cleaned_data.get("experience_level", "never")
+        experience_labels = {
+            "never": "Never dived before",
+            "beginner": "A few dives (1-10)",
+            "intermediate": "10-50 dives",
+            "experienced": "50+ dives",
+        }
+
+        person = Person.objects.create(
+            first_name=self.cleaned_data["first_name"],
+            last_name=self.cleaned_data["last_name"],
+            email=self.cleaned_data["email"],
+            phone=self.cleaned_data.get("phone", ""),
+            notes=f"Lead from website. Experience: {experience_labels.get(experience, experience)}",
+            lead_status="new",
+            lead_source="website",
+        )
+
+        LeadStatusEvent.objects.create(
+            person=person,
+            from_status="",
+            to_status="new",
+            note="Lead captured via website onboarding form",
+        )
+
+        return person

@@ -12,10 +12,16 @@
                 <h2 class="text-xl font-semibold text-gray-800">Messages</h2>
                 <p class="text-gray-600 mt-1">View and manage your conversations with our team.</p>
             </div>
-            <a href="{% url 'portal:new_conversation' %}" class="inline-flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
-                {% icon "plus" "w-4 h-4 mr-2" %}
-                New Message
-            </a>
+            <div class="flex items-center space-x-3">
+                <a href="{% url 'portal:buddy_chats' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+                    {% icon "user-group" "w-4 h-4 mr-2" %}
+                    Buddy Chats
+                </a>
+                <a href="{% url 'portal:new_conversation' %}" class="inline-flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
+                    {% icon "plus" "w-4 h-4 mr-2" %}
+                    New Message
+                </a>
+            </div>
         </div>
     </div>
 

@@ -40,7 +40,7 @@
                     </p>
                 </div>
                 <div class="ml-4">
-                    <a href="#" class="inline-flex items-center px-4 py-2 bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-600">
+                    <a href="{% url 'portal:preferences_survey' %}" class="inline-flex items-center px-4 py-2 bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-600">
                         Complete Survey
                         {% icon "arrow-right" "w-4 h-4 ml-2" %}
                     </a>
@@ -122,7 +122,7 @@
         </div>
         <h3 class="text-lg font-medium text-gray-900 mb-2">No Preferences Collected Yet</h3>
         <p class="text-gray-500 mb-4">Complete a quick survey to help us personalize your dive experience.</p>
-        <a href="#" class="inline-flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">
+        <a href="{% url 'portal:preferences_survey' %}" class="inline-flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">
             {% icon "clipboard-document-list" "w-4 h-4 mr-2" %}
             Complete Preferences Survey
         </a>

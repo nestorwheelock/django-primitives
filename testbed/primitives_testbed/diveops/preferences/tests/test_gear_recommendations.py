@@ -376,11 +376,35 @@ class TestGetRecommendedGear:
         names = [r["item"].display_name for r in recommendations]
         assert "Beginner Dive Computer" not in names
 
-    def test_returns_empty_for_uncertified_diver(
+    def test_returns_starter_kit_for_uncertified_diver(
         self, diver, certification_levels, gear_items, preference_definitions
     ):
-        """Returns empty or limited recommendations for uncertified diver."""
-        # Without any certifications, should not recommend much gear
+        """Returns starter kit recommendations even for uncertified/student divers."""
+        # Without any certifications, should still recommend starter kit
         recommendations = get_recommended_gear(diver)
-        # Could be empty or have very limited recommendations
-        assert len(recommendations) <= 2
+        # Should have starter kit items (mask, snorkel, fins)
+        names = [r["item"].display_name for r in recommendations]
+        has_starter_kit = any(
+            k in name for name in names for k in ["Mask", "Snorkel", "Fins"]
+        )
+        assert has_starter_kit
+
+    def test_starter_kit_items_prioritized_first(
+        self, diver, certification_levels, gear_items, preference_definitions
+    ):
+        """Starter kit (mask, snorkel, fins) should appear first."""
+        DiverCertification.objects.create(
+            diver=diver,
+            level=certification_levels["ow"],
+            issued_on=timezone.now().date(),
+        )
+
+        recommendations = get_recommended_gear(diver, limit=5)
+        names = [r["item"].display_name for r in recommendations]
+
+        # First 3 should be starter kit items (mask, snorkel, fins in some order)
+        starter_kit_in_first_three = sum(
+            1 for name in names[:3]
+            if any(k in name for k in ["Mask", "Snorkel", "Fins"])
+        )
+        assert starter_kit_in_first_three >= 2  # At least 2 starter kit items in top 3

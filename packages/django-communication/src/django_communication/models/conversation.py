@@ -18,6 +18,13 @@ class ConversationStatus(models.TextChoices):
     CLOSED = "closed", "Closed"
 
 
+class ConversationType(models.TextChoices):
+    """Conversation type: direct (1:1) or group."""
+
+    DIRECT = "direct", "Direct (1:1)"
+    GROUP = "group", "Group"
+
+
 class Conversation(BaseModel):
     """Groups related messages between participants.
 
@@ -56,6 +63,28 @@ class Conversation(BaseModel):
         max_length=20,
         choices=ConversationStatus.choices,
         default=ConversationStatus.ACTIVE,
+    )
+
+    # === Group Conversation Fields ===
+    conversation_type = models.CharField(
+        max_length=20,
+        choices=ConversationType.choices,
+        default=ConversationType.DIRECT,
+        db_index=True,
+        help_text="Type of conversation: direct (1:1) or group",
+    )
+    title = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Title for group conversations (optional for direct)",
+    )
+    created_by_person = models.ForeignKey(
+        "django_parties.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_conversations",
+        help_text="Person who created this conversation (for groups)",
     )
 
     # === CRM Assignment (staff User) ===
@@ -135,6 +164,7 @@ class Conversation(BaseModel):
             models.Index(fields=["status", "-last_message_at"]),
             models.Index(fields=["assigned_to_user", "status", "-last_message_at"]),
             models.Index(fields=["related_content_type", "related_object_id"]),
+            models.Index(fields=["conversation_type", "status"]),
         ]
 
     def __str__(self):

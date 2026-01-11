@@ -9,9 +9,24 @@ from django_basemodels import BaseModel
 class ParticipantRole(models.TextChoices):
     """Role of participant in conversation."""
 
+    # CRM roles (for direct/support conversations)
     CUSTOMER = "customer", "Customer"
     STAFF = "staff", "Staff"
     SYSTEM = "system", "System"  # For automated messages
+
+    # Group chat roles
+    OWNER = "owner", "Owner"
+    ADMIN = "admin", "Admin"
+    MEMBER = "member", "Member"
+
+
+class ParticipantState(models.TextChoices):
+    """Membership state in conversation."""
+
+    ACTIVE = "active", "Active"
+    INVITED = "invited", "Invited"
+    LEFT = "left", "Left"
+    REMOVED = "removed", "Removed"
 
 
 class ConversationParticipant(BaseModel):
@@ -60,6 +75,33 @@ class ConversationParticipant(BaseModel):
         default=ParticipantRole.CUSTOMER,
     )
 
+    # === Membership State (for group chats) ===
+    state = models.CharField(
+        max_length=20,
+        choices=ParticipantState.choices,
+        default=ParticipantState.ACTIVE,
+        db_index=True,
+        help_text="Participant membership state",
+    )
+    joined_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When participant joined/accepted",
+    )
+    left_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When participant left or was removed",
+    )
+    invited_by = models.ForeignKey(
+        "django_parties.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invitations_sent",
+        help_text="Person who invited this participant",
+    )
+
     # === Read Tracking ===
     last_read_at = models.DateTimeField(
         null=True,
@@ -86,6 +128,8 @@ class ConversationParticipant(BaseModel):
             models.Index(fields=["conversation", "person"]),
             models.Index(fields=["person", "-last_read_at"]),
             models.Index(fields=["conversation", "role"]),
+            models.Index(fields=["conversation", "state"]),
+            models.Index(fields=["person", "state"]),
         ]
 
     def __str__(self):

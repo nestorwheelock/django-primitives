@@ -48,6 +48,16 @@
     <div class="flex-1 overflow-y-auto bg-gray-50 p-4 space-y-4" id="messages-container">
         {% if messages_list %}
             {% for msg in messages_list %}
+            {% if msg.direction == 'system' %}
+            <!-- System Message -->
+            <div class="flex justify-center my-2">
+                <span class="inline-flex items-center px-3 py-1.5 text-xs text-gray-600 bg-gray-100 rounded-full">
+                    {% icon "information-circle" "w-3.5 h-3.5 mr-1.5 text-gray-400" %}
+                    {{ msg.body_text }}
+                    <span class="ml-2 text-gray-400">{{ msg.created_at|date:"M j, g:i a" }}</span>
+                </span>
+            </div>
+            {% else %}
             <div class="flex {% if msg.sender_person == current_person %}justify-end{% else %}justify-start{% endif %}">
                 {% if msg.sender_person != current_person %}
                 <!-- Staff avatar for inbound messages -->
@@ -124,6 +134,7 @@
                 </div>
                 {% endif %}
             </div>
+            {% endif %}{# end system vs regular message #}
             {% endfor %}
         {% else %}
         <div class="text-center py-8">

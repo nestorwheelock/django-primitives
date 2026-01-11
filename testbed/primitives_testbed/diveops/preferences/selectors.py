@@ -444,6 +444,9 @@ INTEREST_TO_GEAR_KEYWORDS = {
 }
 
 # Basic gear keywords for new divers
+# Starter kit items shown first (highest priority)
+STARTER_KIT_KEYWORDS = ["Mask", "Snorkel", "Fins"]
+# Other basic gear for new divers
 BASIC_GEAR_KEYWORDS = ["Computer", "Mask", "Fins", "Snorkel"]
 
 
@@ -512,9 +515,7 @@ def get_recommended_gear(diver, limit=5):
         ).order_by('-priority', '-valid_from').first()
         item_prices[item.pk] = price.amount if price else None
 
-    # Only recommend gear for certified divers (at least OW)
-    if highest_rank < 2:
-        return []
+    # Show gear recommendations for all divers (including students)
 
     # Get diver's interests from preferences
     interests_pref = PartyPreference.objects.filter(
@@ -535,6 +536,17 @@ def get_recommended_gear(diver, limit=5):
     if photo_pref and photo_pref.value_bool:
         if "Macro photography" not in user_interests:
             user_interests.append("Macro photography")
+
+    # Starter kit (mask, snorkel, fins) - highest priority for all divers
+    for keyword in STARTER_KIT_KEYWORDS:
+        for item in gear_items:
+            if keyword.lower() in item.display_name.lower():
+                recommendations.append({
+                    "item": item,
+                    "price": item_prices.get(item.pk),
+                    "reason": "Starter kit essential",
+                    "priority": 100,
+                })
 
     # Interest-based gear recommendations
     for interest in user_interests:

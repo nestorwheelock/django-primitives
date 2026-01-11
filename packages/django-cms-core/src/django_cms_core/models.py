@@ -10,6 +10,13 @@ from django_basemodels import BaseModel
 from django_singleton import SingletonModel
 
 
+class PageType(models.TextChoices):
+    """Type choices for content pages."""
+
+    PAGE = "page", "Page"
+    POST = "post", "Blog Post"
+
+
 class PageStatus(models.TextChoices):
     """Status choices for content pages."""
 
@@ -59,6 +66,14 @@ class ContentPage(BaseModel):
     slug = models.SlugField(max_length=200, db_index=True)
     title = models.CharField(max_length=255)
 
+    # Type
+    page_type = models.CharField(
+        max_length=20,
+        choices=PageType.choices,
+        default=PageType.PAGE,
+        db_index=True,
+    )
+
     # Status
     status = models.CharField(
         max_length=20,
@@ -99,6 +114,26 @@ class ContentPage(BaseModel):
 
     # Template hint
     template_key = models.CharField(max_length=100, default="default")
+
+    # Blog-specific fields (only used when page_type='post')
+    author = models.ForeignKey(
+        "django_parties.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="blog_posts",
+    )
+    excerpt = models.TextField(blank=True, default="")
+    featured_image_url = models.CharField(max_length=500, blank=True, default="")
+    reading_time_minutes = models.PositiveIntegerField(null=True, blank=True)
+    category = models.ForeignKey(
+        "BlogCategory",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="posts",
+    )
+    tags = models.JSONField(default=list, blank=True)
 
     # Extensibility
     metadata = models.JSONField(default=dict, blank=True)
@@ -200,6 +235,39 @@ class CMSSettings(SingletonModel):
 
     def __str__(self):
         return f"CMS Settings ({self.site_name or 'Unnamed Site'})"
+
+
+class BlogCategory(BaseModel):
+    """Category for organizing blog posts.
+
+    Attributes:
+        name: Display name for the category
+        slug: URL-safe identifier
+        description: Optional description
+        color: Optional hex color for UI display
+        sort_order: For manual ordering in listings
+    """
+
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=100, db_index=True)
+    description = models.TextField(blank=True, default="")
+    color = models.CharField(max_length=7, blank=True, default="")  # e.g., #3B82F6
+    sort_order = models.IntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Blog Category"
+        verbose_name_plural = "Blog Categories"
+        ordering = ["sort_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["slug"],
+                condition=models.Q(deleted_at__isnull=True),
+                name="unique_blog_category_slug",
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
 
 
 class Redirect(BaseModel):

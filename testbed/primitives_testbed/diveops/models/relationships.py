@@ -166,6 +166,8 @@ class DiverRelationship(BaseModel):
         indexes = [
             models.Index(fields=["from_diver", "to_diver"]),
             models.Index(fields=["relationship_type"]),
+            # Performance: buddy pairing queries
+            models.Index(fields=["is_preferred_buddy"]),
         ]
 
     def __str__(self):

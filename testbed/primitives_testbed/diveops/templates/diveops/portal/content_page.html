@@ -73,6 +73,62 @@
                     </a>
                 </div>
 
+            {% elif block.type == 'stats_row' %}
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    {% for stat in block.data.stats %}
+                    <div class="bg-gray-50 rounded-lg p-4 text-center">
+                        <div class="text-xs text-gray-500 uppercase tracking-wide">{{ stat.label }}</div>
+                        <div class="text-lg font-bold text-gray-800 mt-1">{{ stat.value }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+            {% elif block.type == 'card_grid' %}
+                <div class="grid grid-cols-1 md:grid-cols-{{ block.data.columns|default:3 }} gap-4 mb-6">
+                    {% for card in block.data.cards %}
+                    <a href="{{ card.link }}" class="block bg-white border border-gray-200 rounded-lg p-5 hover:shadow-md hover:border-primary-300 transition">
+                        {% if card.badge %}
+                        <span class="inline-block px-2 py-1 text-xs font-medium rounded-full mb-3
+                            {% if card.badge == 'Beginner' %}bg-green-100 text-green-700
+                            {% elif card.badge == 'Advanced' %}bg-red-100 text-red-700
+                            {% elif card.badge == 'All Levels' %}bg-blue-100 text-blue-700
+                            {% else %}bg-gray-100 text-gray-700{% endif %}">
+                            {{ card.badge }}
+                        </span>
+                        {% endif %}
+                        <h3 class="text-lg font-semibold text-gray-800 mb-2">{{ card.title }}</h3>
+                        <p class="text-sm text-gray-600">{{ card.description }}</p>
+                    </a>
+                    {% endfor %}
+                </div>
+
+            {% elif block.type == 'callout' %}
+                <div class="rounded-lg p-4 mb-6
+                    {% if block.data.type == 'info' %}bg-blue-50 border border-blue-200
+                    {% elif block.data.type == 'warning' %}bg-yellow-50 border border-yellow-200
+                    {% elif block.data.type == 'error' %}bg-red-50 border border-red-200
+                    {% elif block.data.type == 'success' %}bg-green-50 border border-green-200
+                    {% else %}bg-gray-50 border border-gray-200{% endif %}">
+                    {% if block.data.title %}
+                    <h4 class="font-semibold mb-2
+                        {% if block.data.type == 'info' %}text-blue-800
+                        {% elif block.data.type == 'warning' %}text-yellow-800
+                        {% elif block.data.type == 'error' %}text-red-800
+                        {% elif block.data.type == 'success' %}text-green-800
+                        {% else %}text-gray-800{% endif %}">
+                        {{ block.data.title }}
+                    </h4>
+                    {% endif %}
+                    <div class="prose prose-sm max-w-none
+                        {% if block.data.type == 'info' %}text-blue-700
+                        {% elif block.data.type == 'warning' %}text-yellow-700
+                        {% elif block.data.type == 'error' %}text-red-700
+                        {% elif block.data.type == 'success' %}text-green-700
+                        {% else %}text-gray-700{% endif %}">
+                        {{ block.data.content|safe }}
+                    </div>
+                </div>
+
             {% elif block.type == 'divider' %}
                 <hr class="my-8 border-gray-200">
 

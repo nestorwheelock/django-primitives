@@ -15,6 +15,9 @@ urlpatterns = [
     path("crm/leads/<uuid:pk>/status/", staff_views.LeadStatusUpdateView.as_view(), name="lead-status-update"),
     path("crm/leads/<uuid:pk>/notes/", staff_views.LeadAddNoteView.as_view(), name="lead-add-note"),
     path("crm/leads/<uuid:pk>/convert/", staff_views.ConvertLeadToDiverView.as_view(), name="lead-convert"),
+    # CRM - Contacts (non-diver persons)
+    path("crm/contacts/", staff_views.ContactsListView.as_view(), name="contacts-list"),
+    path("crm/contacts/<uuid:pk>/", staff_views.ContactDetailView.as_view(), name="contact-detail"),
     # CRM - Conversations Inbox
     path("crm/inbox/", staff_views.StaffInboxView.as_view(), name="crm-inbox"),
     path("crm/inbox/<uuid:conversation_id>/", staff_views.StaffConversationView.as_view(), name="crm-conversation"),
@@ -22,10 +25,14 @@ urlpatterns = [
     path("crm/inbox/<uuid:conversation_id>/assign/", staff_views.AssignConversationView.as_view(), name="crm-assign"),
     path("crm/inbox/<uuid:conversation_id>/close/", staff_views.CloseConversationView.as_view(), name="crm-close"),
     path("crm/inbox/<uuid:conversation_id>/reopen/", staff_views.ReopenConversationView.as_view(), name="crm-reopen"),
+    path("crm/inbox/<uuid:conversation_id>/invite/", staff_views.StaffInviteToConversationView.as_view(), name="crm-invite"),
+    path("crm/inbox/<uuid:conversation_id>/remove/", staff_views.StaffRemoveFromConversationView.as_view(), name="crm-remove"),
     path("crm/inbox/new/", staff_views.StaffNewConversationView.as_view(), name="crm-new-conversation"),
     path("api/customers/search/", staff_views.CustomerSearchAPIView.as_view(), name="api-customer-search"),
     path("api/canned-responses/", staff_views.CannedResponseListAPIView.as_view(), name="api-canned-responses"),
     path("api/canned-responses/<uuid:pk>/render/", staff_views.CannedResponseRenderAPIView.as_view(), name="api-canned-response-render"),
+    path("api/conversation/<uuid:conversation_id>/send-agreement/", staff_views.ConversationSendAgreementAPIView.as_view(), name="api-conversation-send-agreement"),
+    path("api/conversation/<uuid:conversation_id>/send-medical/", staff_views.ConversationSendMedicalAPIView.as_view(), name="api-conversation-send-medical"),
     # Canned Response Management
     path("canned-responses/", staff_views.CannedResponseListView.as_view(), name="canned-response-list"),
     path("canned-responses/add/", staff_views.CannedResponseCreateView.as_view(), name="canned-response-create"),

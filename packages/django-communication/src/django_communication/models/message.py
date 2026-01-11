@@ -24,6 +24,7 @@ class MessageDirection(models.TextChoices):
 
     OUTBOUND = "outbound", "Sent"
     INBOUND = "inbound", "Received"
+    SYSTEM = "system", "System"
 
 
 class MessageStatus(models.TextChoices):

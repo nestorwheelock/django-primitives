@@ -46,3 +46,35 @@ class InvalidRecipientError(CommunicationError):
     def __init__(self, channel: str, reason: str):
         self.channel = channel
         super().__init__(f"Invalid recipient for {channel}: {reason}")
+
+
+class GroupConversationError(CommunicationError):
+    """Base exception for group conversation errors."""
+
+    pass
+
+
+class NotParticipantError(GroupConversationError):
+    """Person is not a participant in the conversation."""
+
+    def __init__(self, message: str = "Not a participant in this conversation"):
+        super().__init__(message)
+
+
+class PermissionDeniedError(GroupConversationError):
+    """Person lacks permission for the requested action."""
+
+    def __init__(self, action: str, required_role: str = None):
+        self.action = action
+        self.required_role = required_role
+        if required_role:
+            super().__init__(f"Permission denied: {action} requires {required_role} role")
+        else:
+            super().__init__(f"Permission denied: {action}")
+
+
+class OwnerCannotLeaveError(GroupConversationError):
+    """Owner cannot leave the conversation without transferring ownership."""
+
+    def __init__(self):
+        super().__init__("Owner cannot leave the conversation. Transfer ownership first.")

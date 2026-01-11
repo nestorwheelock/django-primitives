@@ -109,6 +109,81 @@
             </div>
         </div>
 
+        <!-- Include Message -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h2 class="text-lg font-medium text-gray-900">3. Include Message (Optional)</h2>
+            </div>
+            <div class="px-6 py-4">
+                <input type="hidden" name="message_type" id="message_type" value="none">
+                <input type="hidden" name="canned_response_id" id="canned_response_id" value="">
+
+                <div class="space-y-3">
+                    <!-- No message option -->
+                    <label class="flex items-start cursor-pointer">
+                        <input type="radio" name="message_option" value="none" checked
+                               onchange="selectMessageType('none')"
+                               class="mt-1 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                        <span class="ml-3">
+                            <span class="block text-sm font-medium text-gray-900">No message</span>
+                            <span class="block text-xs text-gray-500">Just send the questionnaire link without a cover message.</span>
+                        </span>
+                    </label>
+
+                    <!-- Canned response option -->
+                    <label class="flex items-start cursor-pointer">
+                        <input type="radio" name="message_option" value="canned"
+                               onchange="selectMessageType('canned')"
+                               class="mt-1 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                        <span class="ml-3">
+                            <span class="block text-sm font-medium text-gray-900">Use a template message</span>
+                            <span class="block text-xs text-gray-500">Choose from pre-written messages.</span>
+                        </span>
+                    </label>
+
+                    <!-- Selected canned response preview -->
+                    <div id="canned-response-preview" class="hidden ml-7 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm font-medium text-blue-900" id="selected-canned-title">-</p>
+                                <p class="text-xs text-blue-700 mt-1 line-clamp-2" id="selected-canned-body">-</p>
+                            </div>
+                            <button type="button" onclick="openCannedModal()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                Change
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Button to open picker -->
+                    <div id="canned-response-picker-btn" class="hidden ml-7">
+                        <button type="button" onclick="openCannedModal()"
+                                class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                            {% icon "chat-bubble-left-right" "w-4 h-4 mr-2" %}
+                            Choose Template Message
+                        </button>
+                    </div>
+
+                    <!-- Custom message option -->
+                    <label class="flex items-start cursor-pointer">
+                        <input type="radio" name="message_option" value="custom"
+                               onchange="selectMessageType('custom')"
+                               class="mt-1 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                        <span class="ml-3">
+                            <span class="block text-sm font-medium text-gray-900">Write a custom message</span>
+                            <span class="block text-xs text-gray-500">Type your own personalized message.</span>
+                        </span>
+                    </label>
+
+                    <!-- Custom message textarea -->
+                    <div id="custom-message-area" class="hidden ml-7">
+                        <textarea name="custom_message" id="custom_message" rows="3"
+                                  placeholder="Hi! Please complete this medical questionnaire before your dive..."
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- What Happens Next -->
         <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-900 mb-2">What happens next?</h3>
@@ -134,4 +209,111 @@
         </div>
     </form>
 </div>
+
+<!-- Canned Response Picker Modal -->
+<div id="canned-modal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeCannedModal()"></div>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-medium text-gray-900" id="modal-title">Choose Template Message</h3>
+                    <button type="button" onclick="closeCannedModal()" class="text-gray-400 hover:text-gray-500">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="mt-3">
+                    <input type="text" id="canned-search" placeholder="Search templates..."
+                           oninput="filterCannedResponses(this.value)"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                </div>
+            </div>
+            <div class="px-6 py-4 max-h-96 overflow-y-auto">
+                <div id="canned-list" class="space-y-3">
+                    {% for response in canned_responses %}
+                    <div class="canned-item p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-colors"
+                         data-search="{{ response.title|lower }} {{ response.body|lower }}"
+                         onclick="selectCannedResponse('{{ response.pk }}', '{{ response.title|escapejs }}', '{{ response.body|truncatechars:150|escapejs }}')">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1 min-w-0">
+                                <h4 class="text-sm font-medium text-gray-900">{{ response.title }}</h4>
+                                <p class="mt-1 text-xs text-gray-500 line-clamp-2">{{ response.body|truncatechars:150 }}</p>
+                            </div>
+                            <span class="ml-4 inline-flex items-center px-3 py-1 text-xs font-medium rounded-md text-blue-700 bg-blue-100">Select</span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-8 text-gray-500">
+                        <p class="text-sm">No template messages available.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+                <button type="button" onclick="closeCannedModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedCannedId = null;
+
+    function selectMessageType(type) {
+        document.getElementById('message_type').value = type;
+        document.getElementById('canned-response-preview').classList.add('hidden');
+        document.getElementById('canned-response-picker-btn').classList.add('hidden');
+        document.getElementById('custom-message-area').classList.add('hidden');
+
+        if (type === 'canned') {
+            if (selectedCannedId) {
+                document.getElementById('canned-response-preview').classList.remove('hidden');
+            } else {
+                document.getElementById('canned-response-picker-btn').classList.remove('hidden');
+            }
+        } else if (type === 'custom') {
+            document.getElementById('custom-message-area').classList.remove('hidden');
+        }
+    }
+
+    function openCannedModal() {
+        document.getElementById('canned-modal').classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        setTimeout(() => document.getElementById('canned-search').focus(), 100);
+    }
+
+    function closeCannedModal() {
+        document.getElementById('canned-modal').classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+        document.getElementById('canned-search').value = '';
+        filterCannedResponses('');
+    }
+
+    function selectCannedResponse(id, title, body) {
+        selectedCannedId = id;
+        document.getElementById('canned_response_id').value = id;
+        document.getElementById('selected-canned-title').textContent = title;
+        document.getElementById('selected-canned-body').textContent = body;
+        document.getElementById('canned-response-preview').classList.remove('hidden');
+        document.getElementById('canned-response-picker-btn').classList.add('hidden');
+        closeCannedModal();
+    }
+
+    function filterCannedResponses(query) {
+        const items = document.querySelectorAll('.canned-item');
+        const lowerQuery = query.toLowerCase().trim();
+        items.forEach(item => {
+            const searchText = item.dataset.search || '';
+            item.classList.toggle('hidden', lowerQuery !== '' && !searchText.includes(lowerQuery));
+        });
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !document.getElementById('canned-modal').classList.contains('hidden')) {
+            closeCannedModal();
+        }
+    });
+</script>
 {% endblock %}

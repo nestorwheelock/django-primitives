@@ -372,6 +372,7 @@ class Actions:
     MEDICAL_QUESTIONNAIRE_FLAGGED = "medical_questionnaire_flagged"
     MEDICAL_QUESTIONNAIRE_CLEARED = "medical_questionnaire_cleared"
     MEDICAL_QUESTIONNAIRE_EXPIRED = "medical_questionnaire_expired"
+    MEDICAL_QUESTIONNAIRE_VOIDED = "medical_questionnaire_voided"
 
 
 # =============================================================================

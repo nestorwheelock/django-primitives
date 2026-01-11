@@ -10,6 +10,12 @@ from . import public_views
 app_name = "diveops_public"
 
 urlpatterns = [
+    # Public lead capture form
+    path(
+        "get-started/",
+        public_views.LeadOnboardingView.as_view(),
+        name="lead-onboarding",
+    ),
     # Public agreement signing (token-based, rate-limited)
     path("<str:token>/", public_views.PublicSigningView.as_view(), name="sign"),
     # Public medical questionnaire (UUID-based)

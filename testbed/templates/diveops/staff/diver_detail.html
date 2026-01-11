@@ -21,6 +21,18 @@
 {% endblock %}
 
 {% block staff_content %}
+<style>
+    @keyframes undulate {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.05); opacity: 0.85; }
+    }
+    .animate-undulate {
+        animation: undulate 1.5s ease-in-out infinite;
+    }
+    .animate-undulate:hover {
+        animation-play-state: paused;
+    }
+</style>
 <div class="space-y-6">
     <!-- Page Header with Profile Photo -->
     <div class="flex items-center justify-between">
@@ -69,6 +81,111 @@
             </a>
         </div>
     </div>
+
+    <!-- Chat Widget Accordion -->
+    {% if customer_conversation %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" x-data="{ chatOpen: false, replyText: '', selectedCanned: null }">
+        <button @click="chatOpen = !chatOpen"
+                class="w-full px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-between hover:from-blue-100 hover:to-indigo-100 transition-colors">
+            <div class="flex items-center">
+                {% icon "message-circle" "w-5 h-5 text-blue-600 mr-3" %}
+                <span class="font-medium text-gray-900">Chat with {{ diver.person.first_name }}</span>
+                {% if conversation_messages %}
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {{ conversation_messages|length }} messages
+                </span>
+                {% endif %}
+            </div>
+            <div class="flex items-center">
+                <a href="{% url 'diveops:crm-conversation' conversation_id=customer_conversation.pk %}"
+                   class="mr-3 text-sm text-blue-600 hover:text-blue-800"
+                   @click.stop>
+                    Open full chat {% icon "external-link" "w-3 h-3 inline" %}
+                </a>
+                <svg class="w-5 h-5 text-gray-400 transition-transform" :class="{ 'rotate-180': chatOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+        </button>
+
+        <div x-show="chatOpen" x-collapse x-cloak class="border-t border-gray-200">
+            <!-- Messages Display -->
+            <div class="max-h-64 overflow-y-auto p-4 space-y-3 bg-gray-50" id="diver-chat-messages">
+                {% for message in conversation_messages reversed %}
+                <div class="flex {% if message.direction == 'outbound' %}justify-end{% else %}justify-start{% endif %}">
+                    {% if message.direction == 'system' %}
+                    <div class="text-center w-full">
+                        <span class="px-3 py-1 text-xs text-gray-500 bg-gray-100 rounded-full">
+                            {{ message.body_text }}
+                        </span>
+                    </div>
+                    {% else %}
+                    <div class="max-w-[80%] {% if message.direction == 'outbound' %}bg-blue-600 text-white{% else %}bg-white border border-gray-200{% endif %} rounded-lg px-3 py-2 shadow-sm">
+                        <p class="text-sm {% if message.direction != 'outbound' %}text-gray-800{% endif %}">{{ message.body_text }}</p>
+                        <p class="text-xs mt-1 {% if message.direction == 'outbound' %}text-blue-200{% else %}text-gray-400{% endif %}">
+                            {{ message.created_at|timesince }} ago
+                            {% if message.sender_person %}• {{ message.sender_person.first_name }}{% endif %}
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <p class="text-center text-gray-500 text-sm py-4">No messages yet</p>
+                {% endfor %}
+            </div>
+
+            <!-- Reply Section -->
+            <div class="p-4 border-t border-gray-200 bg-white">
+                <!-- Canned Response Picker -->
+                {% if canned_responses %}
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Quick Replies</label>
+                    <div class="flex flex-wrap gap-1">
+                        {% for response in canned_responses|slice:":6" %}
+                        <button type="button"
+                                @click="replyText = '{{ response.body|escapejs }}'; selectedCanned = '{{ response.pk }}'"
+                                :class="selectedCanned === '{{ response.pk }}' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+                                class="px-2 py-1 text-xs rounded-lg transition-colors">
+                            {{ response.name|truncatechars:20 }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Message Input -->
+                <form method="post" action="{% url 'diveops:crm-reply' conversation_id=customer_conversation.pk %}"
+                      class="flex items-end gap-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{% url 'diveops:diver-detail' pk=diver.pk %}">
+                    <textarea name="message"
+                              x-model="replyText"
+                              rows="2"
+                              placeholder="Type a message..."
+                              class="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 resize-none"></textarea>
+                    <button type="submit"
+                            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+                        {% icon "send" "w-4 h-4" %}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- No conversation yet -->
+    <div class="bg-gray-50 rounded-lg border border-gray-200 p-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                {% icon "message-circle" "w-5 h-5 text-gray-400 mr-3" %}
+                <span class="text-gray-500">No active conversation with {{ diver.person.first_name }}</span>
+            </div>
+            <a href="{% url 'diveops:staff-inbox' %}"
+               class="text-sm text-blue-600 hover:text-blue-800">
+                View Inbox
+            </a>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Diver Info Card -->
@@ -269,35 +386,36 @@
                     </div>
                     {% elif medical_status == 'requires_clearance' %}
                     <div class="flex items-center">
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                        <a href="{% url 'diveops:medical-detail' pk=medical_instance.pk %}"
+                           class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 animate-undulate hover:bg-red-200 transition-colors cursor-pointer">
                             {% icon "alert-circle" "w-4 h-4 mr-1" %}
                             Requires Physician Clearance
-                        </span>
+                        </a>
                     </div>
                     {% elif medical_status == 'expired' %}
                     <div class="flex items-center">
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                        <a href="{% url 'diveops:send-medical-questionnaire' diver_pk=diver.pk %}"
+                           class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 animate-undulate hover:bg-yellow-200 transition-colors cursor-pointer">
                             {% icon "clock" "w-4 h-4 mr-1" %}
-                            Expired
-                        </span>
+                            Expired - Send New
+                        </a>
                     </div>
                     {% elif medical_status == 'pending' %}
                     <div class="flex items-center">
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                        <a href="{% url 'diveops:medical-detail' pk=medical_instance.pk %}"
+                           class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 animate-undulate hover:bg-blue-200 transition-colors cursor-pointer">
                             {% icon "clock" "w-4 h-4 mr-1" %}
                             Pending Submission
-                        </span>
+                        </a>
                     </div>
                     {% else %}
                     <div class="text-center py-2">
                         <p class="text-sm text-gray-500 mb-3">No medical questionnaire on file</p>
-                        <form method="post" action="{% url 'diveops:send-medical-questionnaire' diver_pk=diver.pk %}">
-                            {% csrf_token %}
-                            <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
-                                {% icon "send" "w-4 h-4 mr-1" %}
-                                Send Questionnaire
-                            </button>
-                        </form>
+                        <a href="{% url 'diveops:send-medical-questionnaire' diver_pk=diver.pk %}"
+                           class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 animate-undulate">
+                            {% icon "send" "w-4 h-4 mr-1" %}
+                            Send Questionnaire
+                        </a>
                     </div>
                     {% endif %}
                 </div>
@@ -783,8 +901,8 @@
                                             Signed
                                         </span>
                                         {% elif agreement.status == 'sent' %}
-                                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                            Pending
+                                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 animate-undulate">
+                                            Awaiting Signature
                                         </span>
                                         {% elif agreement.status == 'void' %}
                                         <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600">

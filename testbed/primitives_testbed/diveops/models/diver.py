@@ -98,6 +98,11 @@ class DiverCertification(BaseModel):
                 name="diveops_cert_expires_after_issued",
             ),
         ]
+        indexes = [
+            # Performance: current certification checks
+            models.Index(fields=["diver", "expires_on"]),
+            models.Index(fields=["is_verified"]),
+        ]
         ordering = ["-level__rank", "-issued_on"]
 
     def __str__(self):
@@ -304,6 +309,9 @@ class DiverProfile(BaseModel):
             models.Index(fields=["person"]),
             models.Index(fields=["equipment_ownership"]),
             models.Index(fields=["diver_type"]),
+            # Performance: medical/waiver validity checks
+            models.Index(fields=["medical_clearance_valid_until"]),
+            models.Index(fields=["waiver_signed_at"]),
         ]
 
     def __str__(self):

@@ -10,9 +10,9 @@ from .canned_response import (
     ResponseChannel,
     Visibility,
 )
-from .conversation import Conversation, ConversationStatus
+from .conversation import Conversation, ConversationStatus, ConversationType
 from .message import Channel, Message, MessageDirection, MessageStatus
-from .participant import ConversationParticipant, ParticipantRole
+from .participant import ConversationParticipant, ParticipantRole, ParticipantState
 from .profile import EmailIdentity, MessageProfile, get_recipient_locale
 from .push_subscription import PushSubscription
 from .settings import CommunicationSettings
@@ -26,6 +26,7 @@ __all__ = [
     "Conversation",
     "ConversationParticipant",
     "ConversationStatus",
+    "ConversationType",
     "EmailIdentity",
     "Message",
     "MessageDirection",
@@ -34,6 +35,7 @@ __all__ = [
     "MessageTemplate",
     "MessageType",
     "ParticipantRole",
+    "ParticipantState",
     "PushSubscription",
     "ResponseChannel",
     "Visibility",

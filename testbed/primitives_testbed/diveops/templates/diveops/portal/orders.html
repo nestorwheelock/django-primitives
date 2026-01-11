@@ -27,7 +27,7 @@
                 {% for order in orders %}
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="font-medium text-gray-900">{{ order.order_number }}</span>
+                        <a href="{% url 'portal:order_detail' order.order_number %}" class="font-medium text-primary-600 hover:text-primary-800">{{ order.order_number }}</a>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {{ order.created_at|date:"M j, Y" }}

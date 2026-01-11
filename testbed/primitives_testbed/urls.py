@@ -11,6 +11,7 @@ from django_cms_core.urls import api_urlpatterns as cms_api_urlpatterns
 from django_cms_core.urls import page_urlpatterns as cms_page_urlpatterns
 
 from . import views
+from .diveops import public_views as diveops_public_views
 from .impersonation import ImpersonateStartView, ImpersonateStopView
 
 urlpatterns = [
@@ -19,6 +20,9 @@ urlpatterns = [
 
     # Health check
     path("health/", views.health_check, name="health_check"),
+
+    # Performance testing endpoints (guarded by PERF_TESTING mode)
+    path("__perf__/", include("primitives_testbed.perf.urls", namespace="perf")),
 
     # User impersonation (staff only)
     path("impersonate/<int:user_id>/", ImpersonateStartView.as_view(), name="impersonate-start"),
@@ -51,6 +55,11 @@ urlpatterns = [
 
     # CMS API (before catch-all)
     path("api/cms/", include((cms_api_urlpatterns, "cms"), namespace="cms-api")),
+
+    # Public Blog (before CMS catch-all)
+    path("blog/", diveops_public_views.BlogHomeView.as_view(), name="blog-home"),
+    path("blog/category/<slug:slug>/", diveops_public_views.BlogCategoryView.as_view(), name="blog-category"),
+    path("blog/<slug:slug>/", diveops_public_views.BlogPostView.as_view(), name="blog-post"),
 
     # CMS public pages (MUST BE LAST - catch-all)
     path("", include((cms_page_urlpatterns, "cms"), namespace="cms")),

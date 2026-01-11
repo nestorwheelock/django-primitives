@@ -1192,3 +1192,37 @@ class DiveBuddy(BaseModel):
         if self.buddy_person:
             return f"{self.buddy_person.first_name} {self.buddy_person.last_name}"
         return "Unknown"
+
+
+class DiveBuddyGroup(BaseModel):
+    """Links a DiveTeam to a group Conversation.
+
+    Provides DiveOps-specific context for buddy group chats:
+    - Connects the primitive Conversation to the domain DiveTeam
+    - Enables chat features for buddy groups
+    - Maintains dive-specific group semantics
+
+    Inherits from BaseModel: id (UUID), created_at, updated_at, deleted_at,
+    objects (excludes deleted), all_objects (includes deleted).
+    """
+
+    dive_team = models.OneToOneField(
+        DiveTeam,
+        on_delete=models.CASCADE,
+        related_name="group_chat",
+        help_text="The dive team this chat belongs to",
+    )
+    conversation = models.OneToOneField(
+        "django_communication.Conversation",
+        on_delete=models.CASCADE,
+        related_name="buddy_group",
+        help_text="The underlying group conversation",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Dive Buddy Group"
+        verbose_name_plural = "Dive Buddy Groups"
+
+    def __str__(self):
+        return f"Chat for {self.dive_team}"

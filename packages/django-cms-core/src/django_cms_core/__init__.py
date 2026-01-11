@@ -5,13 +5,24 @@ __all__ = [
     "ContentBlock",
     "CMSSettings",
     "Redirect",
+    "BlogCategory",
+    "PageType",
     "PageStatus",
     "AccessLevel",
 ]
 
 
 def __getattr__(name):
-    if name in ("ContentPage", "ContentBlock", "CMSSettings", "Redirect", "PageStatus", "AccessLevel"):
+    if name in (
+        "ContentPage",
+        "ContentBlock",
+        "CMSSettings",
+        "Redirect",
+        "BlogCategory",
+        "PageType",
+        "PageStatus",
+        "AccessLevel",
+    ):
         from . import models
         return getattr(models, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down migrate seed verify test shell clean
+.PHONY: help db-up db-down migrate seed verify test shell clean perf perf-baseline perf-setup
 
 help:
 	@echo "Django Primitives Testbed"
@@ -13,6 +13,11 @@ help:
 	@echo "  make shell       Open Django shell"
 	@echo "  make run         Run development server"
 	@echo "  make clean       Remove database volume"
+	@echo ""
+	@echo "Performance Testing:"
+	@echo "  make perf           Run performance tests against running server"
+	@echo "  make perf-baseline  Run perf tests and save as baseline"
+	@echo "  make perf-setup     Install Playwright and create test user"
 	@echo ""
 	@echo "Quick Start:"
 	@echo "  make db-up migrate seed verify"
@@ -56,3 +61,15 @@ setup: db-up
 	$(MAKE) seed
 	@echo ""
 	@echo "Setup complete! Run 'make verify' to check integrity constraints."
+
+# Performance testing
+perf-setup:
+	pip install playwright
+	playwright install chromium
+	python perf/setup_test_user.py
+
+perf:
+	PERF_TESTING=1 python perf/run_perf_tests.py --verbose
+
+perf-baseline:
+	PERF_TESTING=1 python perf/run_perf_tests.py --baseline --verbose

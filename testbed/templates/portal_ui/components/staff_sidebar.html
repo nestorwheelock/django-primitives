@@ -31,12 +31,28 @@
                 {% for item in items %}
                 <li>
                     <a href="{{ item.resolved_url }}"
-                       class="flex items-center px-4 py-2.5 text-sm font-medium transition-colors
-                              {% if item.is_active %}bg-primary-600 text-white{% else %}text-gray-300 hover:bg-gray-800 hover:text-white{% endif %}"
+                       class="group flex items-center px-4 py-2.5 text-sm font-medium transition-all duration-200
+                              {% if item.is_active %}bg-primary-600 text-white{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}"
                        :class="{ 'justify-center': collapsed }"
                        title="{{ item.label }}">
-                        {% if item.icon %}{% icon item.icon "w-5 h-5 flex-shrink-0" %}{% endif %}
-                        <span class="ml-3" x-show="!collapsed">{{ item.label }}</span>
+                        {% if item.icon %}
+                        <span class="relative {% if item.is_active %}text-white{% else %}text-gray-500 group-hover:text-white{% endif %} transition-colors duration-200">
+                            {% icon item.icon "w-5 h-5 flex-shrink-0" %}
+                            {% if item.label == "Inbox" and staff_unread_count > 0 %}
+                            <span class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                                {% if staff_unread_count > 9 %}9+{% else %}{{ staff_unread_count }}{% endif %}
+                            </span>
+                            {% endif %}
+                        </span>
+                        {% endif %}
+                        <span class="ml-3 flex items-center" x-show="!collapsed">
+                            {{ item.label }}
+                            {% if item.label == "Inbox" and staff_unread_count > 0 %}
+                            <span class="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                                {{ staff_unread_count }}
+                            </span>
+                            {% endif %}
+                        </span>
                     </a>
                 </li>
                 {% endfor %}

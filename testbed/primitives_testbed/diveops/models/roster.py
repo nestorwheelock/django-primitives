@@ -79,6 +79,10 @@ class ExcursionRoster(BaseModel):
         indexes = [
             models.Index(fields=["excursion"]),
             models.Index(fields=["role"]),
+            # Performance: diver-based queries and completion filters
+            models.Index(fields=["diver"]),
+            models.Index(fields=["dive_completed"]),
+            models.Index(fields=["checked_in_at"]),
         ]
         ordering = ["checked_in_at"]
 

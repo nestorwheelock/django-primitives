@@ -5286,17 +5286,25 @@ def send_agreement(
     delivery_method: str,
     expires_in_days: int = 30,
     actor,
+    canned_response=None,
+    canned_response_context: dict | None = None,
+    custom_message: str | None = None,
 ):
     """Send agreement to party. Status: draft → sent.
 
     Generates cryptographically random token, stores only the hash.
     Returns raw token ONCE for URL generation.
 
+    Optionally includes a canned response or custom message in the conversation.
+
     Args:
         agreement: SignableAgreement to send
         delivery_method: How it was sent (email, link, in_person)
         expires_in_days: Days until expiration (default 30)
         actor: User performing the action
+        canned_response: Optional CannedResponse to include with agreement
+        canned_response_context: Optional context dict for rendering canned response
+        custom_message: Optional custom message text (alternative to canned response)
 
     Returns:
         tuple: (agreement, raw_token) - raw token returned ONCE for URL generation
@@ -5338,6 +5346,56 @@ def send_agreement(
             "expires_at": agreement.expires_at.isoformat(),
         },
     )
+
+    # Create or update flow thread if agreement has linked flow types
+    thread = get_or_create_flow_for_agreement(agreement)
+    if thread and thread.conversation:
+        from django_communication.services import send_system_message, send_in_conversation
+        from django_communication.services.canned_responses import (
+            render_canned_response,
+            get_context_for_conversation,
+        )
+
+        # Send system message about agreement
+        send_system_message(
+            conversation=thread.conversation,
+            body_text=f"Agreement sent: {agreement.template.name}",
+            event_type="agreement_sent",
+        )
+
+        # Send canned response or custom message if provided
+        message_text = None
+        if canned_response:
+            # Build context for rendering
+            customer = agreement.party_a
+            context = get_context_for_conversation(
+                conversation=thread.conversation,
+                actor=actor,
+                recipient=customer,
+                extra=canned_response_context or {},
+            )
+            # Add agreement-specific context
+            context.update({
+                "agreement_name": agreement.template.name,
+                "customer_name": f"{customer.first_name} {customer.last_name}",
+                "customer_first_name": customer.first_name,
+            })
+            message_text = render_canned_response(canned_response, context)
+        elif custom_message:
+            message_text = custom_message
+
+        if message_text:
+            # Get staff person for sender
+            from .selectors import get_staff_person
+            staff_person = get_staff_person(actor)
+
+            if staff_person:
+                send_in_conversation(
+                    conversation=thread.conversation,
+                    sender_person=staff_person,
+                    body_text=message_text,
+                    direction="outbound",
+                )
 
     return agreement, raw_token
 
@@ -5791,6 +5849,21 @@ def sign_agreement(
         target=agreement,
         data=audit_data,
     )
+
+    # Post to flow conversation if this agreement has a linked flow
+    from .models import FlowThread
+
+    flow_thread = FlowThread.objects.filter(
+        triggered_by_agreement=agreement
+    ).first()
+    if flow_thread and flow_thread.conversation:
+        from django_communication.services import send_system_message
+
+        send_system_message(
+            conversation=flow_thread.conversation,
+            body_text=f"Agreement signed: {agreement.template.name}",
+            event_type="agreement_signed",
+        )
 
     return agreement
 
@@ -6608,6 +6681,148 @@ def remove_buddy(*, me_person, team_id):
 
 
 # =============================================================================
+# Buddy Group Chat Services
+# =============================================================================
+
+
+def create_buddy_group_chat(dive_team, title=None):
+    """Create a group chat for an existing DiveTeam.
+
+    Creates a group Conversation and links it to the DiveTeam.
+    Team members with Person references become conversation participants.
+
+    Args:
+        dive_team: The DiveTeam to create chat for
+        title: Optional title (defaults to team name or "Buddy Chat")
+
+    Returns:
+        DiveBuddyGroup linking the team to its conversation
+
+    Raises:
+        ValueError: If team already has a chat
+    """
+    from django_communication.services.conversations import create_group_conversation
+    from .models import DiveBuddyGroup
+
+    # Check if chat already exists
+    if hasattr(dive_team, "group_chat"):
+        raise ValueError("Team already has a group chat")
+
+    # Determine title
+    chat_title = title or dive_team.name or "Buddy Chat"
+
+    # Get creator (team creator)
+    creator = dive_team.created_by
+
+    # Get initial members (Person references from team members)
+    initial_members = []
+    for membership in dive_team.members.all():
+        identity = membership.identity
+        if identity.person:
+            # Skip the creator - they'll be added as owner
+            if creator and identity.person.pk != creator.pk:
+                initial_members.append(identity.person)
+
+    with transaction.atomic():
+        # Create the group conversation
+        conversation = create_group_conversation(
+            title=chat_title,
+            creator_person=creator,
+            initial_members=initial_members,
+        )
+
+        # Link to dive team
+        buddy_group = DiveBuddyGroup.objects.create(
+            dive_team=dive_team,
+            conversation=conversation,
+        )
+
+    return buddy_group
+
+
+def sync_buddy_group_members(dive_team):
+    """Sync conversation participants with team membership.
+
+    Adds new team members to conversation (as invited).
+    Does NOT remove members who left the team from conversation.
+
+    Args:
+        dive_team: The DiveTeam to sync
+
+    Returns:
+        Number of new participants added
+    """
+    from django_communication.models import ConversationParticipant, ParticipantState
+    from django_communication.services.conversations import invite_participant
+
+    # Get the group chat
+    try:
+        buddy_group = dive_team.group_chat
+    except AttributeError:
+        return 0  # No chat to sync
+
+    conversation = buddy_group.conversation
+    added = 0
+
+    # Get existing participant person IDs
+    existing_person_ids = set(
+        ConversationParticipant.objects.filter(
+            conversation=conversation,
+        ).values_list("person_id", flat=True)
+    )
+
+    # Get the owner to use as inviter
+    owner_participant = ConversationParticipant.objects.filter(
+        conversation=conversation,
+        role="owner",
+        state=ParticipantState.ACTIVE,
+    ).first()
+    inviter = owner_participant.person if owner_participant else None
+
+    if not inviter:
+        return 0  # Can't invite without owner
+
+    # Check each team member
+    for membership in dive_team.members.all():
+        identity = membership.identity
+        if identity.person:
+            if identity.person.pk not in existing_person_ids:
+                # Add new member
+                invite_participant(
+                    conversation=conversation,
+                    person=identity.person,
+                    invited_by=inviter,
+                )
+                added += 1
+
+    return added
+
+
+def get_buddy_conversations(person):
+    """Get all buddy group chats where person is an active participant.
+
+    Args:
+        person: Person to find chats for
+
+    Returns:
+        QuerySet of DiveBuddyGroup objects
+    """
+    from django_communication.models import ConversationParticipant, ParticipantState
+    from .models import DiveBuddyGroup
+
+    # Get conversation IDs where person is active participant
+    conversation_ids = ConversationParticipant.objects.filter(
+        person=person,
+        state=ParticipantState.ACTIVE,
+    ).values_list("conversation_id", flat=True)
+
+    # Return buddy groups for those conversations
+    return DiveBuddyGroup.objects.filter(
+        conversation_id__in=conversation_ids,
+    ).select_related("dive_team", "conversation")
+
+
+# =============================================================================
 # Recurring Excursion Services
 # =============================================================================
 
@@ -6952,3 +7167,431 @@ def split_series(series, cutoff_date, *, actor):
         ).update(series=new_series)
 
     return new_series
+
+
+# =============================================================================
+# Flow Services - Agreement-Triggered Conversation Workflows
+# =============================================================================
+
+
+def _get_customer_active_conversation(customer: "Person") -> "Conversation | None":
+    """Find an existing active conversation for a customer.
+
+    Looks for any active conversation where the customer is a participant.
+    Used to consolidate all communications with a customer into one thread.
+
+    Args:
+        customer: Person to find conversation for
+
+    Returns:
+        Active Conversation if found, None otherwise
+    """
+    from django_communication.models import (
+        Conversation,
+        ConversationParticipant,
+        ConversationStatus,
+        ParticipantState,
+    )
+
+    # Find active conversations where customer is an active participant
+    participant = ConversationParticipant.objects.filter(
+        person=customer,
+        state=ParticipantState.ACTIVE,
+        conversation__status=ConversationStatus.ACTIVE,
+    ).select_related("conversation").order_by("-conversation__last_message_at").first()
+
+    return participant.conversation if participant else None
+
+
+def start_flow(
+    flow_type: "FlowType",
+    customer: "Person",
+    triggered_by: "SignableAgreement | None" = None,
+    force_new_conversation: bool = False,
+) -> "FlowThread":
+    """Start a flow for a customer.
+
+    By default, if the customer already has an active conversation, uses that
+    conversation instead of creating a new one. This keeps all customer
+    communications in one unified thread.
+
+    Set force_new_conversation=True to always create a new conversation.
+
+    Creates a conversation with:
+    - Customer as participant (role=CUSTOMER)
+    - Flow goes to shop inbox (unassigned) until staff claims it
+
+    Args:
+        flow_type: The FlowType to start
+        customer: Person going through the flow
+        triggered_by: Optional agreement that triggered this flow
+        force_new_conversation: If True, always create new conversation
+
+    Returns:
+        FlowThread instance (existing if already active, new otherwise)
+    """
+    from django_communication.services import (
+        create_conversation,
+        add_participant,
+        send_system_message,
+    )
+    from django_communication.models import ParticipantRole, ConversationType
+
+    from .models import FlowThread
+
+    # Check for existing active flow (idempotent)
+    existing = FlowThread.objects.filter(
+        flow_type=flow_type,
+        customer=customer,
+        status=FlowThread.Status.ACTIVE,
+    ).first()
+    if existing:
+        return existing
+
+    # Skip if auto_create_conversation is disabled
+    if not flow_type.auto_create_conversation:
+        # Create thread without conversation
+        return FlowThread.objects.create(
+            flow_type=flow_type,
+            customer=customer,
+            conversation=None,
+            triggered_by_agreement=triggered_by,
+        )
+
+    # Check for existing active conversation with customer
+    # If they already have a conversation, reuse it (unless forced to create new)
+    conversation = None
+    if not force_new_conversation:
+        conversation = _get_customer_active_conversation(customer)
+
+    if conversation:
+        # Reuse existing conversation
+        # Create flow thread linked to existing conversation
+        thread = FlowThread.objects.create(
+            flow_type=flow_type,
+            customer=customer,
+            conversation=conversation,
+            triggered_by_agreement=triggered_by,
+        )
+
+        # Send system message about new flow in existing conversation
+        send_system_message(
+            conversation=conversation,
+            body_text=f"Started: {flow_type.name}",
+            event_type="flow_started",
+        )
+
+        return thread
+
+    # No existing conversation - create new one
+    subject = flow_type.conversation_subject_template.format(
+        flow_name=flow_type.name,
+        customer_name=f"{customer.first_name} {customer.last_name}",
+    )
+    conversation = create_conversation(
+        subject=subject,
+        primary_channel="in_app",
+    )
+
+    # Set conversation type to flow
+    conversation.conversation_type = ConversationType.GROUP
+    conversation.title = flow_type.name
+    conversation.created_by_person = None  # System-created
+    conversation.save(update_fields=["conversation_type", "title", "created_by_person", "updated_at"])
+
+    # Add customer as participant
+    from django_communication.models import ConversationParticipant, ParticipantState
+
+    ConversationParticipant.objects.create(
+        conversation=conversation,
+        person=customer,
+        role=ParticipantRole.CUSTOMER,
+        state=ParticipantState.ACTIVE,
+        joined_at=timezone.now(),
+    )
+
+    # Create flow thread
+    thread = FlowThread.objects.create(
+        flow_type=flow_type,
+        customer=customer,
+        conversation=conversation,
+        triggered_by_agreement=triggered_by,
+    )
+
+    # Send system message announcing flow start
+    send_system_message(
+        conversation=conversation,
+        body_text=f"Started: {flow_type.name}",
+        event_type="flow_started",
+    )
+
+    return thread
+
+
+def complete_flow(
+    thread: "FlowThread",
+    completed_by: "Person | None" = None,
+) -> "FlowThread":
+    """Mark a flow as completed.
+
+    Args:
+        thread: FlowThread to complete
+        completed_by: Optional Person who completed the flow
+
+    Returns:
+        Updated FlowThread
+    """
+    from django_communication.services import send_system_message
+
+    thread.status = thread.Status.COMPLETED
+    thread.completed_at = timezone.now()
+    thread.save(update_fields=["status", "completed_at", "updated_at"])
+
+    if thread.conversation:
+        send_system_message(
+            conversation=thread.conversation,
+            body_text=f"Completed: {thread.flow_type.name}",
+            event_type="flow_completed",
+        )
+
+    return thread
+
+
+def cancel_flow(
+    thread: "FlowThread",
+    cancelled_by: "Person | None" = None,
+    reason: str = "",
+) -> "FlowThread":
+    """Cancel a flow.
+
+    Args:
+        thread: FlowThread to cancel
+        cancelled_by: Optional Person who cancelled
+        reason: Optional reason for cancellation
+
+    Returns:
+        Updated FlowThread
+    """
+    from django_communication.services import send_system_message
+
+    thread.status = thread.Status.CANCELLED
+    thread.save(update_fields=["status", "updated_at"])
+
+    if thread.conversation:
+        message = f"Cancelled: {thread.flow_type.name}"
+        if reason:
+            message += f"\nReason: {reason}"
+        send_system_message(
+            conversation=thread.conversation,
+            body_text=message,
+            event_type="flow_cancelled",
+        )
+
+    return thread
+
+
+def get_or_create_flow_for_agreement(
+    agreement: "SignableAgreement",
+    flow_type: "FlowType | None" = None,
+    force_new_conversation: bool = False,
+) -> "FlowThread | None":
+    """Get existing flow thread for customer or create new one.
+
+    Called when agreement is SENT. Looks up the flow type from the
+    agreement template's linked flow types.
+
+    By default, reuses the customer's existing conversation if they have one.
+    Set force_new_conversation=True to create a separate conversation.
+
+    Args:
+        agreement: The SignableAgreement being sent
+        flow_type: Optional explicit flow type (otherwise auto-detected)
+        force_new_conversation: If True, always create new conversation
+
+    Returns:
+        FlowThread instance, or None if no flow type is configured
+    """
+    from .models import FlowType as FlowTypeModel
+
+    # Get customer (the signer)
+    customer = agreement.party_a
+
+    # Auto-detect flow type from agreement template if not specified
+    if flow_type is None:
+        if hasattr(agreement, "template") and agreement.template:
+            flow_type = agreement.template.flow_types.filter(is_active=True).first()
+
+    if flow_type is None:
+        return None
+
+    return start_flow(
+        flow_type=flow_type,
+        customer=customer,
+        triggered_by=agreement,
+        force_new_conversation=force_new_conversation,
+    )
+
+
+def assign_staff_to_flow(
+    thread: "FlowThread",
+    staff_person: "Person",
+    assigned_by: "Person | None" = None,
+) -> None:
+    """Add staff to flow conversation when assigned.
+
+    Args:
+        thread: FlowThread to assign staff to
+        staff_person: Person to add as staff
+        assigned_by: Person doing the assignment
+    """
+    from django_communication.services import add_participant, send_system_message
+    from django_communication.models import ParticipantRole
+
+    if not thread.conversation:
+        return
+
+    add_participant(
+        conversation=thread.conversation,
+        person=staff_person,
+        added_by=assigned_by,
+        role=ParticipantRole.STAFF,
+    )
+
+    send_system_message(
+        conversation=thread.conversation,
+        body_text=f"{staff_person.first_name} joined the conversation",
+        event_type="staff_assigned",
+    )
+
+
+def unassign_staff_from_flow(
+    thread: "FlowThread",
+    staff_person: "Person",
+    removed_by: "Person | None" = None,
+) -> None:
+    """Remove staff from flow conversation.
+
+    Args:
+        thread: FlowThread to remove staff from
+        staff_person: Person to remove
+        removed_by: Person doing the removal
+    """
+    from django_communication.services import remove_participant, send_system_message
+
+    if not thread.conversation:
+        return
+
+    remove_participant(
+        conversation=thread.conversation,
+        person=staff_person,
+        removed_by=removed_by,
+        purge_history=False,
+    )
+
+    send_system_message(
+        conversation=thread.conversation,
+        body_text=f"{staff_person.first_name} left the conversation",
+        event_type="staff_unassigned",
+    )
+
+
+def post_flow_update(
+    thread: "FlowThread",
+    message: str,
+    event_type: str = "flow_update",
+) -> None:
+    """Post a system message to a flow conversation.
+
+    Used for status updates, notifications, etc.
+
+    Args:
+        thread: FlowThread to post to
+        message: Message text
+        event_type: Type of event for logging
+    """
+    from django_communication.services import send_system_message
+
+    if not thread.conversation:
+        return
+
+    send_system_message(
+        conversation=thread.conversation,
+        body_text=message,
+        event_type=event_type,
+    )
+
+
+def post_medical_review_update(
+    thread: "FlowThread",
+    status: str,
+    notes: str | None = None,
+) -> None:
+    """Post system message about medical review status.
+
+    Physician is NOT a participant - this is out-of-band.
+    Updates are posted as system messages.
+
+    Args:
+        thread: FlowThread to post to
+        status: Status string (pending, cleared, requires_clearance, etc.)
+        notes: Optional notes to include
+    """
+    from django_communication.services import send_system_message
+
+    if not thread.conversation:
+        return
+
+    status_messages = {
+        "pending": "Medical questionnaire submitted. Awaiting review.",
+        "cleared": "Medical clearance confirmed. You're cleared to dive!",
+        "requires_clearance": "Physician clearance required. Please upload clearance document.",
+        "clearance_uploaded": "Physician clearance document uploaded. Under review.",
+        "clearance_approved": "Physician clearance approved. You're cleared to dive!",
+        "expired": "Medical clearance has expired. Please complete a new questionnaire.",
+    }
+
+    message = status_messages.get(status, f"Medical status: {status}")
+    if notes:
+        message = f"{message}\n\nNote: {notes}"
+
+    send_system_message(
+        conversation=thread.conversation,
+        body_text=message,
+        event_type="medical_update",
+    )
+
+
+def get_customer_active_flows(person: "Person") -> list["FlowThread"]:
+    """Get all active flows for a customer.
+
+    Args:
+        person: The customer Person
+
+    Returns:
+        List of active FlowThread instances
+    """
+    from .models import FlowThread
+
+    return list(
+        FlowThread.objects.filter(
+            customer=person,
+            status=FlowThread.Status.ACTIVE,
+        ).select_related("flow_type", "conversation")
+    )
+
+
+def get_flow_for_conversation(conversation: "Conversation") -> "FlowThread | None":
+    """Get the flow thread for a conversation, if any.
+
+    Args:
+        conversation: The Conversation to check
+
+    Returns:
+        FlowThread if conversation is part of a flow, None otherwise
+    """
+    from .models import FlowThread
+
+    try:
+        return conversation.flow_thread
+    except FlowThread.DoesNotExist:
+        return None
