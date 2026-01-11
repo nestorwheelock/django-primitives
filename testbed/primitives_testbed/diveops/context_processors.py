@@ -4,6 +4,11 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
+from django.core.cache import cache
+
+
+# Cache TTL for unread counts - short enough to feel "live", long enough to help
+UNREAD_COUNT_CACHE_TTL = 30  # seconds
 
 
 def diveops_context(request):
@@ -31,12 +36,34 @@ def diveops_context(request):
         "staff_unread_count": 0,  # Default to 0 (for staff inbox)
     }
 
-    # Add unread message count for authenticated users
+    # Add unread message count for authenticated users (with caching)
     if request.user.is_authenticated:
-        context["unread_messages_count"] = _get_unread_messages_count(request.user)
-        context["staff_unread_count"] = _get_staff_unread_count(request.user)
+        context["unread_messages_count"] = _get_unread_messages_count_cached(request.user)
+        context["staff_unread_count"] = _get_staff_unread_count_cached(request.user)
 
     return context
+
+
+def _get_unread_messages_count_cached(user):
+    """Get unread message count with 30-second cache."""
+    cache_key = f"unread_count:customer:{user.pk}"
+    count = cache.get(cache_key)
+    if count is None:
+        count = _get_unread_messages_count(user)
+        cache.set(cache_key, count, UNREAD_COUNT_CACHE_TTL)
+    return count
+
+
+def _get_staff_unread_count_cached(user):
+    """Get staff unread count with 30-second cache."""
+    if not user.is_staff:
+        return 0
+    cache_key = f"unread_count:staff:{user.pk}"
+    count = cache.get(cache_key)
+    if count is None:
+        count = _get_staff_unread_count(user)
+        cache.set(cache_key, count, UNREAD_COUNT_CACHE_TTL)
+    return count
 
 
 def _get_unread_messages_count(user):

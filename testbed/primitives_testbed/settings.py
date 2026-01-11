@@ -75,6 +75,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Serve static files efficiently
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -82,6 +83,8 @@ MIDDLEWARE = [
     "primitives_testbed.impersonation.ImpersonationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Performance testing (only active when PERF_TESTING=1 and X-Perf-Run-Id header present)
+    "primitives_testbed.perf.middleware.PerfMiddleware",
 ]
 
 ROOT_URLCONF = "primitives_testbed.urls"
@@ -126,6 +129,15 @@ DATABASES = {
     }
 }
 
+# Cache configuration (uses in-memory cache for development)
+# For production, use Redis: django.core.cache.backends.redis.RedisCache
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "primitives-testbed-cache",
+    }
+}
+
 # Custom user model with RBAC mixin
 AUTH_USER_MODEL = "primitives_testbed.User"
 
@@ -156,6 +168,16 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Whitenoise: compressed and forever-cacheable static files
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+}
 
 # Media files (uploaded documents, images, etc.)
 # Documents are stored in BASE_DIR with upload_to='documents/%Y/%m/%d/'
