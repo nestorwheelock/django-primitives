@@ -183,3 +183,64 @@ def get_item(collection, key):
         return collection[int(key)]
     except (IndexError, ValueError, TypeError, KeyError):
         return None
+
+
+@register.filter
+def in_list(value, lst):
+    """
+    Check if a value is in a list.
+
+    Usage in template:
+        {% if choice|in_list:my_list %}checked{% endif %}
+
+    Returns True if value is in the list, False otherwise.
+    """
+    if lst is None:
+        return False
+    try:
+        return value in lst
+    except TypeError:
+        return False
+
+
+@register.simple_tag
+def pref_checked(existing_prefs, key, choice):
+    """
+    Check if a choice is selected in existing preferences.
+
+    Usage: {% pref_checked existing_prefs defn.key choice as is_checked %}
+    """
+    if not existing_prefs:
+        return False
+    values = existing_prefs.get(key)
+    if values is None:
+        return False
+    if isinstance(values, list):
+        return choice in values
+    return values == choice
+
+
+@register.filter
+def pref_field_name(key):
+    """
+    Convert a preference definition key to a form field name.
+
+    Replaces dots with underscores to create valid HTML field names.
+    Usage: name="pref_{{ defn.key|pref_field_name }}"
+    """
+    if not key:
+        return ""
+    return str(key).replace(".", "_")
+
+
+@register.filter
+def class_name(obj):
+    """
+    Return the class name of an object.
+
+    Usage: {{ object|class_name }}
+    Returns: "MyModel" for a MyModel instance
+    """
+    if obj is None:
+        return ""
+    return obj.__class__.__name__
