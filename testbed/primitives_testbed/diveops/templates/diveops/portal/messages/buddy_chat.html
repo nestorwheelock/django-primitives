@@ -1,0 +1,323 @@
+{% extends "portal_ui/base_portal.html" %}
+{% load portal_ui_tags %}
+
+{% block page_title %}{{ conversation.title|default:"Buddy Chat" }}{% endblock %}
+
+{% block content %}
+<div class="flex h-[calc(100vh-12rem)]">
+    <!-- Main Chat Area -->
+    <div class="flex flex-col flex-1">
+        <!-- Header -->
+        <div class="bg-white shadow rounded-tl-lg p-4 flex-shrink-0">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <a href="{% url 'portal:buddy_chats' %}" class="text-gray-500 hover:text-gray-700">
+                        {% icon "arrow-left" "w-5 h-5" %}
+                    </a>
+                    <div class="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                        {% icon "user-group" "w-5 h-5 text-primary-600" %}
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-800">{{ conversation.title|default:"Buddy Chat" }}</h2>
+                        <p class="text-sm text-gray-500">
+                            {{ active_participants|length }} participant{{ active_participants|length|pluralize }}
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <!-- Toggle participants sidebar on mobile -->
+                    <button type="button" onclick="document.getElementById('participants-sidebar').classList.toggle('hidden')" class="md:hidden p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100">
+                        {% icon "users" "w-5 h-5" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Invitation Banner (if user is invited but not active) -->
+        {% if user_participant.state == 'invited' %}
+        <div class="bg-yellow-50 border-b border-yellow-200 px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    {% icon "envelope" "w-5 h-5 text-yellow-600 mr-2" %}
+                    <p class="text-sm text-yellow-800">
+                        You've been invited to this chat by {{ user_participant.invited_by.first_name|default:"a member" }}.
+                    </p>
+                </div>
+                <form method="post" action="{% url 'portal:accept_buddy_chat_invite' conversation_id=conversation.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="inline-flex items-center px-3 py-1.5 bg-yellow-600 text-white text-sm font-medium rounded hover:bg-yellow-700">
+                        {% icon "check" "w-4 h-4 mr-1" %}
+                        Accept Invitation
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Messages Area -->
+        <div class="flex-1 overflow-y-auto bg-gray-50 p-4 space-y-4" id="messages-container">
+            {% if messages_list %}
+                {% for msg in messages_list %}
+                {% if msg.direction == 'system' %}
+                <!-- System Message -->
+                <div class="flex justify-center my-2">
+                    <span class="inline-flex items-center px-3 py-1.5 text-xs text-gray-600 bg-gray-100 rounded-full">
+                        {% icon "information-circle" "w-3.5 h-3.5 mr-1.5 text-gray-400" %}
+                        {{ msg.body_text }}
+                        <span class="ml-2 text-gray-400">{{ msg.created_at|date:"M j, g:i a" }}</span>
+                    </span>
+                </div>
+                {% else %}
+                <div class="flex {% if msg.sender_person == current_person %}justify-end{% else %}justify-start{% endif %}">
+                    {% if msg.sender_person != current_person %}
+                    <!-- Sender avatar for inbound messages -->
+                    <div class="flex-shrink-0 mr-2 self-end mb-6">
+                        <div class="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center" title="{{ msg.sender_person.first_name }} {{ msg.sender_person.last_name }}">
+                            <span class="text-xs font-bold text-gray-600">
+                                {{ msg.sender_person.first_name|slice:":1"|upper }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="max-w-[75%]">
+                        <div class="rounded-lg px-4 py-2 {% if msg.sender_person == current_person %}bg-primary-500 text-white{% else %}bg-white shadow text-gray-800{% endif %}">
+                            {% if msg.body_html %}
+                            <div class="prose prose-sm max-w-none {% if msg.sender_person == current_person %}prose-invert{% endif %}">
+                                {{ msg.body_html|safe }}
+                            </div>
+                            {% else %}
+                            <p class="text-sm whitespace-pre-wrap">{{ msg.body_text }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="mt-1 flex items-center space-x-2 {% if msg.sender_person == current_person %}justify-end{% else %}justify-start{% endif %}">
+                            <span class="text-xs text-gray-500">
+                                {% if msg.sender_person %}
+                                    {{ msg.sender_person.first_name }}
+                                {% else %}
+                                    System
+                                {% endif %}
+                            </span>
+                            <span class="text-xs text-gray-400">
+                                {{ msg.created_at|date:"M j, g:i a" }}
+                            </span>
+                        </div>
+                    </div>
+                    {% if msg.sender_person == current_person %}
+                    <!-- Current user avatar for outbound messages -->
+                    <div class="flex-shrink-0 ml-2 self-end mb-6">
+                        {% if current_diver and current_diver.profile_photo %}
+                        <img src="{{ current_diver.profile_photo.file.url }}" alt="You" class="w-7 h-7 rounded-full object-cover">
+                        {% else %}
+                        <div class="w-7 h-7 rounded-full bg-primary-100 flex items-center justify-center">
+                            <span class="text-xs font-bold text-primary-600">
+                                {{ current_person.first_name|slice:":1"|upper }}
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}{# end system vs regular message #}
+                {% endfor %}
+            {% else %}
+            <div class="text-center py-8">
+                <div class="text-gray-400 mb-4">
+                    {% icon "chat-bubble-left-ellipsis" "w-12 h-12 mx-auto" %}
+                </div>
+                <p class="text-gray-500">No messages yet. Start the conversation below.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Message Input -->
+        {% if can_send and user_participant.state == 'active' %}
+        <div class="bg-white shadow rounded-bl-lg p-4 flex-shrink-0">
+            <form method="post" action="{% url 'portal:send_message' conversation_id=conversation.pk %}" class="flex items-end space-x-4">
+                {% csrf_token %}
+                <div class="flex-1">
+                    <label for="message" class="sr-only">Your message</label>
+                    <textarea
+                        name="message"
+                        id="message"
+                        rows="3"
+                        class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 resize-none"
+                        placeholder="Type your message..."
+                        required
+                    ></textarea>
+                </div>
+                <button
+                    type="submit"
+                    class="inline-flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
+                >
+                    {% icon "paper-airplane" "w-5 h-5" %}
+                    <span class="sr-only">Send</span>
+                </button>
+            </form>
+        </div>
+        {% elif user_participant.state == 'invited' %}
+        <div class="bg-yellow-50 rounded-bl-lg p-4 text-center text-yellow-800">
+            <p>Accept the invitation above to start chatting.</p>
+        </div>
+        {% else %}
+        <div class="bg-gray-100 rounded-bl-lg p-4 text-center text-gray-500">
+            <p>You cannot send messages in this chat.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Participants Sidebar -->
+    <div id="participants-sidebar" class="hidden md:block w-64 bg-white border-l border-gray-200 flex-shrink-0 overflow-y-auto">
+        <div class="p-4 border-b border-gray-200">
+            <h3 class="text-sm font-semibold text-gray-900">Participants</h3>
+        </div>
+
+        <!-- Active Participants -->
+        <ul class="divide-y divide-gray-100">
+            {% for participant in active_participants %}
+            <li class="px-4 py-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center mr-3">
+                            <span class="text-xs font-bold text-gray-600">
+                                {{ participant.person.first_name|slice:":1"|upper }}
+                            </span>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-900">
+                                {{ participant.person.first_name }} {{ participant.person.last_name|slice:":1" }}.
+                                {% if participant.person == current_person %}
+                                <span class="text-gray-500">(you)</span>
+                                {% endif %}
+                            </p>
+                            {% if participant.role == 'owner' %}
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-700">
+                                Owner
+                            </span>
+                            {% elif participant.role == 'admin' %}
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                                Admin
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </li>
+            {% empty %}
+            <li class="px-4 py-3 text-sm text-gray-500">No participants</li>
+            {% endfor %}
+        </ul>
+
+        <!-- Pending Invitations -->
+        {% if pending_invitations %}
+        <div class="p-4 border-t border-gray-200">
+            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Pending Invitations</h4>
+            <ul class="space-y-2">
+                {% for participant in pending_invitations %}
+                <li class="flex items-center text-sm text-gray-600">
+                    <div class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center mr-2">
+                        <span class="text-xs text-gray-500">
+                            {{ participant.person.first_name|slice:":1"|upper }}
+                        </span>
+                    </div>
+                    {{ participant.person.first_name }}
+                    <span class="ml-1 text-xs text-yellow-600">(invited)</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="p-4 border-t border-gray-200 space-y-2">
+            {% if is_admin %}
+            <!-- Invite Button (owner/admin only) -->
+            <button type="button" onclick="document.getElementById('invite-modal').classList.remove('hidden')" class="w-full inline-flex items-center justify-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                {% icon "user-plus" "w-4 h-4 mr-2" %}
+                Invite Buddy
+            </button>
+            {% endif %}
+
+            {% if user_participant.role != 'owner' and user_participant.state == 'active' %}
+            <!-- Leave Button (non-owners only) -->
+            <form method="post" action="{% url 'portal:leave_buddy_chat' conversation_id=conversation.pk %}" onsubmit="return confirm('Are you sure you want to leave this chat?');">
+                {% csrf_token %}
+                <button type="submit" class="w-full inline-flex items-center justify-center px-3 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-white hover:bg-red-50">
+                    {% icon "arrow-right-on-rectangle" "w-4 h-4 mr-2" %}
+                    Leave Chat
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Invite Modal -->
+{% if is_admin %}
+<div id="invite-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900">Invite Buddy to Chat</h3>
+                <button type="button" onclick="document.getElementById('invite-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-500">
+                    {% icon "x-mark" "w-5 h-5" %}
+                </button>
+            </div>
+        </div>
+        <form method="post" action="{% url 'portal:invite_to_buddy_chat' conversation_id=conversation.pk %}">
+            {% csrf_token %}
+            <div class="px-6 py-4">
+                {% if available_buddies %}
+                <p class="text-sm text-gray-600 mb-4">Select a buddy from your teams to invite:</p>
+                <div class="space-y-2 max-h-60 overflow-y-auto">
+                    {% for buddy in available_buddies %}
+                    <label class="flex items-center p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                        <input type="radio" name="buddy_person_id" value="{{ buddy.pk }}" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300">
+                        <div class="ml-3 flex items-center">
+                            <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center mr-3">
+                                <span class="text-xs font-bold text-gray-600">
+                                    {{ buddy.first_name|slice:":1"|upper }}
+                                </span>
+                            </div>
+                            <span class="text-sm font-medium text-gray-900">{{ buddy.first_name }} {{ buddy.last_name }}</span>
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500 text-center py-4">
+                    No buddies available to invite. All your buddies are already in this chat.
+                </p>
+                {% endif %}
+            </div>
+            <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
+                <button type="button" onclick="document.getElementById('invite-modal').classList.add('hidden')" class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">
+                    Cancel
+                </button>
+                {% if available_buddies %}
+                <button type="submit" class="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700">
+                    Send Invitation
+                </button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+// Auto-scroll to bottom of messages
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('messages-container');
+    if (container) {
+        container.scrollTop = container.scrollHeight;
+    }
+});
+
+// Close modal when clicking outside
+document.getElementById('invite-modal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+        this.classList.add('hidden');
+    }
+});
+</script>
+{% endblock %}

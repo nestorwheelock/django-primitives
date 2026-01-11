@@ -1,0 +1,132 @@
+{% extends "portal_ui/base_portal.html" %}
+{% load portal_ui_tags diveops_filters %}
+
+{% block page_title %}Preferences Survey{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                {% icon "clipboard-document-list" "w-8 h-8 text-primary-600" %}
+            </div>
+            <div class="ml-4">
+                <h2 class="text-xl font-semibold text-gray-800">Preferences Survey</h2>
+                <p class="text-gray-600">Help us personalize your dive experience by telling us about your preferences.</p>
+            </div>
+        </div>
+    </div>
+
+    {% if definitions_by_category %}
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        {% for category, definitions in definitions_by_category.items %}
+        <div class="bg-white shadow rounded-lg overflow-hidden">
+            <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-800 capitalize">{{ category }}</h3>
+            </div>
+            <div class="p-6 space-y-6">
+                {% for defn in definitions %}
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">
+                        {{ defn.label }}
+                    </label>
+
+                    {% if defn.value_type == "multi_choice" %}
+                    <!-- Multi-choice: checkboxes -->
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {% for choice in defn.choices_json %}
+                        {% pref_checked existing_prefs defn.key choice as is_checked %}
+                        <label class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
+                            <input type="checkbox"
+                                   name="pref_{{ defn.key|pref_field_name }}"
+                                   value="{{ choice }}"
+                                   {% if is_checked %}checked{% endif %}
+                                   class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                            <span class="ml-2 text-sm text-gray-700">{{ choice }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    {% elif defn.value_type == "choice" %}
+                    <!-- Single choice: select -->
+                    <select name="pref_{{ defn.key|pref_field_name }}"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                        <option value="">Select...</option>
+                        {% for choice in defn.choices_json %}
+                        <option value="{{ choice }}"
+                                {% if existing_prefs|get_item:defn.key == choice %}selected{% endif %}>
+                            {{ choice }}
+                        </option>
+                        {% endfor %}
+                    </select>
+
+                    {% elif defn.value_type == "bool" %}
+                    <!-- Boolean: checkbox -->
+                    <label class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
+                        <input type="checkbox"
+                               name="pref_{{ defn.key|pref_field_name }}"
+                               value="true"
+                               {% if existing_prefs|get_item:defn.key %}checked{% endif %}
+                               class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                        <span class="ml-2 text-sm text-gray-700">Yes</span>
+                    </label>
+
+                    {% elif defn.value_type == "number" %}
+                    <!-- Number input -->
+                    <input type="number"
+                           name="pref_{{ defn.key|pref_field_name }}"
+                           value="{{ existing_prefs|get_item:defn.key|default:'' }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+
+                    {% elif defn.value_type == "date" %}
+                    <!-- Date input -->
+                    <input type="date"
+                           name="pref_{{ defn.key|pref_field_name }}"
+                           value="{{ existing_prefs|get_item:defn.key|default:'' }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+
+                    {% else %}
+                    <!-- Text input (default) -->
+                    <input type="text"
+                           name="pref_{{ defn.key|pref_field_name }}"
+                           value="{{ existing_prefs|get_item:defn.key|default:'' }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Submit -->
+        <div class="flex justify-between items-center">
+            <a href="{% url 'portal:preferences' %}" class="text-gray-600 hover:text-gray-800">
+                {% icon "arrow-left" "w-4 h-4 inline mr-1" %}
+                Back to Preferences
+            </a>
+            <button type="submit"
+                    class="inline-flex items-center px-6 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                {% icon "check" "w-5 h-5 mr-2" %}
+                Save Preferences
+            </button>
+        </div>
+    </form>
+    {% else %}
+    <!-- No definitions -->
+    <div class="bg-white shadow rounded-lg p-8 text-center">
+        <div class="text-gray-400 mb-4">
+            {% icon "document-text" "w-12 h-12 mx-auto" %}
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No Survey Available</h3>
+        <p class="text-gray-500">No preference questions have been configured yet.</p>
+        <a href="{% url 'portal:dashboard' %}" class="mt-4 inline-flex items-center text-primary-600 hover:text-primary-800">
+            {% icon "arrow-left" "w-4 h-4 mr-1" %}
+            Back to Dashboard
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

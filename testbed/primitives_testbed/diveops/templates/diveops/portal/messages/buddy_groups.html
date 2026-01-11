@@ -1,0 +1,105 @@
+{% extends "portal_ui/base_portal.html" %}
+{% load portal_ui_tags %}
+
+{% block page_title %}Buddy Group Chats{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Buddy Group Chats</h1>
+            <p class="mt-1 text-sm text-gray-500">Chat with your dive buddies and teams</p>
+        </div>
+        <a href="{% url 'portal:messages' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+            {% icon "arrow-left" "w-4 h-4 mr-2" %}
+            Back to Messages
+        </a>
+    </div>
+
+    <!-- Active Group Chats -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h2 class="text-sm font-semibold text-gray-900">Your Group Chats</h2>
+        </div>
+        {% if buddy_groups %}
+        <ul class="divide-y divide-gray-200">
+            {% for buddy_group in buddy_groups %}
+            <li>
+                <a href="{% url 'portal:buddy_chat' conversation_id=buddy_group.conversation.pk %}" class="block px-6 py-4 hover:bg-gray-50">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                                {% icon "user-group" "w-5 h-5 text-primary-600" %}
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-900">
+                                    {{ buddy_group.conversation.title|default:buddy_group.dive_team.name|default:"Buddy Chat" }}
+                                </p>
+                                <p class="text-xs text-gray-500">
+                                    {{ buddy_group.dive_team.members.count }} members
+                                </p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            {% if buddy_group.conversation.last_message_at %}
+                            <p class="text-xs text-gray-500">
+                                {{ buddy_group.conversation.last_message_at|timesince }} ago
+                            </p>
+                            {% endif %}
+                            {% icon "chevron-right" "w-5 h-5 text-gray-400" %}
+                        </div>
+                    </div>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="px-6 py-12 text-center">
+            <div class="mx-auto h-12 w-12 text-gray-400">
+                {% icon "chat-bubble-left-right" "w-12 h-12" %}
+            </div>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No group chats yet</h3>
+            <p class="mt-1 text-sm text-gray-500">Create a chat with your buddy team to get started.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Teams Without Chat -->
+    {% if dive_teams_without_chat %}
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h2 class="text-sm font-semibold text-gray-900">Start a New Group Chat</h2>
+        </div>
+        <ul class="divide-y divide-gray-200">
+            {% for team in dive_teams_without_chat %}
+            <li class="px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                        {% icon "users" "w-5 h-5 text-gray-500" %}
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-900">
+                            {{ team.name|default:"Buddy Team" }}
+                        </p>
+                        <p class="text-xs text-gray-500">
+                            {% for member in team.members.all %}
+                                {{ member.identity.display_name }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        </p>
+                    </div>
+                </div>
+                <form method="post" action="{% url 'portal:create_buddy_chat' team_id=team.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-primary-600 hover:bg-primary-700">
+                        {% icon "chat-bubble-left-ellipsis" "w-4 h-4 mr-1" %}
+                        Start Chat
+                    </button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
