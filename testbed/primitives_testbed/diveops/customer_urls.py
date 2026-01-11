@@ -19,6 +19,15 @@ urlpatterns = [
     path("orders/<str:order_number>/", customer_views.CustomerOrderDetailView.as_view(), name="order_detail"),
     # Preferences
     path("preferences/", customer_views.CustomerPreferencesView.as_view(), name="preferences"),
+    path("preferences/survey/", customer_views.PreferencesSurveyView.as_view(), name="preferences_survey"),
+    # Buddies
+    path("buddies/add/", customer_views.AddBuddyView.as_view(), name="add_buddy"),
+    path("buddies/<uuid:team_id>/remove/", customer_views.RemoveBuddyView.as_view(), name="remove_buddy"),
+    # Messages / Conversations
+    path("messages/", customer_views.CustomerMessagesInboxView.as_view(), name="messages"),
+    path("messages/new/", customer_views.CustomerStartConversationView.as_view(), name="new_conversation"),
+    path("messages/<uuid:conversation_id>/", customer_views.CustomerConversationDetailView.as_view(), name="conversation"),
+    path("messages/<uuid:conversation_id>/send/", customer_views.CustomerSendMessageView.as_view(), name="send_message"),
     # CMS content pages (within portal context)
     path(
         "content/<path:path>/",

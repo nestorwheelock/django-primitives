@@ -8965,3 +8965,1103 @@ class LeadAddNoteView(StaffPortalMixin, View):
         add_lead_note(lead, body, author=request.user)
         messages.success(request, "Note added.")
         return redirect("diveops:lead-detail", pk=pk)
+
+
+# =============================================================================
+# CMS - Content Management
+# =============================================================================
+
+
+class CMSPageListView(StaffPortalMixin, ListView):
+    """List all CMS content pages."""
+
+    template_name = "diveops/staff/cms/page_list.html"
+    context_object_name = "pages"
+    paginate_by = 25
+
+    def get_queryset(self):
+        from django_cms_core.models import ContentPage
+
+        queryset = ContentPage.objects.filter(
+            deleted_at__isnull=True,
+        ).order_by("-updated_at")
+
+        # Filter by status
+        status = self.request.GET.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # Filter by access level
+        access = self.request.GET.get("access")
+        if access:
+            queryset = queryset.filter(access_level=access)
+
+        # Search
+        search = self.request.GET.get("q")
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) |
+                Q(slug__icontains=search)
+            )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        from django_cms_core.models import ContentPage, PageStatus, AccessLevel
+
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "CMS Pages"
+        context["status_choices"] = PageStatus.choices
+        context["access_choices"] = AccessLevel.choices
+        context["current_status"] = self.request.GET.get("status", "")
+        context["current_access"] = self.request.GET.get("access", "")
+        context["search_query"] = self.request.GET.get("q", "")
+
+        # Summary counts
+        base_qs = ContentPage.objects.filter(deleted_at__isnull=True)
+        context["total_pages"] = base_qs.count()
+        context["draft_pages"] = base_qs.filter(status="draft").count()
+        context["published_pages"] = base_qs.filter(status="published").count()
+        context["archived_pages"] = base_qs.filter(status="archived").count()
+
+        return context
+
+
+class CMSPageCreateView(StaffPortalMixin, View):
+    """Create a new CMS page."""
+
+    template_name = "diveops/staff/cms/page_form.html"
+
+    def get(self, request):
+        from django_cms_core.models import PageStatus, AccessLevel
+
+        return render(request, self.template_name, {
+            "page_title": "Create Page",
+            "status_choices": PageStatus.choices,
+            "access_choices": AccessLevel.choices,
+            "is_create": True,
+        })
+
+    def post(self, request):
+        from django_cms_core.services import create_page
+        from django_cms_core.models import PageStatus, AccessLevel
+
+        slug = request.POST.get("slug", "").strip()
+        title = request.POST.get("title", "").strip()
+
+        if not slug or not title:
+            messages.error(request, "Slug and title are required.")
+            return render(request, self.template_name, {
+                "page_title": "Create Page",
+                "status_choices": PageStatus.choices,
+                "access_choices": AccessLevel.choices,
+                "is_create": True,
+                "form_data": request.POST,
+            })
+
+        try:
+            page = create_page(
+                slug=slug,
+                title=title,
+                user=request.user,
+                status=request.POST.get("status", PageStatus.DRAFT),
+                access_level=request.POST.get("access_level", AccessLevel.PUBLIC),
+                seo_title=request.POST.get("seo_title", ""),
+                seo_description=request.POST.get("seo_description", ""),
+                template_key=request.POST.get("template_key", "default"),
+            )
+            messages.success(request, f"Page '{title}' created.")
+            return redirect("diveops:cms-page-detail", pk=page.pk)
+        except Exception as e:
+            messages.error(request, f"Error creating page: {e}")
+            return render(request, self.template_name, {
+                "page_title": "Create Page",
+                "status_choices": PageStatus.choices,
+                "access_choices": AccessLevel.choices,
+                "is_create": True,
+                "form_data": request.POST,
+            })
+
+
+class CMSPageDetailView(StaffPortalMixin, DetailView):
+    """View and edit CMS page details."""
+
+    template_name = "diveops/staff/cms/page_detail.html"
+    context_object_name = "page"
+
+    def get_queryset(self):
+        from django_cms_core.models import ContentPage
+
+        return ContentPage.objects.filter(deleted_at__isnull=True)
+
+    def get_context_data(self, **kwargs):
+        from django_cms_core.models import PageStatus, AccessLevel
+        from django_cms_core.registry import BlockRegistry
+
+        context = super().get_context_data(**kwargs)
+        page = self.object
+        context["page_title"] = f"Edit: {page.title}"
+        context["status_choices"] = PageStatus.choices
+        context["access_choices"] = AccessLevel.choices
+        context["blocks"] = page.blocks.filter(deleted_at__isnull=True).order_by("sequence")
+        context["block_types"] = BlockRegistry.all()
+        return context
+
+
+class CMSPageUpdateView(StaffPortalMixin, View):
+    """Update CMS page metadata."""
+
+    def post(self, request, pk):
+        from django_cms_core.models import ContentPage
+
+        page = get_object_or_404(ContentPage, pk=pk, deleted_at__isnull=True)
+
+        page.title = request.POST.get("title", page.title).strip()
+        page.slug = request.POST.get("slug", page.slug).strip()
+        page.access_level = request.POST.get("access_level", page.access_level)
+        page.seo_title = request.POST.get("seo_title", "").strip()
+        page.seo_description = request.POST.get("seo_description", "").strip()
+        page.template_key = request.POST.get("template_key", page.template_key).strip()
+        page.is_indexable = request.POST.get("is_indexable") == "on"
+        page.save()
+
+        messages.success(request, "Page updated.")
+        return redirect("diveops:cms-page-detail", pk=pk)
+
+
+class CMSPagePublishView(StaffPortalMixin, View):
+    """Publish a CMS page."""
+
+    def post(self, request, pk):
+        from django_cms_core.models import ContentPage
+        from django_cms_core.services import publish_page, validate_page_blocks
+
+        page = get_object_or_404(ContentPage, pk=pk, deleted_at__isnull=True)
+
+        # Validate blocks before publishing
+        errors = validate_page_blocks(page)
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return redirect("diveops:cms-page-detail", pk=pk)
+
+        try:
+            publish_page(page, request.user)
+            messages.success(request, f"Page '{page.title}' published.")
+        except Exception as e:
+            messages.error(request, f"Error publishing page: {e}")
+
+        return redirect("diveops:cms-page-detail", pk=pk)
+
+
+class CMSPageUnpublishView(StaffPortalMixin, View):
+    """Unpublish a CMS page."""
+
+    def post(self, request, pk):
+        from django_cms_core.models import ContentPage
+        from django_cms_core.services import unpublish_page
+
+        page = get_object_or_404(ContentPage, pk=pk, deleted_at__isnull=True)
+
+        unpublish_page(page)
+        messages.success(request, f"Page '{page.title}' unpublished.")
+        return redirect("diveops:cms-page-detail", pk=pk)
+
+
+class CMSPageArchiveView(StaffPortalMixin, View):
+    """Archive a CMS page."""
+
+    def post(self, request, pk):
+        from django_cms_core.models import ContentPage
+        from django_cms_core.services import archive_page
+
+        page = get_object_or_404(ContentPage, pk=pk, deleted_at__isnull=True)
+
+        archive_page(page)
+        messages.success(request, f"Page '{page.title}' archived.")
+        return redirect("diveops:cms-page-detail", pk=pk)
+
+
+class CMSPageDeleteView(StaffPortalMixin, View):
+    """Soft-delete a CMS page."""
+
+    def post(self, request, pk):
+        from django_cms_core.models import ContentPage
+
+        page = get_object_or_404(ContentPage, pk=pk, deleted_at__isnull=True)
+        title = page.title
+        page.delete()  # Soft delete
+
+        messages.success(request, f"Page '{title}' deleted.")
+        return redirect("diveops:cms-page-list")
+
+
+class CMSBlockAddView(StaffPortalMixin, View):
+    """Add a block to a CMS page."""
+
+    def post(self, request, pk):
+        import json
+        from django_cms_core.models import ContentPage
+        from django_cms_core.services import add_block
+
+        page = get_object_or_404(ContentPage, pk=pk, deleted_at__isnull=True)
+
+        block_type = request.POST.get("block_type", "").strip()
+        data_str = request.POST.get("data", "{}").strip()
+
+        if not block_type:
+            messages.error(request, "Block type is required.")
+            return redirect("diveops:cms-page-detail", pk=pk)
+
+        try:
+            data = json.loads(data_str) if data_str else {}
+        except json.JSONDecodeError:
+            messages.error(request, "Invalid JSON data.")
+            return redirect("diveops:cms-page-detail", pk=pk)
+
+        try:
+            add_block(page, block_type, data)
+            messages.success(request, f"Block '{block_type}' added.")
+        except Exception as e:
+            messages.error(request, f"Error adding block: {e}")
+
+        return redirect("diveops:cms-page-detail", pk=pk)
+
+
+class CMSBlockUpdateView(StaffPortalMixin, View):
+    """Update a CMS block."""
+
+    def post(self, request, page_pk, block_pk):
+        import json
+        from django_cms_core.models import ContentBlock
+        from django_cms_core.services import update_block
+
+        block = get_object_or_404(
+            ContentBlock,
+            pk=block_pk,
+            page_id=page_pk,
+            deleted_at__isnull=True,
+        )
+
+        data_str = request.POST.get("data", "").strip()
+        is_active = request.POST.get("is_active") == "on"
+
+        try:
+            data = json.loads(data_str) if data_str else None
+        except json.JSONDecodeError:
+            messages.error(request, "Invalid JSON data.")
+            return redirect("diveops:cms-page-detail", pk=page_pk)
+
+        try:
+            update_block(block, data=data, is_active=is_active)
+            messages.success(request, "Block updated.")
+        except Exception as e:
+            messages.error(request, f"Error updating block: {e}")
+
+        return redirect("diveops:cms-page-detail", pk=page_pk)
+
+
+class CMSBlockDeleteView(StaffPortalMixin, View):
+    """Delete a CMS block."""
+
+    def post(self, request, page_pk, block_pk):
+        from django_cms_core.models import ContentBlock
+        from django_cms_core.services import delete_block
+
+        block = get_object_or_404(
+            ContentBlock,
+            pk=block_pk,
+            page_id=page_pk,
+            deleted_at__isnull=True,
+        )
+
+        delete_block(block)
+        messages.success(request, "Block deleted.")
+        return redirect("diveops:cms-page-detail", pk=page_pk)
+
+
+class CMSBlockReorderView(StaffPortalMixin, View):
+    """Reorder blocks on a page via AJAX."""
+
+    def post(self, request, pk):
+        import json
+        from django_cms_core.models import ContentPage
+        from django_cms_core.services import reorder_blocks
+
+        page = get_object_or_404(ContentPage, pk=pk, deleted_at__isnull=True)
+
+        try:
+            data = json.loads(request.body)
+            block_ids = data.get("block_ids", [])
+            reorder_blocks(page, block_ids)
+            return JsonResponse({"success": True})
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+
+class CMSRedirectListView(StaffPortalMixin, ListView):
+    """List all CMS redirects."""
+
+    template_name = "diveops/staff/cms/redirect_list.html"
+    context_object_name = "redirects"
+    paginate_by = 50
+
+    def get_queryset(self):
+        from django_cms_core.models import Redirect
+
+        queryset = Redirect.objects.filter(deleted_at__isnull=True).order_by("from_path")
+
+        search = self.request.GET.get("q")
+        if search:
+            queryset = queryset.filter(
+                Q(from_path__icontains=search) |
+                Q(to_path__icontains=search)
+            )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Redirects"
+        context["search_query"] = self.request.GET.get("q", "")
+        return context
+
+
+class CMSRedirectCreateView(StaffPortalMixin, View):
+    """Create a new redirect."""
+
+    template_name = "diveops/staff/cms/redirect_form.html"
+
+    def get(self, request):
+        return render(request, self.template_name, {
+            "page_title": "Create Redirect",
+            "is_create": True,
+        })
+
+    def post(self, request):
+        from django_cms_core.models import Redirect
+
+        from_path = request.POST.get("from_path", "").strip()
+        to_path = request.POST.get("to_path", "").strip()
+        is_permanent = request.POST.get("is_permanent") == "on"
+
+        if not from_path or not to_path:
+            messages.error(request, "Both paths are required.")
+            return render(request, self.template_name, {
+                "page_title": "Create Redirect",
+                "is_create": True,
+                "form_data": request.POST,
+            })
+
+        try:
+            Redirect.objects.create(
+                from_path=from_path,
+                to_path=to_path,
+                is_permanent=is_permanent,
+            )
+            messages.success(request, "Redirect created.")
+            return redirect("diveops:cms-redirect-list")
+        except Exception as e:
+            messages.error(request, f"Error creating redirect: {e}")
+            return render(request, self.template_name, {
+                "page_title": "Create Redirect",
+                "is_create": True,
+                "form_data": request.POST,
+            })
+
+
+class CMSRedirectDeleteView(StaffPortalMixin, View):
+    """Delete a redirect."""
+
+    def post(self, request, pk):
+        from django_cms_core.models import Redirect
+
+        redirect_obj = get_object_or_404(Redirect, pk=pk, deleted_at__isnull=True)
+        redirect_obj.delete()
+
+        messages.success(request, "Redirect deleted.")
+        return redirect("diveops:cms-redirect-list")
+
+
+class CMSSettingsView(StaffPortalMixin, View):
+    """View and edit CMS settings."""
+
+    template_name = "diveops/staff/cms/settings.html"
+
+    def get(self, request):
+        from django_cms_core.models import CMSSettings
+
+        settings = CMSSettings.get_instance()
+        return render(request, self.template_name, {
+            "page_title": "CMS Settings",
+            "settings": settings,
+        })
+
+    def post(self, request):
+        from django_cms_core.models import CMSSettings
+
+        settings = CMSSettings.get_instance()
+
+        settings.site_name = request.POST.get("site_name", "").strip()
+        settings.default_seo_title_suffix = request.POST.get("default_seo_title_suffix", "").strip()
+        settings.default_og_image_url = request.POST.get("default_og_image_url", "").strip()
+        settings.api_cache_ttl_seconds = int(request.POST.get("api_cache_ttl_seconds", 60))
+        settings.save()
+
+        messages.success(request, "Settings saved.")
+        return redirect("diveops:cms-settings")
+
+
+# =============================================================================
+# Blog Views
+# =============================================================================
+
+
+class BlogPostListView(StaffPortalMixin, ListView):
+    """List all blog posts."""
+
+    template_name = "diveops/staff/cms/post_list.html"
+    context_object_name = "posts"
+    paginate_by = 25
+
+    def get_queryset(self):
+        from django.db.models import Q
+        from django_cms_core.models import ContentPage
+
+        qs = ContentPage.objects.filter(
+            page_type="post",
+            deleted_at__isnull=True,
+        ).select_related("author", "category").order_by("-created_at")
+
+        # Filter by status
+        status = self.request.GET.get("status")
+        if status:
+            qs = qs.filter(status=status)
+
+        # Filter by category
+        category = self.request.GET.get("category")
+        if category:
+            qs = qs.filter(category__slug=category)
+
+        # Search
+        search = self.request.GET.get("q")
+        if search:
+            qs = qs.filter(
+                Q(title__icontains=search) |
+                Q(slug__icontains=search) |
+                Q(excerpt__icontains=search)
+            )
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        from django_cms_core.models import ContentPage, BlogCategory, PageStatus
+
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Blog Posts"
+
+        # Status counts
+        base_qs = ContentPage.objects.filter(page_type="post", deleted_at__isnull=True)
+        context["total_posts"] = base_qs.count()
+        context["draft_posts"] = base_qs.filter(status="draft").count()
+        context["published_posts"] = base_qs.filter(status="published").count()
+
+        # Filter state
+        context["current_status"] = self.request.GET.get("status", "")
+        context["current_category"] = self.request.GET.get("category", "")
+        context["search_query"] = self.request.GET.get("q", "")
+
+        # Choices
+        context["status_choices"] = PageStatus.choices
+        context["categories"] = BlogCategory.objects.filter(deleted_at__isnull=True)
+
+        return context
+
+
+class BlogPostCreateView(StaffPortalMixin, View):
+    """Create a new blog post."""
+
+    template_name = "diveops/staff/cms/post_form.html"
+
+    def get(self, request):
+        from django_cms_core.models import PageStatus, AccessLevel, BlogCategory
+        from django_parties.models import Person
+
+        return render(request, self.template_name, {
+            "page_title": "Create Blog Post",
+            "is_create": True,
+            "status_choices": PageStatus.choices,
+            "access_choices": AccessLevel.choices,
+            "categories": BlogCategory.objects.filter(deleted_at__isnull=True),
+            "authors": Person.objects.filter(deleted_at__isnull=True).order_by("first_name", "last_name"),
+            "form_data": {},
+        })
+
+    def post(self, request):
+        from django_cms_core.models import ContentPage, PageStatus, AccessLevel, BlogCategory
+        from django_parties.models import Person
+
+        title = request.POST.get("title", "").strip()
+        slug = request.POST.get("slug", "").strip()
+
+        if not title or not slug:
+            messages.error(request, "Title and slug are required.")
+            return render(request, self.template_name, {
+                "page_title": "Create Blog Post",
+                "is_create": True,
+                "status_choices": PageStatus.choices,
+                "access_choices": AccessLevel.choices,
+                "categories": BlogCategory.objects.filter(deleted_at__isnull=True),
+                "authors": Person.objects.filter(deleted_at__isnull=True),
+                "form_data": request.POST,
+            })
+
+        # Check for duplicate slug
+        if ContentPage.objects.filter(slug=slug, deleted_at__isnull=True).exists():
+            messages.error(request, f"A page with slug '{slug}' already exists.")
+            return render(request, self.template_name, {
+                "page_title": "Create Blog Post",
+                "is_create": True,
+                "status_choices": PageStatus.choices,
+                "access_choices": AccessLevel.choices,
+                "categories": BlogCategory.objects.filter(deleted_at__isnull=True),
+                "authors": Person.objects.filter(deleted_at__isnull=True),
+                "form_data": request.POST,
+            })
+
+        # Get author
+        author = None
+        author_id = request.POST.get("author")
+        if author_id:
+            author = Person.objects.filter(pk=author_id, deleted_at__isnull=True).first()
+
+        # Get category
+        category = None
+        category_id = request.POST.get("category")
+        if category_id:
+            category = BlogCategory.objects.filter(pk=category_id, deleted_at__isnull=True).first()
+
+        # Parse tags
+        tags_str = request.POST.get("tags", "").strip()
+        tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else []
+
+        # Parse reading time
+        reading_time = None
+        reading_time_str = request.POST.get("reading_time_minutes", "").strip()
+        if reading_time_str:
+            try:
+                reading_time = int(reading_time_str)
+            except ValueError:
+                pass
+
+        post = ContentPage.objects.create(
+            page_type="post",
+            title=title,
+            slug=slug,
+            status=request.POST.get("status", "draft"),
+            access_level=request.POST.get("access_level", "public"),
+            author=author,
+            excerpt=request.POST.get("excerpt", "").strip(),
+            featured_image_url=request.POST.get("featured_image_url", "").strip(),
+            reading_time_minutes=reading_time,
+            category=category,
+            tags=tags,
+            template_key=request.POST.get("template_key", "blog_post"),
+            seo_title=request.POST.get("seo_title", "").strip(),
+            seo_description=request.POST.get("seo_description", "").strip(),
+        )
+
+        messages.success(request, f"Blog post '{title}' created.")
+        return redirect("diveops:blog-post-detail", pk=post.pk)
+
+
+class BlogPostDetailView(StaffPortalMixin, DetailView):
+    """View and edit a blog post."""
+
+    template_name = "diveops/staff/cms/post_detail.html"
+    context_object_name = "post"
+
+    def get_queryset(self):
+        from django_cms_core.models import ContentPage
+
+        return ContentPage.objects.filter(
+            page_type="post",
+            deleted_at__isnull=True,
+        ).select_related("author", "category")
+
+    def get_context_data(self, **kwargs):
+        from django_cms_core.models import PageStatus, AccessLevel, BlogCategory
+        from django_parties.models import Person
+
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = self.object.title
+        context["blocks"] = self.object.blocks.filter(
+            deleted_at__isnull=True
+        ).order_by("sequence")
+        context["status_choices"] = PageStatus.choices
+        context["access_choices"] = AccessLevel.choices
+        context["categories"] = BlogCategory.objects.filter(deleted_at__isnull=True)
+        context["authors"] = Person.objects.filter(deleted_at__isnull=True).order_by("first_name", "last_name")
+        return context
+
+
+class BlogPostUpdateView(StaffPortalMixin, View):
+    """Update a blog post."""
+
+    def post(self, request, pk):
+        from django_cms_core.models import ContentPage, BlogCategory
+        from django_parties.models import Person
+
+        post = get_object_or_404(ContentPage, pk=pk, page_type="post", deleted_at__isnull=True)
+
+        post.title = request.POST.get("title", post.title).strip()
+        post.slug = request.POST.get("slug", post.slug).strip()
+        post.access_level = request.POST.get("access_level", post.access_level)
+        post.excerpt = request.POST.get("excerpt", "").strip()
+        post.featured_image_url = request.POST.get("featured_image_url", "").strip()
+        post.template_key = request.POST.get("template_key", post.template_key).strip()
+        post.seo_title = request.POST.get("seo_title", "").strip()
+        post.seo_description = request.POST.get("seo_description", "").strip()
+        post.is_indexable = "is_indexable" in request.POST
+
+        # Update author
+        author_id = request.POST.get("author")
+        if author_id:
+            post.author = Person.objects.filter(pk=author_id, deleted_at__isnull=True).first()
+        else:
+            post.author = None
+
+        # Update category
+        category_id = request.POST.get("category")
+        if category_id:
+            post.category = BlogCategory.objects.filter(pk=category_id, deleted_at__isnull=True).first()
+        else:
+            post.category = None
+
+        # Parse tags
+        tags_str = request.POST.get("tags", "").strip()
+        post.tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else []
+
+        # Parse reading time
+        reading_time_str = request.POST.get("reading_time_minutes", "").strip()
+        if reading_time_str:
+            try:
+                post.reading_time_minutes = int(reading_time_str)
+            except ValueError:
+                pass
+        else:
+            post.reading_time_minutes = None
+
+        post.save()
+
+        messages.success(request, "Blog post updated.")
+        return redirect("diveops:blog-post-detail", pk=pk)
+
+
+class BlogPostPublishView(StaffPortalMixin, View):
+    """Publish a blog post."""
+
+    def post(self, request, pk):
+        from django_cms_core.models import ContentPage
+        from django_cms_core.services import publish_page, validate_page_blocks
+
+        post = get_object_or_404(ContentPage, pk=pk, page_type="post", deleted_at__isnull=True)
+
+        # Validate blocks before publishing
+        errors = validate_page_blocks(post)
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return redirect("diveops:blog-post-detail", pk=pk)
+
+        try:
+            publish_page(post, request.user)
+            messages.success(request, f"Blog post '{post.title}' published.")
+        except Exception as e:
+            messages.error(request, f"Error publishing post: {e}")
+
+        return redirect("diveops:blog-post-detail", pk=pk)
+
+
+class BlogPostUnpublishView(StaffPortalMixin, View):
+    """Unpublish a blog post."""
+
+    def post(self, request, pk):
+        from django_cms_core.models import ContentPage
+        from django_cms_core.services import unpublish_page
+
+        post = get_object_or_404(ContentPage, pk=pk, page_type="post", deleted_at__isnull=True)
+
+        try:
+            unpublish_page(post)
+            messages.success(request, f"Blog post '{post.title}' unpublished.")
+        except Exception as e:
+            messages.error(request, f"Error unpublishing post: {e}")
+
+        return redirect("diveops:blog-post-detail", pk=pk)
+
+
+class BlogPostDeleteView(StaffPortalMixin, View):
+    """Delete a blog post."""
+
+    def post(self, request, pk):
+        from django_cms_core.models import ContentPage
+        from django.utils import timezone
+
+        post = get_object_or_404(ContentPage, pk=pk, page_type="post", deleted_at__isnull=True)
+
+        post.deleted_at = timezone.now()
+        post.save(update_fields=["deleted_at", "updated_at"])
+
+        messages.success(request, f"Blog post '{post.title}' deleted.")
+        return redirect("diveops:blog-post-list")
+
+
+# Blog Category Views
+
+class BlogCategoryListView(StaffPortalMixin, ListView):
+    """List all blog categories."""
+
+    template_name = "diveops/staff/cms/category_list.html"
+    context_object_name = "categories"
+
+    def get_queryset(self):
+        from django.db.models import Count, Q
+        from django_cms_core.models import BlogCategory
+
+        return BlogCategory.objects.filter(
+            deleted_at__isnull=True
+        ).annotate(
+            post_count=Count(
+                "posts",
+                filter=Q(posts__deleted_at__isnull=True, posts__page_type="post")
+            )
+        ).order_by("sort_order", "name")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Blog Categories"
+        return context
+
+
+class BlogCategoryCreateView(StaffPortalMixin, View):
+    """Create a new blog category."""
+
+    template_name = "diveops/staff/cms/category_form.html"
+
+    def get(self, request):
+        return render(request, self.template_name, {
+            "page_title": "Create Category",
+            "is_create": True,
+            "form_data": {},
+        })
+
+    def post(self, request):
+        from django_cms_core.models import BlogCategory
+
+        name = request.POST.get("name", "").strip()
+        slug = request.POST.get("slug", "").strip()
+
+        if not name or not slug:
+            messages.error(request, "Name and slug are required.")
+            return render(request, self.template_name, {
+                "page_title": "Create Category",
+                "is_create": True,
+                "form_data": request.POST,
+            })
+
+        if BlogCategory.objects.filter(slug=slug, deleted_at__isnull=True).exists():
+            messages.error(request, f"A category with slug '{slug}' already exists.")
+            return render(request, self.template_name, {
+                "page_title": "Create Category",
+                "is_create": True,
+                "form_data": request.POST,
+            })
+
+        sort_order = 0
+        sort_order_str = request.POST.get("sort_order", "").strip()
+        if sort_order_str:
+            try:
+                sort_order = int(sort_order_str)
+            except ValueError:
+                pass
+
+        category = BlogCategory.objects.create(
+            name=name,
+            slug=slug,
+            description=request.POST.get("description", "").strip(),
+            color=request.POST.get("color", "").strip(),
+            sort_order=sort_order,
+        )
+
+        messages.success(request, f"Category '{name}' created.")
+        return redirect("diveops:blog-category-list")
+
+
+class BlogCategoryUpdateView(StaffPortalMixin, View):
+    """Update a blog category."""
+
+    template_name = "diveops/staff/cms/category_form.html"
+
+    def get(self, request, pk):
+        from django_cms_core.models import BlogCategory
+
+        category = get_object_or_404(BlogCategory, pk=pk, deleted_at__isnull=True)
+
+        return render(request, self.template_name, {
+            "page_title": f"Edit {category.name}",
+            "is_create": False,
+            "category": category,
+            "form_data": {
+                "name": category.name,
+                "slug": category.slug,
+                "description": category.description,
+                "color": category.color,
+                "sort_order": category.sort_order,
+            },
+        })
+
+    def post(self, request, pk):
+        from django_cms_core.models import BlogCategory
+
+        category = get_object_or_404(BlogCategory, pk=pk, deleted_at__isnull=True)
+
+        name = request.POST.get("name", "").strip()
+        slug = request.POST.get("slug", "").strip()
+
+        if not name or not slug:
+            messages.error(request, "Name and slug are required.")
+            return render(request, self.template_name, {
+                "page_title": f"Edit {category.name}",
+                "is_create": False,
+                "category": category,
+                "form_data": request.POST,
+            })
+
+        # Check for duplicate slug (excluding self)
+        if BlogCategory.objects.filter(slug=slug, deleted_at__isnull=True).exclude(pk=pk).exists():
+            messages.error(request, f"A category with slug '{slug}' already exists.")
+            return render(request, self.template_name, {
+                "page_title": f"Edit {category.name}",
+                "is_create": False,
+                "category": category,
+                "form_data": request.POST,
+            })
+
+        category.name = name
+        category.slug = slug
+        category.description = request.POST.get("description", "").strip()
+        category.color = request.POST.get("color", "").strip()
+
+        sort_order_str = request.POST.get("sort_order", "").strip()
+        if sort_order_str:
+            try:
+                category.sort_order = int(sort_order_str)
+            except ValueError:
+                pass
+
+        category.save()
+
+        messages.success(request, f"Category '{name}' updated.")
+        return redirect("diveops:blog-category-list")
+
+
+class BlogCategoryDeleteView(StaffPortalMixin, View):
+    """Delete a blog category."""
+
+    def post(self, request, pk):
+        from django_cms_core.models import BlogCategory
+        from django.utils import timezone
+
+        category = get_object_or_404(BlogCategory, pk=pk, deleted_at__isnull=True)
+
+        category.deleted_at = timezone.now()
+        category.save(update_fields=["deleted_at", "updated_at"])
+
+        messages.success(request, f"Category '{category.name}' deleted.")
+        return redirect("diveops:blog-category-list")
+
+
+# =============================================================================
+# CRM - Conversations Inbox
+# =============================================================================
+
+
+class StaffInboxView(StaffPortalMixin, TemplateView):
+    """CRM inbox with filters: mine/unassigned/all."""
+
+    template_name = "diveops/staff/crm/inbox.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from django_communication.services import get_staff_inbox
+
+        # Get filter params
+        status = self.request.GET.get("status", "active")
+        scope = self.request.GET.get("scope", "mine")
+
+        context["conversations"] = get_staff_inbox(
+            self.request.user,
+            status=status,
+            scope=scope,
+        )
+        context["current_status"] = status
+        context["current_scope"] = scope
+
+        # Get counts for filter badges
+        from django_communication.models import Conversation, ConversationStatus
+
+        context["count_mine"] = Conversation.objects.filter(
+            assigned_to_user=self.request.user,
+            status=ConversationStatus.ACTIVE,
+        ).count()
+        context["count_unassigned"] = Conversation.objects.filter(
+            assigned_to_user__isnull=True,
+            status=ConversationStatus.ACTIVE,
+        ).count()
+        context["count_all"] = Conversation.objects.filter(
+            status=ConversationStatus.ACTIVE,
+        ).count()
+
+        return context
+
+
+class StaffConversationView(StaffPortalMixin, TemplateView):
+    """Chat thread + customer context panel."""
+
+    template_name = "diveops/staff/crm/conversation.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from django_communication.models import Conversation
+        from django_communication.services import get_conversation_messages
+
+        conversation_id = self.kwargs.get("conversation_id")
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+
+        context["conversation"] = conversation
+        context["messages_list"] = get_conversation_messages(conversation)
+
+        # Get customer participant for context panel
+        customer = conversation.participants.filter(role="customer").first()
+        if customer:
+            context["customer_person"] = customer.person
+            # Try to get associated diver profile
+            from .selectors import get_diver_for_person
+            context["diver"] = get_diver_for_person(customer.person)
+
+        # Mark as read for staff
+        from .selectors import get_staff_person
+        staff_person = get_staff_person(self.request.user)
+        if staff_person:
+            conversation.mark_read_for(staff_person)
+
+        # Get related object info if any
+        if conversation.related_object:
+            context["related_object"] = conversation.related_object
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Handle sending a reply."""
+        from django_communication.models import Conversation, MessageDirection, ParticipantRole
+        from django_communication.services import ensure_conversation_participant, send_in_conversation
+        from .selectors import get_staff_person
+
+        conversation_id = self.kwargs.get("conversation_id")
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+        body_text = request.POST.get("message", "").strip()
+
+        if body_text:
+            staff_person = get_staff_person(request.user)
+            if staff_person:
+                # Ensure staff is a participant
+                ensure_conversation_participant(conversation, staff_person, ParticipantRole.STAFF)
+
+                send_in_conversation(
+                    conversation=conversation,
+                    sender_person=staff_person,
+                    body_text=body_text,
+                    direction=MessageDirection.OUTBOUND,
+                )
+
+        return redirect("diveops:crm-conversation", conversation_id=conversation.pk)
+
+
+class StaffReplyView(StaffPortalMixin, View):
+    """POST to send reply in conversation."""
+
+    def post(self, request, conversation_id):
+        from django_communication.models import Conversation, MessageDirection, ParticipantRole
+        from django_communication.services import ensure_conversation_participant, send_in_conversation
+        from .selectors import get_staff_person
+
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+        body_text = request.POST.get("message", "").strip()
+
+        if body_text:
+            staff_person = get_staff_person(request.user)
+            if staff_person:
+                ensure_conversation_participant(conversation, staff_person, ParticipantRole.STAFF)
+                send_in_conversation(
+                    conversation=conversation,
+                    sender_person=staff_person,
+                    body_text=body_text,
+                    direction=MessageDirection.OUTBOUND,
+                )
+
+        return redirect("diveops:crm-conversation", conversation_id=conversation.pk)
+
+
+class AssignConversationView(StaffPortalMixin, View):
+    """POST to assign/unassign conversation."""
+
+    def post(self, request, conversation_id):
+        from django_communication.models import Conversation
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+
+        action = request.POST.get("action")
+        if action == "assign_to_me":
+            conversation.assigned_to_user = request.user
+            conversation.save(update_fields=["assigned_to_user", "updated_at"])
+            messages.success(request, "Conversation assigned to you.")
+        elif action == "unassign":
+            conversation.assigned_to_user = None
+            conversation.save(update_fields=["assigned_to_user", "updated_at"])
+            messages.success(request, "Conversation unassigned.")
+        elif action == "assign":
+            user_id = request.POST.get("user_id")
+            if user_id:
+                user = get_object_or_404(User, pk=user_id)
+                conversation.assigned_to_user = user
+                conversation.save(update_fields=["assigned_to_user", "updated_at"])
+                messages.success(request, f"Conversation assigned to {user.username}.")
+
+        return redirect("diveops:crm-conversation", conversation_id=conversation.pk)
+
+
+class CloseConversationView(StaffPortalMixin, View):
+    """POST to close a conversation."""
+
+    def post(self, request, conversation_id):
+        from django_communication.models import Conversation
+
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+        conversation.close(user=request.user)
+        messages.success(request, "Conversation closed.")
+        return redirect("diveops:crm-inbox")
+
+
+class ReopenConversationView(StaffPortalMixin, View):
+    """POST to reopen a conversation."""
+
+    def post(self, request, conversation_id):
+        from django_communication.models import Conversation
+
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+        conversation.reopen()
+        messages.success(request, "Conversation reopened.")
+        return redirect("diveops:crm-conversation", conversation_id=conversation.pk)

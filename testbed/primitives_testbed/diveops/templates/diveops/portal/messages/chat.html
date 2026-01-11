@@ -1,0 +1,131 @@
+{% extends "portal_ui/base_portal.html" %}
+{% load portal_ui_tags %}
+
+{% block page_title %}{{ conversation.subject|default:"Conversation" }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-[calc(100vh-12rem)]">
+    <!-- Header -->
+    <div class="bg-white shadow rounded-t-lg p-4 flex-shrink-0">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <a href="{% url 'portal:messages' %}" class="text-gray-500 hover:text-gray-700">
+                    {% icon "arrow-left" "w-5 h-5" %}
+                </a>
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-800">{{ conversation.subject|default:"Conversation" }}</h2>
+                    <p class="text-sm text-gray-500">
+                        {% if conversation.status == 'active' %}
+                        <span class="inline-flex items-center text-green-600">
+                            {% icon "check-circle" "w-4 h-4 mr-1" %}
+                            Active
+                        </span>
+                        {% elif conversation.status == 'closed' %}
+                        <span class="inline-flex items-center text-gray-500">
+                            {% icon "lock-closed" "w-4 h-4 mr-1" %}
+                            Closed
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center text-yellow-600">
+                            {% icon "archive-box" "w-4 h-4 mr-1" %}
+                            Archived
+                        </span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Messages Area -->
+    <div class="flex-1 overflow-y-auto bg-gray-50 p-4 space-y-4" id="messages-container">
+        {% if messages_list %}
+            {% for msg in messages_list %}
+            <div class="flex {% if msg.sender_person == current_person %}justify-end{% else %}justify-start{% endif %}">
+                <div class="max-w-[75%] {% if msg.sender_person == current_person %}order-2{% endif %}">
+                    <div class="rounded-lg px-4 py-2 {% if msg.sender_person == current_person %}bg-primary-500 text-white{% else %}bg-white shadow text-gray-800{% endif %}">
+                        {% if msg.subject %}
+                        <p class="text-xs font-semibold mb-1 {% if msg.sender_person == current_person %}text-primary-100{% else %}text-gray-500{% endif %}">
+                            {{ msg.subject }}
+                        </p>
+                        {% endif %}
+                        {% if msg.body_html %}
+                        <div class="prose prose-sm max-w-none {% if msg.sender_person == current_person %}prose-invert{% endif %}">
+                            {{ msg.body_html|safe }}
+                        </div>
+                        {% else %}
+                        <p class="text-sm whitespace-pre-wrap">{{ msg.body_text }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="mt-1 flex items-center space-x-2 {% if msg.sender_person == current_person %}justify-end{% else %}justify-start{% endif %}">
+                        <span class="text-xs text-gray-500">
+                            {% if msg.sender_person %}
+                                {{ msg.sender_person.first_name }}
+                            {% else %}
+                                System
+                            {% endif %}
+                        </span>
+                        <span class="text-xs text-gray-400">
+                            {{ msg.created_at|date:"M j, g:i a" }}
+                        </span>
+                        {% if msg.channel != 'in_app' %}
+                        <span class="text-xs text-gray-400 px-1 py-0.5 bg-gray-100 rounded">
+                            via {{ msg.channel }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="text-center py-8">
+            <div class="text-gray-400 mb-4">
+                {% icon "chat-bubble-left-ellipsis" "w-12 h-12 mx-auto" %}
+            </div>
+            <p class="text-gray-500">No messages yet. Start the conversation below.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Message Input -->
+    {% if conversation.status == 'active' %}
+    <div class="bg-white shadow rounded-b-lg p-4 flex-shrink-0">
+        <form method="post" class="flex items-end space-x-4">
+            {% csrf_token %}
+            <div class="flex-1">
+                <label for="message" class="sr-only">Your message</label>
+                <textarea
+                    name="message"
+                    id="message"
+                    rows="3"
+                    class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 resize-none"
+                    placeholder="Type your message..."
+                    required
+                ></textarea>
+            </div>
+            <button
+                type="submit"
+                class="inline-flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
+            >
+                {% icon "paper-airplane" "w-5 h-5" %}
+                <span class="sr-only">Send</span>
+            </button>
+        </form>
+    </div>
+    {% else %}
+    <div class="bg-gray-100 rounded-b-lg p-4 text-center text-gray-500">
+        <p>This conversation is {{ conversation.status }}.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Auto-scroll to bottom of messages
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('messages-container');
+    if (container) {
+        container.scrollTop = container.scrollHeight;
+    }
+});
+</script>
+{% endblock %}

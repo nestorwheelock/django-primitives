@@ -523,3 +523,51 @@ def get_diver_with_full_context(diver_id: UUID) -> Optional[dict]:
         "medical_details": get_diver_medical_details(diver),
         "demographics": getattr(person, "demographics", None),
     }
+
+
+def get_staff_person(user) -> Optional[Person]:
+    """Get the Person associated with a staff user.
+
+    Staff users may have an associated Person record for messaging.
+    If not found, returns None.
+
+    Args:
+        user: Django User instance
+
+    Returns:
+        Person instance or None
+    """
+    if not user or not user.is_authenticated:
+        return None
+
+    # Try to find Person by user's email
+    if user.email:
+        person = Person.objects.filter(email=user.email, deleted_at__isnull=True).first()
+        if person:
+            return person
+
+    # Try to find by username as a fallback
+    person = Person.objects.filter(
+        Q(email=user.username) | Q(first_name=user.first_name, last_name=user.last_name),
+        deleted_at__isnull=True,
+    ).first()
+
+    return person
+
+
+def get_diver_for_person(person: Person) -> Optional[DiverProfile]:
+    """Get DiverProfile for a Person if one exists.
+
+    Args:
+        person: Person instance
+
+    Returns:
+        DiverProfile instance or None
+    """
+    if not person:
+        return None
+
+    return DiverProfile.objects.filter(
+        person=person,
+        deleted_at__isnull=True,
+    ).select_related("person").first()

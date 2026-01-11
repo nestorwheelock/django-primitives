@@ -701,3 +701,149 @@ class RemoveBuddyView(CustomerPortalMixin, View):
             messages.error(request, f"Error removing buddy: {e}")
 
         return HttpResponseRedirect(reverse("portal:dashboard"))
+
+
+# =============================================================================
+# Messages / Conversations (Unified CRM Messaging)
+# =============================================================================
+
+
+class CustomerMessagesInboxView(CustomerPortalMixin, TemplateView):
+    """List conversations for current customer Person."""
+
+    template_name = "diveops/portal/messages/inbox.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        diver = get_current_diver(self.request.user)
+
+        if diver and diver.person:
+            from django_communication.services import get_customer_inbox
+
+            context["conversations"] = get_customer_inbox(diver.person)
+        else:
+            context["conversations"] = []
+
+        return context
+
+
+class CustomerConversationDetailView(CustomerPortalMixin, TemplateView):
+    """Full-page chat view for a conversation."""
+
+    template_name = "diveops/portal/messages/chat.html"
+
+    def get_conversation(self):
+        """Get conversation and verify customer is participant."""
+        from django_communication.models import Conversation
+
+        conversation_id = self.kwargs.get("conversation_id")
+        diver = get_current_diver(self.request.user)
+
+        if not diver or not diver.person:
+            raise Http404("Not authenticated")
+
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+
+        # Verify customer is a participant
+        if not conversation.participants.filter(person=diver.person).exists():
+            raise Http404("Conversation not found")
+
+        return conversation, diver.person
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        conversation, person = self.get_conversation()
+
+        from django_communication.services import get_conversation_messages
+
+        context["conversation"] = conversation
+        context["messages_list"] = get_conversation_messages(conversation)
+        context["current_person"] = person
+
+        # Mark as read for this customer
+        conversation.mark_read_for(person)
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Handle sending a message in the conversation."""
+        from django_communication.services import send_in_conversation
+
+        conversation, person = self.get_conversation()
+        body_text = request.POST.get("message", "").strip()
+
+        if body_text:
+            send_in_conversation(
+                conversation=conversation,
+                sender_person=person,
+                body_text=body_text,
+            )
+
+        return redirect("portal:conversation", conversation_id=conversation.pk)
+
+
+class CustomerSendMessageView(CustomerPortalMixin, View):
+    """POST endpoint for sending a message in a conversation."""
+
+    def post(self, request, conversation_id):
+        """Send a message via POST."""
+        from django_communication.models import Conversation
+        from django_communication.services import send_in_conversation
+
+        diver = get_current_diver(request.user)
+        if not diver or not diver.person:
+            raise Http404("Not authenticated")
+
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+
+        # Verify customer is participant
+        if not conversation.participants.filter(person=diver.person).exists():
+            raise Http404("Conversation not found")
+
+        body_text = request.POST.get("message", "").strip()
+
+        if body_text:
+            send_in_conversation(
+                conversation=conversation,
+                sender_person=diver.person,
+                body_text=body_text,
+            )
+
+        return redirect("portal:conversation", conversation_id=conversation.pk)
+
+
+class CustomerStartConversationView(CustomerPortalMixin, TemplateView):
+    """Start a new conversation (for general inquiries)."""
+
+    template_name = "diveops/portal/messages/new_conversation.html"
+
+    def post(self, request, *args, **kwargs):
+        """Create a new conversation and redirect to it."""
+        from django_communication.models import ParticipantRole
+        from django_communication.services import create_conversation, send_in_conversation
+
+        diver = get_current_diver(request.user)
+        if not diver or not diver.person:
+            raise Http404("Not authenticated")
+
+        subject = request.POST.get("subject", "").strip() or "New Inquiry"
+        body_text = request.POST.get("message", "").strip()
+
+        if not body_text:
+            return redirect("portal:messages")
+
+        # Create conversation with customer as participant
+        conversation = create_conversation(
+            subject=subject,
+            participants=[(diver.person, ParticipantRole.CUSTOMER)],
+            primary_channel="in_app",
+        )
+
+        # Send initial message
+        send_in_conversation(
+            conversation=conversation,
+            sender_person=diver.person,
+            body_text=body_text,
+        )
+
+        return redirect("portal:conversation", conversation_id=conversation.pk)

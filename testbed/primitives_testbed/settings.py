@@ -223,6 +223,12 @@ PORTAL_UI = {
             "icon": "receipt",
         },
         {
+            "section": "Main",
+            "label": "Messages",
+            "url": "portal:messages",
+            "icon": "chat-bubble-left-right",
+        },
+        {
             "section": "Learning",
             "label": "My Courseware",
             "url": "portal:content",
@@ -271,9 +277,45 @@ PORTAL_UI = {
         },
         {
             "section": "CRM",
+            "label": "Inbox",
+            "url": "diveops:crm-inbox",
+            "icon": "inbox",
+        },
+        {
+            "section": "CRM",
             "label": "Leads",
             "url": "diveops:lead-list",
             "icon": "user-plus",
+        },
+        {
+            "section": "CMS",
+            "label": "Pages",
+            "url": "diveops:cms-page-list",
+            "icon": "file-text",
+        },
+        {
+            "section": "CMS",
+            "label": "Posts",
+            "url": "diveops:blog-post-list",
+            "icon": "edit-3",
+        },
+        {
+            "section": "CMS",
+            "label": "Categories",
+            "url": "diveops:blog-category-list",
+            "icon": "folder",
+        },
+        {
+            "section": "CMS",
+            "label": "Redirects",
+            "url": "diveops:cms-redirect-list",
+            "icon": "arrow-right",
+        },
+        {
+            "section": "CMS",
+            "label": "Settings",
+            "url": "diveops:cms-settings",
+            "icon": "settings",
         },
         {
             "section": "Dive Operations",

@@ -1,0 +1,82 @@
+{% extends "portal_ui/base_portal.html" %}
+{% load portal_ui_tags %}
+
+{% block page_title %}Messages{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex justify-between items-center">
+            <div>
+                <h2 class="text-xl font-semibold text-gray-800">Messages</h2>
+                <p class="text-gray-600 mt-1">View and manage your conversations with our team.</p>
+            </div>
+            <a href="{% url 'portal:new_conversation' %}" class="inline-flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
+                {% icon "plus" "w-4 h-4 mr-2" %}
+                New Message
+            </a>
+        </div>
+    </div>
+
+    <!-- Conversations List -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        {% if conversations %}
+        <ul class="divide-y divide-gray-200">
+            {% for conv in conversations %}
+            <li>
+                <a href="{% url 'portal:conversation' conversation_id=conv.pk %}" class="block hover:bg-gray-50 transition-colors">
+                    <div class="px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center space-x-3">
+                                    <h3 class="text-sm font-medium text-gray-900 truncate">
+                                        {{ conv.subject|default:"New Conversation" }}
+                                    </h3>
+                                    {% if conv.unread_count > 0 %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                                        {{ conv.unread_count }} new
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% if conv.last_message_preview %}
+                                <p class="mt-1 text-sm text-gray-500 truncate">
+                                    {{ conv.last_message_preview|truncatechars:100 }}
+                                </p>
+                                {% endif %}
+                            </div>
+                            <div class="ml-4 flex-shrink-0 flex flex-col items-end">
+                                {% if conv.last_message_at %}
+                                <p class="text-xs text-gray-500">
+                                    {{ conv.last_message_at|timesince }} ago
+                                </p>
+                                {% endif %}
+                                <span class="mt-1 text-xs px-2 py-0.5 rounded-full
+                                    {% if conv.status == 'active' %}bg-green-100 text-green-700
+                                    {% elif conv.status == 'closed' %}bg-gray-100 text-gray-600
+                                    {% else %}bg-yellow-100 text-yellow-700{% endif %}">
+                                    {{ conv.status|title }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="p-8 text-center">
+            <div class="text-gray-400 mb-4">
+                {% icon "chat-bubble-left-right" "w-12 h-12 mx-auto" %}
+            </div>
+            <p class="text-gray-500 mb-4">No messages yet.</p>
+            <p class="text-sm text-gray-400 mb-4">Start a conversation to get in touch with our team.</p>
+            <a href="{% url 'portal:new_conversation' %}" class="inline-flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">
+                {% icon "plus" "w-4 h-4 mr-2" %}
+                Start a Conversation
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

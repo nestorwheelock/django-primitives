@@ -1,0 +1,78 @@
+{% extends "portal_ui/base_portal.html" %}
+{% load portal_ui_tags %}
+
+{% block page_title %}New Message{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center space-x-4">
+            <a href="{% url 'portal:messages' %}" class="text-gray-500 hover:text-gray-700">
+                {% icon "arrow-left" "w-5 h-5" %}
+            </a>
+            <div>
+                <h2 class="text-xl font-semibold text-gray-800">Start a New Conversation</h2>
+                <p class="text-gray-600 mt-1">Send us a message and we'll get back to you as soon as possible.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+
+            <div>
+                <label for="subject" class="block text-sm font-medium text-gray-700">Subject</label>
+                <input
+                    type="text"
+                    name="subject"
+                    id="subject"
+                    class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                    placeholder="What can we help you with?"
+                >
+                <p class="mt-1 text-sm text-gray-500">Optional - helps us route your message to the right team.</p>
+            </div>
+
+            <div>
+                <label for="message" class="block text-sm font-medium text-gray-700">Message</label>
+                <textarea
+                    name="message"
+                    id="message"
+                    rows="6"
+                    class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                    placeholder="Type your message here..."
+                    required
+                ></textarea>
+            </div>
+
+            <div class="flex items-center justify-between pt-4 border-t border-gray-200">
+                <a href="{% url 'portal:messages' %}" class="text-sm text-gray-500 hover:text-gray-700">
+                    Cancel
+                </a>
+                <button
+                    type="submit"
+                    class="inline-flex items-center px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
+                >
+                    {% icon "paper-airplane" "w-4 h-4 mr-2" %}
+                    Send Message
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Quick Tips -->
+    <div class="bg-blue-50 rounded-lg p-6">
+        <h3 class="text-sm font-medium text-blue-800 flex items-center">
+            {% icon "light-bulb" "w-5 h-5 mr-2" %}
+            Quick Tips
+        </h3>
+        <ul class="mt-2 text-sm text-blue-700 list-disc list-inside space-y-1">
+            <li>Include relevant details like booking references or dates</li>
+            <li>Be specific about what you need help with</li>
+            <li>Check your messages for our response</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

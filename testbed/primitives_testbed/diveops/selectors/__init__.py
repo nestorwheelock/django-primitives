@@ -14,6 +14,8 @@ from .divers import (
     get_diver_dive_history,
     get_diver_medical_details,
     calculate_age,
+    get_staff_person,
+    get_diver_for_person,
 )
 
 from .excursions import (
@@ -55,6 +57,8 @@ __all__ = [
     "get_diver_dive_history",
     "get_diver_medical_details",
     "calculate_age",
+    "get_staff_person",
+    "get_diver_for_person",
     # Excursion and booking selectors
     "list_upcoming_excursions",
     "get_excursion_with_roster",
