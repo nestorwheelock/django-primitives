@@ -1,9 +1,13 @@
 """Customer portal views (authenticated customers)."""
 
-from django.http import Http404
+import json
+
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 
 from django_cms_core.models import AccessLevel, ContentPage, PageStatus
@@ -847,3 +851,88 @@ class CustomerStartConversationView(CustomerPortalMixin, TemplateView):
         )
 
         return redirect("portal:conversation", conversation_id=conversation.pk)
+
+
+# =============================================================================
+# Push Notifications
+# =============================================================================
+
+
+class VapidPublicKeyView(View):
+    """Return the VAPID public key for browser subscription.
+
+    This endpoint is public (no auth required) so the browser can
+    request the key before the service worker subscribes.
+    """
+
+    def get(self, request):
+        from django_communication.models import CommunicationSettings
+
+        settings = CommunicationSettings.objects.first()
+        if settings and settings.vapid_public_key:
+            return JsonResponse({"publicKey": settings.vapid_public_key})
+        return JsonResponse({"publicKey": None}, status=404)
+
+
+class PushSubscribeView(CustomerPortalMixin, View):
+    """Store a new push subscription for the current user."""
+
+    def post(self, request):
+        from django_communication.models import PushSubscription
+
+        diver = get_current_diver(request.user)
+        if not diver or not diver.person:
+            return JsonResponse({"error": "No diver profile"}, status=400)
+
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        endpoint = data.get("endpoint")
+        keys = data.get("keys", {})
+        p256dh = keys.get("p256dh")
+        auth = keys.get("auth")
+
+        if not endpoint or not p256dh or not auth:
+            return JsonResponse({"error": "Missing subscription data"}, status=400)
+
+        PushSubscription.objects.update_or_create(
+            person=diver.person,
+            endpoint=endpoint,
+            defaults={
+                "p256dh_key": p256dh,
+                "auth_key": auth,
+                "user_agent": request.META.get("HTTP_USER_AGENT", "")[:500],
+                "is_active": True,
+                "failure_count": 0,
+            },
+        )
+        return JsonResponse({"status": "subscribed"})
+
+
+class PushUnsubscribeView(CustomerPortalMixin, View):
+    """Remove a push subscription."""
+
+    def post(self, request):
+        from django_communication.models import PushSubscription
+
+        diver = get_current_diver(request.user)
+        if not diver or not diver.person:
+            return JsonResponse({"error": "No diver profile"}, status=400)
+
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        endpoint = data.get("endpoint")
+        if not endpoint:
+            return JsonResponse({"error": "Missing endpoint"}, status=400)
+
+        PushSubscription.objects.filter(
+            person=diver.person,
+            endpoint=endpoint,
+        ).update(is_active=False)
+
+        return JsonResponse({"status": "unsubscribed"})

@@ -8,6 +8,7 @@ from .conversation import Conversation, ConversationStatus
 from .message import Channel, Message, MessageDirection, MessageStatus
 from .participant import ConversationParticipant, ParticipantRole
 from .profile import EmailIdentity, MessageProfile, get_recipient_locale
+from .push_subscription import PushSubscription
 from .settings import CommunicationSettings
 from .template import MessageTemplate, MessageType
 
@@ -25,5 +26,6 @@ __all__ = [
     "MessageTemplate",
     "MessageType",
     "ParticipantRole",
+    "PushSubscription",
     "get_recipient_locale",
 ]

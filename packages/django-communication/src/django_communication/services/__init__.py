@@ -20,6 +20,10 @@ from .messaging import (
     resolve_email_identity,
     send,
 )
+from .notifications import (
+    get_notification_status,
+    send_notification,
+)
 
 __all__ = [
     # Conversation services
@@ -37,4 +41,7 @@ __all__ = [
     "get_messages_for_object",
     "resolve_email_identity",
     "send",
+    # Notification services
+    "get_notification_status",
+    "send_notification",
 ]

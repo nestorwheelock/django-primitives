@@ -270,6 +270,67 @@
         </div>
         {% endif %}
 
+        <!-- Notification Status -->
+        {% if notification_status %}
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-sm font-semibold text-gray-900">Notification Channels</h3>
+            </div>
+            <div class="p-4 space-y-2 text-sm">
+                {% if notification_status.push_enabled %}
+                <div class="flex items-center text-green-600">
+                    {% icon "bell" "w-4 h-4 mr-2" %}
+                    <span>Push enabled ({{ notification_status.push_subscription_count }} device{{ notification_status.push_subscription_count|pluralize }})</span>
+                </div>
+                {% else %}
+                <div class="flex items-center text-gray-400">
+                    {% icon "bell-slash" "w-4 h-4 mr-2" %}
+                    <span>No push subscription</span>
+                </div>
+                {% endif %}
+
+                {% if notification_status.email_available %}
+                <div class="flex items-center text-green-600">
+                    {% icon "mail" "w-4 h-4 mr-2" %}
+                    <span>Email available</span>
+                </div>
+                {% else %}
+                <div class="flex items-center text-gray-400">
+                    {% icon "mail" "w-4 h-4 mr-2" %}
+                    <span>No email</span>
+                </div>
+                {% endif %}
+
+                {% if notification_status.sms_available %}
+                <div class="flex items-center text-green-600">
+                    {% icon "device-phone-mobile" "w-4 h-4 mr-2" %}
+                    <span>SMS available</span>
+                </div>
+                {% else %}
+                <div class="flex items-center text-gray-400">
+                    {% icon "device-phone-mobile" "w-4 h-4 mr-2" %}
+                    <span>No phone</span>
+                </div>
+                {% endif %}
+
+                <div class="pt-2 border-t border-gray-200 mt-2">
+                    <span class="text-gray-500">Primary channel:</span>
+                    <span class="font-medium text-gray-900 ml-1">
+                        {% if notification_status.primary_channel == 'push' %}
+                            {% icon "bell" "w-4 h-4 inline mr-1 text-blue-500" %}Push
+                        {% elif notification_status.primary_channel == 'email' %}
+                            {% icon "mail" "w-4 h-4 inline mr-1 text-blue-500" %}Email
+                        {% elif notification_status.primary_channel == 'sms' %}
+                            {% icon "device-phone-mobile" "w-4 h-4 inline mr-1 text-blue-500" %}SMS
+                        {% else %}
+                            None
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Related Object (if any) -->
         {% if related_object %}
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">

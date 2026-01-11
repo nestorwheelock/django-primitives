@@ -115,6 +115,36 @@ class CommunicationSettings(SingletonModel):
         help_text="Log messages but don't actually send (for testing)",
     )
 
+    # === Web Push Settings ===
+    push_enabled = models.BooleanField(
+        default=False,
+        help_text="Enable Web Push notifications",
+    )
+    vapid_public_key = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="VAPID public key for Web Push",
+    )
+    vapid_private_key = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="VAPID private key for Web Push (keep secret!)",
+    )
+    vapid_contact_email = models.EmailField(
+        blank=True,
+        help_text="Contact email for VAPID claims",
+    )
+
+    # === Notification Fallback Settings ===
+    notification_fallback_enabled = models.BooleanField(
+        default=True,
+        help_text="Enable fallback from push to email/SMS when push fails",
+    )
+    push_failure_threshold = models.PositiveIntegerField(
+        default=3,
+        help_text="Deactivate subscription after this many consecutive failures",
+    )
+
     class Meta:
         verbose_name = "Communication Settings"
         verbose_name_plural = "Communication Settings"
@@ -152,3 +182,19 @@ class CommunicationSettings(SingletonModel):
         if not self.sms_from_number:
             return False
         return True
+
+    def is_push_configured(self) -> bool:
+        """Check if Web Push is properly configured.
+
+        Push is configured when:
+        - push_enabled is True
+        - VAPID public key is set
+        - VAPID private key is set
+        - VAPID contact email is set
+        """
+        return bool(
+            self.push_enabled
+            and self.vapid_public_key
+            and self.vapid_private_key
+            and self.vapid_contact_email
+        )

@@ -16,6 +16,7 @@ class Channel(models.TextChoices):
     SMS = "sms", "SMS"
     IN_APP = "in_app", "In-App Message"
     WHATSAPP = "whatsapp", "WhatsApp"
+    PUSH = "push", "Web Push"
 
 
 class MessageDirection(models.TextChoices):

@@ -271,3 +271,219 @@ class TestConsoleSMSProvider:
         caplog.set_level(logging.INFO)
         provider.send(long_message)
         assert "Segments: 2" in caplog.text
+
+
+@pytest.mark.django_db
+class TestWebPushProvider:
+    """Tests for WebPushProvider."""
+
+    @pytest.fixture
+    def push_settings(self, db):
+        """Create settings with push configured."""
+        from django_communication.models import CommunicationSettings
+
+        settings, _ = CommunicationSettings.objects.get_or_create(
+            defaults={
+                "push_enabled": True,
+                "vapid_public_key": "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM",
+                "vapid_private_key": "xYmPh0VhN7cN3K4fUqDr-5cJjA5FPhMJTKKLR3pHqYE",
+                "vapid_contact_email": "admin@example.com",
+                "push_failure_threshold": 3,
+            }
+        )
+        return settings
+
+    @pytest.fixture
+    def push_subscription(self, person, db):
+        """Create a push subscription for testing."""
+        from django_communication.models import PushSubscription
+
+        return PushSubscription.objects.create(
+            person=person,
+            endpoint="https://fcm.googleapis.com/fcm/send/test123",
+            p256dh_key="BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM",
+            auth_key="tBHItJI5svbpez7KI4CCXg",
+            is_active=True,
+        )
+
+    def test_provider_name(self, push_settings):
+        """WebPush provider has correct name."""
+        from django_communication.providers.push import WebPushProvider
+
+        provider = WebPushProvider(push_settings)
+        assert provider.provider_name == "webpush"
+
+    def test_validate_recipient_https(self, push_settings):
+        """HTTPS endpoints pass validation."""
+        from django_communication.providers.push import WebPushProvider
+
+        provider = WebPushProvider(push_settings)
+        assert provider.validate_recipient("https://fcm.googleapis.com/fcm/send/abc123") is True
+        assert provider.validate_recipient("https://updates.push.services.mozilla.com/xyz") is True
+
+    def test_validate_recipient_http_fails(self, push_settings):
+        """HTTP endpoints fail validation."""
+        from django_communication.providers.push import WebPushProvider
+
+        provider = WebPushProvider(push_settings)
+        assert provider.validate_recipient("http://insecure.example.com/push") is False
+        assert provider.validate_recipient("not-a-url") is False
+        assert provider.validate_recipient("") is False
+
+    def test_send_success(self, push_settings, push_subscription):
+        """Send push notification successfully."""
+        from django_communication.providers.push import WebPushProvider
+        from django.utils import timezone
+
+        message = Message.objects.create(
+            direction=MessageDirection.OUTBOUND,
+            channel=Channel.PUSH,
+            from_address="system",
+            to_address=push_subscription.endpoint,
+            subject="New Message",
+            body_text="You have a new message",
+            status=MessageStatus.QUEUED,
+        )
+
+        with patch("django_communication.providers.push.webpush.webpush") as mock_webpush:
+            mock_webpush.return_value = MagicMock()
+
+            provider = WebPushProvider(push_settings)
+            result = provider.send(message)
+
+            assert result.success is True
+            assert result.provider == "webpush"
+            mock_webpush.assert_called_once()
+
+            # Verify subscription updated
+            push_subscription.refresh_from_db()
+            assert push_subscription.failure_count == 0
+            assert push_subscription.last_successful_push is not None
+
+    def test_send_subscription_not_found(self, push_settings):
+        """Send fails when subscription not found."""
+        from django_communication.providers.push import WebPushProvider
+
+        message = Message.objects.create(
+            direction=MessageDirection.OUTBOUND,
+            channel=Channel.PUSH,
+            from_address="system",
+            to_address="https://nonexistent.endpoint/push",
+            subject="Test",
+            body_text="Test message",
+            status=MessageStatus.QUEUED,
+        )
+
+        provider = WebPushProvider(push_settings)
+        result = provider.send(message)
+
+        assert result.success is False
+        assert "not found" in result.error.lower()
+
+    def test_send_subscription_inactive(self, push_settings, push_subscription):
+        """Send fails when subscription is inactive."""
+        from django_communication.providers.push import WebPushProvider
+
+        push_subscription.is_active = False
+        push_subscription.save()
+
+        message = Message.objects.create(
+            direction=MessageDirection.OUTBOUND,
+            channel=Channel.PUSH,
+            from_address="system",
+            to_address=push_subscription.endpoint,
+            subject="Test",
+            body_text="Test message",
+            status=MessageStatus.QUEUED,
+        )
+
+        provider = WebPushProvider(push_settings)
+        result = provider.send(message)
+
+        assert result.success is False
+
+    def test_send_increments_failure_count(self, push_settings, push_subscription):
+        """Send failure increments failure count."""
+        from django_communication.providers.push import WebPushProvider
+        from pywebpush import WebPushException
+
+        message = Message.objects.create(
+            direction=MessageDirection.OUTBOUND,
+            channel=Channel.PUSH,
+            from_address="system",
+            to_address=push_subscription.endpoint,
+            subject="Test",
+            body_text="Test message",
+            status=MessageStatus.QUEUED,
+        )
+
+        with patch("django_communication.providers.push.webpush.webpush") as mock_webpush:
+            error_response = MagicMock()
+            error_response.status_code = 500
+            mock_webpush.side_effect = WebPushException("Server error", response=error_response)
+
+            provider = WebPushProvider(push_settings)
+            result = provider.send(message)
+
+            assert result.success is False
+            push_subscription.refresh_from_db()
+            assert push_subscription.failure_count == 1
+            assert push_subscription.is_active is True  # Still active after 1 failure
+
+    def test_send_deactivates_on_threshold(self, push_settings, push_subscription):
+        """Subscription deactivated after reaching failure threshold."""
+        from django_communication.providers.push import WebPushProvider
+        from pywebpush import WebPushException
+
+        push_subscription.failure_count = 2  # One away from threshold
+        push_subscription.save()
+
+        message = Message.objects.create(
+            direction=MessageDirection.OUTBOUND,
+            channel=Channel.PUSH,
+            from_address="system",
+            to_address=push_subscription.endpoint,
+            subject="Test",
+            body_text="Test message",
+            status=MessageStatus.QUEUED,
+        )
+
+        with patch("django_communication.providers.push.webpush.webpush") as mock_webpush:
+            error_response = MagicMock()
+            error_response.status_code = 500
+            mock_webpush.side_effect = WebPushException("Server error", response=error_response)
+
+            provider = WebPushProvider(push_settings)
+            provider.send(message)
+
+            push_subscription.refresh_from_db()
+            assert push_subscription.failure_count == 3
+            assert push_subscription.is_active is False  # Deactivated at threshold
+
+    def test_send_deactivates_on_410_gone(self, push_settings, push_subscription):
+        """Subscription deactivated immediately on 410 Gone response."""
+        from django_communication.providers.push import WebPushProvider
+        from pywebpush import WebPushException
+
+        message = Message.objects.create(
+            direction=MessageDirection.OUTBOUND,
+            channel=Channel.PUSH,
+            from_address="system",
+            to_address=push_subscription.endpoint,
+            subject="Test",
+            body_text="Test message",
+            status=MessageStatus.QUEUED,
+        )
+
+        with patch("django_communication.providers.push.webpush.webpush") as mock_webpush:
+            error_response = MagicMock()
+            error_response.status_code = 410  # Gone - subscription expired
+            mock_webpush.side_effect = WebPushException("Subscription gone", response=error_response)
+
+            provider = WebPushProvider(push_settings)
+            result = provider.send(message)
+
+            assert result.success is False
+            assert "expired" in result.error.lower()
+            push_subscription.refresh_from_db()
+            assert push_subscription.is_active is False

@@ -34,4 +34,8 @@ urlpatterns = [
         customer_views.PortalCMSPageView.as_view(),
         name="content",
     ),
+    # Push notifications
+    path("push/vapid-key/", customer_views.VapidPublicKeyView.as_view(), name="vapid-public-key"),
+    path("push/subscribe/", customer_views.PushSubscribeView.as_view(), name="push-subscribe"),
+    path("push/unsubscribe/", customer_views.PushUnsubscribeView.as_view(), name="push-unsubscribe"),
 ]

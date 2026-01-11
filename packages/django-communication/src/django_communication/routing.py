@@ -69,7 +69,7 @@ def get_provider_for_channel(
     """Get the appropriate provider instance for a channel.
 
     Args:
-        channel: The channel (email, sms)
+        channel: The channel (email, sms, push)
         settings: CommunicationSettings with provider config
 
     Returns:
@@ -82,6 +82,8 @@ def get_provider_for_channel(
         return _get_email_provider(settings)
     elif channel == Channel.SMS.value:
         return _get_sms_provider(settings)
+    elif channel == Channel.PUSH.value:
+        return _get_push_provider(settings)
     else:
         raise ValueError(f"No provider configured for channel: {channel}")
 
@@ -113,3 +115,26 @@ def _get_sms_provider(settings: "CommunicationSettings"):
     # Future: add twilio, etc.
     else:
         raise ValueError(f"Unknown SMS provider: {provider_name}")
+
+
+def _get_push_provider(settings: "CommunicationSettings"):
+    """Get push provider based on settings.
+
+    Args:
+        settings: CommunicationSettings with VAPID keys configured
+
+    Returns:
+        WebPushProvider instance
+
+    Raises:
+        ValueError: If push is not properly configured
+    """
+    if not settings.is_push_configured():
+        raise ValueError(
+            "Push notifications not configured. "
+            "Set push_enabled=True and provide VAPID keys."
+        )
+
+    from .providers.push import WebPushProvider
+
+    return WebPushProvider(settings)

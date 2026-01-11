@@ -150,5 +150,146 @@ document.addEventListener('keydown', function(e) {
         closePortalSidebar();
     }
 });
+
+// ==========================================
+// PWA Push Notification Registration
+// ==========================================
+
+// Add manifest link dynamically
+(function() {
+    if (!document.querySelector('link[rel="manifest"]')) {
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = '/static/manifest.json';
+        document.head.appendChild(manifestLink);
+    }
+    // Add theme color meta if not present
+    if (!document.querySelector('meta[name="theme-color"]')) {
+        const themeColor = document.createElement('meta');
+        themeColor.name = 'theme-color';
+        themeColor.content = '#2563eb';
+        document.head.appendChild(themeColor);
+    }
+})();
+
+// Register service worker and handle push subscription
+if ('serviceWorker' in navigator && 'PushManager' in window) {
+    navigator.serviceWorker.register('/static/sw.js').then(function(registration) {
+        console.log('Service Worker registered with scope:', registration.scope);
+
+        // Check if push is already subscribed
+        registration.pushManager.getSubscription().then(function(subscription) {
+            if (subscription) {
+                window.pushSubscription = subscription;
+                console.log('Already subscribed to push');
+            }
+        });
+    }).catch(function(error) {
+        console.warn('Service Worker registration failed:', error);
+    });
+}
+
+// Convert VAPID key from base64 to Uint8Array
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+// Subscribe to push notifications
+async function subscribeToPush() {
+    try {
+        const registration = await navigator.serviceWorker.ready;
+
+        // Get VAPID public key from server
+        const response = await fetch('{% url "portal:vapid-public-key" %}');
+        const data = await response.json();
+
+        if (!data.publicKey) {
+            console.warn('Push notifications not configured on server');
+            return null;
+        }
+
+        // Subscribe to push
+        const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(data.publicKey),
+        });
+
+        // Send subscription to server
+        const saveResponse = await fetch('{% url "portal:push-subscribe" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}',
+            },
+            body: JSON.stringify(subscription.toJSON()),
+        });
+
+        if (saveResponse.ok) {
+            window.pushSubscription = subscription;
+            console.log('Push subscription saved');
+            return subscription;
+        } else {
+            console.error('Failed to save push subscription');
+            return null;
+        }
+    } catch (error) {
+        console.error('Error subscribing to push:', error);
+        return null;
+    }
+}
+
+// Unsubscribe from push notifications
+async function unsubscribeFromPush() {
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+
+        if (subscription) {
+            // Notify server
+            await fetch('{% url "portal:push-unsubscribe" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                },
+                body: JSON.stringify({ endpoint: subscription.endpoint }),
+            });
+
+            // Unsubscribe locally
+            await subscription.unsubscribe();
+            window.pushSubscription = null;
+            console.log('Push subscription removed');
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Error unsubscribing from push:', error);
+        return false;
+    }
+}
+
+// Check if push notifications are supported and permission status
+function getPushPermissionStatus() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        return 'unsupported';
+    }
+    return Notification.permission; // 'default', 'granted', or 'denied'
+}
+
+// Request push notification permission and subscribe
+async function requestPushPermission() {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+        return await subscribeToPush();
+    }
+    return null;
+}
 </script>
 {% endblock %}

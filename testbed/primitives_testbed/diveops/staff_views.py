@@ -9950,6 +9950,10 @@ class StaffConversationView(StaffPortalMixin, TemplateView):
             from .selectors import get_diver_for_person
             context["diver"] = get_diver_for_person(customer.person)
 
+            # Get notification status for this customer
+            from django_communication.services import get_notification_status
+            context["notification_status"] = get_notification_status(customer.person)
+
         # Mark as read for staff
         from .selectors import get_staff_person
         staff_person = get_staff_person(self.request.user)
