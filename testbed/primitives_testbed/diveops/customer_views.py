@@ -68,22 +68,27 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
         emergency_contacts = []
 
         if diver:
+            from django.utils import timezone
+
             # Get full diver with certifications
             diver_with_certs = get_diver_with_certifications(diver.pk)
             highest_cert = get_diver_highest_certification(diver)
-            # Get upcoming bookings (future excursions)
-            upcoming_bookings = list_diver_bookings(diver, include_past=False, limit=5)
-            # Get recent past bookings
-            past_bookings = list_diver_bookings(diver, include_past=True, limit=5)
-            # Filter to only past ones
-            from django.utils import timezone
-            past_bookings = [
-                b for b in past_bookings
-                if b.excursion.departure_time <= timezone.now()
-            ][:3]
 
-            # Medical clearance status
-            medical_status = get_diver_medical_status(diver)
+            # Get bookings in ONE query - split into upcoming/past in Python
+            all_bookings = list_diver_bookings(diver, include_past=True, limit=10)
+            now = timezone.now()
+            upcoming_bookings = [b for b in all_bookings if b.excursion.departure_time > now][:5]
+            past_bookings = [b for b in all_bookings if b.excursion.departure_time <= now][:3]
+
+            # Cache expensive queries (2-minute TTL for semi-real-time data)
+            from django.core.cache import cache
+            cache_key = f"diver_dash:{diver.pk}"
+
+            # Medical clearance status (cached 2 min)
+            medical_status = cache.get(f"{cache_key}:medical")
+            if medical_status is None:
+                medical_status = get_diver_medical_status(diver)
+                cache.set(f"{cache_key}:medical", medical_status, 120)
 
             # Agreements (waivers, medical forms, etc.)
             signed_agreements = list_diver_signed_agreements(diver, limit=10)
@@ -92,9 +97,12 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
             # Briefings (subset of signed agreements)
             briefings = list_diver_briefings(diver, limit=5)
 
-            # Dive logs and stats
+            # Dive logs and stats (cached 2 min)
             dive_logs = list_diver_dive_logs(diver, limit=10)
-            dive_stats = get_diver_dive_stats(diver)
+            dive_stats = cache.get(f"{cache_key}:stats")
+            if dive_stats is None:
+                dive_stats = get_diver_dive_stats(diver)
+                cache.set(f"{cache_key}:stats", dive_stats, 120)
 
             # Documents (medical questionnaire PDFs, photo ID, etc.)
             documents = list_diver_documents(diver, limit=20)
@@ -123,26 +131,26 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
             # Preference status for progressive preference collection
             preference_status = get_diver_preference_status(diver)
 
-            # Certification recommendations based on progression and preferences
-            recommended_certifications = get_recommended_certifications(diver, limit=3)
+            # Recommendations (cached for 5 minutes - expensive queries)
+            cache_key_base = f"diver_recs:{diver.pk}"
 
-            # Courseware recommendations based on certification progression
-            recommended_courseware = get_recommended_courseware(diver, limit=3)
+            recommended_certifications = cache.get(f"{cache_key_base}:certs")
+            if recommended_certifications is None:
+                recommended_certifications = get_recommended_certifications(diver, limit=3)
+                cache.set(f"{cache_key_base}:certs", recommended_certifications, 300)
 
-            # Gear recommendations based on diving interests
-            recommended_gear = get_recommended_gear(diver, limit=3)
+            recommended_courseware = cache.get(f"{cache_key_base}:courseware")
+            if recommended_courseware is None:
+                recommended_courseware = get_recommended_courseware(diver, limit=3)
+                cache.set(f"{cache_key_base}:courseware", recommended_courseware, 300)
 
-            # Briefings status (upcoming excursions with briefings to review)
-            from .models import Booking
-            from django.utils import timezone as tz
+            recommended_gear = cache.get(f"{cache_key_base}:gear")
+            if recommended_gear is None:
+                recommended_gear = get_recommended_gear(diver, limit=3)
+                cache.set(f"{cache_key_base}:gear", recommended_gear, 300)
 
-            # Upcoming bookings = briefings to review
-            upcoming_briefings = Booking.objects.filter(
-                diver=diver,
-                status="confirmed",
-                excursion__departure_time__gte=tz.now(),
-                deleted_at__isnull=True,
-            ).select_related("excursion", "excursion__dive_site")
+            # Briefings status = confirmed upcoming bookings (reuse data)
+            upcoming_briefings = [b for b in upcoming_bookings if b.status == "confirmed"]
 
             # Photos where diver is tagged (for photo gallery/store)
             from .models import PhotoTag
@@ -178,16 +186,19 @@ class CustomerDashboardView(CustomerPortalMixin, TemplateView):
         entitlements = get_user_entitlements(user)
 
         # Find courseware pages user has access to
+        # Optimized: check entitlements in Python instead of N+1 DB calls
         courseware_pages = []
         if entitlements:
+            entitlement_set = set(entitlements)  # O(1) lookup
             pages = ContentPage.objects.filter(
                 status=PageStatus.PUBLISHED,
                 access_level=AccessLevel.ENTITLEMENT,
                 deleted_at__isnull=True,
             )
             for page in pages:
-                allowed, _ = check_page_access(page, user)
-                if allowed:
+                # Check if user has any required entitlement
+                required = page.required_entitlements or []
+                if any(ent in entitlement_set for ent in required):
                     courseware_pages.append(page)
 
         # Get recommended excursions if user has no upcoming bookings
@@ -955,3 +966,279 @@ class PushUnsubscribeView(CustomerPortalMixin, View):
         ).update(is_active=False)
 
         return JsonResponse({"status": "unsubscribed"})
+
+
+# =============================================================================
+# Buddy Group Chat Views
+# =============================================================================
+
+
+class BuddyGroupChatListView(CustomerPortalMixin, TemplateView):
+    """List all buddy group chats for the current diver."""
+
+    template_name = "diveops/portal/messages/buddy_groups.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        diver = get_current_diver(self.request.user)
+        if not diver or not diver.person:
+            context["buddy_groups"] = []
+            context["dive_teams_without_chat"] = []
+            return context
+
+        from .services import get_buddy_conversations, list_buddy_pairs, list_buddy_groups
+        from .models import BuddyIdentity, DiveTeam
+
+        person = diver.person
+
+        # Get buddy group chats
+        buddy_groups = get_buddy_conversations(person)
+        context["buddy_groups"] = buddy_groups
+
+        # Get dive teams without chats
+        try:
+            my_identity = BuddyIdentity.objects.get(person=person)
+            all_teams = DiveTeam.objects.filter(
+                members__identity=my_identity,
+                deleted_at__isnull=True,
+            ).prefetch_related("members__identity")
+
+            # Filter to teams without group_chat
+            teams_with_chat_ids = set(
+                buddy_groups.values_list("dive_team_id", flat=True)
+            )
+            teams_without_chat = [
+                t for t in all_teams if t.pk not in teams_with_chat_ids
+            ]
+            context["dive_teams_without_chat"] = teams_without_chat
+        except BuddyIdentity.DoesNotExist:
+            context["dive_teams_without_chat"] = []
+
+        return context
+
+
+class CreateBuddyGroupChatView(CustomerPortalMixin, View):
+    """Create a group chat for an existing buddy team."""
+
+    def post(self, request, team_id):
+        from django.contrib import messages
+        from .models import DiveTeam, BuddyIdentity
+        from .services import create_buddy_group_chat
+
+        diver = get_current_diver(request.user)
+        if not diver or not diver.person:
+            raise Http404("Not authenticated")
+
+        # Get the team
+        team = get_object_or_404(DiveTeam, pk=team_id)
+
+        # Verify user is a team member
+        try:
+            my_identity = BuddyIdentity.objects.get(person=diver.person)
+            if not team.members.filter(identity=my_identity).exists():
+                raise Http404("Not a team member")
+        except BuddyIdentity.DoesNotExist:
+            raise Http404("Not a team member")
+
+        # Create the chat
+        try:
+            buddy_group = create_buddy_group_chat(
+                dive_team=team,
+                title=request.POST.get("title") or None,
+            )
+            messages.success(request, "Group chat created!")
+            return redirect("portal:buddy_chat", conversation_id=buddy_group.conversation.pk)
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect("portal:buddy_chats")
+
+
+class BuddyGroupChatDetailView(CustomerConversationDetailView):
+    """Detail view for a buddy group chat (extends conversation detail)."""
+
+    template_name = "diveops/portal/messages/buddy_chat.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        conversation = context.get("conversation")
+        current_person = context.get("current_person")
+
+        if not conversation:
+            return context
+
+        from django_communication.models import (
+            ConversationParticipant,
+            ParticipantRole,
+            ParticipantState,
+        )
+        from django_communication.services.conversations import (
+            can_send_message,
+            get_active_participants,
+        )
+
+        # Add buddy group info
+        if hasattr(conversation, "buddy_group"):
+            context["buddy_group"] = conversation.buddy_group
+            context["dive_team"] = conversation.buddy_group.dive_team
+
+        # Get active participants
+        context["active_participants"] = get_active_participants(conversation)
+
+        # Get pending invitations
+        context["pending_invitations"] = ConversationParticipant.objects.filter(
+            conversation=conversation,
+            state=ParticipantState.INVITED,
+        ).select_related("person")
+
+        # Get current user's participant record
+        user_participant = ConversationParticipant.objects.filter(
+            conversation=conversation,
+            person=current_person,
+        ).first()
+        context["user_participant"] = user_participant
+
+        # Check if current user is admin (owner or admin role)
+        is_admin = user_participant and user_participant.role in [
+            ParticipantRole.OWNER,
+            ParticipantRole.ADMIN,
+        ]
+        context["is_admin"] = is_admin
+
+        # Check if user can send messages
+        context["can_send"] = can_send_message(conversation, current_person)
+
+        # Get available buddies to invite (if admin)
+        if is_admin and hasattr(conversation, "buddy_group"):
+            from .models import BuddyIdentity
+
+            # Get all people from user's buddy teams who aren't already participants
+            diver = get_current_diver(self.request.user)
+            available_buddies = []
+
+            if diver and diver.person:
+                try:
+                    my_identity = BuddyIdentity.objects.get(person=diver.person)
+                    # Get all members from all my teams
+                    all_buddy_people = set()
+                    for membership in my_identity.team_memberships.select_related(
+                        "team"
+                    ).prefetch_related("team__members__identity__person"):
+                        for member in membership.team.members.all():
+                            if member.identity.person:
+                                all_buddy_people.add(member.identity.person)
+
+                    # Filter out people already in this conversation
+                    existing_participant_ids = set(
+                        ConversationParticipant.objects.filter(
+                            conversation=conversation
+                        ).values_list("person_id", flat=True)
+                    )
+
+                    available_buddies = [
+                        p for p in all_buddy_people if p.pk not in existing_participant_ids
+                    ]
+                except BuddyIdentity.DoesNotExist:
+                    pass
+
+            context["available_buddies"] = available_buddies
+
+        return context
+
+
+class InviteBuddyToChatView(CustomerPortalMixin, View):
+    """Invite a buddy to an existing group chat."""
+
+    def post(self, request, conversation_id):
+        from django.contrib import messages
+        from django_communication.models import Conversation
+        from django_communication.services.conversations import invite_participant
+        from django_parties.models import Person
+
+        diver = get_current_diver(request.user)
+        if not diver or not diver.person:
+            raise Http404("Not authenticated")
+
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+
+        # Verify user is participant with invite permission
+        from django_communication.models import ConversationParticipant, ParticipantRole
+
+        participant = ConversationParticipant.objects.filter(
+            conversation=conversation,
+            person=diver.person,
+            role__in=[ParticipantRole.OWNER, ParticipantRole.ADMIN],
+        ).first()
+
+        if not participant:
+            messages.error(request, "You don't have permission to invite members.")
+            return redirect("portal:buddy_chat", conversation_id=conversation_id)
+
+        # Get person to invite
+        person_id = request.POST.get("buddy_person_id")
+        if not person_id:
+            messages.error(request, "No person selected.")
+            return redirect("portal:buddy_chat", conversation_id=conversation_id)
+
+        try:
+            person_to_invite = Person.objects.get(pk=person_id)
+            invite_participant(
+                conversation=conversation,
+                person=person_to_invite,
+                invited_by=diver.person,
+            )
+            messages.success(request, f"Invited {person_to_invite.full_name}!")
+        except Person.DoesNotExist:
+            messages.error(request, "Person not found.")
+        except (PermissionError, ValueError) as e:
+            messages.error(request, str(e))
+
+        return redirect("portal:buddy_chat", conversation_id=conversation_id)
+
+
+class LeaveBuddyChatView(CustomerPortalMixin, View):
+    """Leave a buddy group chat."""
+
+    def post(self, request, conversation_id):
+        from django.contrib import messages
+        from django_communication.models import Conversation
+        from django_communication.services.conversations import leave_conversation
+
+        diver = get_current_diver(request.user)
+        if not diver or not diver.person:
+            raise Http404("Not authenticated")
+
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+
+        try:
+            leave_conversation(conversation, diver.person)
+            messages.success(request, "You have left the group chat.")
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect("portal:buddy_chat", conversation_id=conversation_id)
+
+        return redirect("portal:buddy_chats")
+
+
+class AcceptBuddyChatInviteView(CustomerPortalMixin, View):
+    """Accept an invitation to a buddy group chat."""
+
+    def post(self, request, conversation_id):
+        from django.contrib import messages
+        from django_communication.models import Conversation
+        from django_communication.services.conversations import accept_invite
+
+        diver = get_current_diver(request.user)
+        if not diver or not diver.person:
+            raise Http404("Not authenticated")
+
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+
+        try:
+            accept_invite(conversation, diver.person)
+            messages.success(request, "You have joined the group chat!")
+        except ValueError as e:
+            messages.error(request, str(e))
+
+        return redirect("portal:buddy_chat", conversation_id=conversation_id)
