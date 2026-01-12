@@ -132,6 +132,18 @@ class Conversation(BaseModel):
         db_index=True,
         help_text="Timestamp of most recent message (denormalized for sorting)",
     )
+    last_inbound_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Timestamp of last inbound (customer) message - for 'awaiting reply' badge",
+    )
+    last_outbound_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Timestamp of last outbound (staff) message - for 'awaiting reply' badge",
+    )
 
     # === Lifecycle ===
     closed_at = models.DateTimeField(
@@ -166,6 +178,15 @@ class Conversation(BaseModel):
             models.Index(fields=["related_content_type", "related_object_id"]),
             models.Index(fields=["conversation_type", "status"]),
         ]
+        constraints = [
+            # Ensure one active conversation per related object (e.g., one per Person)
+            # This supports identity continuity: lead→account→diver same conversation
+            models.UniqueConstraint(
+                fields=["related_content_type", "related_object_id"],
+                condition=models.Q(deleted_at__isnull=True),
+                name="unique_active_conversation_per_entity",
+            ),
+        ]
 
     def __str__(self):
         return f"Conversation: {self.subject or str(self.pk)[:8]}"
@@ -177,11 +198,37 @@ class Conversation(BaseModel):
         super().save(*args, **kwargs)
 
     def touch_last_message(self, message: "Message"):
-        """Update last_message_at from a message."""
+        """Update last_message_at and direction timestamps from a message."""
+        update_fields = ["last_message_at", "updated_at"]
         self.last_message_at = message.created_at
+
         if not self.primary_channel and message.channel:
             self.primary_channel = message.channel
-        self.save(update_fields=["last_message_at", "primary_channel", "updated_at"])
+            update_fields.append("primary_channel")
+
+        # Track direction timestamps for "awaiting reply" badge
+        if message.direction == "inbound":
+            self.last_inbound_at = message.created_at
+            update_fields.append("last_inbound_at")
+        elif message.direction == "outbound":
+            self.last_outbound_at = message.created_at
+            update_fields.append("last_outbound_at")
+
+        self.save(update_fields=update_fields)
+
+    @property
+    def needs_reply(self) -> bool:
+        """Check if conversation needs a reply (last message was inbound).
+
+        Returns True if:
+        - There's at least one inbound message, AND
+        - Either no outbound messages exist, OR the last inbound is newer than last outbound
+        """
+        if self.last_inbound_at is None:
+            return False
+        if self.last_outbound_at is None:
+            return True
+        return self.last_inbound_at > self.last_outbound_at
 
     def mark_read_for(self, person: "Person", at=None):
         """Mark conversation as read for a participant.
