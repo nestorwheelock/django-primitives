@@ -128,6 +128,7 @@ class Person(BaseModel, Party):
     ]
     LEAD_SOURCE_CHOICES = [
         ('website', _('Website')),
+        ('website_chat', _('Website Chat')),
         ('walk_in', _('Walk-in')),
         ('whatsapp', _('WhatsApp')),
         ('referral', _('Referral')),
@@ -174,6 +175,15 @@ class Person(BaseModel, Party):
         _('lost reason'),
         blank=True,
         help_text=_('Why the lead was lost (if status=lost)'),
+    )
+
+    # Anonymous visitor tracking (for website chat widget)
+    visitor_id = models.CharField(
+        _('visitor ID'),
+        max_length=36,
+        blank=True,
+        db_index=True,
+        help_text=_('UUID from browser cookie for anonymous visitor tracking'),
     )
 
     class Meta:
