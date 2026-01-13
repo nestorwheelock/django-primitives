@@ -39,3 +39,4 @@ documents/
 # OS
 .DS_Store
 Thumbs.db
+android/app/google-services.json
