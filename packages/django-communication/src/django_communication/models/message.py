@@ -34,6 +34,7 @@ class MessageStatus(models.TextChoices):
     SENDING = "sending", "Sending"
     SENT = "sent", "Sent"
     DELIVERED = "delivered", "Delivered"
+    READ = "read", "Read"
     FAILED = "failed", "Failed"
     BOUNCED = "bounced", "Bounced"
 
@@ -182,6 +183,11 @@ class Message(BaseModel):
         blank=True,
         help_text="When delivery was confirmed",
     )
+    read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When message was read/viewed by recipient",
+    )
 
     # === Email Threading (for future robust header-based threading) ===
     external_message_id = models.CharField(
@@ -250,3 +256,13 @@ class Message(BaseModel):
         self.status = MessageStatus.DELIVERED
         self.delivered_at = timezone.now()
         self.save(update_fields=["status", "delivered_at", "updated_at"])
+
+    def mark_read(self):
+        """Update status to read."""
+        from django.utils import timezone
+
+        # Only mark as read if not already read
+        if self.status != MessageStatus.READ:
+            self.status = MessageStatus.READ
+            self.read_at = timezone.now()
+            self.save(update_fields=["status", "read_at", "updated_at"])

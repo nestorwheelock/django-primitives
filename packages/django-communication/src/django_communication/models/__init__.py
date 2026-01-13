@@ -11,6 +11,7 @@ from .canned_response import (
     Visibility,
 )
 from .conversation import Conversation, ConversationStatus, ConversationType
+from .fcm_device import DevicePlatform, FCMDevice
 from .message import Channel, Message, MessageDirection, MessageStatus
 from .participant import ConversationParticipant, ParticipantRole, ParticipantState
 from .profile import EmailIdentity, MessageProfile, get_recipient_locale
@@ -27,7 +28,9 @@ __all__ = [
     "ConversationParticipant",
     "ConversationStatus",
     "ConversationType",
+    "DevicePlatform",
     "EmailIdentity",
+    "FCMDevice",
     "Message",
     "MessageDirection",
     "MessageProfile",
